@@ -108,24 +108,24 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
         nf = number_of_faces(glued)
         nb = number_of_boundary_faces(glued)
 
-        @test length(info["cell_index_a"]) == nc
-        @test length(info["cell_index_b"]) == nc
-        @test length(info["face_index_a"]) == nf
-        @test length(info["face_index_b"]) == nf
-        @test length(info["boundary_face_index_a"]) == nb
-        @test length(info["boundary_face_index_b"]) == nb
+        @test length(info[:cell_index_a]) == nc
+        @test length(info[:cell_index_b]) == nc
+        @test length(info[:face_index_a]) == nf
+        @test length(info[:face_index_b]) == nf
+        @test length(info[:boundary_face_index_a]) == nb
+        @test length(info[:boundary_face_index_b]) == nb
 
         # Cell mappings: first nc_a map to mesh_a, rest to mesh_b
-        @test all(info["cell_index_a"][1:nc_a] .== 1:nc_a)
-        @test all(info["cell_index_a"][nc_a+1:end] .== 0)
-        @test all(info["cell_index_b"][1:nc_a] .== 0)
-        @test all(info["cell_index_b"][nc_a+1:end] .== 1:nc_b)
+        @test all(info[:cell_index_a][1:nc_a] .== 1:nc_a)
+        @test all(info[:cell_index_a][nc_a+1:end] .== 0)
+        @test all(info[:cell_index_b][1:nc_a] .== 0)
+        @test all(info[:cell_index_b][nc_a+1:end] .== 1:nc_b)
 
         # New faces should have zero origin indices
-        @test length(info["new_faces"]) >= 9
-        for f in info["new_faces"]
-            @test info["face_index_a"][f] == 0
-            @test info["face_index_b"][f] == 0
+        @test length(info[:new_faces]) >= 9
+        for f in info[:new_faces]
+            @test info[:face_index_a][f] == 0
+            @test info[:face_index_b][f] == 0
         end
     end
 
@@ -429,19 +429,19 @@ end
         nf = number_of_faces(result)
         nb = number_of_boundary_faces(result)
 
-        @test length(info["cell_index"]) == nc
-        @test all(1 .<= info["cell_index"] .<= nc_orig)
+        @test length(info[:cell_index]) == nc
+        @test all(1 .<= info[:cell_index] .<= nc_orig)
 
-        @test length(info["cell_side"]) == nc
-        @test all(s -> s == :positive || s == :negative, info["cell_side"])
+        @test length(info[:cell_side]) == nc
+        @test all(s -> s == :positive || s == :negative, info[:cell_side])
 
-        @test any(s -> s == :positive, info["cell_side"])
-        @test any(s -> s == :negative, info["cell_side"])
+        @test any(s -> s == :positive, info[:cell_side])
+        @test any(s -> s == :negative, info[:cell_side])
 
-        @test length(info["face_index_a"]) == nf
-        @test length(info["face_index_b"]) == nf
-        @test length(info["boundary_face_index_a"]) == nb
-        @test length(info["boundary_face_index_b"]) == nb
+        @test length(info[:face_index_a]) == nf
+        @test length(info[:face_index_b]) == nf
+        @test length(info[:boundary_face_index_a]) == nb
+        @test length(info[:boundary_face_index_b]) == nb
     end
 
     @testset "extra_out with displacement" begin
@@ -457,11 +457,11 @@ end
         )
 
         nc = number_of_cells(result)
-        @test length(info["cell_index"]) == nc
-        @test all(1 .<= info["cell_index"] .<= nc_orig)
-        @test length(info["cell_side"]) == nc
-        @test any(s -> s == :positive, info["cell_side"])
-        @test any(s -> s == :negative, info["cell_side"])
+        @test length(info[:cell_index]) == nc
+        @test all(1 .<= info[:cell_index] .<= nc_orig)
+        @test length(info[:cell_side]) == nc
+        @test any(s -> s == :positive, info[:cell_side])
+        @test any(s -> s == :negative, info[:cell_side])
     end
 
     @testset "x-normal plane" begin
@@ -515,7 +515,7 @@ end
         cut_faces = Int[]
         for (i, idx) in enumerate(result.faces.neighbors)
             l, r = idx
-            if info["cell_side"][l] != info["cell_side"][r]
+            if info[:cell_side][l] != info[:cell_side][r]
                 push!(cut_faces, i)
             end
         end
@@ -536,7 +536,7 @@ end
         cut_faces = Int[]
         for (i, idx) in enumerate(result.faces.neighbors)
             l, r = idx
-            if info["cell_side"][l] != info["cell_side"][r]
+            if info[:cell_side][l] != info[:cell_side][r]
                 push!(cut_faces, i)
             end
         end
@@ -557,7 +557,7 @@ end
         cut_faces = Int[]
         for (i, idx) in enumerate(result.faces.neighbors)
             l, r = idx
-            if info["cell_side"][l] != info["cell_side"][r]
+            if info[:cell_side][l] != info[:cell_side][r]
                 push!(cut_faces, i)
             end
         end
@@ -576,11 +576,11 @@ end
         )
 
         # new_faces should be a subset of the cross-side faces
-        for f in info["new_faces"]
+        for f in info[:new_faces]
             l, r = result.faces.neighbors[f]
-            @test info["cell_side"][l] != info["cell_side"][r]
+            @test info[:cell_side][l] != info[:cell_side][r]
         end
-        @test length(info["new_faces"]) > 0
+        @test length(info[:new_faces]) > 0
     end
 
     @testset "oblique plane: new faces lie on the cut plane" begin
@@ -603,7 +603,7 @@ end
         @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
 
         # All new interface faces must be very close to the cut plane
-        for f in info["new_faces"]
+        for f in info[:new_faces]
             nodes_idx = result.faces.faces_to_nodes[f]
             pts = [result.node_points[n] for n in nodes_idx]
             face_center = sum(pts) / length(pts)
@@ -689,7 +689,7 @@ end
             @test sum(geo.volumes) ≈ 1.0 rtol = 1e-6
 
             # All new interior faces must lie on the cut plane
-            for f in info["new_faces"]
+            for f in info[:new_faces]
                 nodes_idx = result.faces.faces_to_nodes[f]
                 pts = [result.node_points[n] for n in nodes_idx]
                 fc = sum(pts) / length(pts)
