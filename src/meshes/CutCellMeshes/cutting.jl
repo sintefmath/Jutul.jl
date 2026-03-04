@@ -309,7 +309,7 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
 end
 
 """
-    cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{<:Union{PlaneCut, PolygonalSurface}}; kwargs...)
+    cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{Any}; kwargs...)
 
 Cut an UnstructuredMesh in 3D by multiple cutting constraints. Performs one cut per element
 in the vector, sequentially applying each cut to the result of the previous cut.
@@ -332,7 +332,7 @@ All other keyword arguments are passed to individual cut operations.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
 """
-function cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{<:Union{PlaneCut, PolygonalSurface}}; 
+function cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{Any}; 
                   extra_out::Bool = false, kwargs...)
     if isempty(cuts)
         if extra_out
@@ -350,6 +350,8 @@ function cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{<:Union{PlaneCut, Poly
         end
         return mesh
     end
+
+    all(cut -> isa(cut, PlaneCut) || isa(cut, PolygonalSurface), cuts) || error("All cuts must be PlaneCut or PolygonalSurface")
     
     result = mesh
     
