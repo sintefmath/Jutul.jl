@@ -120,7 +120,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             plot_data["Volumes"] = geo.volumes
         end
         plot_data["Cell ID"] = 1:number_of_cells(m)
-        if Jutul.grid_dims_ijk(m) != (nc, 1, 1)
+        if (m isa Jutul.UnstructuredMesh || m isa Jutul.CartesianMesh) && Jutul.grid_dims_ijk(m) != (nc, 1, 1)
             ijk = map(i -> Jutul.cell_ijk(m, i), 1:nc)
             plot_data["I"] = map(x -> x[1], ijk)
             plot_data["J"] = map(x -> x[2], ijk)

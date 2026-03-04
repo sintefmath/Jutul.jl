@@ -158,6 +158,9 @@ module Jutul
     include("meshes/CutCellMeshes/CutCellMeshes.jl")
     import Jutul.CutCellMeshes: cut_mesh, PlaneCut, PolygonalSurface, glue_mesh, cut_and_displace_mesh
 
+    # Mesh quality control
+    include("meshes/MeshQualityControl/MeshQualityControl.jl")
+
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}
     ForwardDiff.:≺(::JutulSimulateTag, ::Type{<:ForwardDiff.Tag}) = true

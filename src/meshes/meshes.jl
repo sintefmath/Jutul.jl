@@ -163,6 +163,18 @@ function number_of_boundary_faces
 
 end
 
+function faces(G)
+    return 1:number_of_faces(G)
+end
+
+function cells(G)
+    return 1:number_of_cells(G)
+end
+
+function boundary_faces(G)
+    return 1:number_of_boundary_faces(G)
+end
+
 export plot_primitives
 function plot_primitives(mesh, plot_type; kwarg...)
     # By default, no plotting is supported
