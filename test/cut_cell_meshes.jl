@@ -253,13 +253,13 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         nb_new = number_of_boundary_faces(cut)
 
         # cell_index has correct length
-        @test length(info["cell_index"]) == nc_new
+        @test length(info[:cell_index]) == nc_new
         # face_index has correct length
-        @test length(info["face_index"]) == nf_new
+        @test length(info[:face_index]) == nf_new
         # boundary_face_index has correct length
-        @test length(info["boundary_face_index"]) == nb_new
+        @test length(info[:boundary_face_index]) == nb_new
         # new_faces is non-empty (cells were cut)
-        @test length(info["new_faces"]) > 0
+        @test length(info[:new_faces]) > 0
     end
 
     @testset "extra_out cell_index mapping" begin
@@ -270,7 +270,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
         cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
 
-        ci = info["cell_index"]
+        ci = info[:cell_index]
         # All indices should be valid original cell indices
         @test all(1 .<= ci .<= nc_orig)
         # Cut cells should have two entries mapping to the same original cell
@@ -293,8 +293,8 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
         cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
 
-        fi = info["face_index"]
-        nf = info["new_faces"]
+        fi = info[:face_index]
+        nf = info[:new_faces]
         # New cut faces should have face_index == 0
         for f in nf
             @test fi[f] == 0
@@ -315,7 +315,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
         cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
 
-        bfi = info["boundary_face_index"]
+        bfi = info[:boundary_face_index]
         # All boundary face indices should reference valid original boundary faces
         @test all(1 .<= bfi .<= nb_orig)
     end
@@ -327,7 +327,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
         cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
 
-        nf = info["new_faces"]
+        nf = info[:new_faces]
         # 9 cut cells should create 9 new faces
         @test length(nf) == 9
         # All new face indices should be valid
@@ -343,10 +343,10 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         result, info = cut_mesh(mesh, plane; extra_out = true)
 
         @test result === mesh
-        @test info["cell_index"] == collect(1:nc_orig)
-        @test info["face_index"] == collect(1:number_of_faces(mesh))
-        @test info["boundary_face_index"] == collect(1:number_of_boundary_faces(mesh))
-        @test isempty(info["new_faces"])
+        @test info[:cell_index] == collect(1:nc_orig)
+        @test info[:face_index] == collect(1:number_of_faces(mesh))
+        @test info[:boundary_face_index] == collect(1:number_of_boundary_faces(mesh))
+        @test isempty(info[:new_faces])
     end
 
     @testset "Bounding polygon - centroid mode" begin
@@ -449,9 +449,9 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01,
             bounding_polygon = bpoly, extra_out = true)
 
-        @test length(info["cell_index"]) == number_of_cells(cut)
-        @test length(info["face_index"]) == number_of_faces(cut)
-        @test length(info["boundary_face_index"]) == number_of_boundary_faces(cut)
-        @test length(info["new_faces"]) > 0
+        @test length(info[:cell_index]) == number_of_cells(cut)
+        @test length(info[:face_index]) == number_of_faces(cut)
+        @test length(info[:boundary_face_index]) == number_of_boundary_faces(cut)
+        @test length(info[:new_faces]) > 0
     end
 end

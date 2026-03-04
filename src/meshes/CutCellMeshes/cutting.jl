@@ -24,12 +24,12 @@ of the plane.
    also be cut. Default is `false`.
 - `extra_out`: If `true`, return a tuple `(mesh, info_dict)` where `info_dict`
    contains:
-   - `"cell_index"`: Vector mapping each new cell to its original cell index.
-   - `"face_index"`: Vector mapping each new interior face to its original face
+   - `:cell_index`: Vector mapping each new cell to its original cell index.
+   - `:face_index`: Vector mapping each new interior face to its original face
      index (0 for newly created cut faces).
-   - `"boundary_face_index"`: Vector mapping each new boundary face to its
+   - `:boundary_face_index`: Vector mapping each new boundary face to its
      original boundary face index.
-   - `"new_faces"`: Vector of indices of the interior faces added by cutting.
+   - `:new_faces`: Vector of indices of the interior faces added by cutting.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
 """
@@ -50,19 +50,19 @@ function cut_mesh(mesh::UnstructuredMesh{3}, surface::PolygonalSurface; extra_ou
             plane = PlaneCut(c, n)
             result, step_info = cut_mesh(result, plane; extra_out = true, kwargs...)
             # Compose mappings: new cell → intermediate cell → original cell
-            cell_idx = [cell_idx[j] for j in step_info["cell_index"]]
-            face_idx = [j == 0 ? 0 : face_idx[j] for j in step_info["face_index"]]
-            bface_idx = [j == 0 ? 0 : bface_idx[j] for j in step_info["boundary_face_index"]]
+            cell_idx = [cell_idx[j] for j in step_info[:cell_index]]
+            face_idx = [j == 0 ? 0 : face_idx[j] for j in step_info[:face_index]]
+            bface_idx = [j == 0 ? 0 : bface_idx[j] for j in step_info[:boundary_face_index]]
         end
 
         # new_faces: all faces with no original face (face_index == 0)
         all_new_faces = findall(==(0), face_idx)
 
-        info = Dict{String, Any}(
-            "cell_index" => cell_idx,
-            "face_index" => face_idx,
-            "boundary_face_index" => bface_idx,
-            "new_faces" => all_new_faces
+        info = Dict{Symbol, Any}(
+            :cell_index => cell_idx,
+            :face_index => face_idx,
+            :boundary_face_index => bface_idx,
+            :new_faces => all_new_faces
         )
         return (result, info)
     else
@@ -133,11 +133,11 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
         if extra_out
             nf = number_of_faces(mesh)
             nb = number_of_boundary_faces(mesh)
-            info = Dict{String, Any}(
-                "cell_index" => collect(1:nc),
-                "face_index" => collect(1:nf),
-                "boundary_face_index" => collect(1:nb),
-                "new_faces" => Int[]
+            info = Dict{Symbol, Any}(
+                :cell_index => collect(1:nc),
+                :face_index => collect(1:nf),
+                :boundary_face_index => collect(1:nb),
+                :new_faces => Int[]
             )
             return (mesh, info)
         end
@@ -622,11 +622,11 @@ function build_cut_mesh(
     )
 
     if extra_out
-        info_dict = Dict{String, Any}(
-            "cell_index" => cell_index,
-            "face_index" => face_index,
-            "boundary_face_index" => bnd_face_index,
-            "new_faces" => new_faces_list
+        info_dict = Dict{Symbol, Any}(
+            :cell_index => cell_index,
+            :face_index => face_index,
+            :boundary_face_index => bnd_face_index,
+            :new_faces => new_faces_list
         )
         return (new_mesh, info_dict)
     end
