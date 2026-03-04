@@ -574,4 +574,22 @@ end
         
         @test total_vol_orig ≈ total_vol_cut rtol=1e-10
     end
+
+    @testset "Verify cut numbers" begin
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+        
+        cuts = [
+            PlaneCut([0.25, 0.0, 0.0], [1.0, 0.0, 0.0]),
+            PlaneCut([0.0, 0.25, 0.0], [0.0, 1.0, 0.0]),
+            PlaneCut([0.0, 0.0, 0.25], [0.0, 0.0, 1.0])
+        ]
+        
+        mesh, info = cut_mesh(mesh, cuts; min_cut_fraction = 0.0, extra_out = true)
+        geo = tpfv_geometry(mesh)
+        for d = 1:3
+            faces = isapprox.(geo.face_centroids[d, :], 0.25)
+            @test all(info[:cut_no][faces] .== d)
+        end
+    end
 end
