@@ -455,3 +455,123 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test length(info[:new_faces]) > 0
     end
 end
+
+@testset "Multi-cut functionality" begin
+    @testset "Multiple PlaneCuts" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        # Define two perpendicular cuts
+        cuts = [
+            PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0]),
+            PlaneCut([0.5, 0.0, 0.0], [1.0, 0.0, 0.0])
+        ]
+
+        # Test without extra_out
+        cut_mesh_multi = cut_mesh(mesh, cuts; min_cut_fraction = 0.01)
+        @test number_of_cells(cut_mesh_multi) > nc_orig
+        
+        geo = tpfv_geometry(cut_mesh_multi)
+        @test all(geo.volumes .> 0)
+        
+        # Test with extra_out
+        cut_mesh_info, info = cut_mesh(mesh, cuts; min_cut_fraction = 0.01, extra_out = true)
+        # @test cut_mesh_info === cut_mesh_multi  # Should be same mesh
+        
+        # Check that info dict has all required keys
+        @test haskey(info, :cell_index)
+        @test haskey(info, :face_index) 
+        @test haskey(info, :boundary_face_index)
+        @test haskey(info, :new_faces)
+        @test haskey(info, :cut_no)
+        
+        # Check that all arrays have correct lengths
+        @test length(info[:cell_index]) == number_of_cells(cut_mesh_info)
+        @test length(info[:face_index]) == number_of_faces(cut_mesh_info)
+        @test length(info[:boundary_face_index]) == number_of_boundary_faces(cut_mesh_info)
+        @test length(info[:cut_no]) == number_of_faces(cut_mesh_info)
+        
+        # Check cut_no array: should have 0 for original faces and positive numbers for new faces
+        @test all(info[:cut_no] .>= 0)
+        @test maximum(info[:cut_no]) <= length(cuts)
+        
+        # Original faces should map to original indices
+        orig_faces = findall(f -> info[:face_index][f] > 0 && info[:face_index][f] <= number_of_faces(mesh), 1:length(info[:face_index]))
+        @test all(info[:cut_no][orig_faces] .== 0)
+        
+        # New faces should have positive cut numbers
+        new_faces = findall(f -> info[:face_index][f] == 0, 1:length(info[:face_index]))
+        @test all(info[:cut_no][new_faces] .> 0)
+        @test all(info[:cut_no][new_faces] .<= length(cuts))
+    end
+
+    @testset "Mixed PlaneCut and PolygonalSurface" begin
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+        
+        # Define a plane cut and a polygonal surface
+        plane = PlaneCut([0.5, 0.0, 0.0], [1.0, 0.0, 0.0])
+        
+        poly = [
+            SVector{3, Float64}(0.0, 0.0, 0.5),
+            SVector{3, Float64}(1.0, 0.0, 0.5),
+            SVector{3, Float64}(1.0, 1.0, 0.5),
+            SVector{3, Float64}(0.0, 1.0, 0.5)
+        ]
+        surface = PolygonalSurface([poly])
+        
+        cuts = [plane, surface]
+        
+        cut_mesh_seq, info = cut_mesh(mesh, cuts; min_cut_fraction = 0.01, extra_out = true)
+        
+        # Verify basic properties
+        @test number_of_cells(cut_mesh_seq) > number_of_cells(mesh)
+        geo = tpfv_geometry(cut_mesh_seq)
+        @test all(geo.volumes .> 0)
+        
+        # Check that we have faces from both cuts
+        cut1_faces = count(==(1), info[:cut_no])
+        cut2_faces = count(==(2), info[:cut_no])
+        @test cut1_faces > 0
+        @test cut2_faces > 0
+    end
+
+    @testset "Empty cuts vector" begin
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+        
+        cuts = Union{PlaneCut, PolygonalSurface}[]
+        
+        # Without extra_out
+        result = cut_mesh(mesh, cuts)
+        @test result === mesh
+        
+        # With extra_out  
+        result_info, info = cut_mesh(mesh, cuts; extra_out = true)
+        @test result_info === mesh
+        
+        @test info[:cell_index] == collect(1:number_of_cells(mesh))
+        @test info[:face_index] == collect(1:number_of_faces(mesh))
+        @test info[:boundary_face_index] == collect(1:number_of_boundary_faces(mesh))
+        @test isempty(info[:new_faces])
+        @test all(info[:cut_no] .== 0)
+    end
+
+    @testset "Volume conservation with multiple cuts" begin
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+        
+        cuts = [
+            PlaneCut([0.5, 0.0, 0.0], [1.0, 0.0, 0.0]),
+            PlaneCut([0.0, 0.5, 0.0], [0.0, 1.0, 0.0]),
+            PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        ]
+        
+        total_vol_orig = sum(tpfv_geometry(mesh).volumes)
+        cut_mesh_result = cut_mesh(mesh, cuts; min_cut_fraction = 0.01)
+        total_vol_cut = sum(tpfv_geometry(cut_mesh_result).volumes)
+        
+        @test total_vol_orig ≈ total_vol_cut rtol=1e-10
+    end
+end

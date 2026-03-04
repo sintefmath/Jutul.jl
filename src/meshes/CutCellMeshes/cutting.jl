@@ -309,6 +309,147 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
 end
 
 """
+    cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{<:Union{PlaneCut, PolygonalSurface}}; kwargs...)
+
+Cut an UnstructuredMesh in 3D by multiple cutting constraints. Performs one cut per element
+in the vector, sequentially applying each cut to the result of the previous cut.
+
+- `mesh`: A 3D `UnstructuredMesh`
+- `cuts`: Vector of `PlaneCut` or `PolygonalSurface` objects
+- `extra_out`: If `true`, return a tuple `(mesh, info_dict)` where `info_dict`
+   contains:
+   - `:cell_index`: Vector mapping each new cell to its original cell index.
+   - `:face_index`: Vector mapping each new interior face to its original face
+     index (0 for newly created cut faces).
+   - `:boundary_face_index`: Vector mapping each new boundary face to its
+     original boundary face index.
+   - `:new_faces`: Vector of indices of the interior faces added by cutting.
+   - `:cut_no`: Vector where `info_dict[:cut_no][f] = n` if face `f` was
+     generated as a result of cut number `n`, and 0 if the face is not new
+     (was part of the original mesh).
+
+All other keyword arguments are passed to individual cut operations.
+
+Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
+"""
+function cut_mesh(mesh::UnstructuredMesh{3}, cuts::Vector{<:Union{PlaneCut, PolygonalSurface}}; 
+                  extra_out::Bool = false, kwargs...)
+    if isempty(cuts)
+        if extra_out
+            nc = number_of_cells(mesh)
+            nf = number_of_faces(mesh)
+            nb = number_of_boundary_faces(mesh)
+            info = Dict{Symbol, Any}(
+                :cell_index => collect(1:nc),
+                :face_index => collect(1:nf),
+                :boundary_face_index => collect(1:nb),
+                :new_faces => Int[],
+                :cut_no => zeros(Int, nf)
+            )
+            return (mesh, info)
+        end
+        return mesh
+    end
+    
+    result = mesh
+    
+    if extra_out
+        # Initialize with identity mappings relative to original mesh
+        nc_orig = number_of_cells(mesh)
+        nf_orig = number_of_faces(mesh)
+        nb_orig = number_of_boundary_faces(mesh)
+        
+        cell_idx = collect(1:nc_orig)
+        face_idx = collect(1:nf_orig)
+        bface_idx = collect(1:nb_orig)
+        cut_numbers = zeros(Int, nf_orig)  # Track which cut created each face
+        all_new_faces = Int[]
+        
+        for (cut_no, cut) in enumerate(cuts)
+            if isa(cut, PolygonalSurface)
+                # For PolygonalSurface, we need to handle multiple polygons
+                # Each polygon will add to the same cut number
+                result, step_info = cut_mesh(result, cut; extra_out = true, kwargs...)
+                
+                # Compose mappings: new cell → intermediate cell → original cell
+                cell_idx = [cell_idx[j] for j in step_info[:cell_index]]
+                
+                # Update face mappings
+                old_face_idx = face_idx
+                old_cut_numbers = cut_numbers
+                face_idx = [j == 0 ? 0 : old_face_idx[j] for j in step_info[:face_index]]
+                
+                # Update cut numbers
+                cut_numbers = zeros(Int, length(face_idx))
+                for (new_f, old_f) in enumerate(step_info[:face_index])
+                    if old_f == 0
+                        # This is a new face created by current cut
+                        cut_numbers[new_f] = cut_no
+                    else
+                        # This face existed before, preserve its cut number
+                        cut_numbers[new_f] = old_cut_numbers[old_f]
+                    end
+                end
+                
+                # Update boundary face mappings
+                old_bface_idx = bface_idx
+                bface_idx = [j == 0 ? 0 : old_bface_idx[j] for j in step_info[:boundary_face_index]]
+                
+                # Track new faces from this step
+                append!(all_new_faces, step_info[:new_faces])
+                
+            else
+                # For PlaneCut
+                result, step_info = cut_mesh(result, cut; extra_out = true, kwargs...)
+                
+                # Compose mappings: new cell → intermediate cell → original cell
+                cell_idx = [cell_idx[j] for j in step_info[:cell_index]]
+                
+                # Update face mappings
+                old_face_idx = face_idx
+                old_cut_numbers = cut_numbers
+                face_idx = [j == 0 ? 0 : old_face_idx[j] for j in step_info[:face_index]]
+                
+                # Update cut numbers
+                cut_numbers = zeros(Int, length(face_idx))
+                for (new_f, old_f) in enumerate(step_info[:face_index])
+                    if old_f == 0
+                        # This is a new face created by current cut
+                        cut_numbers[new_f] = cut_no
+                    else
+                        # This face existed before, preserve its cut number
+                        cut_numbers[new_f] = old_cut_numbers[old_f]
+                    end
+                end
+                
+                # Update boundary face mappings
+                old_bface_idx = bface_idx  
+                bface_idx = [j == 0 ? 0 : old_bface_idx[j] for j in step_info[:boundary_face_index]]
+                
+                # Track new faces from this step
+                append!(all_new_faces, step_info[:new_faces])
+            end
+        end
+
+        info = Dict{Symbol, Any}(
+            :cell_index => cell_idx,
+            :face_index => face_idx,
+            :boundary_face_index => bface_idx, 
+            :new_faces => all_new_faces,
+            :cut_no => cut_numbers
+        )
+        return (result, info)
+        
+    else
+        # No extra output, just apply cuts sequentially
+        for cut in cuts
+            result = cut_mesh(result, cut; extra_out = false, kwargs...)
+        end
+        return result
+    end
+end
+
+"""
     dominant_side(fnodes, node_class)
 
 Determine which side of the plane a face is on.
