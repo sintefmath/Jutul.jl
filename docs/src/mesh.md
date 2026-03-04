@@ -18,11 +18,23 @@ Plotting requires that a Makie backend is loaded (typically GLMakie or CairoMaki
 
 ### Non-mutating
 
+#### Interactive
+
+These can be used to explore data and meshes with a full GUI. They are not really useful without an interactive backend for Makie.
+
+```@docs
+plot_interactive
+plot_explorer
+```
+
+#### Programmatic
+
+Plotters that just do the job of plotting something, useful for programmatic constructions of plots.
+
 ```@docs
 plot_mesh
 plot_cell_data
 plot_mesh_edges
-plot_interactive
 ```
 
 ### Mutating
