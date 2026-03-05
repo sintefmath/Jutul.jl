@@ -120,7 +120,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             plot_data["Volumes"] = geo.volumes
         end
         plot_data["Cell ID"] = 1:number_of_cells(m)
-        if Jutul.grid_dims_ijk(m) != (nc, 1, 1)
+        if (m isa Jutul.UnstructuredMesh || m isa Jutul.CartesianMesh) && Jutul.grid_dims_ijk(m) != (nc, 1, 1)
             ijk = map(i -> Jutul.cell_ijk(m, i), 1:nc)
             plot_data["I"] = map(x -> x[1], ijk)
             plot_data["J"] = map(x -> x[2], ijk)
@@ -133,9 +133,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     background_colormap = to_colormap(background_colormap)
     if !ismissing(aspect)
         length(aspect) == 3 || error("Aspect ratio must be a tuple of three values (scale_x, scale_y, scale_z)")
-        if ismissing(backgroundcolor)
-            backgroundcolor = 0.5*(background_colormap[1] + background_colormap[end])
-        end
     end
     use_gradient = ismissing(backgroundcolor)
     if use_gradient
@@ -168,7 +165,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     lights = []
 
     fig = Figure(size = (1600, 800), figure_padding = 0.0)
-    lscene = LScene(fig[1:N, 1:N], scenekw = scene_arg, show_axis=show_axis)
+    lscene = LScene(fig[1:N, 1:N], scenekw = (clear = false, ), show_axis = show_axis)
+    mesh_scene = Scene(lscene.scene, scenekw = scene_arg)
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
     right_grid_layout = GridLayout(fig[:, N-3:N-1], 20, 5)
@@ -421,14 +419,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         autolimits!(ax_hist)
     end
 
-
-    scene_outer = lscene.scene
     if zreversed
         upvector = Vec3f(0, 0, -1)
     else
         upvector = Vec3f(0, 0, 1)
     end
-    cam = Makie.cam3d!(scene_outer; upvector = upvector, camarg...)
+    cam = Makie.cam3d!(mesh_scene; upvector = upvector, camarg...)
     if Jutul.mesh_z_is_depth(m)
         # cam.upvector[] = Vec3f(0, 0, -1)
     end
@@ -455,7 +451,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             plt, i = pick(fig)
             if is_right
                 for plt in cell_outline
-                    delete!(scene_outer, plt)
+                    delete!(mesh_scene, plt)
                 end
                 empty!(cell_outline)
                 selected_cells[] = Int[]
@@ -463,7 +459,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             elseif plt == mplt
                 cell = cell_for_click(i)
                 for plt in cell_outline
-                    delete!(scene_outer, plt)
+                    delete!(mesh_scene, plt)
                 end
                 empty!(cell_outline)
                 if is_shift
@@ -478,7 +474,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
                     selected_cells[] = cells
                 end
                 for (i, cell) in enumerate(cells)
-                    pp = plot_mesh_edges!(scene_outer, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
+                    pp = plot_mesh_edges!(mesh_scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
                     push!(cell_outline, pp)
                 end
                 return Consume(true)
@@ -575,7 +571,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
                 colormap = bgcmap,
                 colorrange = (minimum(bg), maximum(bg))
             )
-            translate!(bg_plt, 0, 0, -10000)
+            translation_factor_bg = -10000
+            if !ismissing(aspect) && length(aspect) == 3
+                translation_factor_bg /= aspect[end]
+            end
+            translate!(bg_plt, 0, 0, translation_factor_bg)
         end
         draw_bg()
 
