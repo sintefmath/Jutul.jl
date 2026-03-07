@@ -344,6 +344,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             F = x -> x
         end
         @. cell_val_buffer = F(v)
+        @. cell_val_buffer_trunc = cell_val_buffer
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
