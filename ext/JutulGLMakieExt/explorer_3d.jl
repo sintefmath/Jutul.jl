@@ -82,11 +82,7 @@ function preset_colors(name::Symbol)
         error("Unknown preset: $name")
     end
     if ismissing(hist_colormap)
-        if ismissing(background_colormap)
-            hist_colormap = colormap
-        else
-            hist_colormap = background_colormap
-        end
+        hist_colormap = colormap
     end
     return (
         colormap = colormap,
@@ -428,11 +424,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         tickcolor = main_color
     )
 
-    bins = @lift range($lims[1], $lims[2], length = nbins)
+    bins = @lift range($lims[1], $lims[2], length = nbins+1)
+    bin_centers = @lift [($lims[1] + bin_idx*($lims[2] - $lims[1])/(2*nbins)) for bin_idx in 1:nbins]
 
     hist!(ax_hist, cdata_cells,
-        # normalization = :pdf,
-        color = :values,
+        color = bin_centers,
+        colorrange = lims,
         colormap = hist_colormap,
         bins = bins,
         visible = hist_toggle.checked
