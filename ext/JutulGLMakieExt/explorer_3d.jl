@@ -344,11 +344,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
             F = x -> x
         end
         @. cell_val_buffer = F(v)
-        @. cell_val_buffer_trunc = cell_val_buffer
+        @. cell_val_buffer_trunc = v
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
-        map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip)
+        map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip, F)
 
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -654,7 +654,7 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     return lims
 end
 
-function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip)
+function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip, F)
     # map_to_face_buffer_with_truncation!(face_val_buffer, cell_to_vertex
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
     ϵ = 1e-6
@@ -667,7 +667,7 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_
     end
     bnd_static = (bnd_static[1], max(bnd_static[2], bnd_static[1] + ϵ))
     is_outside(x, rng) = x < rng[1] || x > rng[2]
-    to_inner(x, bnds) = (x - bnds[1])/(bnds[2] - bnds[1])
+    to_inner(x, bnds) = (F(x) - bnds[1])/(bnds[2] - bnds[1])
     @time for cell_no in eachindex(cell_vals)
         if has_dynamic
             dyn_norm = to_inner(dyn_values[cell_no], bnd_dyn)
