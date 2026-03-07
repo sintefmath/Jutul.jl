@@ -13,9 +13,10 @@ function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = miss
         if m isa DataDomain
             static = convert_dict(m.data, number_of_cells(m))
             if haskey(m, :cell_centroids)
-                static["X"] = m[:cell_centroids][1, :]
-                static["Y"] = m[:cell_centroids][2, :]
-                static["Z"] = m[:cell_centroids][3, :]
+                cc = m[:cell_centroids]
+                static["X"] = view(cc, 1, :)
+                static["Y"] = view(cc, 2, :)
+                static["Z"] = view(cc, 3, :)
                 static["Volumes"] = m[:volumes]
             end
         else
@@ -43,7 +44,7 @@ function convert_dict(d::AbstractDict, nc::Int)
             out[sk] = v
         elseif v isa Matrix && size(v, 2) == nc
             for row in axes(v, 1)
-                out["$sk row $row"] = v[row, :]
+                out["$sk row $row"] = view(v, row, :)
             end
         end
     end
@@ -80,7 +81,7 @@ function preset_colors(name::Symbol)
     return (colormap = colormap, background_colormap = background_colormap, textcolor = textcolor, backgroundcolor = background_color)
 end
 
-function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynamic_data;
+function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, dynamic_data;
         preset = :viridis_dark,
         textcolor = missing,
         background_colormap = missing,
@@ -114,9 +115,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     if extra_static || length(keys(plot_data)) == 0
         if !haskey(plot_data, "X")
             geo = tpfv_geometry(m)
-            plot_data["X"] = geo.cell_centroids[1, :]
-            plot_data["Y"] = geo.cell_centroids[2, :]
-            plot_data["Z"] = geo.cell_centroids[3, :]
+            cc = geo.cell_centroids
+            plot_data["X"] = view(cc, 1, :)
+            plot_data["Y"] = view(cc, 2, :)
+            plot_data["Z"] = view(cc, 3, :)
             plot_data["Volumes"] = geo.volumes
         end
         plot_data["Cell ID"] = 1:number_of_cells(m)
@@ -143,7 +145,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     static_lims, dynamic_lims = setup_limits(plot_data, dynamic_data)
     menu_alpha = 0.1
     main_color = textcolor
-    Tri_T = eltype(ttri)
+    # Tri_T = eltype(ttri)
     W = 2
     pl = PointLight(RGBf(W, W, W), Point3f(0, 0, 0))
     # al = AmbientLight(RGBf(0.2, 0.2, 0.2))
@@ -319,11 +321,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     # transparency_toggle = add_toggle!("Transparency", false)
     hist_toggle = add_toggle!("Histogram", true)
     symlog_toggle = add_toggle!("Symlog10", false)
-    cell_to_vertex = tri.mapper.indices.Cells
+    cell_to_vertex = indices.Cells
     cell_val_buffer = zeros(nc)
     cell_val_buffer_trunc = zeros(nc)
-    vertex_val_buffer = GLMakie.Buffer(zeros(length(cell_to_vertex)))
+    vertex_val_buffer = GLMakie.Buffer(zeros(Float64, length(cell_to_vertex)))
     function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog)
+        println("Updating for step $step_idx")
         # Doing two things:
         # - Return the values in val_buffer for histogram
         # - Update the vertex_val_buffer for the mesh plotting
@@ -441,7 +444,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     # cam.projection[] = Makie.perspectiveprojection(45f0, aspect, nearplane, farplane)
 
     function cell_for_click(node_idx)
-        tri.mapper.indices.Cells[node_idx]
+        return indices.Cells[node_idx]
     end
 
     selected_cells = Observable{Vector{Int}}(Int[])
@@ -596,21 +599,26 @@ end
 function mesh_as_static(m)
     tri = Jutul.triangulate_mesh(m, outer = false)
 
+    indices = tri.mapper.indices
+    tripoints = tri.points
+    triangulation = tri.triangulation
     D = Jutul.dim(m)
     T = Jutul.float_type(m)
     Point_T = Point{D, T}
     points = Vector{Point_T}()
     for i in axes(tri.points, 1)
-        push!(points, Point_T(tri.points[i, :]...))
+        push!(points, Point_T(tripoints[i, :]...))
     end
+    GC.gc()
     Tri_T = Makie.GeometryBasics.TriangleFace{Int}
     ttri = Tri_T[]
-    for i in axes(tri.triangulation, 1)
-        v = tri.triangulation[i, :]
+    for i in axes(triangulation, 1)
+        v = triangulation[i, :]
         reverse!(v)
         push!(ttri, Tri_T(v))
     end
-    return (points, ttri, tri)
+    GC.gc()
+    return (points, ttri, indices)
 end
 
 function setup_limits(static, dynamic)
