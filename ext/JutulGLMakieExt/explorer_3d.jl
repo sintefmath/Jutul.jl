@@ -55,6 +55,7 @@ end
 
 function preset_colors(name::Symbol)
     background_color = missing
+    hist_colormap = missing
     if name == :viridis_dark
         colormap = :viridis
         background_colormap = :linear_ternary_blue_0_44_c57_n256
@@ -80,7 +81,20 @@ function preset_colors(name::Symbol)
     else
         error("Unknown preset: $name")
     end
-    return (colormap = colormap, background_colormap = background_colormap, textcolor = textcolor, backgroundcolor = background_color)
+    if ismissing(hist_colormap)
+        if ismissing(background_colormap)
+            hist_colormap = colormap
+        else
+            hist_colormap = background_colormap
+        end
+    end
+    return (
+        colormap = colormap,
+        background_colormap = background_colormap,
+        hist_colormap = hist_colormap,
+        textcolor = textcolor,
+        backgroundcolor = background_color
+    )
 end
 
 function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, dynamic_data;
@@ -88,6 +102,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         textcolor = missing,
         background_colormap = missing,
         colormap = missing,
+        hist_colormap = missing,
+        nbins = 25,
         use_highclip = Sys.isapple(),
         backgroundcolor = missing,
         extra_static = true,
@@ -110,6 +126,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
     if ismissing(backgroundcolor)
         backgroundcolor = default_colors.backgroundcolor
+    end
+    if ismissing(hist_colormap)
+        hist_colormap = default_colors.hist_colormap
     end
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
@@ -409,11 +428,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         tickcolor = main_color
     )
 
+    bins = @lift range($lims[1], $lims[2], length = nbins)
+
     hist!(ax_hist, cdata_cells,
         # normalization = :pdf,
         color = :values,
-        colormap = cmap,
-        bins = 25,
+        colormap = hist_colormap,
+        bins = bins,
         visible = hist_toggle.checked
     )
     hidespines!(ax_hist)
