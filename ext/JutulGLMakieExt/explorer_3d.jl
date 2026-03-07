@@ -93,7 +93,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         edges = false,
         camarg = NamedTuple(),
         show_axis = false,
-        aspect = missing
+        aspect = missing,
+        plot_pause = 1.0/30.0
     )
     default_colors = preset_colors(preset)
     if ismissing(colormap)
@@ -300,9 +301,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 if newindex > Nstep || previndex != newindex-1 || !is_playing[]
                     break
                 end
-                step_idx[] = newindex
+                plot_time = @elapsed step_idx[] = newindex
                 previndex = newindex
-                sleep(1/30)
+                sleep(max(0, plot_pause - plot_time))
             end
         end
         on(play.clicks) do _
