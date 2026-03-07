@@ -102,7 +102,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                 push!(face_index, face)
                 push!(pts, node_pts[nodes[i]])
             end
-            push!(tri, SVector{3, Int}(offset+1, offset + 2, offset + 3))
+            push!(tri, SVector{3, Int}(offset + 3, offset + 2, offset+1))
             offset += n
         end
     elseif n == 4
@@ -113,8 +113,8 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                 push!(face_index, face)
                 push!(pts, node_pts[nodes[i]])
             end
-            push!(tri, SVector{3, Int}(offset+1, offset + 2, offset + 3))
-            push!(tri, SVector{3, Int}(offset+3, offset + 4, offset + 1))
+            push!(tri, SVector{3, Int}(offset + 3, offset + 2, offset + 1))
+            push!(tri, SVector{3, Int}(offset + 1, offset + 4, offset + 3))
             offset += n
         end
     else
@@ -147,7 +147,10 @@ function svector_cyclical_tesselation(n::Int, i::Int, offset::Int)
     else
         t = i + offset
     end
-    return @SVector [i + 1 + offset, 1 + offset, t]
+    n1 = i + 1 + offset
+    n2 = 1 + offset
+    n3 = t
+    return SVector{3, Int}(n3, n2, n1)
 end
 
 function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts) where N
@@ -158,7 +161,6 @@ function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts) wh
     end
     return pt::SVector{N, Float64}
 end
-
 
 function plot_flatten_helper(data::Vector{Tv}) where Tv<:SVector
     n = length(data)

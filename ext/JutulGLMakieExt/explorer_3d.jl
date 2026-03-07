@@ -324,8 +324,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     cell_to_vertex = indices.Cells
     cell_val_buffer = zeros(nc)
     cell_val_buffer_trunc = zeros(nc)
-    vertex_val_buffer = GLMakie.Buffer(zeros(Float64, length(cell_to_vertex)))
-    vertex_values = zeros(length(cell_to_vertex))
+
+    T_f = Float32
+    vertex_val_buffer = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
+    vertex_values = zeros(T_f, length(cell_to_vertex))
     function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog)
         println("Updating for step $step_idx")
         # Doing two things:
