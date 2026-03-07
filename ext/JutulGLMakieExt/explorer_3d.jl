@@ -232,11 +232,14 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         Nstep = length(dynamic_data)
         toggle_dyn = add_toggle!("Show dynamic values", true, type = :toggle)
         toggle_static_limits = add_toggle!("Static color range", true, type = :toggle)
+        toggle_independent = add_toggle!("Independent filters", true, type = :toggle)
         is_dynamic = toggle_dyn.active
+        is_independent = toggle_independent.active
         is_global_limit = toggle_static_limits.active
     else
         dyn_keys = ["No dynamic data"]
         is_global_limit = Observable(false)
+        is_independent = Observable(false)
     end
 
 
@@ -338,7 +341,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     T_f = Float32
     vertex_val_buffer = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
     vertex_values = zeros(T_f, length(cell_to_vertex))
-    function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog)
+    function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_indep, is_glob, to_symlog)
         println("Updating for step $step_idx")
         # Doing two things:
         # - Return the values in val_buffer for histogram
@@ -364,7 +367,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
-        map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip, F)
+        map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F)
 
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -380,7 +383,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     use_symlog = symlog_toggle.checked
     # cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
-    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog)
+    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_independent, $is_global_limit, $use_symlog)
     lims = @lift get_limits(static_lims, dynamic_lims, $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit, $use_symlog)
     if use_highclip
         mesh_arg = (highclip = :transparent, )
@@ -732,7 +735,7 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     return lims
 end
 
-function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip, F)
+function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, is_indep, use_highclip, F)
     # map_to_face_buffer_with_truncation!(face_val_buffer, cell_to_vertex
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
     ϵ = 1e-6
@@ -753,7 +756,14 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
             dyn_norm = 0.5
         end
         static_norm = to_inner(static_values[cell_no], bnd_static)
-        if is_outside(dyn_norm, limiter_dynamic) || is_outside(static_norm, limiter_static)
+        outside_dyn = is_outside(dyn_norm, limiter_dynamic)
+        outside_static = is_outside(static_norm, limiter_static)
+        if is_indep
+            skip = outside_dyn && outside_static
+        else
+            skip = outside_dyn || outside_static
+        end
+        if skip
             if use_highclip
                 if is_dyn
                     cell_vals[cell_no] = (1.0 + ϵ)*bnd_dyn[2] + ϵ
