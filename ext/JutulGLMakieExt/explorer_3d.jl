@@ -285,6 +285,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             step_idx[] = Nstep
             notify(step_idx)
         end
+        # Play button logic
+        is_playing = Ref(false)
         function playback()
             start = step_idx.val
             if start == Nstep
@@ -295,7 +297,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             for _ in start:Nstep
                 current = step_idx.val
                 newindex = current + 1
-                if newindex > Nstep || previndex != newindex-1
+                if newindex > Nstep || previndex != newindex-1 || !is_playing[]
                     break
                 end
                 step_idx[] = newindex
@@ -304,7 +306,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             end
         end
         on(play.clicks) do _
-            @async playback()
+            if is_playing[]
+                is_playing[] = false
+            else
+                is_playing[] = true
+                @async playback()
+            end
         end
     else
         is_dynamic = Observable(false)
