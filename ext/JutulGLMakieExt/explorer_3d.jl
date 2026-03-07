@@ -28,12 +28,14 @@ end
 
 function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing; kwarg...)
     m = physical_representation(m)
-    points, ttri, tri = mesh_as_static(m)
+    println("Triangulating mesh for plotting...")
+    @time points, ttri, tri = mesh_as_static(m)
+    println("Mesh triangulation complete. Setting up plot...")
     return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic; kwarg...)
 end
 
 function convert_dict(d::AbstractDict, nc::Int)
-    out = OrderedDict{String, Vector}()
+    out = OrderedDict{String, Any}()
     for (k, v) in pairs(d)
         if v isa Tuple
             # Handle internal data domain keys
@@ -609,26 +611,83 @@ end
 
 function mesh_as_static(m)
     tri = Jutul.triangulate_mesh(m, outer = false)
+    return mesh_as_static(m, tri)
+end
 
+function mesh_as_static(m, tri)
+    D = Jutul.dim(m)
+    T = Jutul.float_type(m)
+    return mesh_as_static(m, tri, Val(D), Val(T))
+end
+
+function convert_points(tripoints, ::Val{D}, ::Val{T}) where {D, T}
+    Point_T = Point{D, T}
+    points = Vector{Point_T}()
+    npts = size(tripoints, 1)
+    sizehint!(points, npts)
+    if D == 2
+        for i in 1:npts
+            x = tripoints[i, 1]
+            y = tripoints[i, 2]
+            nextpt = Point_T((x, y))
+            nextpt::Point_T
+            push!(points, nextpt)
+        end
+    else
+        @assert D == 3
+        for i in 1:npts
+            x = tripoints[i, 1]
+            y = tripoints[i, 2]
+            z = tripoints[i, 3]
+            nextpt = Point_T((x, y, z))
+            nextpt::Point_T
+            push!(points, nextpt)
+        end
+    end
+    return points
+end
+
+function mesh_as_static(m, tri, Dval::Val{D}, Tval::Val{T}) where {D, T}
     indices = tri.mapper.indices
     tripoints = tri.points
     triangulation = tri.triangulation
-    D = Jutul.dim(m)
-    T = Jutul.float_type(m)
-    Point_T = Point{D, T}
-    points = Vector{Point_T}()
-    for i in axes(tri.points, 1)
-        push!(points, Point_T(tripoints[i, :]...))
-    end
-    GC.gc()
+    tripoints::Matrix{T}
+    points = convert_points(tripoints, Dval, Tval)
+    # Point_T = Point{D, T}
+    # points = Vector{Point_T}()
+    # npts = size(tripoints, 1)
+    # sizehint!(points, npts)
+    # if D == 2
+    #     for i in 1:npts
+    #         x = tripoints[i, 1]
+    #         y = tripoints[i, 2]
+    #         nextpt = Point_T(x, y)
+    #         nextpt::Point_T
+    #         push!(points, nextpt)
+    #     end
+    # else
+    #     @assert D == 3
+    #     for i in 1:npts
+    #         x = tripoints[i, 1]
+    #         y = tripoints[i, 2]
+    #         z = tripoints[i, 3]
+    #         nextpt = Point_T(x, y, z)
+    #         nextpt::Point_T
+    #         push!(points, nextpt)
+    #     end
+    # end
     Tri_T = Makie.GeometryBasics.TriangleFace{Int}
     ttri = Tri_T[]
+    sizehint!(ttri, size(triangulation, 1))
     for i in axes(triangulation, 1)
-        v = triangulation[i, :]
-        reverse!(v)
-        push!(ttri, Tri_T(v))
+        v1 = triangulation[i, 1]
+        v2 = triangulation[i, 2]
+        v3 = triangulation[i, 3]
+        # Note the reversed order to get correct orientation for Makie?
+        nexttri = Tri_T(v3, v2, v1)
+        nexttri::Tri_T
+        push!(ttri, nexttri)
     end
-    GC.gc()
     return (points, ttri, indices)
 end
 
