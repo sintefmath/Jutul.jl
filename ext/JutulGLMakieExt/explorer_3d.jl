@@ -321,6 +321,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     symlog_toggle = add_toggle!("Symlog10", false)
     cell_to_vertex = tri.mapper.indices.Cells
     cell_val_buffer = zeros(nc)
+    cell_val_buffer_trunc = zeros(nc)
     vertex_val_buffer = GLMakie.Buffer(zeros(length(cell_to_vertex)))
     function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog)
         # Doing two things:
@@ -346,7 +347,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
-        map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_val_buffer, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip)
+        map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip)
 
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -666,8 +667,7 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_
     bnd_static = (bnd_static[1], max(bnd_static[2], bnd_static[1] + ϵ))
     is_outside(x, rng) = x < rng[1] || x > rng[2]
     to_inner(x, bnds) = (x - bnds[1])/(bnds[2] - bnds[1])
-    @time for vertex_no in eachindex(static_values)
-        cell_no = cell_to_vertex[vertex_no]
+    @time for cell_no in eachindex(cell_vals)
         if has_dynamic
             dyn_norm = to_inner(dyn_values[cell_no], bnd_dyn)
         else
@@ -677,15 +677,26 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_
         if is_outside(dyn_norm, limiter_dynamic) || is_outside(static_norm, limiter_static)
             if use_highclip
                 if is_dyn
-                    vertex_val_buffer[vertex_no] = (1.0 + ϵ)*bnd_dyn[2] + ϵ
+                    cell_vals[cell_no] = (1.0 + ϵ)*bnd_dyn[2] + ϵ
                 else
-                    vertex_val_buffer[vertex_no] = (1.0 + ϵ)*bnd_static[2] + ϵ
+                    cell_vals[cell_no] = (1.0 + ϵ)*bnd_static[2] + ϵ
                 end
             else
-                vertex_val_buffer[vertex_no] = NaN
+                cell_vals[cell_no] = NaN
             end
         end
     end
+    @time vertex_val_buffer[eachindex(cell_to_vertex)] = cell_vals[cell_to_vertex]
     return vertex_val_buffer
 end
 
+function symlog10(x)
+    # Inspired by matplotlib.scale.SymmetricalLogScale
+    # https://matplotlib.org/stable/api/scale_api.html#matplotlib.scale.SymmetricalLogScale
+    if x < 1.0 && x > -1.0
+        transformed_val = x
+    else
+        transformed_val = sign(x)*(log10(abs(x))+1)
+    end
+    return transformed_val
+end
