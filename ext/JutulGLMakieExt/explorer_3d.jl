@@ -247,7 +247,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         Nstep = length(dynamic_data)
         toggle_dyn = add_toggle!("Show dynamic values", true, type = :toggle)
         toggle_static_limits = add_toggle!("Static color range", true, type = :toggle)
-        toggle_independent = add_toggle!("Independent filters", true, type = :toggle)
+        toggle_independent = add_toggle!("Split filters", false, type = :toggle)
         is_dynamic = toggle_dyn.active
         is_independent = toggle_independent.active
         is_global_limit = toggle_static_limits.active
