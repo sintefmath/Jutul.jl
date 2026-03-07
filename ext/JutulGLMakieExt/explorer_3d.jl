@@ -320,9 +320,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     hist_toggle = add_toggle!("Histogram", true)
     symlog_toggle = add_toggle!("Symlog10", false)
     cell_to_vertex = tri.mapper.indices.Cells
-    val_buffer = zeros(nc)
-    face_val_buffer = zeros(length(cell_to_vertex))
-    function get_mesh_plot(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog; do_map = true, trunc = do_map)
+    cell_val_buffer = zeros(nc)
+    vertex_val_buffer = GLMakie.Buffer(zeros(length(cell_to_vertex)))
+    function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog)
+        # Doing two things:
+        # - Return the values in val_buffer for histogram
+        # - Update the vertex_val_buffer for the mesh plotting
         if ismissing(dynamic_data)
             dyn_values = missing
         else
@@ -334,31 +337,32 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
         else
             v = static_values
         end
-        @. val_buffer = v
-        if trunc
-            bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
-            bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
-            truncate_values!(val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip)
-        end
-
         if to_symlog
-            @. val_buffer = symlog10(val_buffer)
-        end
-        if do_map
-            # out = tri.mapper.Cells(val_buffer)
-            out = face_val_buffer
-            @. out = val_buffer[cell_to_vertex]
+            F = symlog10
         else
-            out = val_buffer
+            F = x -> x
         end
-        return out
+        @. cell_val_buffer = F(v)
+
+        bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
+        bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
+        map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_val_buffer, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip)
+
+        # if do_map
+        #     # out = tri.mapper.Cells(val_buffer)
+        #     out = face_val_buffer
+        #     @. out = val_buffer[cell_to_vertex]
+        # else
+        #     out = val_buffer
+        # end
+        return cell_val_buffer
     end
 
     # active = Tri_T[]
 
     use_symlog = symlog_toggle.checked
-    cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
-    cdata_cells = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = false, trunc = false)
+    # cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
+    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog)
     lims = @lift get_limits(static_lims, dynamic_lims, $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit, $use_symlog)
     if use_highclip
         mesh_arg = (highclip = :transparent, )
@@ -367,7 +371,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, tri, static, dynam
     end
     mplt = mesh!(lscene, points, ttri;
         colormap = cmap,
-        color = cdata_face,
+        color = vertex_val_buffer,
         visible = toggle_mesh.checked,
         colorrange = lims,
         mesh_arg...
@@ -648,7 +652,8 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     return lims
 end
 
-function truncate_values!(val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip)
+function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip)
+    # map_to_face_buffer_with_truncation!(face_val_buffer, cell_to_vertex
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
     ϵ = 1e-6
     has_dynamic = !ismissing(dyn_values)
@@ -661,25 +666,26 @@ function truncate_values!(val_buffer, bnd_dyn, bnd_static, dyn_values, static_va
     bnd_static = (bnd_static[1], max(bnd_static[2], bnd_static[1] + ϵ))
     is_outside(x, rng) = x < rng[1] || x > rng[2]
     to_inner(x, bnds) = (x - bnds[1])/(bnds[2] - bnds[1])
-    for i in eachindex(static_values)
+    @time for vertex_no in eachindex(static_values)
+        cell_no = cell_to_vertex[vertex_no]
         if has_dynamic
-            dyn_norm = to_inner(dyn_values[i], bnd_dyn)
+            dyn_norm = to_inner(dyn_values[cell_no], bnd_dyn)
         else
             dyn_norm = 0.5
         end
-        static_norm = to_inner(static_values[i], bnd_static)
+        static_norm = to_inner(static_values[cell_no], bnd_static)
         if is_outside(dyn_norm, limiter_dynamic) || is_outside(static_norm, limiter_static)
             if use_highclip
                 if is_dyn
-                    val_buffer[i] = (1.0 + ϵ)*bnd_dyn[2] + ϵ
+                    vertex_val_buffer[vertex_no] = (1.0 + ϵ)*bnd_dyn[2] + ϵ
                 else
-                    val_buffer[i] = (1.0 + ϵ)*bnd_static[2] + ϵ
+                    vertex_val_buffer[vertex_no] = (1.0 + ϵ)*bnd_static[2] + ϵ
                 end
             else
-                val_buffer[i] = NaN
+                vertex_val_buffer[vertex_no] = NaN
             end
         end
     end
-    return val_buffer
+    return vertex_val_buffer
 end
 
