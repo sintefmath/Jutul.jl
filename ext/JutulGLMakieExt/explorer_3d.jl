@@ -325,6 +325,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     cell_val_buffer = zeros(nc)
     cell_val_buffer_trunc = zeros(nc)
     vertex_val_buffer = GLMakie.Buffer(zeros(Float64, length(cell_to_vertex)))
+    vertex_values = zeros(length(cell_to_vertex))
     function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_glob, to_symlog)
         println("Updating for step $step_idx")
         # Doing two things:
@@ -351,7 +352,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
-        map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip, F)
+        map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip, F)
 
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -662,7 +663,7 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     return lims
 end
 
-function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip, F)
+function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, use_highclip, F)
     # map_to_face_buffer_with_truncation!(face_val_buffer, cell_to_vertex
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
     ϵ = 1e-6
@@ -695,7 +696,9 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, cell_vals, cell_
             end
         end
     end
-    @time vertex_val_buffer[eachindex(cell_to_vertex)] = cell_vals[cell_to_vertex]
+    @. vertex_vals = cell_vals[cell_to_vertex]
+    n = length(vertex_vals)
+    @time vertex_val_buffer[1:n] = vertex_vals
     return vertex_val_buffer
 end
 
