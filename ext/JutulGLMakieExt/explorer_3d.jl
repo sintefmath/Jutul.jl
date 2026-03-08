@@ -1,12 +1,15 @@
 using Jutul.StaticArrays
 using OrderedCollections
 
-struct PlotExplorer
+struct PlotExplorerOutput
     fig
     lscene
+    right_grid
+    add_menu
+    add_toggle
 end
 
-Base.display(pe::PlotExplorer) = display(pe.fig)
+Base.display(pe::PlotExplorerOutput) = display(pe.fig)
 
 function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = missing, dynamic = missing, kwarg...)
     if ismissing(static)
@@ -226,9 +229,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         return tog
     end
 
-    function add_menu!(title, options)
+    function add_menu!(options, title = ""; prepend = false)
         options = collect(options)
-        if HAS_DYNAMIC_DATA
+        if prepend
             labels = map(o -> "$o ($title)", options)
         else
             labels = options
@@ -258,7 +261,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
 
-    menu_cell = add_menu!("static", keys(plot_data))
+    menu_cell = add_menu!(keys(plot_data), "static", prepend = HAS_DYNAMIC_DATA)
 
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
@@ -267,7 +270,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     value_static = slider_static.interval
 
     if HAS_DYNAMIC_DATA
-        menu_dyn = add_menu!("dynamic", dyn_keys)
+        menu_dyn = add_menu!(dyn_keys, "dynamic", prepend = HAS_DYNAMIC_DATA)
 
         slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
         idx_right_gl += 1
@@ -626,7 +629,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             draw_bg()
         end
     end
-    return PlotExplorer(fig, lscene)
+    return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!)
 end
 
 function mesh_as_static(m)
