@@ -1,4 +1,4 @@
-function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten = true) where D
+function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten = true, flip = mesh_z_is_depth(m)) where D
     pts = Vector{SVector{D, Float64}}()
     tri = Vector{SVector{3, Int64}}()
     cell_index = Vector{Int64}()
@@ -23,7 +23,11 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten =
         cell_centroids = missing
     end
 
-    add_points!(e, e_def, offset, face_offset) = triangulate_and_add_faces!(dest, m, e, e_def, cell_centroids, offset = offset, face_offset = face_offset)
+    add_points!(e, e_def, offset, face_offset) = triangulate_and_add_faces!(dest, m, e, e_def, cell_centroids,
+        offset = offset,
+        face_offset = face_offset,
+        flip = flip
+    )
     # Put boundary first for rendering performance in Makie
     offset = add_points!(BoundaryFaces(), m.boundary_faces, offset, 0)
     if !outer
@@ -55,7 +59,7 @@ function mesh_data_to_tris!(out::Vector{Float64}, cell_data, cell_index)
     return out::Vector{Float64}
 end
 
-function triangulate_and_add_faces!(dest, m, e, faces, cell_centroids; offset = 0, face_offset = 0)
+function triangulate_and_add_faces!(dest, m, e, faces, cell_centroids; offset = 0, face_offset = 0, flip = false)
     node_pts = m.node_points
     T = eltype(node_pts)
     for f in 1:count_entities(m, e)
@@ -66,12 +70,12 @@ function triangulate_and_add_faces!(dest, m, e, faces, cell_centroids; offset = 
             C += node_pts[node]
         end
         C /= n
-        offset = triangulate_and_add_faces!(dest, f + face_offset, faces.neighbors[f], C, nodes, node_pts, cell_centroids, n; offset = offset)
+        offset = triangulate_and_add_faces!(dest, f + face_offset, faces.neighbors[f], C, nodes, node_pts, cell_centroids, n; offset = offset, flip = flip)
     end
     return offset
 end
 
-function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::Vector{SVector{2, T}}, cell_centroids, n; offset = 0) where {T}
+function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::Vector{SVector{2, T}}, cell_centroids, n; offset = 0, flip = flip) where {T}
     cell_index, face_index, pts, tri = dest
     new_vert_count = n + 1
     @assert new_vert_count == 3
@@ -83,7 +87,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                 push!(pts, svector_local_point(cell_centroids[cell], i-1, nodes, node_pts))
             end
             for i in 1:n
-                push!(tri, svector_cyclical_tesselation(n, i, offset))
+                push!(tri, svector_cyclical_tesselation(n, i, offset, flip))
             end
             offset = offset + new_vert_count
         end
@@ -92,7 +96,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
 end
 
 
-function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::Vector{SVector{3, T}}, cell_centroids, n; offset = 0) where {T}
+function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::Vector{SVector{3, T}}, cell_centroids, n; offset = 0, flip = flip) where {T}
     cell_index, face_index, pts, tri = dest
     if n == 3
         # Just add the triangle
@@ -102,7 +106,11 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                 push!(face_index, face)
                 push!(pts, node_pts[nodes[i]])
             end
-            push!(tri, SVector{3, Int}(offset+1, offset + 2, offset + 3))
+            next_tri = SVector{3, Int}(offset + 1, offset + 2, offset+3)
+            if flip
+                next_tri = reverse(next_tri)
+            end
+            push!(tri, next_tri)
             offset += n
         end
     elseif n == 4
@@ -113,8 +121,14 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                 push!(face_index, face)
                 push!(pts, node_pts[nodes[i]])
             end
-            push!(tri, SVector{3, Int}(offset+1, offset + 2, offset + 3))
-            push!(tri, SVector{3, Int}(offset+3, offset + 4, offset + 1))
+            T1 = SVector{3, Int}(offset + 1, offset + 2, offset + 3)
+            T2 = SVector{3, Int}(offset + 3, offset + 4, offset + 1)
+            if flip
+                T1 = reverse(T1)
+                T2 = reverse(T2)
+            end
+            push!(tri, T1)
+            push!(tri, T2)
             offset += n
         end
     else
@@ -127,7 +141,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                     push!(pts, svector_local_point(C, i-1, nodes, node_pts))
                 end
                 for i in 1:n
-                    push!(tri, svector_cyclical_tesselation(n, i, offset))
+                    push!(tri, svector_cyclical_tesselation(n, i, offset, flip))
                 end
                 offset = offset + new_vert_count
             end
@@ -136,7 +150,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
     return offset
 end
 
-function svector_cyclical_tesselation(n::Int, i::Int, offset::Int)
+function svector_cyclical_tesselation(n::Int, i::Int, offset::Int, flip::Bool = false)
     # Create a triangulation of face, assuming convexity
     # Each tri is two successive points on boundary connected to centroid
     # First column i + 1
@@ -147,7 +161,14 @@ function svector_cyclical_tesselation(n::Int, i::Int, offset::Int)
     else
         t = i + offset
     end
-    return @SVector [i + 1 + offset, 1 + offset, t]
+    n1 = i + 1 + offset
+    n2 = 1 + offset
+    n3 = t
+    out = SVector{3, Int}(n1, n2, n3)
+    if flip
+        out = reverse(out)
+    end
+    return out
 end
 
 function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts) where N
@@ -158,7 +179,6 @@ function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts) wh
     end
     return pt::SVector{N, Float64}
 end
-
 
 function plot_flatten_helper(data::Vector{Tv}) where Tv<:SVector
     n = length(data)
