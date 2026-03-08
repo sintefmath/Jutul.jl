@@ -116,6 +116,9 @@ function triangulate_mesh(d::DataDomain; kwarg...)
     return triangulate_mesh(physical_representation(d); kwarg...)
 end
 
+dim(d::DataDomain) = dim(physical_representation(d))
+mesh_z_is_depth(d::DataDomain) = mesh_z_is_depth(physical_representation(d))
+
 """
     DataDomain(domain::JutulDomain; property1 = p1, property2 = p2, ...)
 
