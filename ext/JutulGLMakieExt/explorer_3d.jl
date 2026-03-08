@@ -189,17 +189,17 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     mesh_scene = Scene(lscene.scene, scenekw = scene_arg)
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
-    right_grid_layout = GridLayout(fig[:, N-3:N-1], 20, 5)
+
+    right_grid_layout_outer = GridLayout(fig[2:N-2, N-4:N-1], 3, 1)
+    right_grid_layout = GridLayout(right_grid_layout_outer[1:2, 1])
     idx_right_gl = 2
+    # Middle box for stepping
     step_grid_layout = GridLayout(fig[N-3:N, 6:16])
     idx_stepgl = 1
 
-    if HAS_DYNAMIC_DATA
-        histrng = 16:18
-    else
-        histrng = 16:18
-    end
-    ax_hist = Axis(right_grid_layout[histrng, 1:5],
+    histrng = 3
+    hist_grid_layout = GridLayout(right_grid_layout_outer[histrng, 1])
+    ax_hist = Axis(hist_grid_layout[1, 1],
         titlecolor = main_color,
         ygridvisible = false,
         xgridvisible = false,
@@ -416,7 +416,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     # plot_faults!(lscene, m, colormap = cmap)
 
 
-    Colorbar(right_grid_layout[last(histrng)+1, 1:5], mplt,
+    Colorbar(hist_grid_layout[2, 1], mplt,
         vertical = false,
         ticklabelsize = 12,
         flipaxis = false,
@@ -596,7 +596,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     _ = @lift sideplot_timeseries($selected_cells, $sel_dyn, $is_dynamic)
     Label(left_grid_layout[2, 1:5], clicklabel, halign = :left, color = main_color, justification = :left)
-    @assert idx_right_gl < first(histrng) "Not enough space for click label, increase subgl rows or reduce controls"
 
     if !ismissing(aspect)
         scale!(lscene.scene, aspect...)
