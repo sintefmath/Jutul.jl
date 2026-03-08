@@ -29,12 +29,16 @@ function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = miss
     return Jutul.plot_explorer_impl(m, static, dynamic; kwarg...)
 end
 
-function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing; kwarg...)
+function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing; verbose = false, kwarg...)
     m = physical_representation(m)
-    println("Triangulating mesh for plotting...")
-    @time points, ttri, tri = mesh_as_static(m)
-    println("Mesh triangulation complete. Setting up plot...")
-    return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic; kwarg...)
+    if verbose
+        jutul_message("plot_explorer", "Triangulating mesh for plotting...")
+    end
+    t_static = @elapsed points, ttri, tri = mesh_as_static(m)
+    if verbose
+        jutul_message("plot_explorer", "Mesh triangulation complete in $(round(t_static, sigdigits=3)) seconds. Setting up plot...")
+    end
+    return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic; verbose = verbose, kwarg...)
 end
 
 function convert_dict(d::AbstractDict, nc::Int)
@@ -111,7 +115,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         camarg = NamedTuple(),
         show_axis = false,
         aspect = missing,
-        plot_pause = 1.0/30.0
+        plot_pause = 1.0/30.0,
+        verbose = false
     )
     default_colors = preset_colors(preset)
     if ismissing(colormap)
@@ -347,7 +352,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
     toggle_mesh = add_toggle!("Mesh cells")
-    
+
     # Toggle mesh itself
     # transparency_toggle = add_toggle!("Transparency", false)
     hist_toggle = add_toggle!("Histogram", true)
@@ -360,7 +365,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     vertex_val_buffer = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
     vertex_values = zeros(T_f, length(cell_to_vertex))
     function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_indep, is_glob, to_symlog)
-        println("Updating for step $step_idx")
         # Doing two things:
         # - Return the values in val_buffer for histogram
         # - Update the vertex_val_buffer for the mesh plotting
@@ -385,7 +389,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
-        map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F)
+        map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F, verbose)
 
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -504,6 +508,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 return Consume(false)
             elseif plt == mplt
                 cell = cell_for_click(i)
+                if verbose
+                    jutul_message("plot_explorer", "Clicked cell: $cell")
+                end
                 for plt in cell_outline
                     delete!(mesh_scene, plt)
                 end
@@ -755,7 +762,7 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     return lims
 end
 
-function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, is_indep, use_highclip, F)
+function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, is_indep, use_highclip, F, verbose)
     # map_to_face_buffer_with_truncation!(face_val_buffer, cell_to_vertex
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
     ϵ = 1e-6
@@ -769,7 +776,7 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
     bnd_static = (bnd_static[1], max(bnd_static[2], bnd_static[1] + ϵ))
     is_outside(x, rng) = x < rng[1] || x > rng[2]
     to_inner(x, bnds) = (F(x) - bnds[1])/(bnds[2] - bnds[1])
-    @time for cell_no in eachindex(cell_vals)
+    for cell_no in eachindex(cell_vals)
         if has_dynamic
             dyn_norm = to_inner(dyn_values[cell_no], bnd_dyn)
         else
@@ -797,7 +804,10 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
     end
     @. vertex_vals = cell_vals[cell_to_vertex]
     n = length(vertex_vals)
-    @time vertex_val_buffer[1:n] = vertex_vals
+    t_update = @elapsed vertex_val_buffer[1:n] = vertex_vals
+    if verbose
+        jutul_message("plot_explorer", "Updated vertex buffer in $(round(t_update, sigdigits=3)) seconds")
+    end
     return vertex_val_buffer
 end
 
