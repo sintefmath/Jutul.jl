@@ -756,8 +756,14 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     else
         lims = get(static, key, missing)
     end
-    if !ismissing(lims) && to_symlog
-        lims = (symlog10(lims[1]), symlog10(lims[2]))
+    if !ismissing(lims)
+        # Make sure limits are not identical
+        ϵ = 1e-3
+        low_delta = max(lims[1] + ϵ, lims[1]*(1+ϵ))
+        lims = (lims[1], max(low_delta, lims[2]))
+        if to_symlog
+            lims = (symlog10(lims[1]), symlog10(lims[2]))
+        end
     end
     return lims
 end
