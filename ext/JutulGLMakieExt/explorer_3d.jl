@@ -34,11 +34,15 @@ function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = miss
     return Jutul.plot_explorer_impl(m, static, dynamic; kwarg...)
 end
 
-function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing; verbose = false, kwarg...)
+function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing;
+        verbose = false,
+        triangulate_arg = NamedTuple(),
+        kwarg...
+    )
     if verbose
         jutul_message("plot_explorer", "Triangulating mesh for plotting...")
     end
-    t_static = @elapsed points, ttri, tri = mesh_as_static(m)
+    t_static = @elapsed points, ttri, tri = mesh_as_static(m; triangulate_arg...)
     if verbose
         jutul_message("plot_explorer", "Mesh triangulation complete in $(round(t_static, sigdigits=3)) seconds. Setting up plot...")
     end
@@ -653,8 +657,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!)
 end
 
-function mesh_as_static(m)
-    tri = Jutul.triangulate_mesh(m, outer = false)
+function mesh_as_static(m; kwarg...)
+    tri = Jutul.triangulate_mesh(m; outer = false, kwarg...)
     return mesh_as_static(m, tri)
 end
 
