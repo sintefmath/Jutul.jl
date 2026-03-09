@@ -534,19 +534,34 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 end
                 empty!(cell_outline)
                 if is_shift
-                    push!(selected_cells.val, cell)
-                    while length(selected_cells.val) > max_clicked
-                        popfirst!(selected_cells.val)
+                    if !(cell in selected_cells.val)
+                        push!(selected_cells.val, cell)
+                        while length(selected_cells.val) > max_clicked
+                            popfirst!(selected_cells.val)
+                        end
+                        cells = selected_cells.val
+                        notify(selected_cells)
                     end
-                    cells = selected_cells.val
-                    notify(selected_cells)
                 else
                     cells = [cell]
                     selected_cells[] = cells
                 end
                 for (i, cell) in enumerate(cells)
                     pp = plot_mesh_edges!(mesh_scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
-                    if !ismissing(pp)
+                    if ismissing(pp)
+                        verts = findall(isequal(cell), cell_to_vertex)
+                        new_tri = similar(ttri, 0)
+                        for t in ttri
+                            a, b, c = t
+                            if a in verts && b in verts && c in verts
+                                push!(new_tri, t)
+                            end
+                        end
+                        if length(new_tri) > 0
+                            pp = mesh!(lscene.scene, points, new_tri)#, color = colors_clicks[i], alpha = 0.5, transparency = true)
+                            push!(cell_outline, pp)
+                        end
+                    else
                         push!(cell_outline, pp)
                     end
                 end
