@@ -17,10 +17,15 @@ function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = miss
             static = convert_dict(m.data, number_of_cells(m))
             if haskey(m, :cell_centroids)
                 cc = m[:cell_centroids]
+                d = size(cc, 1)
                 static["X"] = view(cc, 1, :)
                 static["Y"] = view(cc, 2, :)
-                static["Z"] = view(cc, 3, :)
-                static["Volumes"] = m[:volumes]
+                if d > 2
+                    static["Z"] = view(cc, 3, :)
+                end
+                if haskey(m, :volumes)
+                    static["Volumes"] = m[:volumes]
+                end
             end
         else
             static = OrderedDict{String, Vector}()
@@ -29,15 +34,19 @@ function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = miss
     return Jutul.plot_explorer_impl(m, static, dynamic; kwarg...)
 end
 
-function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing; verbose = false, kwarg...)
-    m = physical_representation(m)
+function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing;
+        verbose = false,
+        triangulate_arg = NamedTuple(),
+        kwarg...
+    )
     if verbose
         jutul_message("plot_explorer", "Triangulating mesh for plotting...")
     end
-    t_static = @elapsed points, ttri, tri = mesh_as_static(m)
+    t_static = @elapsed points, ttri, tri = mesh_as_static(m; triangulate_arg...)
     if verbose
         jutul_message("plot_explorer", "Mesh triangulation complete in $(round(t_static, sigdigits=3)) seconds. Setting up plot...")
     end
+    m = physical_representation(m)
     return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic; verbose = verbose, kwarg...)
 end
 
@@ -105,7 +114,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         textcolor = missing,
         background_colormap = missing,
         colormap = missing,
-        hist_colormap = missing,
+        hist_colormap = colormap,
         nbins = 25,
         use_highclip = Sys.isapple(),
         backgroundcolor = missing,
@@ -140,12 +149,21 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     plot_data = convert_dict(static, nc)
     if extra_static || length(keys(plot_data)) == 0
         if !haskey(plot_data, "X")
-            geo = tpfv_geometry(m)
-            cc = geo.cell_centroids
-            plot_data["X"] = view(cc, 1, :)
-            plot_data["Y"] = view(cc, 2, :)
-            plot_data["Z"] = view(cc, 3, :)
-            plot_data["Volumes"] = geo.volumes
+            geo = missing
+            try
+                geo = tpfv_geometry(m)
+            catch
+
+            end
+            if !ismissing(geo)
+                cc = geo.cell_centroids
+                plot_data["X"] = view(cc, 1, :)
+                plot_data["Y"] = view(cc, 2, :)
+                if size(cc, 1) > 2
+                    plot_data["Z"] = view(cc, 3, :)
+                end
+                plot_data["Volumes"] = geo.volumes
+            end
         end
         plot_data["Cell ID"] = 1:number_of_cells(m)
         if (m isa Jutul.UnstructuredMesh || m isa Jutul.CartesianMesh) && Jutul.grid_dims_ijk(m) != (nc, 1, 1)
@@ -516,19 +534,36 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 end
                 empty!(cell_outline)
                 if is_shift
-                    push!(selected_cells.val, cell)
-                    while length(selected_cells.val) > max_clicked
-                        popfirst!(selected_cells.val)
+                    if !(cell in selected_cells.val)
+                        push!(selected_cells.val, cell)
+                        while length(selected_cells.val) > max_clicked
+                            popfirst!(selected_cells.val)
+                        end
+                        cells = selected_cells.val
+                        notify(selected_cells)
                     end
-                    cells = selected_cells.val
-                    notify(selected_cells)
                 else
                     cells = [cell]
                     selected_cells[] = cells
                 end
                 for (i, cell) in enumerate(cells)
                     pp = plot_mesh_edges!(mesh_scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
-                    push!(cell_outline, pp)
+                    if ismissing(pp)
+                        verts = findall(isequal(cell), cell_to_vertex)
+                        new_tri = similar(ttri, 0)
+                        for t in ttri
+                            a, b, c = t
+                            if a in verts && b in verts && c in verts
+                                push!(new_tri, t)
+                            end
+                        end
+                        if length(new_tri) > 0
+                            pp = mesh!(lscene.scene, points, new_tri)#, color = colors_clicks[i], alpha = 0.5, transparency = true)
+                            push!(cell_outline, pp)
+                        end
+                    else
+                        push!(cell_outline, pp)
+                    end
                 end
                 return Consume(true)
             else
@@ -639,15 +674,15 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!)
 end
 
-function mesh_as_static(m)
-    tri = Jutul.triangulate_mesh(m, outer = false)
+function mesh_as_static(m; kwarg...)
+    tri = Jutul.triangulate_mesh(m; outer = false, kwarg...)
     return mesh_as_static(m, tri)
 end
 
 function mesh_as_static(m, tri)
     D = Jutul.dim(m)
     T = Jutul.float_type(m)
-    return mesh_as_static(m, tri, Val(D), Val(T))
+    return mesh_as_static(physical_representation(m), tri, Val(D), Val(T))
 end
 
 function convert_points(tripoints, ::Val{D}, ::Val{T}) where {D, T}
@@ -683,29 +718,6 @@ function mesh_as_static(m, tri, Dval::Val{D}, Tval::Val{T}) where {D, T}
     triangulation = tri.triangulation
     tripoints::Matrix{T}
     points = convert_points(tripoints, Dval, Tval)
-    # Point_T = Point{D, T}
-    # points = Vector{Point_T}()
-    # npts = size(tripoints, 1)
-    # sizehint!(points, npts)
-    # if D == 2
-    #     for i in 1:npts
-    #         x = tripoints[i, 1]
-    #         y = tripoints[i, 2]
-    #         nextpt = Point_T(x, y)
-    #         nextpt::Point_T
-    #         push!(points, nextpt)
-    #     end
-    # else
-    #     @assert D == 3
-    #     for i in 1:npts
-    #         x = tripoints[i, 1]
-    #         y = tripoints[i, 2]
-    #         z = tripoints[i, 3]
-    #         nextpt = Point_T(x, y, z)
-    #         nextpt::Point_T
-    #         push!(points, nextpt)
-    #     end
-    # end
     Tri_T = Makie.GeometryBasics.TriangleFace{Int}
     ttri = Tri_T[]
     sizehint!(ttri, size(triangulation, 1))
