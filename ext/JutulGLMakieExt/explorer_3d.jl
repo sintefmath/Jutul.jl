@@ -546,7 +546,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 end
                 for (i, cell) in enumerate(cells)
                     pp = plot_mesh_edges!(mesh_scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
-                    push!(cell_outline, pp)
+                    if !ismissing(pp)
+                        push!(cell_outline, pp)
+                    end
                 end
                 return Consume(true)
             else
