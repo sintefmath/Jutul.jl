@@ -426,7 +426,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     else
         mesh_arg = NamedTuple()
     end
-    @info "??" points ttri
     mplt = mesh!(lscene, points, ttri;
         colormap = cmap,
         color = vertex_val_buffer,
