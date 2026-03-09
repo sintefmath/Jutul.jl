@@ -114,7 +114,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         textcolor = missing,
         background_colormap = missing,
         colormap = missing,
-        hist_colormap = missing,
+        hist_colormap = colormap,
         nbins = 25,
         use_highclip = Sys.isapple(),
         backgroundcolor = missing,
