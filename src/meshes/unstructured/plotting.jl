@@ -1,4 +1,4 @@
-function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten = true, flip = mesh_z_is_depth(m)) where D
+function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten = true, flip = true) where D
     pts = Vector{SVector{D, Float64}}()
     tri = Vector{SVector{3, Int64}}()
     cell_index = Vector{Int64}()
