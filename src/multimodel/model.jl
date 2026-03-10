@@ -448,6 +448,8 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         end
         return bz
     end
+    block_size_adjusted_offset(offset, ::Nothing) = offset
+    block_size_adjusted_offset(offset, b::Int) = offset ÷ b
     bz_n = nothing
     bz_m = nothing
     for target in targets
@@ -466,10 +468,10 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
 
                 for ii in i
-                    push!(I, ii + equation_offset)
+                    push!(I, ii + block_size_adjusted_offset(equation_offset, bz_n))
                 end
                 for jj in j
-                    push!(J, jj + variable_offset)
+                    push!(J, jj + block_size_adjusted_offset(variable_offset, bz_m))
                 end
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
