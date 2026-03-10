@@ -182,7 +182,8 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
         else
             # Vector (of floats) was given. Use as buffer, reinterpret.
             v::AbstractVector{<:Ft}
-            @assert length(v) == n*bz "Expected buffer size $n*$bz, was $(length(v))."
+            expected_length = n*bz
+            length(v) == expected_length || error("Expected buffer size $n*$bz=$expected_length, was $(length(v)).")
             unsafe = true
             if unsafe
                 # This is a bit dangerous but there are issues with performance
