@@ -452,6 +452,12 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     block_size_adjusted_offset(offset, b::Int) = offset ÷ b
     bz_n = nothing
     bz_m = nothing
+    
+    targets_number_of_equations = map(k -> number_of_equations(model[k]), targets)
+    sources_number_of_variables = map(k -> number_of_degrees_of_freedom(model[k]), sources)
+    
+    @info "??" targets sources targets_number_of_equations sources_number_of_variables
+    variable_offset = 0
     for target in targets
         variable_offset = 0
         n = 0
@@ -468,13 +474,13 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
 
                 for ii in i
-                    push!(I, ii + block_size_adjusted_offset(equation_offset, bz_n))
+                    push!(I, ii + equation_offset)
                 end
                 for jj in j
-                    push!(J, jj + block_size_adjusted_offset(variable_offset, bz_m))
+                    push!(J, jj + variable_offset)
                 end
             end
-            outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
+            outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1) with bz=($bz_n,$bz_m).\n"
             variable_offset += m
         end
         outstr *= "\n"
@@ -483,7 +489,10 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     @debug outstr
     bz_n = finalize_block_size(bz_n)
     bz_m = finalize_block_size(bz_m)
-    return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
+    N = sum(targets_number_of_equations)
+    M = sum(sources_number_of_variables)
+    @info "????" N M N/bz_n M/bz_m
+    return SparsePattern(I, J, N, M, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
 end
 
 function setup_linearized_system!(storage, model::MultiModel)
@@ -523,6 +532,7 @@ function setup_linearized_system!(storage, model::MultiModel)
             global_subs = (base_pos+1):(base_pos+local_size)
             r_i = view(r, global_subs)
             dx_i = view(dx, global_subs)
+            @info "???" ndof ndof[local_models]
             subsystems[dpos, dpos] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
             base_pos += local_size
         end
