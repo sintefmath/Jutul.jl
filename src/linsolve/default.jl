@@ -127,6 +127,8 @@ function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing
         nrows = n
         ncols = m
     end
+    @assert nrows == ncols
+    @info "???" ncols bz
     dx, dx_buf = get_jacobian_vector(ncols, context, layout, dx, bz[1])
     r, r_buf = get_jacobian_vector(nrows, context, layout, r, bz[1])
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
@@ -154,7 +156,7 @@ function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row
     Ft = float_type(context)
 
     V = zeros(Jt, length(I))
-    jac = build_sparse_matrix(context, I, J, V, n, m)
+    jac = build_sparse_matrix(context, I, J, V, n ÷ bz[1], m ÷ bz[2])
     nzval = nonzeros(jac)
     if Ft == Jt
         V_buf = nzval
