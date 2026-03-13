@@ -156,6 +156,7 @@ function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row
     Ft = float_type(context)
 
     V = zeros(Jt, length(I))
+    @info "m!" maximum(I) maximum(J) n m n ÷ bz[1] m ÷ bz[2]
     jac = build_sparse_matrix(context, I, J, V, n ÷ bz[1], m ÷ bz[2])
     nzval = nonzeros(jac)
     if Ft == Jt
