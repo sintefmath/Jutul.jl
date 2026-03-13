@@ -315,21 +315,27 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
 
         col_is_block = col_layout == BlockMajorLayout()
         row_is_block = row_layout == BlockMajorLayout()
-        has_blocks = col_is_block
+        # has_blocks = col_is_block
 
-        if has_blocks
+        if col_is_block
             both_block = row_is_block && row_is_block
             if both_block
                 @error "Both are blocks..."
+                @assert row_layout == col_layout
             else
+                @error "Scalarizing" row_layout col_layout
                 row_layout = scalarize_layout(row_layout, col_layout)
                 col_layout = scalarize_layout(col_layout, row_layout)
             end
-            @assert row_layout == col_layout
             # Assume that block layout uses a single entity, grab the only one with primaries
             prim_e = get_primary_variable_ordered_entities(target_model)
             some_entity = only(prim_e)
             bz = degrees_of_freedom_per_entity(target_model, some_entity)
+        elseif row_is_block
+            @error "Scalarizing" row_layout col_layout
+            row_layout = scalarize_layout(row_layout, col_layout)
+            col_layout = scalarize_layout(col_layout, row_layout)
+            bz = 1
         else
             bz = 1
         end
