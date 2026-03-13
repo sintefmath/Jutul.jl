@@ -86,6 +86,11 @@ function find_jac_position(
             target_entity_offset = 0
             equation_index = equation_index + n
         end
+        if source_entity_offset != 0
+            m = fld(source_entity_offset, nentities_source)
+            source_entity_offset = 0
+            partial_index = partial_index + m
+        end
     end
 
     row_base = row_offset
