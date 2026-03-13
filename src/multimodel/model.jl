@@ -372,8 +372,8 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         I = vec(vcat(I...))
         J = vec(vcat(J...))
         nrows = number_of_rows(target_model, row_layout)
-        @info "?!" nrows bz
-        if row_is_block
+        @info "?!" nrows ncols bz col_is_block row_is_block
+        if col_is_block && !row_is_block
             # nrows = nrows ÷ bz
         end
         @info "Attempting sparse pattern with" target source nrows ncols maximum(I, init = 0) maximum(J, init = 0)
@@ -392,8 +392,17 @@ end
 
 function number_of_rows(model, layout::BlockMajorLayout)
     n = 0
+    entity = missing
     for eq in values(model.equations)
-        n += number_of_entities(model, eq)
+        new_entity = associated_entity(eq)
+        new_n = number_of_entities(model, eq)
+        if ismissing(entity)
+            entity = new_entity
+        else
+            @assert entity == new_entity "All equations must be associated with the same entity for block major layout"
+            @assert new_n == n "All blocks must have the same number of rows for block major layout"
+        end
+        n = new_n
     end
     return n
 end
@@ -488,8 +497,12 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     
     targets_number_of_equations = map(k -> number_of_equations(model[k]), targets)
     sources_number_of_variables = map(k -> number_of_degrees_of_freedom(model[k]), sources)
+
+    row_layout = matrix_layout(row_context)
+    col_layout = matrix_layout(col_context)
     
-    @info "??" targets sources targets_number_of_equations sources_number_of_variables
+    @info "?!!!!!!!?" targets sources targets_number_of_equations sources_number_of_variables row_context col_context
+    is_fully_blocked = false && row_layout == col_layout == BlockMajorLayout()
     variable_offset = 0
     for target in targets
         variable_offset = 0
@@ -507,11 +520,18 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                 @assert minimum(i) >= 1 "I index was lower than 1 for $source → $target"
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
 
-                for ii in i
-                    push!(I, ii + equation_offset)
-                end
-                for jj in j
-                    push!(J, jj + variable_offset)
+                if is_fully_blocked
+                    for (ii, jj) in zip(i, j)
+                        push!(I, ii)
+                        push!(J, jj)
+                    end
+                else
+                    for ii in i
+                        push!(I, ii + equation_offset)
+                    end
+                    for jj in j
+                        push!(J, jj + variable_offset)
+                    end
                 end
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1) with bz=($bz_n,$bz_m).\n"
@@ -525,6 +545,10 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     bz_m = finalize_block_size(bz_m)
     N = sum(targets_number_of_equations)
     M = sum(sources_number_of_variables)
+    if is_fully_blocked
+        # error()
+        println("!!!!!!!!! System is all blocks with block size ($bz_n, $bz_m).")
+    end
     @info "????" N M N/bz_n M/bz_m
     @error "Pattern setup" maximum(I) maximum(J)
     return SparsePattern(I, J, N, M, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
@@ -567,7 +591,7 @@ function setup_linearized_system!(storage, model::MultiModel)
             global_subs = (base_pos+1):(base_pos+local_size)
             r_i = view(r, global_subs)
             dx_i = view(dx, global_subs)
-            @info "???" ndof ndof[local_models]
+            @info "READY TO ADD FOR $dpos" dpos t ndof ndof[local_models]
             subsystems[dpos, dpos] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
             base_pos += local_size
         end
