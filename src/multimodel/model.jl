@@ -308,19 +308,27 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # These are the main diagonal blocks each model knows how to produce themselves
         sarg = get_sparse_arguments(storage[target], target_model)
     else
+        # TODO: HERE!
         row_layout = matrix_layout(row_context)
         col_layout = matrix_layout(col_context)
 
-        row_layout = scalarize_layout(row_layout, col_layout)
-        col_layout = scalarize_layout(col_layout, row_layout)
         has_blocks = col_layout == BlockMajorLayout()
-        bz = 1
+
         if has_blocks
+            both_block = has_blocks && row_layout == BlockMajorLayout()
+            if both_block
+                @error "Both are blocks..."
+            else
+                row_layout = scalarize_layout(row_layout, col_layout)
+                col_layout = scalarize_layout(col_layout, row_layout)
+            end
             @assert row_layout == col_layout
             # Assume that block layout uses a single entity, grab the only one with primaries
             prim_e = get_primary_variable_ordered_entities(target_model)
             some_entity = only(prim_e)
             bz = degrees_of_freedom_per_entity(target_model, some_entity)
+        else
+            bz = 1
         end
 
         # Source differs from target. We need to get sparsity from cross model terms.
@@ -423,6 +431,8 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
         if !isnothing(S)
             rows = S.I
             cols = S.J
+            @warn "Block CT" maximum(rows) maximum(cols) equation_offset variable_offset
+
             push!(I, rows .+ equation_offset)
             push!(J, cols .+ variable_offset)
         end
@@ -464,6 +474,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         for source in sources
             sarg = get_sparse_arguments(storage, model, target, source, row_context, col_context)
             i, j, n, m = ijnm(sarg)
+            @info "Pattern for $target $source" variable_offset equation_offset n m maximum(i) maximum(j)
             bz_n = treat_block_size(bz_n, sarg.block_n)
             bz_m = treat_block_size(bz_m, sarg.block_m)
             if length(i) > 0
@@ -492,6 +503,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     N = sum(targets_number_of_equations)
     M = sum(sources_number_of_variables)
     @info "????" N M N/bz_n M/bz_m
+    @error "Pattern setup" maximum(I) maximum(J)
     return SparsePattern(I, J, N, M, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
 end
 
