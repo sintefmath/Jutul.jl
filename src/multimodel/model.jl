@@ -312,10 +312,12 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         row_layout = matrix_layout(row_context)
         col_layout = matrix_layout(col_context)
 
-        has_blocks = col_layout == BlockMajorLayout()
+        col_is_block = col_layout == BlockMajorLayout()
+        row_is_block = row_layout == BlockMajorLayout()
+        has_blocks = col_is_block
 
         if has_blocks
-            both_block = has_blocks && row_layout == BlockMajorLayout()
+            both_block = row_is_block && row_is_block
             if both_block
                 @error "Both are blocks..."
             else
@@ -335,7 +337,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         T = index_type(row_context)
         I = Vector{Vector{T}}()
         J = Vector{Vector{T}}()
-        ncols = Int(number_of_degrees_of_freedom(source_model)/bz)
+        ncols = number_of_degrees_of_freedom(source_model) ÷ bz
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
@@ -362,6 +364,9 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         I = vec(vcat(I...))
         J = vec(vcat(J...))
         nrows = number_of_rows(target_model, row_layout)
+        if row_is_block
+            nrows = nrows ÷ bz
+        end
         sarg = SparsePattern(I, J, nrows, ncols, row_layout, col_layout, bz, bz)
     end
     return sarg
