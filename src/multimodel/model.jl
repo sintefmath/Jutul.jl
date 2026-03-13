@@ -309,6 +309,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         sarg = get_sparse_arguments(storage[target], target_model)
     else
         # TODO: HERE!
+        @info "Sparsity for" target source
         row_layout = matrix_layout(row_context)
         col_layout = matrix_layout(col_context)
 
@@ -367,6 +368,7 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         if row_is_block
             nrows = nrows ÷ bz
         end
+        @info "Attempting sparse pattern with" nrows ncols maximum(I) maximum(J)
         sarg = SparsePattern(I, J, nrows, ncols, row_layout, col_layout, bz, bz)
     end
     return sarg
@@ -428,21 +430,29 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
     eq = ct_equation(target_model, eq_label)
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
-    bz = degrees_of_freedom_per_entity(target_model, only(entities))
-    equation_offset = get_equation_offset(target_model, eq_label)
-    variable_offset = 0
+    # bz = degrees_of_freedom_per_entity(target_model, only(entities))
+    # equation_offset = 0# get_equation_offset(target_model, eq_label)# ÷ bz
+    # variable_offset = 0
+    # 
+    IJ_pairs = Tuple{Int, Int}[]
+    @assert length(entities) <= 1
     for (i, source_e) in enumerate(entities)
         S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, row_layout, col_layout)
         if !isnothing(S)
-            rows = S.I
-            cols = S.J
-            @warn "Block CT" maximum(rows) maximum(cols) equation_offset variable_offset
-
-            push!(I, rows .+ equation_offset)
-            push!(J, cols .+ variable_offset)
+            # rows = S.I
+            # cols = S.J
+            # @warn "Block CT" maximum(rows) maximum(cols) equation_offset variable_offset source_e i eq_label
+            for (ii, jj) in zip(S.I, S.J)
+                push!(IJ_pairs, (ii, jj))
+            end
+            # push!(I, rows .+ equation_offset)
+            # push!(J, cols .+ variable_offset)
         end
-        variable_offset += count_active_entities(source_model.domain, source_e)
+        # variable_offset += count_active_entities(source_model.domain, source_e)
     end
+    unique!(IJ_pairs)
+    push!(I, map(first, IJ_pairs))
+    push!(J, map(last, IJ_pairs))
 end
 
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
