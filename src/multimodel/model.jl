@@ -372,10 +372,11 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         I = vec(vcat(I...))
         J = vec(vcat(J...))
         nrows = number_of_rows(target_model, row_layout)
+        @info "?!" nrows bz
         if row_is_block
-            nrows = nrows ÷ bz
+            # nrows = nrows ÷ bz
         end
-        @info "Attempting sparse pattern with" nrows ncols maximum(I, init = 0) maximum(J, init = 0)
+        @info "Attempting sparse pattern with" target source nrows ncols maximum(I, init = 0) maximum(J, init = 0)
         sarg = SparsePattern(I, J, nrows, ncols, row_layout, col_layout, bz, bz)
     end
     return sarg
