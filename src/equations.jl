@@ -91,9 +91,6 @@ function find_jac_position(
     row_base = row_offset
     col_base = column_offset
 
-    row_base = row_base ÷ N
-    col_base = col_base ÷ N
-
     row = target_entity_offset + target_entity_index + row_base
     col = source_entity_offset + source_entity_index + col_base
 
@@ -500,12 +497,12 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
     end
 end
 
-function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0, kwarg...)
     if entity == associated_entity(eq)
         # By default we perform a diagonal alignment if we match the associated entity.
         # A diagonal alignment means that the equation for some entity depends only on the values inside that entity.
         # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
-        diagonal_alignment!(eq_s, eq, jac, entity, model.context, target_offset = equation_offset, source_offset = variable_offset)
+        diagonal_alignment!(eq_s, eq, jac, entity, model.context; target_offset = equation_offset, source_offset = variable_offset, kwarg...)
     end
 end
 

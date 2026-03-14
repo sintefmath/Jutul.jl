@@ -260,13 +260,24 @@ end
 
 function align_equations_subgroup!(storage, models, model_keys, dims, J, equation_offset, variable_offset)
     neqs, nvars, bz = dims
+    row_offset = column_offset = 0
     for key in model_keys
         submodel = models[key]
         eqs_s = storage[key][:equations]
         eqs = submodel.equations
-        align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
-        equation_offset += neqs[key]÷bz[key]
-        variable_offset += nvars[key]÷bz[key]
+        align_equations_to_jacobian!(eqs_s, eqs, J, submodel,
+            equation_offset = equation_offset,
+            variable_offset = variable_offset,
+            column_offset = column_offset,
+            row_offset = row_offset
+        )
+        nrows = neqs[key]÷bz[key]
+        ncols = nvars[key]÷bz[key]
+        if represented_as_adjoint(matrix_layout(submodel.context))
+            nrows, ncols = ncols, nrows
+        end
+        column_offset += nrows
+        row_offset += ncols
     end
 end
 
@@ -311,27 +322,38 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         row_layout = matrix_layout(row_context)
         col_layout = matrix_layout(col_context)
 
-        row_layout = scalarize_layout(row_layout, col_layout)
-        col_layout = scalarize_layout(col_layout, row_layout)
-        has_blocks = col_layout == BlockMajorLayout()
-        bz = 1
-        if has_blocks
-            @assert row_layout == col_layout
-            # Assume that block layout uses a single entity, grab the only one with primaries
-            prim_e = get_primary_variable_ordered_entities(target_model)
-            some_entity = only(prim_e)
-            bz = degrees_of_freedom_per_entity(target_model, some_entity)
+        col_is_block = col_layout isa BlockMajorLayout
+        row_is_block = row_layout isa BlockMajorLayout
+
+        if col_is_block
+            both_block = row_is_block && row_is_block
+            if both_block
+                @assert row_layout == col_layout
+                # Assume that block layout uses a single entity, grab the only one with primaries
+                prim_e = get_primary_variable_ordered_entities(target_model)
+                some_entity = only(prim_e)
+                bz = degrees_of_freedom_per_entity(target_model, some_entity)
+            else
+                row_layout = scalarize_layout(row_layout, col_layout)
+                col_layout = scalarize_layout(col_layout, row_layout)
+                bz = 1
+            end
+        elseif row_is_block
+            row_layout = scalarize_layout(row_layout, col_layout)
+            col_layout = scalarize_layout(col_layout, row_layout)
+            bz = 1
+        else
+            bz = 1
         end
 
         # Source differs from target. We need to get sparsity from cross model terms.
         T = index_type(row_context)
         I = Vector{Vector{T}}()
         J = Vector{Vector{T}}()
-        ncols = Int(number_of_degrees_of_freedom(source_model)/bz)
+        ncols = number_of_degrees_of_freedom(source_model) ÷ bz
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
-        # TODO: Fix here?
         for (ctp, s) in zip(cross_terms, cross_term_storage)
             ct = ctp.cross_term
             transp = ctp.source == target
@@ -369,8 +391,17 @@ end
 
 function number_of_rows(model, layout::BlockMajorLayout)
     n = 0
+    entity = missing
     for eq in values(model.equations)
-        n += number_of_entities(model, eq)
+        new_entity = associated_entity(eq)
+        new_n = number_of_entities(model, eq)
+        if ismissing(entity)
+            entity = new_entity
+        else
+            @assert entity == new_entity "All equations must be associated with the same entity for block major layout"
+            @assert new_n == n "All blocks must have the same number of rows for block major layout"
+        end
+        n = new_n
     end
     return n
 end
@@ -415,19 +446,20 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
     eq = ct_equation(target_model, eq_label)
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
-    bz = degrees_of_freedom_per_entity(target_model, only(entities))
-    equation_offset = get_equation_offset(target_model, eq_label)
-    variable_offset = 0
+
+    IJ_pairs = Tuple{Int, Int}[]
+    @assert length(entities) <= 1
     for (i, source_e) in enumerate(entities)
         S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, row_layout, col_layout)
         if !isnothing(S)
-            rows = S.I
-            cols = S.J
-            push!(I, rows .+ equation_offset)
-            push!(J, cols .+ variable_offset)
+            for (ii, jj) in zip(S.I, S.J)
+                push!(IJ_pairs, (ii, jj))
+            end
         end
-        variable_offset += count_active_entities(source_model.domain, source_e)
     end
+    unique!(IJ_pairs)
+    push!(I, map(first, IJ_pairs))
+    push!(J, map(last, IJ_pairs))
 end
 
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
@@ -448,8 +480,15 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         end
         return bz
     end
+    block_size_adjusted_offset(offset, ::Nothing) = offset
+    block_size_adjusted_offset(offset, b::Int) = offset ÷ b
     bz_n = nothing
     bz_m = nothing
+
+    targets_number_of_equations = map(k -> number_of_equations(model[k]), targets)
+    sources_number_of_variables = map(k -> number_of_degrees_of_freedom(model[k]), sources)
+
+    variable_offset = 0
     for target in targets
         variable_offset = 0
         n = 0
@@ -472,7 +511,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                     push!(J, jj + variable_offset)
                 end
             end
-            outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1).\n"
+            outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1) with bz=($bz_n,$bz_m).\n"
             variable_offset += m
         end
         outstr *= "\n"
@@ -481,7 +520,10 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     @debug outstr
     bz_n = finalize_block_size(bz_n)
     bz_m = finalize_block_size(bz_m)
-    return SparsePattern(I, J, equation_offset, variable_offset, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
+    N = sum(targets_number_of_equations)÷bz_n
+    M = sum(sources_number_of_variables)÷bz_m
+
+    return SparsePattern(I, J, N, M, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
 end
 
 function setup_linearized_system!(storage, model::MultiModel)

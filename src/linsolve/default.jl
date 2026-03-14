@@ -109,7 +109,7 @@ function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = no
     schur_buffer = Tuple(schur_buffer)
     dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
     r, r_buf = get_jacobian_vector(n, context, layout, r)
-    MultiLinearizedSystem{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)
+    return MultiLinearizedSystem{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)
 end
 
 LSystem = Union{LinearizedType, MultiLinearizedSystem}
@@ -154,7 +154,9 @@ function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row
     Ft = float_type(context)
 
     V = zeros(Jt, length(I))
+    # jac = build_sparse_matrix(context, I, J, V, n ÷ bz[1], m ÷ bz[2])
     jac = build_sparse_matrix(context, I, J, V, n, m)
+
     nzval = nonzeros(jac)
     if Ft == Jt
         V_buf = nzval
@@ -182,7 +184,8 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
         else
             # Vector (of floats) was given. Use as buffer, reinterpret.
             v::AbstractVector{<:Ft}
-            @assert length(v) == n*bz "Expected buffer size $n*$bz, was $(length(v))."
+            expected_length = n*bz
+            length(v) == expected_length || error("Expected buffer size $n*$bz=$expected_length, was $(length(v)).")
             unsafe = true
             if unsafe
                 # This is a bit dangerous but there are issues with performance
