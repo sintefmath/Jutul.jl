@@ -140,6 +140,7 @@ function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMa
         I, J = findnz(A)
         IJ = map((i, j) -> (i, j), I, J)
         @error "Unable to map cache entry to Jacobian, ($row,$col) not allocated in Jacobian matrix." A row col represented_as_adjoint(layout) IJ
+        display(A.At')
         error("Jacobian alignment failed. Giving up.")
     end
     return pos
@@ -497,12 +498,12 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
     end
 end
 
-function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0, kwarg...)
     if entity == associated_entity(eq)
         # By default we perform a diagonal alignment if we match the associated entity.
         # A diagonal alignment means that the equation for some entity depends only on the values inside that entity.
         # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
-        diagonal_alignment!(eq_s, eq, jac, entity, model.context, target_offset = equation_offset, source_offset = variable_offset)
+        diagonal_alignment!(eq_s, eq, jac, entity, model.context; target_offset = equation_offset, source_offset = variable_offset, kwarg...)
     end
 end
 

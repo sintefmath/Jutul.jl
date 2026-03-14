@@ -261,14 +261,14 @@ end
 # end
 
 
-function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, jac, model, ::Faces; equation_offset = 0, variable_offset = 0, kwarg...)
     fd = law.flow_discretization
     pr = physical_representation(model.domain)
     neighborship = get_neighborship(pr)
 
     hflux_faces = eq_s.half_face_flux_faces
     if !isnothing(hflux_faces)
-        half_face_flux_faces_alignment!(hflux_faces, jac, model.context, neighborship, fd, target_offset = equation_offset, source_offset = variable_offset)
+        half_face_flux_faces_alignment!(hflux_faces, jac, model.context, neighborship, fd; target_offset = equation_offset, source_offset = variable_offset, kwarg...)
     end
 end
 
@@ -276,7 +276,7 @@ function align_to_jacobian!(eq_s::ConservationLawTPFAStorage, law::ConservationL
     # Assume that this is ok. Warning already issued.
 end
 
-function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0)
+function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0, row_offset = 0, column_offset = 0)
     nf, ne, np = ad_dims(face_cache)
     nhf = size(face_cache.jacobian_positions, 2)
     @assert nhf/2 == nf
@@ -287,7 +287,7 @@ function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc;
             face = flow_disc.conn_data[f_ix].face
             for e in 1:ne
                 for d = 1:np
-                    pos = find_jac_position(jac, cell, face, 0, 0, target_offset, source_offset, e, d, nc, nf, ne, np, context)
+                    pos = find_jac_position(jac, cell, face, row_offset, column_offset, target_offset, source_offset, e, d, nc, nf, ne, np, context)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end
             end
