@@ -694,7 +694,6 @@ function align_equations_to_jacobian!(eq_storage, equations, jac, model;
             variable_offset = variable_offset,
             column_offset = column_offset,
             row_offset = row_offset
-
         )
         equation_offset += number_of_equations(model, eq)
     end

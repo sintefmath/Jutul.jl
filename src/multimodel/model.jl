@@ -271,8 +271,13 @@ function align_equations_subgroup!(storage, models, model_keys, dims, J, equatio
             column_offset = column_offset,
             row_offset = row_offset
         )
-        column_offset += neqs[key]÷bz[key]
-        row_offset += nvars[key]÷bz[key]
+        nrows = neqs[key]÷bz[key]
+        ncols = nvars[key]÷bz[key]
+        if represented_as_adjoint(matrix_layout(submodel.context))
+            nrows, ncols = ncols, nrows
+        end
+        column_offset += nrows
+        row_offset += ncols
     end
 end
 
