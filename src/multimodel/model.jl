@@ -260,13 +260,20 @@ end
 
 function align_equations_subgroup!(storage, models, model_keys, dims, J, equation_offset, variable_offset)
     neqs, nvars, bz = dims
+    row_offset = column_offset = 0
     for key in model_keys
         submodel = models[key]
         eqs_s = storage[key][:equations]
         eqs = submodel.equations
-        align_equations_to_jacobian!(eqs_s, eqs, J, submodel, equation_offset = equation_offset, variable_offset = variable_offset)
-        equation_offset += neqs[key]÷bz[key]
-        variable_offset += nvars[key]÷bz[key]
+        @info "Aligning equations of model $key to linearized system with offset $equation_offset and variable offset $variable_offset..."
+        align_equations_to_jacobian!(eqs_s, eqs, J, submodel,
+            equation_offset = equation_offset,
+            variable_offset = variable_offset,
+            column_offset = column_offset,
+            row_offset = row_offset
+        )
+        column_offset += neqs[key]÷bz[key]
+        row_offset += nvars[key]÷bz[key]
     end
 end
 
