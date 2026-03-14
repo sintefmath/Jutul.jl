@@ -319,7 +319,6 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
 
         col_is_block = col_layout == BlockMajorLayout()
         row_is_block = row_layout == BlockMajorLayout()
-        # has_blocks = col_is_block
 
         if col_is_block
             both_block = row_is_block && row_is_block
@@ -442,25 +441,16 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
     eq = ct_equation(target_model, eq_label)
     target_e = associated_entity(eq)
     entities = get_primary_variable_ordered_entities(source_model)
-    # bz = degrees_of_freedom_per_entity(target_model, only(entities))
-    # equation_offset = 0# get_equation_offset(target_model, eq_label)# ÷ bz
-    # variable_offset = 0
-    # 
+
     IJ_pairs = Tuple{Int, Int}[]
     @assert length(entities) <= 1
     for (i, source_e) in enumerate(entities)
         S = declare_sparsity(target_model, source_model, eq, x, s, ind, target_e, source_e, row_layout, col_layout)
         if !isnothing(S)
-            # rows = S.I
-            # cols = S.J
-            # @warn "Block CT" maximum(rows) maximum(cols) equation_offset variable_offset source_e i eq_label
             for (ii, jj) in zip(S.I, S.J)
                 push!(IJ_pairs, (ii, jj))
             end
-            # push!(I, rows .+ equation_offset)
-            # push!(J, cols .+ variable_offset)
         end
-        # variable_offset += count_active_entities(source_model.domain, source_e)
     end
     unique!(IJ_pairs)
     push!(I, map(first, IJ_pairs))
