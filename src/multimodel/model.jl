@@ -520,8 +520,8 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     @debug outstr
     bz_n = finalize_block_size(bz_n)
     bz_m = finalize_block_size(bz_m)
-    N = sum(targets_number_of_equations)
-    M = sum(sources_number_of_variables)
+    N = sum(targets_number_of_equations)÷bz_n
+    M = sum(sources_number_of_variables)÷bz_m
 
     return SparsePattern(I, J, N, M, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
 end

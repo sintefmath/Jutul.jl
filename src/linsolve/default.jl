@@ -109,7 +109,7 @@ function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = no
     schur_buffer = Tuple(schur_buffer)
     dx, dx_buf = get_jacobian_vector(n, context, layout, dx)
     r, r_buf = get_jacobian_vector(n, context, layout, r)
-    MultiLinearizedSystem{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)
+    return MultiLinearizedSystem{typeof(layout)}(subsystems, r, dx, r_buf, dx_buf, reduction, FactorStore(), layout, schur_buffer)
 end
 
 LSystem = Union{LinearizedType, MultiLinearizedSystem}
@@ -154,7 +154,9 @@ function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row
     Ft = float_type(context)
 
     V = zeros(Jt, length(I))
-    jac = build_sparse_matrix(context, I, J, V, n, m)# n ÷ bz[1], m ÷ bz[2])
+    # jac = build_sparse_matrix(context, I, J, V, n ÷ bz[1], m ÷ bz[2])
+    jac = build_sparse_matrix(context, I, J, V, n, m)
+
     nzval = nonzeros(jac)
     if Ft == Jt
         V_buf = nzval
