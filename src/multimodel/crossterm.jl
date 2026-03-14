@@ -374,16 +374,9 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     neqs = sub_number_of_equations(model)
     # Diagonal part: Into target equation, and with respect to target variables
     bz = model_block_size(target_model)
-    # bz_s = model_block_size(model[source])
-    # bz_t = model_block_size(target_model)
-
-    #    bz = min(bz_s, bz_t)
 
     row_offset = local_group_offset(target_keys, target, neqs) ÷ bz
     column_offset = local_group_offset(target_keys, target, ndofs) ÷ bz
-
-    @info "???" bz local_group_offset(target_keys, target, ndofs)
-    @warn "Diagonal alignment for cross term affecting equation $eq_label of model $target with source $source. Equation offset: $equation_offset, variable offset: $variable_offset, row offset: $row_offset, column offset: $column_offset"
 
     equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
@@ -408,18 +401,21 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     # Diagonal part: Into target equation, and with respect to target variables
     bz_s = model_block_size(source_model)
     bz_t = model_block_size(target_model)
-    bz = bz_s
-    bz = bz_t
-    bz = 1
-    bz = min(bz_s, bz_t)
+
+    row_layout = matrix_layout(target_model.context)
+    col_layout = matrix_layout(source_model.context)
+    if bz_s != bz_t
+        layout = matrix_layout(model.context)
+        row_layout = scalarize_layout(row_layout, layout)
+        col_layout = scalarize_layout(col_layout, layout)
+        bz = 1
+    else
+        bz = bz_s
+    end
     row_offset = local_group_offset(target_keys, target, neqs) ÷ bz
     column_offset = local_group_offset(source_keys, source, ndofs) ÷ bz
 
-
     equation_offset += get_equation_offset(target_model, eq_label)
-
-    @info "Off diagonal alignment for cross term affecting equation $eq_label of model $target with source $source. Equation offset: $equation_offset, variable offset: $variable_offset, row offset: $row_offset, column offset: $column_offset"
-    @info "???" bz_s bz_t
     @assert !isnothing(offdiag_alignment)
     nt = number_of_entities(target_model, ct_equation(target_model, eq_label))
     for source_e in get_primary_variable_ordered_entities(source_model)
@@ -436,8 +432,8 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
             column_offset = column_offset,
             positions = offdiag_alignment,
             number_of_entities_target = nt,
-            row_layout = matrix_layout(target_model.context),
-            col_layout = matrix_layout(source_model.context),
+            row_layout = row_layout,
+            col_layout = col_layout,
             number_of_equations_for_entity = neqs_total,
             context = model.context
         )
