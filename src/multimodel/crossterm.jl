@@ -373,8 +373,15 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     ndofs = sub_number_of_degrees_of_freedom(model)
     neqs = sub_number_of_equations(model)
     # Diagonal part: Into target equation, and with respect to target variables
-    row_offset = local_group_offset(target_keys, target, neqs)
-    column_offset = local_group_offset(target_keys, target, ndofs)
+    bz = model_block_size(target_model)
+    bz_s = model_block_size(model[source])
+    bz_t = model_block_size(target_model)
+
+        bz = min(bz_s, bz_t)
+
+    row_offset = local_group_offset(target_keys, target, neqs) ÷ bz
+    column_offset = local_group_offset(target_keys, target, ndofs) ÷ bz
+
 
     equation_offset += get_equation_offset(target_model, eq_label)
     for target_e in get_primary_variable_ordered_entities(target_model)
@@ -393,15 +400,24 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     J = lsys.jac
     ndofs = sub_number_of_degrees_of_freedom(model)
     neqs = sub_number_of_equations(model)
-    # Diagonal part: Into target equation, and with respect to target variables
-    row_offset = local_group_offset(target_keys, target, neqs)
-    column_offset = local_group_offset(source_keys, source, ndofs)
-
     target_model = model[target]
     source_model = model[source]
 
+    # Diagonal part: Into target equation, and with respect to target variables
+    bz_s = model_block_size(source_model)
+    bz_t = model_block_size(target_model)
+    bz = bz_s
+    bz = bz_t
+    bz = 1
+    bz = min(bz_s, bz_t)
+    row_offset = local_group_offset(target_keys, target, neqs) ÷ bz
+    column_offset = local_group_offset(source_keys, source, ndofs) ÷ bz
+
+
     equation_offset += get_equation_offset(target_model, eq_label)
 
+    @info "Off diagonal alignment for cross term affecting equation $eq_label of model $target with source $source. Equation offset: $equation_offset, variable offset: $variable_offset, row offset: $row_offset, column offset: $column_offset"
+    @info "???" bz_s bz_t
     @assert !isnothing(offdiag_alignment)
     nt = number_of_entities(target_model, ct_equation(target_model, eq_label))
     for source_e in get_primary_variable_ordered_entities(source_model)

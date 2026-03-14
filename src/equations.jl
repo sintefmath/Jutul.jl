@@ -72,6 +72,7 @@ function find_jac_position(
     ) where T<:BlockMajorLayout
 
     N = partials_per_entity
+    # if eqs_per_entity < partials_per_entity
     if eqs_per_entity < partials_per_entity
         if target_entity_offset != 0
             # This happens when we have a block layout with several equation
@@ -90,7 +91,6 @@ function find_jac_position(
             m = fld(source_entity_offset, nentities_source)
             source_entity_offset = 0
             partial_index = partial_index + m
-        end
     end
 
     row_base = row_offset
