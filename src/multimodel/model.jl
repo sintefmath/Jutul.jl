@@ -322,8 +322,8 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         row_layout = matrix_layout(row_context)
         col_layout = matrix_layout(col_context)
 
-        col_is_block = col_layout == BlockMajorLayout()
-        row_is_block = row_layout == BlockMajorLayout()
+        col_is_block = col_layout isa BlockMajorLayout
+        row_is_block = row_layout isa BlockMajorLayout
 
         if col_is_block
             both_block = row_is_block && row_is_block
