@@ -314,8 +314,6 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # These are the main diagonal blocks each model knows how to produce themselves
         sarg = get_sparse_arguments(storage[target], target_model)
     else
-        # TODO: HERE!
-        @info "Sparsity for" target source
         row_layout = matrix_layout(row_context)
         col_layout = matrix_layout(col_context)
 
@@ -326,20 +324,17 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         if col_is_block
             both_block = row_is_block && row_is_block
             if both_block
-                @error "Both are blocks..."
                 @assert row_layout == col_layout
                 # Assume that block layout uses a single entity, grab the only one with primaries
                 prim_e = get_primary_variable_ordered_entities(target_model)
                 some_entity = only(prim_e)
                 bz = degrees_of_freedom_per_entity(target_model, some_entity)
             else
-                @error "Scalarizing" row_layout col_layout
                 row_layout = scalarize_layout(row_layout, col_layout)
                 col_layout = scalarize_layout(col_layout, row_layout)
                 bz = 1
             end
         elseif row_is_block
-            @error "Scalarizing" row_layout col_layout
             row_layout = scalarize_layout(row_layout, col_layout)
             col_layout = scalarize_layout(col_layout, row_layout)
             bz = 1
@@ -355,7 +350,6 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         # Loop over target equations and get the sparsity of the sources for each equation - with
         # derivative positions that correspond to that of the source
         cross_terms, cross_term_storage = cross_term_pair(model, storage, source, target, true)
-        # TODO: Fix here?
         for (ctp, s) in zip(cross_terms, cross_term_storage)
             ct = ctp.cross_term
             transp = ctp.source == target
@@ -378,11 +372,6 @@ function get_sparse_arguments(storage, model::MultiModel, target::Symbol, source
         I = vec(vcat(I...))
         J = vec(vcat(J...))
         nrows = number_of_rows(target_model, row_layout)
-        @info "?!" nrows ncols bz col_is_block row_is_block
-        if col_is_block && !row_is_block
-            # nrows = nrows ÷ bz
-        end
-        @info "Attempting sparse pattern with" target source nrows ncols maximum(I, init = 0) maximum(J, init = 0)
         sarg = SparsePattern(I, J, nrows, ncols, row_layout, col_layout, bz, bz)
     end
     return sarg
@@ -500,15 +489,10 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     block_size_adjusted_offset(offset, b::Int) = offset ÷ b
     bz_n = nothing
     bz_m = nothing
-    
+
     targets_number_of_equations = map(k -> number_of_equations(model[k]), targets)
     sources_number_of_variables = map(k -> number_of_degrees_of_freedom(model[k]), sources)
 
-    row_layout = matrix_layout(row_context)
-    col_layout = matrix_layout(col_context)
-    
-    @info "?!!!!!!!?" targets sources targets_number_of_equations sources_number_of_variables row_context col_context
-    is_fully_blocked = false && row_layout == col_layout == BlockMajorLayout()
     variable_offset = 0
     for target in targets
         variable_offset = 0
@@ -516,7 +500,6 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
         for source in sources
             sarg = get_sparse_arguments(storage, model, target, source, row_context, col_context)
             i, j, n, m = ijnm(sarg)
-            @info "Pattern for $target $source" variable_offset equation_offset n m maximum(i, init = 0) maximum(j, init = 0)
             bz_n = treat_block_size(bz_n, sarg.block_n)
             bz_m = treat_block_size(bz_m, sarg.block_m)
             if length(i) > 0
@@ -526,18 +509,11 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                 @assert minimum(i) >= 1 "I index was lower than 1 for $source → $target"
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
 
-                if is_fully_blocked
-                    for (ii, jj) in zip(i, j)
-                        push!(I, ii)
-                        push!(J, jj)
-                    end
-                else
-                    for ii in i
-                        push!(I, ii + equation_offset)
-                    end
-                    for jj in j
-                        push!(J, jj + variable_offset)
-                    end
+                for ii in i
+                    push!(I, ii + equation_offset)
+                end
+                for jj in j
+                    push!(J, jj + variable_offset)
                 end
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1) with bz=($bz_n,$bz_m).\n"
@@ -551,12 +527,7 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
     bz_m = finalize_block_size(bz_m)
     N = sum(targets_number_of_equations)
     M = sum(sources_number_of_variables)
-    if is_fully_blocked
-        # error()
-        println("!!!!!!!!! System is all blocks with block size ($bz_n, $bz_m).")
-    end
-    @info "????" N M N/bz_n M/bz_m
-    @error "Pattern setup" maximum(I) maximum(J)
+
     return SparsePattern(I, J, N, M, matrix_layout(row_context), matrix_layout(col_context), bz_n, bz_m)
 end
 
@@ -597,7 +568,6 @@ function setup_linearized_system!(storage, model::MultiModel)
             global_subs = (base_pos+1):(base_pos+local_size)
             r_i = view(r, global_subs)
             dx_i = view(dx, global_subs)
-            @info "READY TO ADD FOR $dpos" dpos t ndof ndof[local_models]
             subsystems[dpos, dpos] = LinearizedSystem(sparse_arg, ctx, layout, dx = dx_i, r = r_i)
             base_pos += local_size
         end
