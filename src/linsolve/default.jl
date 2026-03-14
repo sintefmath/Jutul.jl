@@ -127,7 +127,6 @@ function LinearizedSystem(sparse_arg, context, layout; r = nothing, dx = nothing
         nrows = n
         ncols = m
     end
-    @assert nrows == ncols
     dx, dx_buf = get_jacobian_vector(ncols, context, layout, dx, bz[1])
     r, r_buf = get_jacobian_vector(nrows, context, layout, r, bz[1])
     return LinearizedSystem(jac, r, dx, jac_buf, r_buf, dx_buf, layout)
