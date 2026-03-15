@@ -6,7 +6,7 @@ function fix_nonpositive_areas!(msh, bad_faces; print::Bool = true, boundary::Bo
         else
             ts = "internal"
         end
-        jutul_print("Mesh fixing", "Mesh has $ts faces with non-positive or non-finite area. Automatic fixing is not implemented for this issue.", color = :yellow)
+        jutul_message("Mesh fixing", "Mesh has $ts faces with non-positive or non-finite area. Automatic fixing is not implemented for this issue.", color = :yellow)
     end
     return msh
 end
