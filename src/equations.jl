@@ -35,10 +35,14 @@ function find_jac_position(A,
         number_of_equations_for_entity = eqs_per_entity
     )
     # get row and column index in the specific layout we are looking at
-    if row_layout isa BlockMajorLayout
-        b = (target_entity_offset ÷ nentities_target)
-        equation_index += b
+    if row_layout isa BlockMajorLayout || row_layout isa EntityMajorLayout
+        n = fld(target_entity_offset, nentities_target)
         target_entity_offset = 0
+        equation_index = equation_index + n
+
+        # b = (target_entity_offset ÷ nentities_target)
+        # equation_index += b
+        # target_entity_offset = 0
         # The block we are in could actually be bigger. This only matters for
         # entity/block major stuff.
         eqs_per_entity = max(eqs_per_entity, partials_per_entity)
