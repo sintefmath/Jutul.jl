@@ -35,10 +35,14 @@ function find_jac_position(A,
         number_of_equations_for_entity = eqs_per_entity
     )
     # get row and column index in the specific layout we are looking at
-    if row_layout isa BlockMajorLayout
-        b = (target_entity_offset ÷ nentities_target)
-        equation_index += b
+    if row_layout isa BlockMajorLayout || row_layout isa EntityMajorLayout
+        n = fld(target_entity_offset, nentities_target)
         target_entity_offset = 0
+        equation_index = equation_index + n
+
+        # b = (target_entity_offset ÷ nentities_target)
+        # equation_index += b
+        # target_entity_offset = 0
         # The block we are in could actually be bigger. This only matters for
         # entity/block major stuff.
         eqs_per_entity = max(eqs_per_entity, partials_per_entity)
@@ -90,9 +94,6 @@ function find_jac_position(
 
     row_base = row_offset
     col_base = column_offset
-
-    row_base = row_base ÷ N
-    col_base = col_base ÷ N
 
     row = target_entity_offset + target_entity_index + row_base
     col = source_entity_offset + source_entity_index + col_base
@@ -500,12 +501,12 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
     end
 end
 
-function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0, kwarg...)
     if entity == associated_entity(eq)
         # By default we perform a diagonal alignment if we match the associated entity.
         # A diagonal alignment means that the equation for some entity depends only on the values inside that entity.
         # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
-        diagonal_alignment!(eq_s, eq, jac, entity, model.context, target_offset = equation_offset, source_offset = variable_offset)
+        diagonal_alignment!(eq_s, eq, jac, entity, model.context; target_offset = equation_offset, source_offset = variable_offset, kwarg...)
     end
 end
 

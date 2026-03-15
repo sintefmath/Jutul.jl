@@ -95,12 +95,17 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawFiniteVo
     return (I, J)
 end
 
-function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0)
+function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::ConservationLaw, jac, model, u::Cells; equation_offset = 0, variable_offset = 0, row_offset = 0, column_offset = 0)
     fd = eq.flow_discretization
     M = global_map(model.domain)
 
     acc = eq_s.accumulation
-    diagonal_alignment!(acc, eq, jac, u, model.context, target_offset = equation_offset, source_offset = variable_offset)
+    diagonal_alignment!(acc, eq, jac, u, model.context,
+        target_offset = equation_offset,
+        source_offset = variable_offset,
+        row_offset = row_offset,
+        column_offset = column_offset
+    )
     nf = number_of_faces(model.domain)
     face_cache = eq_s.face_flux_cells
     vpos = face_cache.vpos
@@ -120,7 +125,7 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
                     pos = find_jac_position(
                         jac,
                         l, cell,
-                        0, 0,
+                        row_offset, column_offset,
                         equation_offset, variable_offset,
                         e, d,
                         nc, nc,
@@ -131,7 +136,7 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
                     pos = find_jac_position(
                         jac,
                         r, cell,
-                        0, 0,
+                        row_offset, column_offset,
                         equation_offset, variable_offset,
                         e, d,
                         nc, nc,

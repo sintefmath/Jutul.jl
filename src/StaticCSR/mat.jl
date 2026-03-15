@@ -14,6 +14,11 @@ SparseArrays.nonzeros(S::StaticSparsityMatrixCSR) = nonzeros(S.At)
 Base.isstored(S::StaticSparsityMatrixCSR, I::Integer, J::Integer) = Base.isstored(S.At, J, I)
 SparseArrays.nzrange(S::StaticSparsityMatrixCSR, row::Integer) = SparseArrays.nzrange(S.At, row)
 
+function SparseArrays.findnz(S::StaticSparsityMatrixCSR)
+    J, I, V = findnz(S.At)
+    return (I, J, V)
+end
+
 colvals(S::StaticSparsityMatrixCSR) = SparseArrays.rowvals(S.At)
 
 function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::AbstractVector, α::Number, β::Number)

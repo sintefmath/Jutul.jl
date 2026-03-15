@@ -680,11 +680,21 @@ function align_equations_to_linearized_system!(storage, model::JutulModel; kwarg
     align_equations_to_jacobian!(eq_storage, eqs, jac, model; kwarg...)
 end
 
-function align_equations_to_jacobian!(eq_storage, equations, jac, model; equation_offset = 0, variable_offset = 0)
+function align_equations_to_jacobian!(eq_storage, equations, jac, model;
+        equation_offset = 0,
+        variable_offset = 0,
+        row_offset = 0,
+        column_offset = 0
+    )
     for key in keys(equations)
         eq_s = eq_storage[key]
         eq = equations[key]
-        align_to_jacobian!(eq_s, eq, jac, model, equation_offset = equation_offset, variable_offset = variable_offset)
+        align_to_jacobian!(eq_s, eq, jac, model,
+            equation_offset = equation_offset,
+            variable_offset = variable_offset,
+            column_offset = column_offset,
+            row_offset = row_offset
+        )
         equation_offset += number_of_equations(model, eq)
     end
     equation_offset
