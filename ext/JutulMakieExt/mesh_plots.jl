@@ -23,6 +23,7 @@ function Jutul.plot_mesh_impl!(ax, m;
         kwarg...
     )
     pts, tri, mapper = triangulate_mesh(m, outer = outer)
+    is_unstructured = physical_representation(m) isa UnstructuredMesh
     has_cell_filter = !isnothing(cells)
     has_face_filter = !isnothing(faces)
     has_bface_filter = !isnothing(boundaryfaces)
@@ -45,6 +46,10 @@ function Jutul.plot_mesh_impl!(ax, m;
             faces = findall(faces)
         end
         if has_face_filter
+            if is_unstructured
+                faces = deepcopy(faces)
+                faces .+= number_of_boundary_faces(m)
+            end
             for f in faces
                 keep_faces[f] = true
             end
@@ -55,8 +60,10 @@ function Jutul.plot_mesh_impl!(ax, m;
         end
         if has_bface_filter
             nf = number_of_faces(m)
-            boundaryfaces = deepcopy(boundaryfaces)
-            boundaryfaces .+= nf
+            if !is_unstructured
+                boundaryfaces = deepcopy(boundaryfaces)
+                boundaryfaces .+= nf
+            end
             for f in boundaryfaces
                 keep_bf[f] = true
             end
