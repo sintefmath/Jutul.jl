@@ -29,7 +29,7 @@ end
 
 Extract a subgrid for a given mesh and a iterable of `cells` to keep.
 """
-function extract_submesh(g::UnstructuredMesh, cells)
+function extract_submesh(g::UnstructuredMesh, cells; kwarg...)
     g = deepcopy(g)
     function add_to_indexmap!(vals, pos, iterable)
         n = length(iterable)
@@ -158,8 +158,9 @@ function extract_submesh(g::UnstructuredMesh, cells)
         new_boundary_nodespos,
         node_points,
         new_neighbors,
-        new_boundary_cells,
+        new_boundary_cells;
         structure = g.structure,
-        cell_map = cells
+        cell_map = cells,
+        kwarg...
     )
 end
