@@ -7,11 +7,13 @@ interconnected faces.
 
 # Fields
 - `unstructured_mesh::UnstructuredMesh`: The underlying unstructured mesh representation
-- `intersections::Vector{Vector{Int}}`: Indices of embedded mesh cells that are part of intersections
+- `intersections::Vector{Vector{Int}}`: Backward-compatible alias for `intersection_neighbors`
+- `intersection_neighbors::Vector{Vector{Int}}`: Embedded mesh cells grouped per intersection
 """
 struct EmbeddedMesh <: Jutul.FiniteVolumeMesh
     unstructured_mesh::UnstructuredMesh
     intersections::Vector{Vector{Int}}
+    intersection_neighbors::Vector{Vector{Int}}
 end
 
 """
@@ -23,16 +25,27 @@ Construct an embedded mesh from selected faces of an unstructured mesh.
 - `mesh::UnstructuredMesh`: Parent mesh containing the faces
 - `faces`: Collection of face indices to include in the embedded mesh
 
+# Keyword arguments
+- `include_intersection_connections::Bool = false`: If `true`, intersections
+    with three or more faces are split into pairwise internal connections. If
+    `false` (default), intersection edges are kept disconnected in the
+    neighborship and stored in `intersections`.
+
 # Returns
-- `EmbeddedMesh`: Embedded mesh made up of the specified faces. Instances of
-  three or more faces intersecting at an edge is split into pairwise
-  connections.
+- `EmbeddedMesh`: Embedded mesh made up of the specified faces.
 
 """
-function EmbeddedMesh(mesh::UnstructuredMesh, faces)
-    embedded_mesh, intersections = make_mesh_from_faces(mesh, faces)
-    return EmbeddedMesh(embedded_mesh, intersections)
+function EmbeddedMesh(mesh::UnstructuredMesh, faces; include_intersection_connections = false)
+    embedded_mesh, intersections = make_mesh_from_faces(
+        mesh,
+        faces;
+        include_intersection_connections = include_intersection_connections
+    )
+    return EmbeddedMesh(embedded_mesh, intersections, intersections)
 end
+
+EmbeddedMesh(mesh::UnstructuredMesh, intersections::Vector{Vector{Int}}) =
+    EmbeddedMesh(mesh, intersections, intersections)
 
 function Jutul.UnstructuredMesh(mesh::EmbeddedMesh)
     return mesh.unstructured_mesh
@@ -43,7 +56,7 @@ end
 
 Helper for EmbeddedMesh constructor.
 """
-function make_mesh_from_faces(mesh, faces)
+function make_mesh_from_faces(mesh, faces; include_intersection_connections = false)
 
     # Make edges
     face_edges, num_edges_per_face, face_edge_signs, neighbors = get_face_edges(mesh, faces)
@@ -80,8 +93,15 @@ function make_mesh_from_faces(mesh, faces)
     neighbors, num_ix_faces, edge_nodes, num_nodes_per_edge, face_edges, 
     face_edge_signs, face_edge_pos, intersection_faces = 
     split_intersections(
-        neighbors, face_edges, face_edge_signs, face_edge_pos, length(faces), 
-        edge_nodes, num_nodes_per_edge)
+        neighbors,
+        face_edges,
+        face_edge_signs,
+        face_edge_pos,
+        length(faces),
+        edge_nodes,
+        num_nodes_per_edge;
+        include_intersection_connections = include_intersection_connections
+    )
     edge_node_pos = cumsum([1; num_nodes_per_edge])
 
     # Fix orientation of edges
@@ -144,7 +164,16 @@ function get_edge_nodes(mesh, edges)
 end
 
 
-function split_intersections(neighbors, face_edges, face_edge_signs, face_edge_pos, num_faces, edge_nodes, num_nodes_per_edge)
+function split_intersections(
+    neighbors,
+    face_edges,
+    face_edge_signs,
+    face_edge_pos,
+    num_faces,
+    edge_nodes,
+    num_nodes_per_edge;
+    include_intersection_connections = false
+)
 
     new_neighbors = Vector{Vector{Int}}()
     new_edge_nodes = Vector{Int}()
@@ -166,30 +195,42 @@ function split_intersections(neighbors, face_edges, face_edge_signs, face_edge_p
         current_edge_node_idx += n_nodes
 
         if length(faces) > 2
-            # Intersection: create pairwise connections
-            # Connect every pair (f_i, f_j)
-            for i in 1:length(faces)
-                for j in (i+1):length(faces)
-                    f1 = faces[i]
-                    f2 = faces[j]
-                    
-                    push!(new_neighbors, [f1, f2])
+            if include_intersection_connections
+                # Intersection: create pairwise internal connections.
+                for i in 1:length(faces)
+                    for j in (i+1):length(faces)
+                        f1 = faces[i]
+                        f2 = faces[j]
+
+                        push!(new_neighbors, [f1, f2])
+                        append!(new_edge_nodes, nodes)
+                        push!(new_num_nodes_per_edge, n_nodes)
+
+                        new_edge_idx = length(new_neighbors)
+
+                        if !haskey(replacements[old_edge_idx], f1)
+                            replacements[old_edge_idx][f1] = Int[]
+                        end
+                        push!(replacements[old_edge_idx][f1], new_edge_idx)
+
+                        if !haskey(replacements[old_edge_idx], f2)
+                            replacements[old_edge_idx][f2] = Int[]
+                        end
+                        push!(replacements[old_edge_idx][f2], new_edge_idx)
+                    end
+                end
+            else
+                # Intersection: duplicate as boundary edge per face.
+                for f in faces
+                    push!(new_neighbors, [f])
                     append!(new_edge_nodes, nodes)
                     push!(new_num_nodes_per_edge, n_nodes)
-                    
+
                     new_edge_idx = length(new_neighbors)
-                    
-                    # Register replacement for f1
-                    if !haskey(replacements[old_edge_idx], f1)
-                        replacements[old_edge_idx][f1] = Int[]
+                    if !haskey(replacements[old_edge_idx], f)
+                        replacements[old_edge_idx][f] = Int[]
                     end
-                    push!(replacements[old_edge_idx][f1], new_edge_idx)
-                    
-                    # Register replacement for f2
-                    if !haskey(replacements[old_edge_idx], f2)
-                        replacements[old_edge_idx][f2] = Int[]
-                    end
-                    push!(replacements[old_edge_idx][f2], new_edge_idx)
+                    push!(replacements[old_edge_idx][f], new_edge_idx)
                 end
             end
             # Store faces that are part of intersection

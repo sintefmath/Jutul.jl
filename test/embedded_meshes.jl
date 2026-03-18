@@ -32,6 +32,11 @@ using Jutul.EmbeddedMeshes
         
         fracture_faces = findall(face_mask)
         embedded_mesh = Jutul.EmbeddedMeshes.EmbeddedMesh(parent_mesh, fracture_faces)
+        embedded_mesh_with_connections = Jutul.EmbeddedMeshes.EmbeddedMesh(
+            parent_mesh,
+            fracture_faces;
+            include_intersection_connections = true
+        )
         
         @testset "EmbeddedMesh Construction" begin
             # Create embedded mesh
@@ -39,12 +44,19 @@ using Jutul.EmbeddedMeshes
             @test embedded_mesh isa Jutul.EmbeddedMeshes.EmbeddedMesh
             @test embedded_mesh.unstructured_mesh isa Jutul.UnstructuredMesh
             @test embedded_mesh.intersections isa Vector{Vector{Int}}
+            @test embedded_mesh.intersection_neighbors isa Vector{Vector{Int}}
+            @test embedded_mesh_with_connections isa Jutul.EmbeddedMeshes.EmbeddedMesh
+            @test embedded_mesh_with_connections.intersections == embedded_mesh.intersections
+            @test embedded_mesh.intersection_neighbors == embedded_mesh.intersections
+            @test embedded_mesh_with_connections.intersection_neighbors == embedded_mesh_with_connections.intersections
             
             # Test basic interface functions
             @test dim(embedded_mesh) == 3  # Embedded features are 2D, but have 3D coordinates
             @test number_of_cells(embedded_mesh) == length(fracture_faces)  # Each face should become a cell in the embedded mesh
-            @test number_of_faces(embedded_mesh) == 18 + 3*6
-            @test number_of_boundary_faces(embedded_mesh) == 24
+            @test number_of_faces(embedded_mesh_with_connections) == 18 + 3*6
+            @test number_of_boundary_faces(embedded_mesh_with_connections) == 24
+            @test number_of_faces(embedded_mesh) < number_of_faces(embedded_mesh_with_connections)
+            @test number_of_boundary_faces(embedded_mesh) > number_of_boundary_faces(embedded_mesh_with_connections)
         end
         
         @testset "Connectivity Verification" begin
@@ -60,6 +72,10 @@ using Jutul.EmbeddedMeshes
             @test length(umesh.faces.neighbors) == nf
             @test length(umesh.boundary_faces.neighbors) == nbf
             @test all(length.(embedded_mesh.intersections) .== 4)
+
+            umesh_connected = embedded_mesh_with_connections.unstructured_mesh
+            @test all(length.(embedded_mesh_with_connections.intersections) .== 4)
+            @test length(umesh_connected.faces.neighbors) > length(umesh.faces.neighbors)
             
             # Check neighbor consistency
             neighbors = get_neighborship(embedded_mesh)
@@ -71,6 +87,26 @@ using Jutul.EmbeddedMeshes
             for i in 1:nf
                 @test neighbors[1, i] != neighbors[2, i]
             end
+
+            # Default behavior should not create internal intersection links.
+            for ix in embedded_mesh.intersections
+                ix_set = Set(ix)
+                has_internal_ix_link = any(eachcol(neighbors)) do n
+                    (n[1] in ix_set) && (n[2] in ix_set)
+                end
+                @test !has_internal_ix_link
+            end
+
+            # Opt-in behavior should include internal links at intersections.
+            neighbors_connected = get_neighborship(embedded_mesh_with_connections)
+            total_ix_links = 0
+            for ix in embedded_mesh_with_connections.intersections
+                ix_set = Set(ix)
+                total_ix_links += count(eachcol(neighbors_connected)) do n
+                    (n[1] in ix_set) && (n[2] in ix_set)
+                end
+            end
+            @test total_ix_links > 0
         end
         
         @testset "Geometric Consistency" begin
