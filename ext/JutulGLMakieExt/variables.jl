@@ -72,7 +72,7 @@ function Jutul.plot_jutul_line_data(data::JutulLinePlotData; kwarg...)
     Jutul.plot_jutul_line_data([data]; kwarg...)
 end
 
-function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, regions = axes(data, 2), kwarg...)
+function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, regions = axes(data, 2), link = false, kwarg...)
     fig = Figure(size = size)
     colors = Makie.wong_colors()
     all_axes = []
@@ -90,6 +90,8 @@ function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, reg
             axislegend(position = :rt)
         end
     end
-    linkaxes!(all_axes...)
+    if link
+        linkaxes!(all_axes...)
+    end
     display(GLMakie.Screen(), fig)
 end

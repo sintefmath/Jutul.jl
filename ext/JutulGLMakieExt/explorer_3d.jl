@@ -539,15 +539,15 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                         while length(selected_cells.val) > max_clicked
                             popfirst!(selected_cells.val)
                         end
-                        cells = selected_cells.val
+                        selected_cells_idx = selected_cells.val
                         notify(selected_cells)
                     end
                 else
-                    cells = [cell]
-                    selected_cells[] = cells
+                    selected_cells_idx = [cell]
+                    selected_cells[] = selected_cells_idx
                 end
-                for (i, cell) in enumerate(cells)
-                    pp = plot_mesh_edges!(mesh_scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
+                for (i, cell) in enumerate(selected_cells_idx)
+                    pp = plot_mesh_edges!(lscene.scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
                     if ismissing(pp)
                         verts = findall(isequal(cell), cell_to_vertex)
                         new_tri = similar(ttri, 0)
