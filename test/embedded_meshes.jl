@@ -53,15 +53,15 @@ using Jutul.EmbeddedMeshes
             @test embedded_mesh_remove isa Jutul.EmbeddedMeshes.EmbeddedMesh
             @test embedded_mesh_remove.unstructured_mesh isa Jutul.UnstructuredMesh
             @test embedded_mesh_remove.intersection_neighbors isa Vector{Vector{Int}}
-            @test embedded_mesh_remove.intersection_boundary_faces isa Vector{Vector{Int}}
+            @test embedded_mesh_remove.intersection_edges isa Vector{Vector{Int}}
             @test embedded_mesh_remove.intersection_cells == Int[]
             @test embedded_mesh_star isa Jutul.EmbeddedMeshes.EmbeddedMesh
             @test embedded_mesh_star.intersection_neighbors == embedded_mesh_remove.intersection_neighbors
-            @test embedded_mesh_star.intersection_boundary_faces == [Int[] for _ in embedded_mesh_star.intersection_neighbors]
+            @test all(!isempty, embedded_mesh_star.intersection_edges)
             @test embedded_mesh_star.intersection_cells == Int[]
             @test embedded_mesh_keep isa Jutul.EmbeddedMeshes.EmbeddedMesh
             @test embedded_mesh_keep.intersection_neighbors == embedded_mesh_remove.intersection_neighbors
-            @test embedded_mesh_keep.intersection_boundary_faces == [Int[] for _ in embedded_mesh_keep.intersection_neighbors]
+            @test all(!isempty, embedded_mesh_keep.intersection_edges)
             @test length(embedded_mesh_keep.intersection_cells) == length(embedded_mesh_keep.intersection_neighbors)
             
             # Test basic interface functions
@@ -87,7 +87,7 @@ using Jutul.EmbeddedMeshes
             @test length(umesh.faces.neighbors) == nf
             @test length(umesh.boundary_faces.neighbors) == nbf
             @test all(length.(embedded_mesh_remove.intersection_neighbors) .== 4)
-            @test all(length.(embedded_mesh_remove.intersection_boundary_faces) .== 4)
+            @test all(length.(embedded_mesh_remove.intersection_edges) .== 4)
 
             umesh_connected = embedded_mesh_star.unstructured_mesh
             @test all(length.(embedded_mesh_star.intersection_neighbors) .== 4)
@@ -105,7 +105,7 @@ using Jutul.EmbeddedMeshes
             end
 
             # Remove strategy should disconnect the intersection into boundary faces.
-            for (ix, ix_boundary_faces) in zip(embedded_mesh_remove.intersection_neighbors, embedded_mesh_remove.intersection_boundary_faces)
+            for (ix, ix_boundary_faces) in zip(embedded_mesh_remove.intersection_neighbors, embedded_mesh_remove.intersection_edges)
                 ix_set = Set(ix)
                 has_internal_ix_link = any(eachcol(neighbors)) do n
                     (n[1] in ix_set) && (n[2] in ix_set)
