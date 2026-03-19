@@ -23,6 +23,7 @@ function Jutul.plot_mesh_impl!(ax, m;
         kwarg...
     )
     pts, tri, mapper = triangulate_mesh(m, outer = outer)
+    is_unstructured = physical_representation(m) isa UnstructuredMesh
     has_cell_filter = !isnothing(cells)
     has_face_filter = !isnothing(faces)
     has_bface_filter = !isnothing(boundaryfaces)
@@ -45,6 +46,10 @@ function Jutul.plot_mesh_impl!(ax, m;
             faces = findall(faces)
         end
         if has_face_filter
+            if is_unstructured
+                faces = deepcopy(faces)
+                faces .+= number_of_boundary_faces(m)
+            end
             for f in faces
                 keep_faces[f] = true
             end
@@ -55,8 +60,10 @@ function Jutul.plot_mesh_impl!(ax, m;
         end
         if has_bface_filter
             nf = number_of_faces(m)
-            boundaryfaces = deepcopy(boundaryfaces)
-            boundaryfaces .+= nf
+            if !is_unstructured
+                boundaryfaces = deepcopy(boundaryfaces)
+                boundaryfaces .+= nf
+            end
             for f in boundaryfaces
                 keep_bf[f] = true
             end
@@ -199,10 +206,20 @@ function Jutul.plot_mesh_edges_impl!(ax, m;
         boundary_faces = nothing,
         outer = dim(m) == 3 && isnothing(faces) && isnothing(boundary_faces),
         linewidth = 0.3,
+        depth_shift = -0.001,
         kwarg...
     )
     m = physical_representation(m)
     s = Jutul.mesh_linesegments(m, cells = cells, faces = faces, boundary_faces = boundary_faces, outer = outer)
-    f = linesegments!(ax, s; linewidth = linewidth, transparency = transparency, color = color, kwarg...)
+    if length(s) == 0
+        return missing
+    end
+    f = linesegments!(ax, s;
+        linewidth = linewidth,
+        transparency = transparency,
+        color = color,
+        depth_shift = depth_shift,
+        kwarg...
+    )
     return f
 end

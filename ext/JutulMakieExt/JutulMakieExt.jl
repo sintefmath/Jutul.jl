@@ -1,6 +1,6 @@
 module JutulMakieExt
 
-using Jutul, Makie
+    using Jutul, Makie
     function Jutul.check_plotting_availability_impl()
         return true
     end

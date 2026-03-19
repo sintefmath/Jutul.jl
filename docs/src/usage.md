@@ -75,6 +75,22 @@ JutulConfig
 add_option!
 ```
 
+The options for the simulator can be set during a call to `simulate` or
+`simulate!` by passing a keyword argument `config = ...` with a `JutulConfig`
+object or by passing keyword arguments directly to `simulate` or `simulate!`
+that will be added to the default configuration. We can see the default options
+by calling `simulator_config` on a simulator object and showing it in the REPL:
+
+```@example
+using Jutul
+sys = ScalarTestSystem()
+D = ScalarTestDomain()
+model = SimulationModel(D, sys)
+state0 = setup_state(model, Dict(:XVar=>0.0))
+sim = Simulator(model, state0 = state0)
+config = simulator_config(sim)
+```
+
 ## Linear solvers
 
 ```@docs

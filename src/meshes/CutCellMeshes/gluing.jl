@@ -520,14 +520,14 @@ function glue_mesh(
             cell_index_b[nc_a + c] = c
         end
 
-        info = Dict{String, Any}(
-            "cell_index_a"          => cell_index_a,
-            "cell_index_b"          => cell_index_b,
-            "face_index_a"          => face_index_a,
-            "face_index_b"          => face_index_b,
-            "boundary_face_index_a" => bnd_face_index_a,
-            "boundary_face_index_b" => bnd_face_index_b,
-            "new_faces"             => new_faces_list
+        info = Dict{Symbol, Any}(
+            :cell_index_a          => cell_index_a,
+            :cell_index_b          => cell_index_b,
+            :face_index_a          => face_index_a,
+            :face_index_b          => face_index_b,
+            :boundary_face_index_a => bnd_face_index_a,
+            :boundary_face_index_b => bnd_face_index_b,
+            :new_faces             => new_faces_list
         )
         return (new_mesh, info)
     end
@@ -1041,8 +1041,8 @@ function cut_and_displace_mesh(
         cell_index = Vector{Int}(undef, nc_glued)
         cell_side = Vector{Symbol}(undef, nc_glued)
         for c in 1:nc_glued
-            ia = glue_info["cell_index_a"][c]
-            ib = glue_info["cell_index_b"][c]
+            ia = glue_info[:cell_index_a][c]
+            ib = glue_info[:cell_index_b][c]
             if ia > 0
                 # This cell comes from mesh_a in the glue.
                 # mesh_a is always the positive-side submesh (either shifted
@@ -1055,17 +1055,17 @@ function cut_and_displace_mesh(
                 cut_cell = neg_cells[ib]
                 cell_side[c] = :negative
             end
-            cell_index[c] = cut_info["cell_index"][cut_cell]
+            cell_index[c] = cut_info[:cell_index][cut_cell]
         end
 
-        info = Dict{String, Any}(
-            "cell_index"            => cell_index,
-            "cell_side"             => cell_side,
-            "face_index_a"          => glue_info["face_index_a"],
-            "face_index_b"          => glue_info["face_index_b"],
-            "boundary_face_index_a" => glue_info["boundary_face_index_a"],
-            "boundary_face_index_b" => glue_info["boundary_face_index_b"],
-            "new_faces"             => glue_info["new_faces"]
+        info = Dict{Symbol, Any}(
+            :cell_index            => cell_index,
+            :cell_side             => cell_side,
+            :face_index_a          => glue_info[:face_index_a],
+            :face_index_b          => glue_info[:face_index_b],
+            :boundary_face_index_a => glue_info[:boundary_face_index_a],
+            :boundary_face_index_b => glue_info[:boundary_face_index_b],
+            :new_faces             => glue_info[:new_faces]
         )
         return (glued_mesh, info)
     end

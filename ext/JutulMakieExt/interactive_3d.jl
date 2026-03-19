@@ -738,11 +738,12 @@ end
 function symlog10(x)
     # Inspired by matplotlib.scale.SymmetricalLogScale
     # https://matplotlib.org/stable/api/scale_api.html#matplotlib.scale.SymmetricalLogScale
-    if x < 1 && x > -1
-        return x
+    if x < 1.0 && x > -1.0
+        transformed_val = x
     else
-        return sign(x)*(log10(abs(x))+1)
+        transformed_val = sign(x)*(log10(abs(x))+1)
     end
+    return transformed_val
 end
 
 function plot_transform(x, name)

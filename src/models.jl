@@ -484,7 +484,6 @@ end
 function setup_storage_model(storage, model)
     # Reference the variable definitions used for the model.
     # These are immutable, unlike the model definitions.
-    vars = JutulStorage()
     primary = get_primary_variables(model)
     secondary = get_secondary_variables(model)
     parameters = get_parameters(model)
@@ -501,9 +500,16 @@ function setup_storage_model(storage, model)
         end
         push!(extra_keys, k)
     end
-    vars[:primary_variables] = NamedTuple(pairs(primary))
-    vars[:secondary_variables] = NamedTuple(pairs(secondary))
-    vars[:parameters] = NamedTuple(pairs(parameters))
+    mutable_references = model.optimization_level < 1
+    vars = JutulStorage(always_mutable = mutable_references)
+    if !mutable_references
+        primary = NamedTuple(pairs(primary))
+        secondary = NamedTuple(pairs(secondary))
+        parameters = NamedTuple(pairs(parameters))
+    end
+    vars[:primary_variables] = primary
+    vars[:secondary_variables] = secondary
+    vars[:parameters] = parameters
     vars[:extra_variable_fields] = extra_keys
     storage[:variable_definitions] = vars
     # Allow for dispatch specific to model's constitutive parts.
@@ -674,11 +680,21 @@ function align_equations_to_linearized_system!(storage, model::JutulModel; kwarg
     align_equations_to_jacobian!(eq_storage, eqs, jac, model; kwarg...)
 end
 
-function align_equations_to_jacobian!(eq_storage, equations, jac, model; equation_offset = 0, variable_offset = 0)
+function align_equations_to_jacobian!(eq_storage, equations, jac, model;
+        equation_offset = 0,
+        variable_offset = 0,
+        row_offset = 0,
+        column_offset = 0
+    )
     for key in keys(equations)
         eq_s = eq_storage[key]
         eq = equations[key]
-        align_to_jacobian!(eq_s, eq, jac, model, equation_offset = equation_offset, variable_offset = variable_offset)
+        align_to_jacobian!(eq_s, eq, jac, model,
+            equation_offset = equation_offset,
+            variable_offset = variable_offset,
+            column_offset = column_offset,
+            row_offset = row_offset
+        )
         equation_offset += number_of_equations(model, eq)
     end
     equation_offset
@@ -930,8 +946,8 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel, prima
                 error("Primary variables recieved invalid updates.")
             end
         end
-        @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
         report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
+        @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
     end
     return report
 end

@@ -202,22 +202,25 @@ function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, stat
     conserved = conserved_symbol(eq)
     M₀ = state0[conserved]
     M = state[conserved]
-    # Compute ∇⋅V
-    flux(ld) = face_flux(ld.self, ld.other, ld.face, ld.face_sign, eq, state, model, Δt, eq.flow_discretization, Val(T_e))
-    # div_v = zero(T_e)
-    div_v = flux(ldisc[1])
-    for i in 2:length(ldisc)
-        ld = ldisc[i]
-        q_i = flux(ld)
-        div_v += q_i
+    for i in eachindex(eq_buf)
+        @inbounds eq_buf[i] = accumulation_term(M, M₀, Δt, i, self_cell)
     end
-    for i in eachindex(div_v)
-        ∂M∂t = accumulation_term(M, M₀, Δt, i, self_cell)
-        @inbounds eq_buf[i] = ∂M∂t + div_v[i]
+    # Compute ∇⋅V
+    nfaces = length(ldisc)
+    if nfaces > 0
+        flux(ld) = face_flux(ld.self, ld.other, ld.face, ld.face_sign, eq, state, model, Δt, eq.flow_discretization, Val(T_e))
+        div_v = flux(ldisc[1])
+        for i in 2:nfaces
+            ld = ldisc[i]
+            q_i = flux(ld)
+            div_v += q_i
+        end
+        for i in eachindex(div_v)
+            @inbounds eq_buf[i] += div_v[i]
+        end
     end
     return eq_buf
 end
-
 
 number_of_half_faces(tp::TwoPointPotentialFlowHardCoded) = length(tp.conn_data)
 
