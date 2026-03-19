@@ -89,7 +89,7 @@ function make_mesh_from_faces(mesh, faces; intersection_strategy = :star_delta)
 
     # Handle intersection
     neighbors, num_ix_faces, edge_nodes, num_nodes_per_edge, face_edges,
-    face_edge_signs, face_edge_pos, intersection_faces, intersection_boundary_faces =
+    face_edge_signs, face_edge_pos, intersection_faces, intersection_boundary_edges =
     split_intersections(
         neighbors,
         face_edges,
@@ -106,23 +106,23 @@ function make_mesh_from_faces(mesh, faces; intersection_strategy = :star_delta)
     N = fix_edge_orientation(neighbors, face_edges, face_edge_signs, face_edge_pos)
 
     # Convert from mesh face ids to boundary-local face ids used by boundary arrays.
-    intersection_boundary_faces = remap_intersection_boundary_faces(intersection_boundary_faces, N)
+    intersection_boundary_edges = remap_intersection_boundary_faces(intersection_boundary_edges, N)
     
     # Create unstructured mesh
     mesh_2d = UnstructuredMesh(face_edges, face_edge_pos, edge_nodes, edge_node_pos, node_points, N)
 
-    return mesh_2d, intersection_faces, intersection_boundary_faces
+    return mesh_2d, intersection_faces, intersection_boundary_edges
 
 end
 
-function remap_intersection_boundary_faces(intersection_boundary_faces, N)
+function remap_intersection_boundary_faces(intersection_boundary_edges, N)
     nfaces = size(N, 2)
     boundary_mesh_faces = findall(i -> N[1, i] == 0 || N[2, i] == 0, 1:nfaces)
     boundary_map = Dict{Int, Int}(f => i for (i, f) in enumerate(boundary_mesh_faces))
 
-    mapped = Vector{Vector{Int}}(undef, length(intersection_boundary_faces))
-    for i in eachindex(intersection_boundary_faces)
-        ix = intersection_boundary_faces[i]
+    mapped = Vector{Vector{Int}}(undef, length(intersection_boundary_edges))
+    for i in eachindex(intersection_boundary_edges)
+        ix = intersection_boundary_edges[i]
         mapped_ix = Int[]
         sizehint!(mapped_ix, length(ix))
         for f in ix
@@ -206,7 +206,7 @@ function split_intersections(
     replacements = [Dict{Int, Vector{Int}}() for _ in 1:length(neighbors)]
 
     intersection_faces = Vector{Vector{Int}}()
-    intersection_boundary_faces = Vector{Vector{Int}}()
+    intersection_boundary_edges = Vector{Vector{Int}}()
 
     # Iterate over original edges
     for (old_edge_idx, faces) in enumerate(neighbors)
@@ -240,23 +240,27 @@ function split_intersections(
                         push!(replacements[old_edge_idx][f2], new_edge_idx)
                     end
                 end
-                push!(intersection_boundary_faces, Int[])
-            else
+                push!(intersection_boundary_edges, Int[])
+            elseif strategy == :remove
                 # Intersection: duplicate as boundary edge per face.
-                ix_boundary_faces = Int[]
+                ix_boundary_edges = Int[]
                 for f in faces
                     push!(new_neighbors, [f])
                     append!(new_edge_nodes, nodes)
                     push!(new_num_nodes_per_edge, n_nodes)
 
                     new_edge_idx = length(new_neighbors)
-                    push!(ix_boundary_faces, new_edge_idx)
+                    push!(ix_boundary_edges, new_edge_idx)
                     if !haskey(replacements[old_edge_idx], f)
                         replacements[old_edge_idx][f] = Int[]
                     end
                     push!(replacements[old_edge_idx][f], new_edge_idx)
                 end
-                push!(intersection_boundary_faces, ix_boundary_faces)
+                push!(intersection_boundary_edges, ix_boundary_edges)
+            elseif strategy == :keep
+                 error("Not implemented yet")
+            else
+                error("Unknown intersection strategy: $strategy")
             end
             # Store faces that are part of intersection
             push!(intersection_faces, faces)
@@ -308,7 +312,7 @@ function split_intersections(
     
     num_ix_faces = 0
 
-    return new_neighbors, num_ix_faces, new_edge_nodes, new_num_nodes_per_edge, new_face_edges, new_face_edge_signs, new_face_edge_pos, intersection_faces, intersection_boundary_faces
+    return new_neighbors, num_ix_faces, new_edge_nodes, new_num_nodes_per_edge, new_face_edges, new_face_edge_signs, new_face_edge_pos, intersection_faces, intersection_boundary_edges
 
 end
 
