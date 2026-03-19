@@ -10,11 +10,13 @@ interconnected faces.
 - `intersection_neighbors::Vector{Vector{Int}}`: Embedded mesh cells grouped per intersection
 - `intersection_boundary_faces::Vector{Vector{Int}}`: Boundary-local face indices per intersection,
   aligned with `intersection_neighbors`
+- `intersection_cells::Vector{Int}`: Embedded mesh cell indices created for kept intersections
 """
 struct EmbeddedMesh <: Jutul.FiniteVolumeMesh
     unstructured_mesh::UnstructuredMesh
     intersection_neighbors::Vector{Vector{Int}}
     intersection_boundary_faces::Vector{Vector{Int}}
+    intersection_cells::Vector{Int}
 end
 
 """
@@ -37,12 +39,12 @@ Construct an embedded mesh from selected faces of an unstructured mesh.
 
 """
 function EmbeddedMesh(mesh::UnstructuredMesh, faces; intersection_strategy = :star_delta)
-    embedded_mesh, intersection_neighbors, intersection_boundary_faces = make_mesh_from_faces(
+    embedded_mesh, intersection_neighbors, intersection_boundary_faces, intersection_cells = make_mesh_from_faces(
         mesh,
         faces;
         intersection_strategy = intersection_strategy
     )
-    return EmbeddedMesh(embedded_mesh, intersection_neighbors, intersection_boundary_faces)
+    return EmbeddedMesh(embedded_mesh, intersection_neighbors, intersection_boundary_faces, intersection_cells)
 end
 
 function Jutul.UnstructuredMesh(mesh::EmbeddedMesh)
@@ -89,7 +91,8 @@ function make_mesh_from_faces(mesh, faces; intersection_strategy = :star_delta)
 
     # Handle intersection
     neighbors, num_ix_faces, edge_nodes, num_nodes_per_edge, face_edges,
-    face_edge_signs, face_edge_pos, intersection_neighbors, intersection_boundary_edges =
+    face_edge_signs, face_edge_pos, intersection_neighbors, intersection_boundary_edges,
+    intersection_cells =
     split_intersections(
         neighbors,
         face_edges,
@@ -111,7 +114,7 @@ function make_mesh_from_faces(mesh, faces; intersection_strategy = :star_delta)
     # Create unstructured mesh
     mesh_2d = UnstructuredMesh(face_edges, face_edge_pos, edge_nodes, edge_node_pos, node_points, N)
 
-    return mesh_2d, intersection_neighbors, intersection_boundary_edges
+    return mesh_2d, intersection_neighbors, intersection_boundary_edges, intersection_cells
 
 end
 
@@ -207,6 +210,16 @@ function split_intersections(
 
     intersection_neighbors = Vector{Vector{Int}}()
     intersection_boundary_edges = Vector{Vector{Int}}()
+    intersection_cells = Int[]
+    intersection_cell_edges = Vector{Vector{Int}}()
+    intersection_cell_edge_signs = Vector{Vector{Int}}()
+
+    function register_replacement!(old_edge_idx, face_idx, new_edge_idx)
+        if !haskey(replacements[old_edge_idx], face_idx)
+            replacements[old_edge_idx][face_idx] = Int[]
+        end
+        push!(replacements[old_edge_idx][face_idx], new_edge_idx)
+    end
 
     # Iterate over original edges
     for (old_edge_idx, faces) in enumerate(neighbors)
@@ -229,15 +242,8 @@ function split_intersections(
 
                         new_edge_idx = length(new_neighbors)
 
-                        if !haskey(replacements[old_edge_idx], f1)
-                            replacements[old_edge_idx][f1] = Int[]
-                        end
-                        push!(replacements[old_edge_idx][f1], new_edge_idx)
-
-                        if !haskey(replacements[old_edge_idx], f2)
-                            replacements[old_edge_idx][f2] = Int[]
-                        end
-                        push!(replacements[old_edge_idx][f2], new_edge_idx)
+                        register_replacement!(old_edge_idx, f1, new_edge_idx)
+                        register_replacement!(old_edge_idx, f2, new_edge_idx)
                     end
                 end
                 push!(intersection_boundary_edges, Int[])
@@ -251,14 +257,33 @@ function split_intersections(
 
                     new_edge_idx = length(new_neighbors)
                     push!(ix_boundary_edges, new_edge_idx)
-                    if !haskey(replacements[old_edge_idx], f)
-                        replacements[old_edge_idx][f] = Int[]
-                    end
-                    push!(replacements[old_edge_idx][f], new_edge_idx)
+                    register_replacement!(old_edge_idx, f, new_edge_idx)
                 end
                 push!(intersection_boundary_edges, ix_boundary_edges)
             elseif strategy == :keep
-                 error("Not implemented yet")
+                ix_cell = num_faces + length(intersection_cells) + 1
+                ix_edges = Int[]
+                ix_edge_signs = Int[]
+
+                for f in faces
+                    push!(new_neighbors, [f, ix_cell])
+                    append!(new_edge_nodes, nodes)
+                    push!(new_num_nodes_per_edge, n_nodes)
+
+                    new_edge_idx = length(new_neighbors)
+                    push!(ix_edges, new_edge_idx)
+                    register_replacement!(old_edge_idx, f, new_edge_idx)
+
+                    face_positions = face_edge_pos[f]:(face_edge_pos[f + 1] - 1)
+                    face_pos = findfirst(face_edges[face_positions] .== old_edge_idx)
+                    isnothing(face_pos) && error("Edge $old_edge_idx not found in face $f")
+                    push!(ix_edge_signs, -face_edge_signs[face_positions[face_pos]])
+                end
+
+                push!(intersection_boundary_edges, Int[])
+                push!(intersection_cells, ix_cell)
+                push!(intersection_cell_edges, ix_edges)
+                push!(intersection_cell_edge_signs, ix_edge_signs)
             else
                 error("Unknown intersection strategy: $strategy")
             end
@@ -273,10 +298,7 @@ function split_intersections(
             new_edge_idx = length(new_neighbors)
             
             for f in faces
-                if !haskey(replacements[old_edge_idx], f)
-                    replacements[old_edge_idx][f] = Int[]
-                end
-                push!(replacements[old_edge_idx][f], new_edge_idx)
+                register_replacement!(old_edge_idx, f, new_edge_idx)
             end
         end
     end
@@ -309,10 +331,16 @@ function split_intersections(
         end
         push!(new_face_edge_pos, length(new_face_edges) + 1)
     end
-    
-    num_ix_faces = 0
 
-    return new_neighbors, num_ix_faces, new_edge_nodes, new_num_nodes_per_edge, new_face_edges, new_face_edge_signs, new_face_edge_pos, intersection_neighbors, intersection_boundary_edges
+    for (ix_edges, ix_signs) in zip(intersection_cell_edges, intersection_cell_edge_signs)
+        append!(new_face_edges, ix_edges)
+        append!(new_face_edge_signs, ix_signs)
+        push!(new_face_edge_pos, length(new_face_edges) + 1)
+    end
+
+    num_ix_faces = length(intersection_cells)
+
+    return new_neighbors, num_ix_faces, new_edge_nodes, new_num_nodes_per_edge, new_face_edges, new_face_edge_signs, new_face_edge_pos, intersection_neighbors, intersection_boundary_edges, intersection_cells
 
 end
 
