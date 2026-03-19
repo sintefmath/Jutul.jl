@@ -7,14 +7,12 @@ interconnected faces.
 
 # Fields
 - `unstructured_mesh::UnstructuredMesh`: The underlying unstructured mesh representation
-- `intersections::Vector{Vector{Int}}`: Backward-compatible alias for `intersection_neighbors`
 - `intersection_neighbors::Vector{Vector{Int}}`: Embedded mesh cells grouped per intersection
 - `intersection_boundary_faces::Vector{Vector{Int}}`: Boundary-local face indices per intersection,
   aligned with `intersection_neighbors`
 """
 struct EmbeddedMesh <: Jutul.FiniteVolumeMesh
     unstructured_mesh::UnstructuredMesh
-    intersections::Vector{Vector{Int}}
     intersection_neighbors::Vector{Vector{Int}}
     intersection_boundary_faces::Vector{Vector{Int}}
 end
@@ -29,29 +27,23 @@ Construct an embedded mesh from selected faces of an unstructured mesh.
 - `faces`: Collection of face indices to include in the embedded mesh
 
 # Keyword arguments
-- `include_intersection_connections::Bool = false`: If `true`, intersections
-    with three or more faces are split into pairwise internal connections. If
-    `false` (default), intersection edges are kept disconnected in the
-    neighborship and stored in `intersections`.
+- `intersection_strategy::Symbol = :keep`: Strategy for handling intersections.
+    - `:keep` (default): Intersection edges are kept disconnected in the
+      neighborship and stored in `intersections`.
+    - `:star_delta`: Intersections with three or more faces are split into pairwise internal connections.
 
 # Returns
 - `EmbeddedMesh`: Embedded mesh made up of the specified faces.
 
 """
-function EmbeddedMesh(mesh::UnstructuredMesh, faces; include_intersection_connections = false)
-    embedded_mesh, intersections, intersection_boundary_faces = make_mesh_from_faces(
+function EmbeddedMesh(mesh::UnstructuredMesh, faces; intersection_strategy = :star_delta)
+    embedded_mesh, intersection_neighbors, intersection_boundary_faces = make_mesh_from_faces(
         mesh,
         faces;
-        include_intersection_connections = include_intersection_connections
+        intersection_strategy = intersection_strategy
     )
-    return EmbeddedMesh(embedded_mesh, intersections, intersections, intersection_boundary_faces)
+    return EmbeddedMesh(embedded_mesh, intersection_neighbors, intersection_boundary_faces)
 end
-
-EmbeddedMesh(mesh::UnstructuredMesh, intersections::Vector{Vector{Int}}) =
-    EmbeddedMesh(mesh, intersections, intersections, Vector{Vector{Int}}())
-
-EmbeddedMesh(mesh::UnstructuredMesh, intersections::Vector{Vector{Int}}, intersection_neighbors::Vector{Vector{Int}}) =
-    EmbeddedMesh(mesh, intersections, intersection_neighbors, Vector{Vector{Int}}())
 
 function Jutul.UnstructuredMesh(mesh::EmbeddedMesh)
     return mesh.unstructured_mesh
@@ -62,7 +54,7 @@ end
 
 Helper for EmbeddedMesh constructor.
 """
-function make_mesh_from_faces(mesh, faces; include_intersection_connections = false)
+function make_mesh_from_faces(mesh, faces; intersection_strategy = :star_delta)
 
     # Make edges
     face_edges, num_edges_per_face, face_edge_signs, neighbors = get_face_edges(mesh, faces)
@@ -106,7 +98,7 @@ function make_mesh_from_faces(mesh, faces; include_intersection_connections = fa
         length(faces),
         edge_nodes,
         num_nodes_per_edge;
-        include_intersection_connections = include_intersection_connections
+        strategy = intersection_strategy
     )
     edge_node_pos = cumsum([1; num_nodes_per_edge])
 
@@ -200,7 +192,7 @@ function split_intersections(
     num_faces,
     edge_nodes,
     num_nodes_per_edge;
-    include_intersection_connections = false
+    strategy = :star_delta,
 )
 
     new_neighbors = Vector{Vector{Int}}()
@@ -224,7 +216,7 @@ function split_intersections(
         current_edge_node_idx += n_nodes
 
         if length(faces) > 2
-            if include_intersection_connections
+            if strategy == :star_delta
                 # Intersection: create pairwise internal connections.
                 for i in 1:length(faces)
                     for j in (i+1):length(faces)
