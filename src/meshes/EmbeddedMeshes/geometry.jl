@@ -13,6 +13,12 @@ Jutul.face_normal(mesh::EmbeddedMesh, f, e::Jutul.BoundaryFaces) = Jutul.face_no
 
 function Jutul.compute_centroid_and_measure(mesh::EmbeddedMesh, ::Jutul.Cells, i)
 
+    if i ∈ mesh.intersection_cells
+        faces = mesh.unstructured_mesh.faces.cells_to_faces[i]
+        centroid, area =  Jutul.compute_centroid_and_measure(mesh, Jutul.Faces(), faces[1])
+        return (centroid, area)
+    end
+
     umesh = mesh.unstructured_mesh
     pts = umesh.node_points
     T = eltype(pts)
