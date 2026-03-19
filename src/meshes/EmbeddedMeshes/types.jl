@@ -89,7 +89,7 @@ function make_mesh_from_faces(mesh, faces; intersection_strategy = :star_delta)
 
     # Handle intersection
     neighbors, num_ix_faces, edge_nodes, num_nodes_per_edge, face_edges,
-    face_edge_signs, face_edge_pos, intersection_faces, intersection_boundary_edges =
+    face_edge_signs, face_edge_pos, intersection_neighbors, intersection_boundary_edges =
     split_intersections(
         neighbors,
         face_edges,
@@ -111,7 +111,7 @@ function make_mesh_from_faces(mesh, faces; intersection_strategy = :star_delta)
     # Create unstructured mesh
     mesh_2d = UnstructuredMesh(face_edges, face_edge_pos, edge_nodes, edge_node_pos, node_points, N)
 
-    return mesh_2d, intersection_faces, intersection_boundary_edges
+    return mesh_2d, intersection_neighbors, intersection_boundary_edges
 
 end
 
@@ -205,7 +205,7 @@ function split_intersections(
     # We use a Vector of Dicts
     replacements = [Dict{Int, Vector{Int}}() for _ in 1:length(neighbors)]
 
-    intersection_faces = Vector{Vector{Int}}()
+    intersection_neighbors = Vector{Vector{Int}}()
     intersection_boundary_edges = Vector{Vector{Int}}()
 
     # Iterate over original edges
@@ -263,7 +263,7 @@ function split_intersections(
                 error("Unknown intersection strategy: $strategy")
             end
             # Store faces that are part of intersection
-            push!(intersection_faces, faces)
+            push!(intersection_neighbors, faces)
         else
             # Normal edge or boundary
             push!(new_neighbors, faces)
@@ -312,7 +312,7 @@ function split_intersections(
     
     num_ix_faces = 0
 
-    return new_neighbors, num_ix_faces, new_edge_nodes, new_num_nodes_per_edge, new_face_edges, new_face_edge_signs, new_face_edge_pos, intersection_faces, intersection_boundary_edges
+    return new_neighbors, num_ix_faces, new_edge_nodes, new_num_nodes_per_edge, new_face_edges, new_face_edge_signs, new_face_edge_pos, intersection_neighbors, intersection_boundary_edges
 
 end
 
