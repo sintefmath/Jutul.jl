@@ -64,20 +64,23 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
         end
     end
     # For intersection cells, copy the half-face trans from the neighbor on each shared face
-    for ix_cell in mesh.intersection_cells
-        for fpos = facepos[ix_cell]:(facepos[ix_cell+1]-1)
-            face = faces[fpos]
-            l, r = N[:, face]
-            neighbor = (l == ix_cell) ? r : l
-            # Find the neighbor's half-face position for this face
-            for npos = facepos[neighbor]:(facepos[neighbor+1]-1)
-                if faces[npos] == face
-                    T_hf[fpos] = T_hf[npos].*d_hf[npos]./(aperture[ix_cell]/2)
-                    break
+    if !isempty(mesh.intersection_cells)
+        for ix_cell in mesh.intersection_cells
+            for fpos = facepos[ix_cell]:(facepos[ix_cell+1]-1)
+                face = faces[fpos]
+                l, r = N[:, face]
+                neighbor = (l == ix_cell) ? r : l
+                # Find the neighbor's half-face position for this face
+                for npos = facepos[neighbor]:(facepos[neighbor+1]-1)
+                    if faces[npos] == face
+                        T_hf[fpos] = T_hf[npos].*d_hf[npos]./(aperture[ix_cell]/2)
+                        break
+                    end
                 end
             end
         end
     end
+
     return T_hf
 end
 
