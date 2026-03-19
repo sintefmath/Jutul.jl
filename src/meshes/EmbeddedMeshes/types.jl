@@ -53,12 +53,6 @@ function EmbeddedMesh(mesh::UnstructuredMesh, faces; intersection_strategy = :st
     return EmbeddedMesh(embedded_mesh, faces, intersection_neighbors, intersection_faces, intersection_cells)
 end
 
-EmbeddedMesh(mesh::UnstructuredMesh, intersections::Vector{Vector{Int}}) =
-    EmbeddedMesh(mesh, intersections, intersections, Vector{Vector{Int}}())
-
-EmbeddedMesh(mesh::UnstructuredMesh, intersections::Vector{Vector{Int}}, intersection_neighbors::Vector{Vector{Int}}) =
-    EmbeddedMesh(mesh, intersections, intersection_neighbors, Vector{Vector{Int}}())
-
 function Jutul.UnstructuredMesh(mesh::EmbeddedMesh)
     return mesh.unstructured_mesh
 end
