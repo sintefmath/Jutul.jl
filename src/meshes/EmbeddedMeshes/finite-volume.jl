@@ -4,11 +4,12 @@
 Compute half-face transmissibilities for finite volume discretization in
 embedded meshes.
 """
-function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_centroids, face_areas, perm, faces, facepos)
+function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_centroids, face_areas, perm, aperture, faces, facepos)
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
     T_hf = zeros(eltype(face_areas), length(faces))
+    d_hf = zeros(eltype(face_areas), length(faces))
     nc = length(facepos)-1
     if isa(perm, AbstractFloat)
         perm = repeat([perm], 1, nc)
@@ -59,6 +60,7 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
             T = Jutul.half_face_trans(A, K, C, Nn)
             T = abs(T)
             T_hf[fpos] = T
+            d_hf[fpos] = norm(C, 2)
         end
     end
     # For intersection cells, copy the half-face trans from the neighbor on each shared face
@@ -70,7 +72,7 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
             # Find the neighbor's half-face position for this face
             for npos = facepos[neighbor]:(facepos[neighbor+1]-1)
                 if faces[npos] == face
-                    T_hf[fpos] = T_hf[npos]
+                    T_hf[fpos] = T_hf[npos].*d_hf[npos]./(aperture[ix_cell]/2)
                     break
                 end
             end
@@ -154,11 +156,13 @@ function half_face_normal(mesh::EmbeddedMesh, face, cell, cn)
 
 end
 
-function compute_face_trans_dfm(T_hf, N, intersections)
+function compute_face_trans_dfm(T_hf, N, intersections, star_delta)
     T = compute_face_trans(T_hf, N)
-    T_ix, ix_faces = compute_intersection_trans_dfm(T_hf, N, intersections)
-    for (f, T_val) in zip(ix_faces, T_ix)
-        T[f] = T_val
+    if star_delta
+        T_ix, ix_faces = compute_intersection_trans_dfm(T_hf, N, intersections)
+        for (f, T_val) in zip(ix_faces, T_ix)
+            T[f] = T_val
+        end
     end
     return T
 end
