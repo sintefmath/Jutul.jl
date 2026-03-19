@@ -15,6 +15,7 @@ interconnected faces.
 """
 struct EmbeddedMesh <: Jutul.FiniteVolumeMesh
     unstructured_mesh::UnstructuredMesh
+    parent_faces::Vector{Int}
     intersection_neighbors::Vector{Vector{Int}}
     intersection_faces::Vector{Vector{Int}}
     intersection_cells::Vector{Int}
@@ -45,7 +46,7 @@ function EmbeddedMesh(mesh::UnstructuredMesh, faces; intersection_strategy = :st
         faces;
         intersection_strategy = intersection_strategy
     )
-    return EmbeddedMesh(embedded_mesh, intersection_neighbors, intersection_faces, intersection_cells)
+    return EmbeddedMesh(embedded_mesh, faces, intersection_neighbors, intersection_faces, intersection_cells)
 end
 
 function Jutul.UnstructuredMesh(mesh::EmbeddedMesh)
