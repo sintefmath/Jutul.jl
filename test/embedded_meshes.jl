@@ -31,54 +31,70 @@ using Jutul.EmbeddedMeshes
         end
         
         fracture_faces = findall(face_mask)
-        embedded_mesh = Jutul.EmbeddedMeshes.EmbeddedMesh(parent_mesh, fracture_faces)
-        embedded_mesh_with_connections = Jutul.EmbeddedMeshes.EmbeddedMesh(
+        embedded_mesh_remove = Jutul.EmbeddedMeshes.EmbeddedMesh(
             parent_mesh,
             fracture_faces;
-            include_intersection_connections = true
+            intersection_strategy = :remove
+        )
+        embedded_mesh_star = Jutul.EmbeddedMeshes.EmbeddedMesh(
+            parent_mesh,
+            fracture_faces;
+            intersection_strategy = :star_delta
+        )
+        embedded_mesh_keep = Jutul.EmbeddedMeshes.EmbeddedMesh(
+            parent_mesh,
+            fracture_faces;
+            intersection_strategy = :keep
         )
         
         @testset "EmbeddedMesh Construction" begin
             # Create embedded mesh
             
-            @test embedded_mesh isa Jutul.EmbeddedMeshes.EmbeddedMesh
-            @test embedded_mesh.unstructured_mesh isa Jutul.UnstructuredMesh
-            @test embedded_mesh.intersections isa Vector{Vector{Int}}
-            @test embedded_mesh.intersection_neighbors isa Vector{Vector{Int}}
-            @test embedded_mesh_with_connections isa Jutul.EmbeddedMeshes.EmbeddedMesh
-            @test embedded_mesh_with_connections.intersections == embedded_mesh.intersections
-            @test embedded_mesh.intersection_neighbors == embedded_mesh.intersections
-            @test embedded_mesh_with_connections.intersection_neighbors == embedded_mesh_with_connections.intersections
+            @test embedded_mesh_remove isa Jutul.EmbeddedMeshes.EmbeddedMesh
+            @test embedded_mesh_remove.unstructured_mesh isa Jutul.UnstructuredMesh
+            @test embedded_mesh_remove.intersection_neighbors isa Vector{Vector{Int}}
+            @test embedded_mesh_remove.intersection_boundary_faces isa Vector{Vector{Int}}
+            @test embedded_mesh_remove.intersection_cells == Int[]
+            @test embedded_mesh_star isa Jutul.EmbeddedMeshes.EmbeddedMesh
+            @test embedded_mesh_star.intersection_neighbors == embedded_mesh_remove.intersection_neighbors
+            @test embedded_mesh_star.intersection_boundary_faces == [Int[] for _ in embedded_mesh_star.intersection_neighbors]
+            @test embedded_mesh_star.intersection_cells == Int[]
+            @test embedded_mesh_keep isa Jutul.EmbeddedMeshes.EmbeddedMesh
+            @test embedded_mesh_keep.intersection_neighbors == embedded_mesh_remove.intersection_neighbors
+            @test embedded_mesh_keep.intersection_boundary_faces == [Int[] for _ in embedded_mesh_keep.intersection_neighbors]
+            @test length(embedded_mesh_keep.intersection_cells) == length(embedded_mesh_keep.intersection_neighbors)
             
             # Test basic interface functions
-            @test dim(embedded_mesh) == 3  # Embedded features are 2D, but have 3D coordinates
-            @test number_of_cells(embedded_mesh) == length(fracture_faces)  # Each face should become a cell in the embedded mesh
-            @test number_of_faces(embedded_mesh_with_connections) == 18 + 3*6
-            @test number_of_boundary_faces(embedded_mesh_with_connections) == 24
-            @test number_of_faces(embedded_mesh) < number_of_faces(embedded_mesh_with_connections)
-            @test number_of_boundary_faces(embedded_mesh) > number_of_boundary_faces(embedded_mesh_with_connections)
+            @test dim(embedded_mesh_remove) == 3
+            @test number_of_cells(embedded_mesh_remove) == length(fracture_faces)
+            @test number_of_cells(embedded_mesh_star) == length(fracture_faces)
+            @test number_of_cells(embedded_mesh_keep) == length(fracture_faces) + length(embedded_mesh_keep.intersection_cells)
+            @test number_of_faces(embedded_mesh_remove) < number_of_faces(embedded_mesh_star)
+            @test number_of_faces(embedded_mesh_keep) == number_of_faces(embedded_mesh_remove) + sum(length, embedded_mesh_keep.intersection_neighbors)
+            @test number_of_boundary_faces(embedded_mesh_remove) > number_of_boundary_faces(embedded_mesh_keep)
         end
         
         @testset "Connectivity Verification" begin
-            umesh = embedded_mesh.unstructured_mesh
+            umesh = embedded_mesh_remove.unstructured_mesh
                 
-            nc = number_of_cells(embedded_mesh)
-            nf = number_of_faces(embedded_mesh)
-            nbf = number_of_boundary_faces(embedded_mesh)
+            nc = number_of_cells(embedded_mesh_remove)
+            nf = number_of_faces(embedded_mesh_remove)
+            nbf = number_of_boundary_faces(embedded_mesh_remove)
             
             # Basic connectivity checks
             @test length(umesh.faces.cells_to_faces) == nc
             @test length(umesh.boundary_faces.cells_to_faces) == nc
             @test length(umesh.faces.neighbors) == nf
             @test length(umesh.boundary_faces.neighbors) == nbf
-            @test all(length.(embedded_mesh.intersections) .== 4)
+            @test all(length.(embedded_mesh_remove.intersection_neighbors) .== 4)
+            @test all(length.(embedded_mesh_remove.intersection_boundary_faces) .== 4)
 
-            umesh_connected = embedded_mesh_with_connections.unstructured_mesh
-            @test all(length.(embedded_mesh_with_connections.intersections) .== 4)
+            umesh_connected = embedded_mesh_star.unstructured_mesh
+            @test all(length.(embedded_mesh_star.intersection_neighbors) .== 4)
             @test length(umesh_connected.faces.neighbors) > length(umesh.faces.neighbors)
             
             # Check neighbor consistency
-            neighbors = get_neighborship(embedded_mesh)
+            neighbors = get_neighborship(embedded_mesh_remove)
             @test size(neighbors) == (2, nf)
             @test all(1 .<= neighbors[1, :] .<= nc)
             @test all(1 .<= neighbors[2, :] .<= nc)
@@ -88,34 +104,50 @@ using Jutul.EmbeddedMeshes
                 @test neighbors[1, i] != neighbors[2, i]
             end
 
-            # Default behavior should not create internal intersection links.
-            for ix in embedded_mesh.intersections
+            # Remove strategy should disconnect the intersection into boundary faces.
+            for (ix, ix_boundary_faces) in zip(embedded_mesh_remove.intersection_neighbors, embedded_mesh_remove.intersection_boundary_faces)
                 ix_set = Set(ix)
                 has_internal_ix_link = any(eachcol(neighbors)) do n
                     (n[1] in ix_set) && (n[2] in ix_set)
                 end
                 @test !has_internal_ix_link
+                @test length(ix_boundary_faces) == length(ix)
             end
 
-            # Opt-in behavior should include internal links at intersections.
-            neighbors_connected = get_neighborship(embedded_mesh_with_connections)
+            # Star-delta strategy should include internal links at intersections.
+            neighbors_connected = get_neighborship(embedded_mesh_star)
             total_ix_links = 0
-            for ix in embedded_mesh_with_connections.intersections
+            for ix in embedded_mesh_star.intersection_neighbors
                 ix_set = Set(ix)
                 total_ix_links += count(eachcol(neighbors_connected)) do n
                     (n[1] in ix_set) && (n[2] in ix_set)
                 end
             end
             @test total_ix_links > 0
+
+            # Keep strategy should attach duplicated edges to new intersection cells.
+            neighbors_keep = get_neighborship(embedded_mesh_keep)
+            for (ix_cells, ix_cell) in zip(embedded_mesh_keep.intersection_neighbors, embedded_mesh_keep.intersection_cells)
+                connected_faces = findall(f -> ix_cell in neighbors_keep[:, f], 1:size(neighbors_keep, 2))
+                connected_cells = Int[]
+                for f in connected_faces
+                    n = neighbors_keep[:, f]
+                    other = n[1] == ix_cell ? n[2] : n[1]
+                    push!(connected_cells, other)
+                end
+                sort!(connected_cells)
+                @test connected_cells == sort(ix_cells)
+                @test all(count(==(ix_cell), neighbors_keep[:, f]) == 1 for f in connected_faces)
+            end
         end
         
         @testset "Geometric Consistency" begin
-            nc = number_of_cells(embedded_mesh)
+            nc = number_of_cells(embedded_mesh_remove)
             # Test geometry computation
             for i in 1:nc
-                centroid, volume = Jutul.compute_centroid_and_measure(embedded_mesh, Cells(), i)
+                centroid, volume = Jutul.compute_centroid_and_measure(embedded_mesh_remove, Cells(), i)
                 centroid_p, area_p = Jutul.compute_centroid_and_measure(parent_mesh, Faces(), fracture_faces[i])
-                cell_normal = Jutul.EmbeddedMeshes.cell_normal(embedded_mesh, i)
+                cell_normal = Jutul.EmbeddedMeshes.cell_normal(embedded_mesh_remove, i)
                 face_normal = Jutul.face_normal(parent_mesh, fracture_faces[i], Faces())
                 @test all(isapprox.(centroid, centroid_p))
                 @test all(isapprox.(volume, area_p))
