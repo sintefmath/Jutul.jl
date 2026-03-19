@@ -87,7 +87,7 @@ function embed_mesh(
             partial_cut = :none,
             merge_faces = merge_faces
         )
-        cell_map = [cell_map[j] for j in step_info["cell_index"]]
+        cell_map = [cell_map[j] for j in step_info[:cell_index]]
     end
 
     # ------------------------------------------------------------------
@@ -140,8 +140,8 @@ function embed_mesh(
         cell_index_b = Vector{Int}(undef, nc_result)
 
         for c in 1:nc_result
-            idx_a = glue_info["cell_index_a"][c]
-            idx_b = glue_info["cell_index_b"][c]
+            idx_a = glue_info[:cell_index_a][c]
+            idx_b = glue_info[:cell_index_b][c]
             if idx_a > 0
                 cell_origin[c] = :mesh_a
                 cell_index_a[c] = trimmed_cell_map[idx_a]

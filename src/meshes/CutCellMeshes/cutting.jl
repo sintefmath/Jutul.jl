@@ -203,11 +203,11 @@ function cut_mesh(mesh::UnstructuredMesh{3}, plane::PlaneCut{T};
             if extra_out
                 nf = number_of_faces(mesh)
                 nb = number_of_boundary_faces(mesh)
-                info = Dict{String, Any}(
-                    "cell_index" => collect(1:nc),
-                    "face_index" => collect(1:nf),
-                    "boundary_face_index" => collect(1:nb),
-                    "new_faces" => Int[]
+                info = Dict{Symbol, Any}(
+                    :cell_index => collect(1:nc),
+                    :face_index => collect(1:nf),
+                    :boundary_face_index => collect(1:nb),
+                    :new_faces => Int[]
                 )
                 return (mesh, info)
             end
