@@ -84,7 +84,6 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
             end
         end
     end
-
     return T_hf
 end
 
