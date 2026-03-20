@@ -12,6 +12,7 @@ include("utils.jl")
 include("optimization.jl")
 include("relaxation.jl")
 include("helper.jl")
+include("debug_io.jl")
 
 function simulator_storage(model;
         state0 = nothing,
@@ -367,7 +368,7 @@ function solve_timestep!(sim, dT, forces, max_its, config;
                 cut_count += 1
                 if info_level > 1
                     t_format = t -> @sprintf "%1.2f" 100*t/dT
-                    @warn "Cutting mini-step. Step $(t_format(t_local)) % complete.\nΔt reduced to $(get_tstr(dt)) ($(t_format(dt))% of full time-step).\nThis is cut #$cut_count for time-step #$step_no."
+                    @warn "Cutting mini-step. Step $(t_format(t_local)) % complete.\nΔt reduced to $(get_tstr(dt, 2)) ($(t_format(dt))% of full time-step).\nThis is cut #$cut_count for time-step #$step_no."
                 end
             end
         end
@@ -415,11 +416,17 @@ function perform_step!(storage, model, dt, forces, config;
         report[:prepare_step_time] = t_prep
         _, t_eqs = update_state_dependents!(storage, model, dt, forces, time = time, update_secondary = false)
     end
+    if config[:info_level] > 2.0
+        jutul_message("Linearization", "Updated secondary variables in $(get_tstr(t_secondary, 2)) and equations in $(get_tstr(t_eqs, 2)).", color = :blue)
+    end
     report[:secondary_time] = t_secondary
     report[:equations_time] = t_eqs
     # Update the linearized system
     t_lsys = @elapsed begin
         @tic "linear system" update_linearized_system!(storage, model, executor)
+    end
+    if config[:info_level] > 2.0
+        jutul_message("Linear system", "Updated linear system in $(get_tstr(t_lsys, 2)).", color = :blue)
     end
     report[:linear_system_time] = t_lsys
     solved = false
@@ -483,6 +490,7 @@ end
 function perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
     lsolve = config[:linear_solver]
     check = config[:safe_mode]
+    write_debug_output(config, storage, model, :state)
     try
         t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
                 storage, model, dt,
@@ -497,6 +505,10 @@ function perform_step_solve_impl!(report, storage, model, config, dt, iteration,
         report[:linear_iterations] = n_iter
         report[:linear_solve_time] = t_solve
         report[:update_time] = t_update
+        write_debug_output(config, storage, model, :equations)
+        if config[:info_level] > 2.0
+            jutul_message("Linear solver", "Solve system in $(get_tstr(t_solve, 2)) with $n_iter iterations.", color = :blue)
+        end
     catch e
         if config[:failure_cuts_timestep] && !(e isa InterruptException)
             if config[:info_level] > 0
@@ -508,6 +520,7 @@ function perform_step_solve_impl!(report, storage, model, config, dt, iteration,
         end
     end
 end
+
 
 function perform_step_per_process_initial_update!(sim::JutulSimulator, dt, forces, config; kwarg...)
     return perform_step_per_process_initial_update!(sim.storage, sim.model, dt, forces, config; kwarg...)

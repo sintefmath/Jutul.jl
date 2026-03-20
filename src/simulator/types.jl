@@ -62,8 +62,12 @@ function get_prepare_step_handler(storage)
     return (handler = handler, storage = hstorage)
 end
 
-function progress_recorder(sim)
-    return sim.storage.recorder
+function progress_recorder(sim::JutulSimulator)
+    return progress_recorder(sim.storage)
+end
+
+function progress_recorder(storage)
+    return storage.recorder
 end
 
 mutable struct SolveRecorder
