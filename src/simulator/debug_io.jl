@@ -48,6 +48,58 @@ function debug_output_path(basepth::String, rec, variant)
     ss = substep(rec)
     it = iteration(rec)
     subit = subiteration(rec)
-    out = joinpath(basepth, "$(variant)_jutul_newton_$(it)_sub_$(subit)_step_$(s)_substep_$(ss).jld2")
+    out = debug_output_path(basepth, variant, s, ss, it, subit)
+    return out
+end
+
+function debug_output_path(basepth, variant, step, substep, it, subit)
+    out = joinpath(basepth, "$(variant)_jutul_newton_step_$(step)_substep_$(substep)_$(it)_sub_$(subit).jld2")
+    return out
+end
+
+function read_debug_output(path::String, variant::Symbol)
+    isdir(path) || error("Path $path does not exist or is not a directory")
+    out = []
+    done = false
+    for step in 1:typemax(Int)
+        for substep in 1:typemax(Int)
+            m = length(out)
+            for it in 0:typemax(Int)
+                n = length(out)
+                for subit in 0:typemax(Int)
+                    next = read_debug_output(path, variant, step, substep, it, subit)
+                    if ismissing(next)
+                        break
+                    end
+                    push!(out, next)
+                end
+                if length(out) == n
+                    break
+                end
+            end
+            done = length(out) == m
+            if done
+                break
+            end
+        end
+        if done
+            break
+        end
+    end
+    return out
+end
+
+
+function read_debug_output(path, variant, step::Int, substep::Int, it::Int, subit::Int = 0)
+    fpth = debug_output_path(path, variant, step, substep, it, subit)
+    if isfile(fpth)
+        @debug "Reading debug output from $fpth"
+        data = jldopen(fpth, "r") do file
+            Dict(k => file[k] for k in keys(file))
+        end
+        out = data
+    else
+        out = missing
+    end
     return out
 end
