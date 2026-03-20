@@ -95,7 +95,7 @@ function read_debug_output(path, variant, step::Int, substep::Int, it::Int, subi
     if isfile(fpth)
         @debug "Reading debug output from $fpth"
         data = jldopen(fpth, "r") do file
-            Dict(k => file[k] for k in keys(file))
+            Dict(Symbol(k) => file[k] for k in keys(file))
         end
         out = data
     else
