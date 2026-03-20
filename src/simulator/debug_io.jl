@@ -37,6 +37,7 @@ function debug_output_path(config::JutulConfig, rec, variant)
     if ismissing(basepth)
         out = missing
     else
+        mkpath(basepth)
         out = debug_output_path(basepth, rec, variant)
     end
     return out

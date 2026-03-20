@@ -630,6 +630,7 @@ function Base.map(f, S::JutulStorage)
 end
 Base.pairs(S::JutulStorage) = Base.pairs(data(S))
 Base.values(S::JutulStorage) = Base.values(data(S))
+Base.get(S::JutulStorage, key, default) = Base.get(data(S), key, default)
 
 function Base.getproperty(S::JutulStorage{Nothing}, name::Symbol)
     Base.getindex(data(S), name)
@@ -668,7 +669,6 @@ end
 function Base.keys(S::JutulStorage{Nothing})
     return Tuple(keys(data(S)))
 end
-
 
 function Base.haskey(S::JutulStorage{NamedTuple{K, V}}, name::Symbol) where {K, V}
     return name in K
