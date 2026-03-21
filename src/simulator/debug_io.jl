@@ -8,7 +8,8 @@ function write_debug_output(config, storage, model, variant::Symbol)
         error("Unknown debug output variant: $variant")
     end
     rec = progress_recorder(storage)
-    pth = debug_output_path(config, rec, variant)
+    # Set offset - we are writing before the iteration is incremented
+    pth = debug_output_path(config, rec, variant, it_offset = 1)
     if !ismissing(pth)
         @debug "Writing debug state to $pth"
         jldopen(pth, "w") do file
@@ -26,7 +27,7 @@ function write_debug_output(config, storage, model, variant::Symbol)
     end
 end
 
-function debug_output_path(config::JutulConfig, rec, variant)
+function debug_output_path(config::JutulConfig, rec, variant; it_offset = 0)
     if variant == :equations
         basepth = config[:debug_equations_path]
     elseif variant == :state
@@ -38,16 +39,16 @@ function debug_output_path(config::JutulConfig, rec, variant)
         out = missing
     else
         mkpath(basepth)
-        out = debug_output_path(basepth, rec, variant)
+        out = debug_output_path(basepth, rec, variant, it_offset = it_offset)
     end
     return out
 end
 
-function debug_output_path(basepth::String, rec, variant)
+function debug_output_path(basepth::String, rec, variant; it_offset = 0)
     s = step(rec)
     ss = substep(rec)
-    it = iteration(rec) + 1
-    subit = subiteration(rec) + 1
+    it = iteration(rec) + it_offset
+    subit = subiteration(rec) + it_offset
     out = debug_output_path(basepth, variant, s, ss, it, subit)
     return out
 end
@@ -100,7 +101,7 @@ function read_debug_output!(out, path, variant, step::Int, substep::Int, it::Int
     return out
 end
 
-function read_debug_output(path, variant, step::Int, substep::Int, it::Int, subit::Int = 0)
+function read_debug_output(path, variant, step::Int, substep::Int, it::Int, subit::Int = 1)
     fpth = debug_output_path(path, variant, step, substep, it, subit)
     if isfile(fpth)
         @debug "Reading debug output from $fpth"
