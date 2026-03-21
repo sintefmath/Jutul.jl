@@ -84,7 +84,7 @@ function read_debug_output(path::String, variant::Symbol)
     return out
 end
 
-function read_debug_output(path, variant, step::Int = 1, substep::Int = 1, it::Int = 1)
+function read_debug_output(path, variant; step::Int = 1, substep::Int = 1, it::Int = 1)
     # Utility to read all Newton iterations for a given outer iteration
     out = []
     return read_debug_output!(out, path, variant, step, substep, it)
@@ -101,7 +101,7 @@ function read_debug_output!(out, path, variant, step::Int, substep::Int, it::Int
     return out
 end
 
-function read_debug_output(path, variant, step::Int, substep::Int, it::Int, subit::Int = 1)
+function read_debug_output(path, variant, step::Int, substep::Int, it::Int, subit::Int)
     fpth = debug_output_path(path, variant, step, substep, it, subit)
     if isfile(fpth)
         @debug "Reading debug output from $fpth"
