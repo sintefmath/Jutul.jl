@@ -98,7 +98,6 @@ function setup_storage!(storage, model::MultiModel;
     )
     state0_ref = JutulStorage()
     state_ref = JutulStorage()
-    views = JutulStorage()
     use_internal_ad = state0_ad || state_ad
     @tic "model" for key in submodels_symbols(model)
         m = model[key]
@@ -113,7 +112,6 @@ function setup_storage!(storage, model::MultiModel;
                 tag = submodel_ad_tag(model, key),
                 kwarg...
             )
-            views[key] = get(storage[key], :views, missing)
         end
         # Add outer references to state that matches the nested structure
         state_ref[key] = storage[key][:state]
@@ -121,7 +119,6 @@ function setup_storage!(storage, model::MultiModel;
     end
     storage[:state] = state_ref
     storage[:state0] = state0_ref
-    storage[:views] = views
     @tic "cross terms" setup_cross_terms_storage!(storage, model, ad = use_internal_ad)
     @tic "equations" for key in submodels_symbols(model)
         m = model[key]
@@ -142,6 +139,12 @@ function setup_storage!(storage, model::MultiModel;
             @tic "views" setup_equations_and_primary_variable_views!(storage, model)
         end
     end
+    # Add references to views for each submodel
+    views = JutulStorage()
+    for key in submodels_symbols(model)
+        views[key] = get(storage[key], :views, missing)
+    end
+    storage[:views] = views
     setup_multimodel_maps!(storage, model)
     return storage
 end
