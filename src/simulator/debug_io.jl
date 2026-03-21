@@ -17,8 +17,8 @@ function write_debug_output(config, storage, model, variant::Symbol)
             else
                 file["state"] = get_output_state(storage, model)
             end
-            file["iteration"] = iteration(rec)
-            file["subiteration"] = subiteration(rec)
+            file["iteration"] = iteration(rec) + 1
+            file["subiteration"] = subiteration(rec) + 1
             file["step"] = step(rec)
             file["substep"] = substep(rec)
             file["time"] = recorder_current_time(rec, :global)
@@ -46,8 +46,8 @@ end
 function debug_output_path(basepth::String, rec, variant)
     s = step(rec)
     ss = substep(rec)
-    it = iteration(rec)
-    subit = subiteration(rec)
+    it = iteration(rec) + 1
+    subit = subiteration(rec) + 1
     out = debug_output_path(basepth, variant, s, ss, it, subit)
     return out
 end
@@ -64,9 +64,9 @@ function read_debug_output(path::String, variant::Symbol)
     for step in 1:typemax(Int)
         for substep in 1:typemax(Int)
             m = length(out)
-            for it in 0:typemax(Int)
+            for it in 1:typemax(Int)
                 n = length(out)
-                for subit in 0:typemax(Int)
+                for subit in 1:typemax(Int)
                     next = read_debug_output(path, variant, step, substep, it, subit)
                     if ismissing(next)
                         break
