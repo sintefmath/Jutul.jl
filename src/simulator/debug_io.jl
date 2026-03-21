@@ -66,13 +66,7 @@ function read_debug_output(path::String, variant::Symbol)
             m = length(out)
             for it in 1:typemax(Int)
                 n = length(out)
-                for subit in 1:typemax(Int)
-                    next = read_debug_output(path, variant, step, substep, it, subit)
-                    if ismissing(next)
-                        break
-                    end
-                    push!(out, next)
-                end
+                read_debug_output(path, variant, step, substep, it)
                 if length(out) == n
                     break
                 end
@@ -89,6 +83,22 @@ function read_debug_output(path::String, variant::Symbol)
     return out
 end
 
+function read_debug_output(path, variant, step::Int = 1, substep::Int = 1, it::Int = 1)
+    # Utility to read all Newton iterations for a given outer iteration
+    out = []
+    return read_debug_output!(out, path, variant, step, substep, it)
+end
+
+function read_debug_output!(out, path, variant, step::Int, substep::Int, it::Int)
+    for subit in 1:typemax(Int)
+        next = read_debug_output(path, variant, step, substep, it, subit)
+        if ismissing(next)
+            break
+        end
+        push!(out, next)
+    end
+    return out
+end
 
 function read_debug_output(path, variant, step::Int, substep::Int, it::Int, subit::Int = 0)
     fpth = debug_output_path(path, variant, step, substep, it, subit)
