@@ -68,6 +68,9 @@ using `free_optimization_parameter!` prior to calling the optimizer.
   - `output_path`: If provided, the optimization results will be stored in the
     given path as a JLD2 file named `final.jld2`, with intermediate steps being
     stored as `step_1.jld2`, `step_2.jld2`, etc if `solution_history` is enabled.
+  - `randomized_start`: If `true`, the initial guess will be randomized within
+    the provided limits instead of using the initial values in
+    `dopt.parameters`.
 
 # Returns
 The optimized parameters as a dictionary.
@@ -115,6 +118,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
         output_path = nothing,
+        randomized_start = false,
         kwarg...
     )
     if ismissing(setup_fn)
@@ -131,6 +135,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         print_parameters = print_parameters,
         allow_errors = allow_errors,
         gradient_scaling = gradient_scaling,
+        randomized_start = randomized_start,
         output_path = output_path
     )
 
