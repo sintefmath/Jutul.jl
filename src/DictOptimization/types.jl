@@ -172,6 +172,7 @@ struct JutulOptimizationProblem
             print_parameters::Bool = false,
             allow_errors::Bool = false,
             gradient_scaling = false,
+            randomized_start = false,
             output_path = nothing
         )
         if !isnothing(output_path)
@@ -182,6 +183,13 @@ struct JutulOptimizationProblem
         end
         backend_arg = setup_optimization_backend_kwarg(; deps = deps, deps_ad = deps_ad, backend_arg...)
         x0, x_setup, limits = optimization_setup(dopt)
+        if randomized_start
+            for i in eachindex(x0, limits.min, limits.max)
+                mx = limits.max[i]
+                mn = limits.min[i]
+                x0[i] = rand()*(mx - mn) + mn
+            end
+        end
 
         # Set up a cache for forward/backward sim
         adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config, info_level = info_level)
