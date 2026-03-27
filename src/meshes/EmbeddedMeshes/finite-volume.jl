@@ -4,11 +4,12 @@
 Compute half-face transmissibilities for finite volume discretization in
 embedded meshes.
 """
-function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_centroids, face_areas, perm, faces, facepos)
+function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_centroids, face_areas, perm, aperture, faces, facepos)
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
     T_hf = zeros(eltype(face_areas), length(faces))
+    Nn_hf = Vector{SVector{dim, Float64}}(undef, length(faces))
     nc = length(facepos)-1
     if isa(perm, AbstractFloat)
         perm = repeat([perm], 1, nc)
@@ -41,7 +42,12 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
     vdim = Val(dim)
     cc = zeros(eltype(cell_centroids), dim)
     fc = zeros(eltype(face_centroids), dim)
+    ix_cells = Set(mesh.intersection_cells)
+    N = get_neighborship(mesh)
     for cell = 1:nc
+        if cell in ix_cells
+            continue
+        end
         cn = cell_normal(mesh, cell)
         for fpos = facepos[cell]:(facepos[cell+1]-1)
             face = faces[fpos]
@@ -54,8 +60,31 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
             T = Jutul.half_face_trans(A, K, C, Nn)
             T = abs(T)
             T_hf[fpos] = T
+            Nn_hf[fpos] = Nn
         end
     end
+    # For intersection cells, copy the half-face trans from the neighbor on each shared face
+    if !isempty(mesh.intersection_cells)
+        for ix_cell in mesh.intersection_cells
+            for fpos = facepos[ix_cell]:(facepos[ix_cell+1]-1)
+                face = faces[fpos]
+                l, r = N[:, face]
+                neighbor = (l == ix_cell) ? r : l
+                # Find the neighbor's half-face position for this face
+                for npos = facepos[neighbor]:(facepos[neighbor+1]-1)
+                    if faces[npos] == face
+                        A = face_areas[face]
+                        Nn = Nn_hf[npos]
+                        C = Nn.*aperture[neighbor]/2
+                        K = Jutul.expand_perm(perm[:, neighbor], vdim)
+                        T_hf[fpos] = Jutul.half_face_trans(A, K, C, Nn)
+                        break
+                    end
+                end
+            end
+        end
+    end
+
     return T_hf
 end
 
@@ -134,11 +163,13 @@ function half_face_normal(mesh::EmbeddedMesh, face, cell, cn)
 
 end
 
-function compute_face_trans_dfm(T_hf, N, intersections)
+function compute_face_trans_dfm(T_hf, N, intersections, star_delta)
     T = compute_face_trans(T_hf, N)
-    T_ix, ix_faces = compute_intersection_trans_dfm(T_hf, N, intersections)
-    for (f, T_val) in zip(ix_faces, T_ix)
-        T[f] = T_val
+    if star_delta
+        T_ix, ix_faces = compute_intersection_trans_dfm(T_hf, N, intersections)
+        for (f, T_val) in zip(ix_faces, T_ix)
+            T[f] = T_val
+        end
     end
     return T
 end
