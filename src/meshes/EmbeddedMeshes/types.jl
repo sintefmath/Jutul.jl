@@ -7,6 +7,7 @@ interconnected faces.
 
 # Fields
 - `unstructured_mesh::UnstructuredMesh`: The underlying unstructured mesh representation
+- `parent_faces::Vector{Int}`: Indices of the parent mesh faces that make up the embedded mesh
 - `intersection_neighbors::Vector{Vector{Int}}`: Embedded mesh cells grouped per intersection
 - `intersection_faces::Vector{Vector{Int}}`: Face indices per intersection, aligned with
   `intersection_neighbors`. For `:remove`, these are boundary face indices; for `:star_delta`
@@ -32,9 +33,12 @@ Construct an embedded mesh from selected faces of an unstructured mesh.
 
 # Keyword arguments
 - `intersection_strategy::Symbol = :keep`: Strategy for handling intersections.
-    - `:keep` (default): Intersection edges are kept disconnected in the
-      neighborship and stored in `intersections`.
-    - `:star_delta`: Intersections with three or more faces are split into pairwise internal connections.
+    - `:star_delta` (default): Intersections with three or more faces are split
+      into pairwise internal connections.
+    - `:remove`: Intersections are removed by duplicating the intersecting edge
+      as a boundary edge for each face.
+    - `:keep`: Intersections are kept as-is, with an additional cell created for
+      each intersection and connected to all intersecting faces.
 
 # Returns
 - `EmbeddedMesh`: Embedded mesh made up of the specified faces.
