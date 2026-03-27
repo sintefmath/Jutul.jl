@@ -53,15 +53,15 @@ using Jutul.EmbeddedMeshes
             @test embedded_mesh_remove isa Jutul.EmbeddedMeshes.EmbeddedMesh
             @test embedded_mesh_remove.unstructured_mesh isa Jutul.UnstructuredMesh
             @test embedded_mesh_remove.intersection_neighbors isa Vector{Vector{Int}}
-            @test embedded_mesh_remove.intersection_edges isa Vector{Vector{Int}}
+            @test embedded_mesh_remove.intersection_faces isa Vector{Vector{Int}}
             @test embedded_mesh_remove.intersection_cells == Int[]
             @test embedded_mesh_star isa Jutul.EmbeddedMeshes.EmbeddedMesh
             @test embedded_mesh_star.intersection_neighbors == embedded_mesh_remove.intersection_neighbors
-            @test all(!isempty, embedded_mesh_star.intersection_edges)
+            @test all(!isempty, embedded_mesh_star.intersection_faces)
             @test embedded_mesh_star.intersection_cells == Int[]
             @test embedded_mesh_keep isa Jutul.EmbeddedMeshes.EmbeddedMesh
             @test embedded_mesh_keep.intersection_neighbors == embedded_mesh_remove.intersection_neighbors
-            @test all(!isempty, embedded_mesh_keep.intersection_edges)
+            @test all(!isempty, embedded_mesh_keep.intersection_faces)
             @test length(embedded_mesh_keep.intersection_cells) == length(embedded_mesh_keep.intersection_neighbors)
             
             # Test basic interface functions
@@ -87,7 +87,7 @@ using Jutul.EmbeddedMeshes
             @test length(umesh.faces.neighbors) == nf
             @test length(umesh.boundary_faces.neighbors) == nbf
             @test all(length.(embedded_mesh_remove.intersection_neighbors) .== 4)
-            @test all(length.(embedded_mesh_remove.intersection_edges) .== 4)
+            @test all(length.(embedded_mesh_remove.intersection_faces) .== 4)
 
             umesh_connected = embedded_mesh_star.unstructured_mesh
             @test all(length.(embedded_mesh_star.intersection_neighbors) .== 4)
@@ -105,7 +105,7 @@ using Jutul.EmbeddedMeshes
             end
 
             # Remove strategy should disconnect the intersection into boundary faces.
-            for (ix, ix_boundary_faces) in zip(embedded_mesh_remove.intersection_neighbors, embedded_mesh_remove.intersection_edges)
+            for (ix, ix_boundary_faces) in zip(embedded_mesh_remove.intersection_neighbors, embedded_mesh_remove.intersection_faces)
                 ix_set = Set(ix)
                 has_internal_ix_link = any(eachcol(neighbors)) do n
                     (n[1] in ix_set) && (n[2] in ix_set)
@@ -208,7 +208,47 @@ using Jutul.EmbeddedMeshes
         @test dim(umesh) == dim(embedded_mesh)
         @test number_of_cells(umesh) == number_of_cells(embedded_mesh)
     end
-    
+
+    @testset "Face and BoundaryFace Centroid/Measure" begin
+        parent_mesh = UnstructuredMesh(CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0)))
+        test_faces = [1, 3, 5]
+        embedded_mesh = Jutul.EmbeddedMeshes.EmbeddedMesh(parent_mesh, test_faces)
+
+        nf = number_of_faces(embedded_mesh)
+        nbf = number_of_boundary_faces(embedded_mesh)
+
+        for f in 1:nf
+            centroid, measure = Jutul.compute_centroid_and_measure(embedded_mesh, Faces(), f)
+            @test length(centroid) == 3
+            @test measure > 0
+        end
+        for f in 1:nbf
+            centroid, measure = Jutul.compute_centroid_and_measure(embedded_mesh, BoundaryFaces(), f)
+            @test length(centroid) == 3
+            @test measure > 0
+        end
+    end
+
+    @testset "half_face_normal" begin
+        parent_mesh = UnstructuredMesh(CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0)))
+        test_faces = [1, 2]
+        embedded_mesh = Jutul.EmbeddedMeshes.EmbeddedMesh(parent_mesh, test_faces)
+
+        N = get_neighborship(embedded_mesh)
+        nc = number_of_cells(embedded_mesh)
+        for cell in 1:nc
+            cn = Jutul.EmbeddedMeshes.cell_normal(embedded_mesh, cell)
+            umesh = embedded_mesh.unstructured_mesh
+            for face in umesh.faces.cells_to_faces[cell]
+                hfn = Jutul.EmbeddedMeshes.half_face_normal(embedded_mesh, face, cell, cn)
+                # Should be a unit vector
+                @test norm(hfn) ≈ 1.0
+                # Should be perpendicular to the cell normal
+                @test abs(dot(hfn, cn)) < 1e-12
+            end
+        end
+    end
+
     @testset "Transmissibility Computation" begin
         # Test specialized transmissibility calculations for embedded features
         parent_mesh = UnstructuredMesh(CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0)))
@@ -218,12 +258,11 @@ using Jutul.EmbeddedMeshes
         # Set up basic finite volume geometry
         tpfv_geo = tpfv_geometry(embedded_mesh)
         nc = number_of_cells(embedded_mesh)
-        nf = number_of_faces(embedded_mesh)
         
         # Test transmissibility computation
         perm_scalar = 1e-12  # 1 mD
+        aperture = 1.0       # unit aperture
         N = get_neighborship(embedded_mesh)
-        nc = number_of_cells(embedded_mesh)
         faces, facepos = get_facepos(N, nc)
         T_hf = compute_half_face_trans(
             embedded_mesh,
@@ -231,11 +270,129 @@ using Jutul.EmbeddedMeshes
             tpfv_geo.face_centroids,
             tpfv_geo.areas,
             perm_scalar,
+            aperture,
             faces,
             facepos
         )
         
         @test length(T_hf) == length(faces)
-        @test all(T_hf .== 2.0e-12)  # Transmissibilities should be non-negative
+        @test all(T_hf .== 2.0e-12)
+        @test all(isfinite, T_hf)
+    end
+
+    @testset "compute_face_trans_dfm" begin
+        # Use the cross-shaped fracture network with star-delta strategy
+        parent_dims = (3, 3, 3)
+        parent_mesh = UnstructuredMesh(CartesianMesh(parent_dims, (4.0, 4.0, 4.0)))
+        neighbors = get_neighborship(parent_mesh)
+        ijk = reinterpret(reshape, Int, map(c -> cell_ijk(parent_mesh, c), 1:number_of_cells(parent_mesh)))
+
+        face_mask = falses(size(neighbors, 2))
+        for k = 1:parent_dims[3], j = 1:parent_dims[2]
+            cell_mask_l = (ijk[1,:] .== 1) .& (ijk[2,:] .== j) .& (ijk[3,:] .== k)
+            cell_mask_r = (ijk[1,:] .== 2) .& (ijk[2,:] .== j) .& (ijk[3,:] .== k)
+            face_mask = face_mask .| vec(any(cell_mask_l[neighbors], dims = 1) .& any(cell_mask_r[neighbors], dims = 1))
+        end
+        for k = 1:parent_dims[3], i = 1:parent_dims[1]
+            cell_mask_l = (ijk[1,:] .== i) .& (ijk[2,:] .== 1) .& (ijk[3,:] .== k)
+            cell_mask_r = (ijk[1,:] .== i) .& (ijk[2,:] .== 2) .& (ijk[3,:] .== k)
+            face_mask = face_mask .| vec(any(cell_mask_l[neighbors], dims = 1) .& any(cell_mask_r[neighbors], dims = 1))
+        end
+        fracture_faces = findall(face_mask)
+
+        # Test with star_delta strategy (has intersection connections)
+        mesh_star = Jutul.EmbeddedMeshes.EmbeddedMesh(parent_mesh, fracture_faces; intersection_strategy = :star_delta)
+        geo_star = tpfv_geometry(mesh_star)
+        N_star = get_neighborship(mesh_star)
+        nc_star = number_of_cells(mesh_star)
+        nf_star = number_of_faces(mesh_star)
+        faces_star, facepos_star = get_facepos(N_star, nc_star)
+        perm = 1e-12
+        aperture = 1e-3
+
+        T_hf_star = compute_half_face_trans(
+            mesh_star,
+            geo_star.cell_centroids,
+            geo_star.face_centroids,
+            geo_star.areas,
+            perm,
+            aperture,
+            faces_star,
+            facepos_star
+        )
+
+        intersections = mesh_star.intersection_neighbors
+        T_star = Jutul.EmbeddedMeshes.compute_face_trans_dfm(T_hf_star, N_star, intersections, true)
+        @test length(T_star) == nf_star
+        @test all(T_star .>= 0.0)
+        @test all(isfinite, T_star)
+
+        # Without star-delta correction (should still return valid transmissibilities)
+        T_no_sd = Jutul.EmbeddedMeshes.compute_face_trans_dfm(T_hf_star, N_star, intersections, false)
+        @test length(T_no_sd) == nf_star
+        @test all(T_no_sd .>= 0.0)
+        @test all(isfinite, T_no_sd)
+    end
+
+    @testset "compute_intersection_trans_dfm" begin
+        # Use the same cross-shaped fracture network
+        parent_dims = (3, 3, 3)
+        parent_mesh = UnstructuredMesh(CartesianMesh(parent_dims, (4.0, 4.0, 4.0)))
+        neighbors = get_neighborship(parent_mesh)
+        ijk = reinterpret(reshape, Int, map(c -> cell_ijk(parent_mesh, c), 1:number_of_cells(parent_mesh)))
+
+        face_mask = falses(size(neighbors, 2))
+        for k = 1:parent_dims[3], j = 1:parent_dims[2]
+            cell_mask_l = (ijk[1,:] .== 1) .& (ijk[2,:] .== j) .& (ijk[3,:] .== k)
+            cell_mask_r = (ijk[1,:] .== 2) .& (ijk[2,:] .== j) .& (ijk[3,:] .== k)
+            face_mask = face_mask .| vec(any(cell_mask_l[neighbors], dims = 1) .& any(cell_mask_r[neighbors], dims = 1))
+        end
+        for k = 1:parent_dims[3], i = 1:parent_dims[1]
+            cell_mask_l = (ijk[1,:] .== i) .& (ijk[2,:] .== 1) .& (ijk[3,:] .== k)
+            cell_mask_r = (ijk[1,:] .== i) .& (ijk[2,:] .== 2) .& (ijk[3,:] .== k)
+            face_mask = face_mask .| vec(any(cell_mask_l[neighbors], dims = 1) .& any(cell_mask_r[neighbors], dims = 1))
+        end
+        fracture_faces = findall(face_mask)
+
+        mesh_star = Jutul.EmbeddedMeshes.EmbeddedMesh(parent_mesh, fracture_faces; intersection_strategy = :star_delta)
+        geo_star = tpfv_geometry(mesh_star)
+        N_star = get_neighborship(mesh_star)
+        nc_star = number_of_cells(mesh_star)
+        faces_star, facepos_star = get_facepos(N_star, nc_star)
+        perm = 1e-12
+        aperture = 1e-3
+
+        T_hf = compute_half_face_trans(
+            mesh_star,
+            geo_star.cell_centroids,
+            geo_star.face_centroids,
+            geo_star.areas,
+            perm,
+            aperture,
+            faces_star,
+            facepos_star
+        )
+
+        intersections = mesh_star.intersection_neighbors
+        @test !isempty(intersections)
+
+        T_ix, ix_faces = Jutul.EmbeddedMeshes.compute_intersection_trans_dfm(T_hf, N_star, intersections)
+
+        # Each intersection with 4 neighbors produces 4*(4-1)/2 = 6 star-delta faces
+        @test length(T_ix) == length(ix_faces)
+        @test !isempty(T_ix)
+        @test all(T_ix .> 0.0)
+        @test all(isfinite, T_ix)
+
+        # All returned faces should be valid face indices
+        nf = size(N_star, 2)
+        @test all(1 .<= ix_faces .<= nf)
+
+        # Intersection faces should connect cells within the same intersection group
+        for f in ix_faces
+            ci, cj = N_star[:, f]
+            found = any(ix -> (ci in ix && cj in ix), intersections)
+            @test found
+        end
     end
 end
