@@ -888,21 +888,21 @@ end
         @test all(geo.volumes .> 0)
 
         # B cells preserved
-        n_b = count(x -> x == :mesh_b, info["cell_origin"])
+        n_b = count(x -> x == :mesh_b, info[:cell_origin])
         @test n_b == number_of_cells(mesh_b)
 
         # Total cells: 56 from A + 8 from B = 64
-        n_a = count(x -> x == :mesh_a, info["cell_origin"])
+        n_a = count(x -> x == :mesh_a, info[:cell_origin])
         @test n_a + n_b == number_of_cells(result)
 
         # Cell indices valid
         for c in 1:number_of_cells(result)
-            if info["cell_origin"][c] == :mesh_a
-                @test 1 <= info["cell_index_a"][c] <= number_of_cells(mesh_a)
-                @test info["cell_index_b"][c] == 0
+            if info[:cell_origin][c] == :mesh_a
+                @test 1 <= info[:cell_index_a][c] <= number_of_cells(mesh_a)
+                @test info[:cell_index_b][c] == 0
             else
-                @test info["cell_index_a"][c] == 0
-                @test 1 <= info["cell_index_b"][c] <= number_of_cells(mesh_b)
+                @test info[:cell_index_a][c] == 0
+                @test 1 <= info[:cell_index_b][c] <= number_of_cells(mesh_b)
             end
         end
     end
@@ -933,11 +933,11 @@ end
         @test all(geo.volumes .> 0)
 
         # B cells preserved exactly
-        n_b = count(x -> x == :mesh_b, info["cell_origin"])
+        n_b = count(x -> x == :mesh_b, info[:cell_origin])
         @test n_b == number_of_cells(mesh_b)
 
         # More A cells than original (splitting occurred)
-        n_a = count(x -> x == :mesh_a, info["cell_origin"])
+        n_a = count(x -> x == :mesh_a, info[:cell_origin])
         @test n_a > number_of_cells(mesh_a) - number_of_cells(mesh_b)
 
         # Interior normals consistency
@@ -978,7 +978,7 @@ end
         @test all(geo.volumes .> 0)
 
         # B cells preserved exactly
-        n_b = count(x -> x == :mesh_b, info["cell_origin"])
+        n_b = count(x -> x == :mesh_b, info[:cell_origin])
         @test n_b == number_of_cells(mesh_b)
     end
 
