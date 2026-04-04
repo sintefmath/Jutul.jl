@@ -23,19 +23,19 @@ may be split when only partially overlapping.
    of the interface plane (see `interface_point`).
 - `extra_out::Bool = false`: If `true`, return `(mesh, info)` where `info` is
    a `Dict` with:
-  - `"cell_index_a"` – maps new cell indices to original cell indices in
+  - `:cell_index_a` – maps new cell indices to original cell indices in
     `mesh_a` (0 for cells from `mesh_b`).
-  - `"cell_index_b"` – maps new cell indices to original cell indices in
+  - `:cell_index_b` – maps new cell indices to original cell indices in
     `mesh_b` (0 for cells from `mesh_a`).
-  - `"face_index_a"` – maps new interior face to original face in `mesh_a`
+  - `:face_index_a` – maps new interior face to original face in `mesh_a`
     (0 otherwise).
-  - `"face_index_b"` – maps new interior face to original face in `mesh_b`
+  - `:face_index_b` – maps new interior face to original face in `mesh_b`
     (0 otherwise).
-  - `"boundary_face_index_a"` – maps new boundary face to original boundary
+  - `:boundary_face_index_a` – maps new boundary face to original boundary
     face in `mesh_a` (0 otherwise).
-  - `"boundary_face_index_b"` – maps new boundary face to original boundary
+  - `:boundary_face_index_b` – maps new boundary face to original boundary
     face in `mesh_b` (0 otherwise).
-  - `"new_faces"` – indices of newly created interior faces from gluing.
+  - `:new_faces` – indices of newly created interior faces from gluing.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` when
 `extra_out=true`.
@@ -913,15 +913,15 @@ the plane but never move them out of it) and preserve cell volumes.
 - `extra_out::Bool = false`: Return mapping information.
 
 When `extra_out=true` the returned `Dict` contains:
-- `"cell_index"` – maps each new cell to its original cell index in the input
+- `:cell_index` – maps each new cell to its original cell index in the input
   `mesh` (composed through `cut_mesh` and `extract_submesh`).
-- `"cell_side"` – per cell, `:positive` or `:negative` indicating which side
+- `:cell_side` – per cell, `:positive` or `:negative` indicating which side
   of the cut plane it belongs to.
-- `"face_index_a"`, `"face_index_b"` – per interior face, index in the
+- `:face_index_a`, `:face_index_b` – per interior face, index in the
   positive-side or negative-side sub-mesh (0 otherwise).
-- `"boundary_face_index_a"`, `"boundary_face_index_b"` – same for boundary
+- `:boundary_face_index_a`, `:boundary_face_index_b` – same for boundary
   faces.
-- `"new_faces"` – indices of newly created interior faces from gluing.
+- `:new_faces` – indices of newly created interior faces from gluing.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` when
 `extra_out=true`.
@@ -1035,7 +1035,7 @@ function cut_and_displace_mesh(
         nc_a = number_of_cells(side == :positive ? shifted_mesh : mesh_pos)
 
         # Compose mappings back to the original mesh:
-        # cut_info["cell_index"] maps cut-mesh cell → original cell.
+        # cut_info[:cell_index] maps cut-mesh cell → original cell.
         # pos_cells / neg_cells map sub-mesh cells → cut-mesh cell.
         nc_glued = number_of_cells(glued_mesh)
         cell_index = Vector{Int}(undef, nc_glued)
