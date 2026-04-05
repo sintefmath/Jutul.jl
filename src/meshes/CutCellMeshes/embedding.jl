@@ -11,11 +11,11 @@ then stitched together with `glue_mesh`.
 
 # Keyword arguments
 - `extra_out::Bool = false`: If `true`, return `(mesh, info)` where `info` is a
-  `Dict{String, Any}` containing:
-  - `"cell_origin"`:  `Vector{Symbol}` — `:mesh_a` or `:mesh_b` for each cell.
-  - `"cell_index_a"`: `Vector{Int}` — maps each cell to its index in the original
+  `Dict{Symbol, Any}` containing:
+  - `:cell_origin`:  `Vector{Symbol}` — `:mesh_a` or `:mesh_b` for each cell.
+  - `:cell_index_a`: `Vector{Int}` — maps each cell to its index in the original
     mesh A (0 for cells from B).
-  - `"cell_index_b"`: `Vector{Int}` — maps each cell to its index in the original
+  - `:cell_index_b`: `Vector{Int}` — maps each cell to its index in the original
     mesh B (0 for cells from A).
 - `min_cut_fraction::Real = 0.01`: Passed to `cut_mesh` for volume filtering.
 - `tol::Real = 1e-6`: Node merging tolerance for gluing.
@@ -153,10 +153,10 @@ function embed_mesh(
             end
         end
 
-        info = Dict{String, Any}(
-            "cell_origin" => cell_origin,
-            "cell_index_a" => cell_index_a,
-            "cell_index_b" => cell_index_b,
+        info = Dict{Symbol, Any}(
+            :cell_origin => cell_origin,
+            :cell_index_a => cell_index_a,
+            :cell_index_b => cell_index_b,
         )
         return (result, info)
     end
