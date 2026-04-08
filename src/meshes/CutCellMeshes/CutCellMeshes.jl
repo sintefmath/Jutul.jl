@@ -6,7 +6,10 @@ module CutCellMeshes
     include("types.jl")
     include("geometry.jl")
     include("cutting.jl")
+    include("merge_faces.jl")
     include("gluing.jl")
+    include("embedding.jl")
 
     export cut_mesh, glue_mesh, cut_and_displace_mesh
+    export embed_mesh
 end

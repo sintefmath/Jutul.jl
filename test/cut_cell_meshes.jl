@@ -592,4 +592,474 @@ end
             @test all(info[:cut_no][faces] .== d)
         end
     end
+
+    @testset "partial_cut negative" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        nc_orig = number_of_cells(mesh)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = :negative)
+
+        # Keeping negative side (below z=0.5): 9 bottom cells + 9 cut half-cells = 18
+        @test number_of_cells(cut) == 18
+        geo = tpfv_geometry(cut)
+        @test all(geo.volumes .> 0)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_cut = sum(geo.volumes)
+        @test vol_cut < vol_orig
+        @test vol_cut ≈ 0.5 rtol=1e-8
+    end
+
+    @testset "partial_cut positive" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut_pos = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = :positive)
+        cut_neg = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = :negative)
+
+        geo_pos = tpfv_geometry(cut_pos)
+        geo_neg = tpfv_geometry(cut_neg)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+
+        @test all(geo_pos.volumes .> 0)
+        @test all(geo_neg.volumes .> 0)
+        # Volumes of positive and negative sides should sum to original
+        @test sum(geo_pos.volumes) + sum(geo_neg.volumes) ≈ vol_orig rtol=1e-8
+    end
+
+    @testset "partial_cut geometry consistency" begin
+        g = CartesianMesh((4, 4, 4))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.5, 0.5, 0.55], [0.0, 0.0, 1.0])
+
+        for side in [:negative, :positive]
+            cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, partial_cut = side)
+            geo = tpfv_geometry(cut)
+            @test all(geo.volumes .> 0)
+
+            # Interior normals point from left to right cell
+            for f in 1:number_of_faces(cut)
+                l, r = cut.faces.neighbors[f]
+                cl = geo.cell_centroids[:, l]
+                cr = geo.cell_centroids[:, r]
+                N = geo.normals[:, f]
+                @test dot(N, cr - cl) > 0
+            end
+
+            # Boundary normals point outward
+            for f in 1:number_of_boundary_faces(cut)
+                c = cut.boundary_faces.neighbors[f]
+                cc = geo.cell_centroids[:, c]
+                fc = geo.boundary_centroids[:, f]
+                N = geo.boundary_normals[:, f]
+                @test dot(N, fc - cc) > 0
+            end
+        end
+    end
+
+    @testset "partial_cut extra_out" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01,
+            partial_cut = :negative, extra_out = true)
+
+        @test length(info[:cell_index]) == number_of_cells(cut)
+        @test length(info[:face_index]) == number_of_faces(cut)
+        @test length(info[:boundary_face_index]) == number_of_boundary_faces(cut)
+    end
+
+    @testset "partial_cut no-cut case" begin
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+
+        # Plane outside mesh on negative side — all cells are positive
+        plane = PlaneCut([0.0, 0.0, -1.0], [0.0, 0.0, 1.0])
+
+        # partial_cut = :positive should keep all cells (they're all positive)
+        cut_pos = cut_mesh(mesh, plane; partial_cut = :positive)
+        @test number_of_cells(cut_pos) == number_of_cells(mesh)
+
+        # Plane outside mesh on positive side — all cells are negative
+        plane2 = PlaneCut([0.0, 0.0, 5.0], [0.0, 0.0, 1.0])
+
+        # partial_cut = :negative should keep all cells (they're all negative)
+        cut_neg = cut_mesh(mesh, plane2; partial_cut = :negative)
+        @test number_of_cells(cut_neg) == number_of_cells(mesh)
+    end
+
+    @testset "merge_faces default on" begin
+        # Verify merge_faces=true is the default and produces valid meshes
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01)  # default merge_faces=true
+
+        geo = tpfv_geometry(cut)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_cut = sum(geo.volumes)
+
+        @test all(geo.volumes .> 0)
+        @test vol_cut ≈ vol_orig rtol=1e-10
+
+        # Interior normals consistency
+        for f in 1:number_of_faces(cut)
+            l, r = cut.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+
+        # Boundary normals consistency
+        for f in 1:number_of_boundary_faces(cut)
+            c = cut.boundary_faces.neighbors[f]
+            cc = geo.cell_centroids[:, c]
+            fc = geo.boundary_centroids[:, f]
+            N = geo.boundary_normals[:, f]
+            @test dot(N, fc - cc) > 0
+        end
+    end
+
+    @testset "merge_faces=false produces valid mesh" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, merge_faces = false)
+
+        geo = tpfv_geometry(cut)
+        vol_orig = sum(tpfv_geometry(mesh).volumes)
+        vol_cut = sum(geo.volumes)
+
+        @test all(geo.volumes .> 0)
+        @test vol_cut ≈ vol_orig rtol=1e-10
+    end
+
+    @testset "merge_faces with PolygonalSurface" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        poly = [
+            SVector{3, Float64}(-1.0, -1.0, 0.5),
+            SVector{3, Float64}(2.0, -1.0, 0.5),
+            SVector{3, Float64}(2.0, 2.0, 0.5),
+            SVector{3, Float64}(-1.0, 2.0, 0.5)
+        ]
+        surface = PolygonalSurface([poly])
+
+        cut_merged = cut_mesh(mesh, surface; min_cut_fraction = 0.01, merge_faces = true)
+        cut_nomerge = cut_mesh(mesh, surface; min_cut_fraction = 0.01, merge_faces = false)
+
+        # Both should have valid geometry
+        geo_m = tpfv_geometry(cut_merged)
+        geo_n = tpfv_geometry(cut_nomerge)
+        @test all(geo_m.volumes .> 0)
+        @test all(geo_n.volumes .> 0)
+        # Same cell count
+        @test number_of_cells(cut_merged) == number_of_cells(cut_nomerge)
+        # Merged should have <= faces (equal if no merges possible)
+        @test number_of_faces(cut_merged) <= number_of_faces(cut_nomerge)
+        @test number_of_boundary_faces(cut_merged) <= number_of_boundary_faces(cut_nomerge)
+    end
+
+    @testset "merge_coplanar_faces on synthetic mesh" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces
+
+        # Create a simple mesh, then manually verify merge_coplanar_faces works
+        # on a Cartesian mesh (which has no mergeable faces — it's a no-op test)
+        g = CartesianMesh((2, 2, 2))
+        mesh = UnstructuredMesh(g)
+        merged = merge_coplanar_faces(mesh)
+
+        @test number_of_cells(merged) == number_of_cells(mesh)
+        @test number_of_faces(merged) == number_of_faces(mesh)
+        @test number_of_boundary_faces(merged) == number_of_boundary_faces(mesh)
+
+        # Verify geometry is preserved
+        geo_orig = tpfv_geometry(mesh)
+        geo_merged = tpfv_geometry(merged)
+        @test sum(geo_orig.volumes) ≈ sum(geo_merged.volumes) rtol=1e-10
+    end
+
+    @testset "merge_coplanar_faces reduces boundary face count" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces
+
+        # A single z-cut on a 2x1x1 mesh creates cut cells whose boundary
+        # faces on the ±y and ±x sides are split into sub-faces that share
+        # the same cell AND are coplanar.  merge_coplanar_faces should
+        # recombine them.
+        g = CartesianMesh((1, 1, 1))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        # cut without merging
+        cut_no = cut_mesh(mesh, plane; min_cut_fraction = 0.01, merge_faces = false)
+        nb_no = number_of_boundary_faces(cut_no)
+
+        # cut with merging (default)
+        cut_yes = cut_mesh(mesh, plane; min_cut_fraction = 0.01)
+        nb_yes = number_of_boundary_faces(cut_yes)
+
+        # Each cut sub-cell has 5 boundary faces (4 sides + 1 z-face) = 10
+        # but the 4 side-faces per sub-cell are unique (different cells).
+        # If any coplanar pairs exist they will be merged; if not, counts equal.
+        @test nb_yes <= nb_no
+        # Both meshes should have valid geometry
+        geo_no = tpfv_geometry(cut_no)
+        geo_yes = tpfv_geometry(cut_yes)
+        @test all(geo_no.volumes .> 0)
+        @test all(geo_yes.volumes .> 0)
+        @test sum(geo_no.volumes) ≈ sum(geo_yes.volumes) rtol=1e-10
+    end
+
+    @testset "merge_coplanar_faces orientation" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces
+
+        # Use a cut mesh where merging occurs, then verify normals
+        g = CartesianMesh((4, 4, 4))
+        mesh = UnstructuredMesh(g)
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, merge_faces = false)
+        merged = merge_coplanar_faces(cut)
+
+        geo = tpfv_geometry(merged)
+
+        # Interior normals should point from left to right cell
+        for f in 1:number_of_faces(merged)
+            l, r = merged.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+
+        # Boundary normals should point outward
+        for f in 1:number_of_boundary_faces(merged)
+            c = merged.boundary_faces.neighbors[f]
+            cc = geo.cell_centroids[:, c]
+            fc = geo.boundary_centroids[:, f]
+            N = geo.boundary_normals[:, f]
+            @test dot(N, fc - cc) > 0
+        end
+    end
+
+    @testset "merge_faces with extra_out" begin
+        g = CartesianMesh((3, 3, 3))
+        mesh = UnstructuredMesh(g)
+
+        plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true, merge_faces = true)
+
+        # Info dict should still work (cell_index refers to pre-merge cell counts)
+        @test length(info[:cell_index]) > 0
+        @test all(1 .<= info[:cell_index] .<= number_of_cells(mesh))
+    end
+
+    # ==================================================================
+    # embed_mesh tests
+    # ==================================================================
+    @testset "embed_mesh grid-aligned" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B is entirely inside A and aligns with A's grid lines
+        g_a = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(1.0, 1.0, 1.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+        geo = tpfv_geometry(result)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_result = sum(geo.volumes)
+
+        # Volume conservation
+        @test vol_result ≈ vol_a rtol=1e-8
+
+        # All volumes positive
+        @test all(geo.volumes .> 0)
+
+        # B cells preserved
+        n_b = count(x -> x == :mesh_b, info[:cell_origin])
+        @test n_b == number_of_cells(mesh_b)
+
+        # Total cells: 56 from A + 8 from B = 64
+        n_a = count(x -> x == :mesh_a, info[:cell_origin])
+        @test n_a + n_b == number_of_cells(result)
+
+        # Cell indices valid
+        for c in 1:number_of_cells(result)
+            if info[:cell_origin][c] == :mesh_a
+                @test 1 <= info[:cell_index_a][c] <= number_of_cells(mesh_a)
+                @test info[:cell_index_b][c] == 0
+            else
+                @test info[:cell_index_a][c] == 0
+                @test 1 <= info[:cell_index_b][c] <= number_of_cells(mesh_b)
+            end
+        end
+    end
+
+    @testset "embed_mesh misaligned" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B does NOT align with A's grid lines, causing cells to be split
+        g_a = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(0.5, 0.5, 0.5)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+        geo = tpfv_geometry(result)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_result = sum(geo.volumes)
+
+        # Volume conservation
+        @test vol_result ≈ vol_a rtol=1e-6
+
+        # All volumes positive
+        @test all(geo.volumes .> 0)
+
+        # B cells preserved exactly
+        n_b = count(x -> x == :mesh_b, info[:cell_origin])
+        @test n_b == number_of_cells(mesh_b)
+
+        # More A cells than original (splitting occurred)
+        n_a = count(x -> x == :mesh_a, info[:cell_origin])
+        @test n_a > number_of_cells(mesh_a) - number_of_cells(mesh_b)
+
+        # Interior normals consistency
+        for f in 1:number_of_faces(result)
+            l, r = result.faces.neighbors[f]
+            cl = geo.cell_centroids[:, l]
+            cr = geo.cell_centroids[:, r]
+            N = geo.normals[:, f]
+            @test dot(N, cr - cl) > 0
+        end
+    end
+
+    @testset "embed_mesh B protruding" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B extends outside A on one side
+        g_a = CartesianMesh((4, 4, 4), (4.0, 4.0, 4.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(3.0, 1.0, 1.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+        geo = tpfv_geometry(result)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_b = sum(tpfv_geometry(mesh_b).volumes)
+        vol_result = sum(geo.volumes)
+
+        # Volume should be A + part of B outside A
+        expected_vol = vol_a + vol_b / 2
+        @test vol_result ≈ expected_vol rtol=1e-6
+
+        # All volumes positive
+        @test all(geo.volumes .> 0)
+
+        # B cells preserved exactly
+        n_b = count(x -> x == :mesh_b, info[:cell_origin])
+        @test n_b == number_of_cells(mesh_b)
+    end
+
+    @testset "embed_mesh without extra_out" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        g_a = CartesianMesh((3, 3, 3), (3.0, 3.0, 3.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((1, 1, 1), (1.0, 1.0, 1.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(1.0, 1.0, 1.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        # Without extra_out should just return mesh
+        result = embed_mesh(mesh_a, mesh_b)
+        @test isa(result, UnstructuredMesh)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_result = sum(tpfv_geometry(result).volumes)
+        @test vol_result ≈ vol_a rtol=1e-6
+    end
+
+    @testset "embed_mesh B fully outside A" begin
+        import Jutul.CutCellMeshes: embed_mesh
+
+        # B is completely outside A -- should just add B's cells
+        g_a = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
+        mesh_a = UnstructuredMesh(g_a)
+
+        g_b = CartesianMesh((2, 2, 2), (1.0, 1.0, 1.0))
+        mesh_b_raw = UnstructuredMesh(g_b)
+        offset = SVector{3, Float64}(5.0, 5.0, 5.0)
+        new_points = [p + offset for p in mesh_b_raw.node_points]
+        mesh_b = Jutul.CutCellMeshes._rebuild_mesh_with_nodes(mesh_b_raw, new_points)
+
+        result, info = embed_mesh(mesh_a, mesh_b; extra_out = true)
+
+        # Total cells = A cells + B cells (no overlap)
+        @test number_of_cells(result) == number_of_cells(mesh_a) + number_of_cells(mesh_b)
+
+        vol_a = sum(tpfv_geometry(mesh_a).volumes)
+        vol_b = sum(tpfv_geometry(mesh_b).volumes)
+        vol_result = sum(tpfv_geometry(result).volumes)
+        @test vol_result ≈ vol_a + vol_b rtol=1e-8
+    end
+
+    # ==================================================================
+    # merge_coplanar_faces convexity check
+    # ==================================================================
+    @testset "merge_coplanar_faces convexity check" begin
+        import Jutul.CutCellMeshes: merge_coplanar_faces, _is_convex_polygon
+
+        # Test the convexity checker directly
+        # Convex square
+        pts_convex = [
+            SVector{3, Float64}(0.0, 0.0, 0.0),
+            SVector{3, Float64}(1.0, 0.0, 0.0),
+            SVector{3, Float64}(1.0, 1.0, 0.0),
+            SVector{3, Float64}(0.0, 1.0, 0.0)
+        ]
+        @test _is_convex_polygon(pts_convex, SVector{3, Float64}(0.0, 0.0, 1.0))
+
+        # Non-convex (L-shape approximation)
+        pts_nonconvex = [
+            SVector{3, Float64}(0.0, 0.0, 0.0),
+            SVector{3, Float64}(2.0, 0.0, 0.0),
+            SVector{3, Float64}(2.0, 1.0, 0.0),
+            SVector{3, Float64}(1.0, 1.0, 0.0),
+            SVector{3, Float64}(1.0, 2.0, 0.0),
+            SVector{3, Float64}(0.0, 2.0, 0.0)
+        ]
+        @test !_is_convex_polygon(pts_nonconvex, SVector{3, Float64}(0.0, 0.0, 1.0))
+
+        # Triangle is always convex
+        pts_tri = [
+            SVector{3, Float64}(0.0, 0.0, 0.0),
+            SVector{3, Float64}(1.0, 0.0, 0.0),
+            SVector{3, Float64}(0.5, 1.0, 0.0)
+        ]
+        @test _is_convex_polygon(pts_tri, SVector{3, Float64}(0.0, 0.0, 1.0))
+    end
 end

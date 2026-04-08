@@ -156,7 +156,7 @@ module Jutul
 
     # Cut-cell meshes
     include("meshes/CutCellMeshes/CutCellMeshes.jl")
-    import Jutul.CutCellMeshes: cut_mesh, PlaneCut, PolygonalSurface, glue_mesh, cut_and_displace_mesh
+    import Jutul.CutCellMeshes: cut_mesh, PlaneCut, PolygonalSurface, glue_mesh, cut_and_displace_mesh, embed_mesh
 
     # Mesh quality control
     include("meshes/MeshQualityControl/MeshQualityControl.jl")
