@@ -132,6 +132,25 @@ end
         )
 end
 
+struct PropagateEntitiesTestTag <: JutulEntity end
+
+@testset "transfer_entities!" begin
+    g = CartesianMesh((2, 2))
+    d = DataDomain(g)
+    d.entities[PropagateEntitiesTestTag()] = 1
+    d[:tag_scalar, PropagateEntitiesTestTag()] = 3.14
+    disc = DiscretizedDomain(g)
+    @test !haskey(disc.entities, PropagateEntitiesTestTag())
+    Jutul.transfer_entities!(disc, d)
+    @test haskey(disc.entities, PropagateEntitiesTestTag())
+    @test disc.entities[PropagateEntitiesTestTag()] == 1
+    @test count_entities(disc, Cells()) == count_entities(d, Cells())
+    # SimulationModel propagates custom entities from DataDomain automatically
+    struct DummySys <: JutulSystem end
+    model = SimulationModel(d, DummySys())
+    @test haskey(model.domain.entities, PropagateEntitiesTestTag())
+end
+
 @testset "get_1d_interpolator" begin
     for constant_dx in [true, false, missing]
         # Test scalar interpolation

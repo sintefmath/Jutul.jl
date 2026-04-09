@@ -286,6 +286,9 @@ function SimulationModel(domain, system;
         end
     end
     domain = discretize_domain(domain, system; kwarg...)
+    if domain isa DiscretizedDomain && data_domain isa DataDomain
+        transfer_entities!(domain, data_domain)
+    end
     domain = transfer(context, domain)
     if !ismissing(plot_mesh)
         error("plot_mesh argument is deprecated.")
