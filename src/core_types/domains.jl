@@ -69,6 +69,24 @@ function declare_entities(domain::DataDomain)
 end
 
 """
+    transfer_entities!(disc::DiscretizedDomain, data::DataDomain)
+
+Add any entities present in `data` but missing from `disc` into `disc.entities`.
+Entities already present must have matching counts.
+"""
+function transfer_entities!(disc::DiscretizedDomain, data::DataDomain)
+    for (entity, n) in data.entities
+        if haskey(disc.entities, entity)
+            disc_n = disc.entities[entity]
+            @assert disc_n == n "Entity $entity: DiscretizedDomain has count $disc_n but DataDomain has $n"
+        else
+            disc.entities[entity] = n
+        end
+    end
+    return disc
+end
+
+"""
     physical_representation(x::DataDomain)
 
 Get the underlying physical representation (domain or mesh) that is wrapped.
