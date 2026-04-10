@@ -342,3 +342,486 @@ end
         @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag2) == [2, 4, 6, 8]
     end
 end
+
+function check_mesh_normals(m_refined)
+    geo = tpfv_geometry(m_refined)
+    for f in 1:number_of_faces(m_refined)
+        l, r = m_refined.faces.neighbors[f]
+        cl = geo.cell_centroids[:, l]
+        cr = geo.cell_centroids[:, r]
+        N = geo.normals[:, f]
+        @test dot(N, cr - cl) > 0
+    end
+    for f in 1:number_of_boundary_faces(m_refined)
+        c = m_refined.boundary_faces.neighbors[f]
+        cc = geo.cell_centroids[:, c]
+        fc = geo.boundary_centroids[:, f]
+        N = geo.boundary_normals[:, f]
+        @test dot(N, fc - cc) > 0
+    end
+end
+
+@testset "refine_mesh" begin
+
+    @testset "2D refinement" begin
+        @testset "refine all cells" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1, 2, 3, 4]; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 16
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test length(result.cell_map) == number_of_cells(m2)
+            check_mesh_normals(m2)
+        end
+        @testset "refine single cell" begin
+            m = UnstructuredMesh(CartesianMesh((3, 3)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [5]; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 12
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test count(==(5), result.cell_map) == 4
+            check_mesh_normals(m2)
+        end
+        @testset "refine with variable deltas" begin
+            m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
+            geo_orig = tpfv_geometry(m)
+            m2 = refine_mesh(m, [1, 6])
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            check_mesh_normals(m2)
+        end
+    end
+
+    @testset "3D refinement" begin
+        @testset "refine all cells" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, 1:8; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 64
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test length(result.cell_map) == 64
+            check_mesh_normals(m2)
+        end
+        @testset "refine single cell" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1]; extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 15
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test count(==(1), result.cell_map) == 8
+            check_mesh_normals(m2)
+        end
+        @testset "refine with variable deltas" begin
+            m = UnstructuredMesh(CartesianMesh((3, 2, 2), ((1.0, 3.0, 4.0), (1.0, 2.0), 1.0)))
+            geo_orig = tpfv_geometry(m)
+            m2 = refine_mesh(m, [1, 12])
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            check_mesh_normals(m2)
+        end
+    end
+
+    @testset "cell_map output" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        result = refine_mesh(m, [1, 3]; extra_out = true)
+        cell_map = result.cell_map
+        # Cells 1 and 3 each produce 4 sub-cells, cells 2 and 4 stay
+        @test length(cell_map) == number_of_cells(result.mesh)
+        @test count(==(1), cell_map) == 4
+        @test count(==(2), cell_map) == 1
+        @test count(==(3), cell_map) == 4
+        @test count(==(4), cell_map) == 1
+    end
+
+    @testset "factor = 1 (no-op)" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        m2 = refine_mesh(m, [1, 2]; factor = 1)
+        @test number_of_cells(m2) == number_of_cells(m)
+    end
+
+    @testset "per-cell factors" begin
+        m = UnstructuredMesh(CartesianMesh((3, 3)))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh(m, [1, 5, 9]; factor = [2, 1, 2])
+        geo = tpfv_geometry(m2)
+        # Cell 1 and 9 refined (4 sub each), cell 5 stays = 4 + 1 + 4 + 6 unrefined = 15
+        @test number_of_cells(m2) == 15
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "higher factors by iteration" begin
+        @testset "factor=4 all cells 2D" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1, 2, 3, 4]; factor = 4, extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            # factor=4 = 2 passes of factor-2: 4 cells × 4^2 = 64
+            @test number_of_cells(m2) == 64
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test length(result.cell_map) == 64
+            @test all(c -> 1 <= c <= 4, result.cell_map)
+            check_mesh_normals(m2)
+        end
+        @testset "factor=4 single cell 2D" begin
+            m = UnstructuredMesh(CartesianMesh((3, 3)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [5]; factor = 4, extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test count(==(5), result.cell_map) == 16
+            check_mesh_normals(m2)
+        end
+        @testset "factor=3 2D (rounds up to 2 passes)" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1]; factor = 3, extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            # ceil(log2(3)) = 2 passes → 16 sub-cells for the refined cell
+            @test count(==(1), result.cell_map) == 16
+            check_mesh_normals(m2)
+        end
+        @testset "factor=4 single cell 3D" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1]; factor = 4, extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test count(==(1), result.cell_map) == 64
+            check_mesh_normals(m2)
+        end
+        @testset "per-cell mixed high factors" begin
+            m = UnstructuredMesh(CartesianMesh((3, 3)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1, 5, 9]; factor = [4, 2, 1], extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            @test count(==(1), result.cell_map) == 16
+            @test count(==(5), result.cell_map) == 4
+            @test count(==(9), result.cell_map) == 1
+            check_mesh_normals(m2)
+        end
+    end
+
+    @testset "tuple factor" begin
+        @testset "2D tuple factor" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, [1, 2, 3, 4]; factor = (2, 2), extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test number_of_cells(m2) == 16
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            check_mesh_normals(m2)
+        end
+        @testset "2D tuple factor (2,1)" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            geo_orig = tpfv_geometry(m)
+            m2 = refine_mesh(m, [1, 2, 3, 4]; factor = (2, 1))
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            check_mesh_normals(m2)
+        end
+        @testset "3D tuple factor (2,2,1)" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
+            geo_orig = tpfv_geometry(m)
+            result = refine_mesh(m, 1:8; factor = (2, 2, 1), extra_out = true)
+            m2 = result.mesh
+            geo = tpfv_geometry(m2)
+            @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+            check_mesh_normals(m2)
+        end
+        @testset "tuple factor (1,1) is no-op" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            m2 = refine_mesh(m, [1, 2]; factor = (1, 1))
+            @test number_of_cells(m2) == number_of_cells(m)
+        end
+        @testset "tuple dimension mismatch" begin
+            m = UnstructuredMesh(CartesianMesh((2, 2)))
+            @test_throws AssertionError refine_mesh(m, [1]; factor = (2, 2, 1))
+        end
+    end
+
+    @testset "cell_map through iterations" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        result = refine_mesh(m, [1, 3]; factor = 4, extra_out = true)
+        cell_map = result.cell_map
+        @test length(cell_map) == number_of_cells(result.mesh)
+        # cell 1: 16 sub-cells, cell 3: 16 sub-cells, cells 2 and 4: 1 each
+        @test count(==(1), cell_map) == 16
+        @test count(==(2), cell_map) == 1
+        @test count(==(3), cell_map) == 16
+        @test count(==(4), cell_map) == 1
+    end
+end
+
+@testset "refine_mesh_radial" begin
+
+    @testset "default sectors (no edge splitting)" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1, 2, 3, 4]; extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 16
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        @test length(result.cell_map) == 16
+        check_mesh_normals(m2)
+    end
+
+    @testset "single cell" begin
+        m = UnstructuredMesh(CartesianMesh((3, 3)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [5]; extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 12
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        @test count(==(5), result.cell_map) == 4
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_sectors = 8 (with edge splitting)" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_sectors = 8, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        @test count(==(1), result.cell_map) == 8
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_sectors = 3 (fewer than edges)" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 2, 3, 4]; n_sectors = 3)
+        geo = tpfv_geometry(m2)
+        # 4 edges > 3 sectors, so 4 sectors per cell
+        @test number_of_cells(m2) == 16
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "empty cells" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        m2 = refine_mesh_radial(m, Int[])
+        @test number_of_cells(m2) == 4
+    end
+
+    @testset "variable deltas" begin
+        m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 6])
+        geo = tpfv_geometry(m2)
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_rings = 2" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 2, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 2 rings = 8 sub-cells + 3 unrefined = 11
+        @test number_of_cells(m2) == 11
+        @test count(==(1), result.cell_map) == 8
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_rings = 2 all cells" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 2, 3, 4]; n_rings = 2)
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 32
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_rings = 3" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 3, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 3 rings = 12 + 3 unrefined = 15
+        @test number_of_cells(m2) == 15
+        @test count(==(1), result.cell_map) == 12
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "center_cell with n_rings = 2" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 2, center_cell = true, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 1 ring + 1 center = 5 + 3 unrefined = 8
+        @test number_of_cells(m2) == 8
+        @test count(==(1), result.cell_map) == 5
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "center_cell with n_rings = 3" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_rings = 3, center_cell = true, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 4 sectors × 2 rings + 1 center = 9 + 3 = 12
+        @test number_of_cells(m2) == 12
+        @test count(==(1), result.cell_map) == 9
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "center_cell all cells" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 2, 3, 4]; n_rings = 2, center_cell = true)
+        geo = tpfv_geometry(m2)
+        # 4 cells × (4 sectors × 1 ring + 1 center) = 20
+        @test number_of_cells(m2) == 20
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "n_sectors = 8 with n_rings = 2 and center_cell" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = refine_mesh_radial(m, [1]; n_sectors = 8, n_rings = 2, center_cell = true, extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        # 8 sectors × 1 ring + 1 center = 9 + 3 = 12
+        @test number_of_cells(m2) == 12
+        @test count(==(1), result.cell_map) == 9
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "variable deltas with n_rings" begin
+        m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 6]; n_rings = 2)
+        geo = tpfv_geometry(m2)
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "variable deltas with center_cell" begin
+        m = UnstructuredMesh(CartesianMesh((3, 2), ([1.0, 3.0, 4.0], [1.0, 2.0])))
+        geo_orig = tpfv_geometry(m)
+        m2 = refine_mesh_radial(m, [1, 6]; n_rings = 2, center_cell = true)
+        geo = tpfv_geometry(m2)
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+end
+
+@testset "merge_cells" begin
+
+    @testset "merge two adjacent cells in 1D" begin
+        m = UnstructuredMesh(CartesianMesh((3, 1)))
+        geo_orig = tpfv_geometry(m)
+        result = merge_cells(m, [[1, 2]]; extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 2
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        @test result.cell_map[1] == [1, 2]
+        @test result.cell_map[2] == [3]
+        check_mesh_normals(m2)
+    end
+
+    @testset "merge all cells" begin
+        m = UnstructuredMesh(CartesianMesh((2, 1)))
+        geo_orig = tpfv_geometry(m)
+        result = merge_cells(m, [[1, 2]]; extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 1
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "merge multiple groups" begin
+        m = UnstructuredMesh(CartesianMesh((4, 1)))
+        geo_orig = tpfv_geometry(m)
+        result = merge_cells(m, [[1, 2], [3, 4]]; extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 2
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        @test result.cell_map[1] == [1, 2]
+        @test result.cell_map[2] == [3, 4]
+        check_mesh_normals(m2)
+    end
+
+    @testset "merge 2x2 block in 3x3" begin
+        m = UnstructuredMesh(CartesianMesh((3, 3)))
+        geo_orig = tpfv_geometry(m)
+        result = merge_cells(m, [[1, 2, 4, 5]]; extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 6
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "merge in 3D" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2, 2)))
+        geo_orig = tpfv_geometry(m)
+        result = merge_cells(m, [[1, 2]]; extra_out = true)
+        m2 = result.mesh
+        geo = tpfv_geometry(m2)
+        @test number_of_cells(m2) == 7
+        @test sum(geo_orig.volumes) ≈ sum(geo.volumes)
+        check_mesh_normals(m2)
+    end
+
+    @testset "empty merge" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        m2 = merge_cells(m, Vector{Int}[])
+        @test number_of_cells(m2) == 4
+    end
+
+    @testset "cell in multiple groups" begin
+        m = UnstructuredMesh(CartesianMesh((3, 1)))
+        @test_throws AssertionError merge_cells(m, [[1, 2], [2, 3]])
+    end
+
+    @testset "cell_map correctness" begin
+        m = UnstructuredMesh(CartesianMesh((4, 1)))
+        result = merge_cells(m, [[2, 3]]; extra_out = true)
+        cm = result.cell_map
+        @test length(cm) == 3
+        @test cm[1] == [2, 3]
+        @test cm[2] == [1]
+        @test cm[3] == [4]
+    end
+
+    @testset "MeshUtils module access" begin
+        m = UnstructuredMesh(CartesianMesh((2, 2)))
+        m2 = Jutul.MeshUtils.merge_cells(m, [[1, 2]])
+        @test number_of_cells(m2) == 3
+    end
+end
