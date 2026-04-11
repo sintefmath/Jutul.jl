@@ -391,7 +391,7 @@ function _is_gpu_backed(x)
     return false
 end
 
-function Jutul.apply_forces_to_equation!(d, storage, model::SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext}, eq::Jutul.AbstractPoissonEquation, eq_s, force::Vector{<:Jutul.PoissonSource}, time)
+function Jutul.apply_forces_to_equation!(d, storage, model::SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext}, eq::Jutul.AbstractPoissonEquation, eq_s, force::Vector{PoissonSource{T}}, time) where T
     # PoissonSource forces are small, apply via CPU round-trip
     d_cpu = Array(d)
     for f in force
