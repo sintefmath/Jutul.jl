@@ -73,3 +73,17 @@ end
 function Jutul.number_of_partials(::GenericAutoDiffCache_device{N, E, ∂x}) where {N, E, ∂x}
     return Jutul.number_of_partials(∂x)
 end
+
+function Jutul.diagonal_view(cache::GenericAutoDiffCache_device)
+    dpos = cache.diagonal_positions
+    if isnothing(dpos)
+        return nothing
+    else
+        return view(cache.entries, :, dpos)
+    end
+end
+
+Jutul.ad_dims(c::GenericAutoDiffCache_device) = (number_of_entities(c), equations_per_entity(c), number_of_partials(c))
+Jutul.ad_dims(c::CompactAutoDiffCache_device) = (number_of_entities(c), equations_per_entity(c), number_of_partials(c))
+
+Base.eltype(::GenericAutoDiffCache_device{N, E, ∂x}) where {N, E, ∂x} = ∂x

@@ -37,7 +37,7 @@ function transfer_to_device(sim::Simulator, backend;
     state0_dev = transfer_state(storage.state0, backend)
 
     # Build new storage with device arrays
-    storage_dev = transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend)
+    storage_dev = transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend, model)
 
     # Create a new model with the KA context
     model_dev = replace_model_context(model, context)
@@ -95,7 +95,7 @@ function transfer_linearized_system(lsys::LinearizedSystem, backend, float_t, in
     return LinearizedSystem(jac_dev, r_dev, dx_dev, nzval_dev, r_buf_dev, dx_buf_dev, lsys.matrix_layout)
 end
 
-function transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend)
+function transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend, model)
     new_storage = JutulStorage()
     # Copy over all existing storage entries
     for (k, v) in pairs(Jutul.data(storage))
@@ -135,10 +135,8 @@ function transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend)
         new_storage[:equations] = transfer_equation_storage(storage.equations, backend)
     end
 
-    # Update views
-    if haskey(storage, :views)
-        new_storage[:views] = transfer_views(storage.views, lsys_dev, state_dev, backend)
-    end
+    # Update views - rebuild against device arrays
+    new_storage[:views] = Jutul.setup_equations_and_primary_variable_views(new_storage, model, lsys_dev.r_buffer, lsys_dev.dx_buffer)
 
     return Jutul.convert_to_immutable_storage(new_storage)
 end
@@ -188,12 +186,6 @@ end
 function transfer_eq_cache(cache, backend)
     # Unknown cache type - keep as is
     return cache
-end
-
-function transfer_views(views, lsys_dev, state_dev, backend)
-    # Views must be reconstructed to point to device arrays
-    # For now, we keep original views - they will be updated during simulation
-    return views
 end
 
 function replace_model_context(model::SimulationModel, new_context)

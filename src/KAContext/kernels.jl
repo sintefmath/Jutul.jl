@@ -230,3 +230,30 @@ end
     i = @index(Global)
     @inbounds out[i] = abs(r[i])
 end
+
+# ──────────────────────────────────────────────────────────────
+# 6. Linear solve for KA context
+#    Converts device CSR to CPU sparse, solves, copies dx back
+# ──────────────────────────────────────────────────────────────
+
+function Jutul.linear_solve!(sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR{Tv, Ti, V, I}}, ::Nothing, context::KernelAbstractionsContext, arg...; dx = sys.dx, r = sys.r, atol = nothing, rtol = nothing, executor = Jutul.default_executor()) where {Tv, Ti, V<:GPUArrays.AbstractGPUVector, I}
+    # Copy CSR data to CPU sparse matrix and solve
+    nzval_cpu = Array(nonzeros(sys.jac))
+    colval_cpu = Array(colvals(sys.jac))
+    rowptr_cpu = sys.jac.rowptr
+    m, n = size(sys.jac)
+    r_cpu = Array(r)
+
+    # Reconstruct CSC from CSR data: CSR(A) = CSC(A^T), so At = CSC with
+    # colptr=rowptr, rowval=colval, nzval=nzval
+    At_csc = SparseMatrixCSC(n, m, rowptr_cpu, colval_cpu, nzval_cpu)
+    A_csr_cpu = StaticSparsityMatrixCSR(At_csc)
+
+    # Use the CSC transpose to solve: A*x = r, where A = At_csc'
+    # Since StaticSparsityMatrixCSR stores At as CSC: jac = CSR(A) means At_csc = A^T in CSC
+    # So A = At_csc', but backslash on CSC: x = At_csc' \ r_cpu
+    dx_cpu = -(At_csc' \ r_cpu)
+    @assert all(isfinite, dx_cpu) "Linear solve resulted in non-finite values."
+    copyto!(dx, dx_cpu)
+    return Jutul.linear_solve_return()
+end

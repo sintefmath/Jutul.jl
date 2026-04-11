@@ -27,9 +27,11 @@ module JutulKernelAbstractions
     using ..Jutul: update_values!
     using ..Jutul: matrix_layout, float_type, index_type, nzval_index_type, minbatch
     using ..Jutul: build_sparse_matrix, jacobian_eltype
+    using ..Jutul: linear_solve!, linear_solve_return
     using ..Jutul: Cells, Faces
     using ..Jutul: JutulContext
     using ..Jutul: convert_to_immutable_storage, data
+    using ..Jutul: setup_equations_and_primary_variable_views
 
     using KernelAbstractions
     using GPUArrays
