@@ -217,6 +217,7 @@ include("contexts/interface.jl")
 include("contexts/csr.jl")
 include("contexts/default.jl")
 include("contexts/cuda.jl")
+include("contexts/ka.jl")
 
 # Domains
 include("domains.jl")

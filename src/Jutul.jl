@@ -161,6 +161,13 @@ module Jutul
     # Mesh quality control
     include("meshes/MeshQualityControl/MeshQualityControl.jl")
 
+    # KernelAbstractions GPU/device context support
+    using KernelAbstractions
+    using GPUArrays
+    include("KAContext/JutulKernelAbstractions.jl")
+    using .JutulKernelAbstractions
+    export transfer_to_device
+
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}
     ForwardDiff.:≺(::JutulSimulateTag, ::Type{<:ForwardDiff.Tag}) = true
