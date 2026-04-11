@@ -87,10 +87,17 @@ function transfer_linearized_system(lsys::LinearizedSystem, backend, float_t, in
         jac_dev = jac  # Fallback: keep on CPU
     end
     nzval_dev = nonzeros(jac_dev)
-    r_dev = to_device(backend, Array(lsys.r))
-    dx_dev = to_device(backend, Array(lsys.dx))
+
+    # Check if r/dx and their buffers are the same array (aliased).
+    # For block_size == 1 systems, they are. We must preserve aliasing.
+    r_same = lsys.r === lsys.r_buffer
+    dx_same = lsys.dx === lsys.dx_buffer
+
     r_buf_dev = to_device(backend, Array(lsys.r_buffer))
+    r_dev = r_same ? r_buf_dev : to_device(backend, Array(lsys.r))
+
     dx_buf_dev = to_device(backend, Array(lsys.dx_buffer))
+    dx_dev = dx_same ? dx_buf_dev : to_device(backend, Array(lsys.dx))
 
     return LinearizedSystem(jac_dev, r_dev, dx_dev, nzval_dev, r_buf_dev, dx_buf_dev, lsys.matrix_layout)
 end
@@ -133,6 +140,12 @@ function transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend, mod
     # Transfer equation caches to device
     if haskey(storage, :equations)
         new_storage[:equations] = transfer_equation_storage(storage.equations, backend)
+    end
+
+    # Transfer parameters to device (parameters are also in state, but need
+    # to keep the separate parameters storage in sync)
+    if haskey(storage, :parameters)
+        new_storage[:parameters] = transfer_state(storage.parameters, backend)
     end
 
     # Update views - rebuild against device arrays

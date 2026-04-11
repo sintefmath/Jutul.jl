@@ -236,7 +236,7 @@ end
 #    Converts device CSR to CPU sparse, solves, copies dx back
 # ──────────────────────────────────────────────────────────────
 
-function Jutul.linear_solve!(sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR{Tv, Ti, V, I}}, ::Nothing, context::KernelAbstractionsContext, arg...; dx = sys.dx, r = sys.r, atol = nothing, rtol = nothing, executor = Jutul.default_executor()) where {Tv, Ti, V<:GPUArrays.AbstractGPUVector, I}
+function Jutul.linear_solve!(sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR{Tv, Ti, V, I}}, ::Nothing, context::KernelAbstractionsContext, arg...; dx = sys.dx, r = sys.r_buffer, atol = nothing, rtol = nothing, executor = Jutul.default_executor()) where {Tv, Ti, V<:GPUArrays.AbstractGPUVector, I}
     # Copy CSR data to CPU sparse matrix and solve
     nzval_cpu = Array(nonzeros(sys.jac))
     colval_cpu = Array(colvals(sys.jac))
@@ -244,16 +244,191 @@ function Jutul.linear_solve!(sys::LinearizedSystem{<:Any, <:StaticSparsityMatrix
     m, n = size(sys.jac)
     r_cpu = Array(r)
 
-    # Reconstruct CSC from CSR data: CSR(A) = CSC(A^T), so At = CSC with
-    # colptr=rowptr, rowval=colval, nzval=nzval
+    # Reconstruct CSC from CSR data: CSR stores A as At in CSC format
+    # So At_csc has colptr=rowptr, rowval=colval, nzval=nzval
     At_csc = SparseMatrixCSC(n, m, rowptr_cpu, colval_cpu, nzval_cpu)
-    A_csr_cpu = StaticSparsityMatrixCSR(At_csc)
 
-    # Use the CSC transpose to solve: A*x = r, where A = At_csc'
-    # Since StaticSparsityMatrixCSR stores At as CSC: jac = CSR(A) means At_csc = A^T in CSC
-    # So A = At_csc', but backslash on CSC: x = At_csc' \ r_cpu
+    # Solve A*x = r using A = At_csc'
     dx_cpu = -(At_csc' \ r_cpu)
     @assert all(isfinite, dx_cpu) "Linear solve resulted in non-finite values."
     copyto!(dx, dx_cpu)
     return Jutul.linear_solve_return()
+end
+
+# ──────────────────────────────────────────────────────────────
+# 7. GPU-compatible update_values! for device arrays
+#    Avoids scalar indexing by using KA kernels
+# ──────────────────────────────────────────────────────────────
+
+@kernel function ka_update_values_ad_to_real_kernel!(v, @Const(next))
+    i = @index(Global)
+    @inbounds v[i] = ForwardDiff.value(next[i])
+end
+
+# Dual{Tag} array <- Real array: preserve partials, update value
+function Jutul.update_values!(v::GPUArrays.AbstractGPUArray{<:ForwardDiff.Dual}, next::GPUArrays.AbstractGPUArray{<:Real})
+    backend = get_backend(v)
+    kernel = ka_update_values_ad_kernel!(backend)
+    kernel(v, next; ndrange = length(v))
+    return v
+end
+
+# Real array <- Dual{Tag} array: extract value
+function Jutul.update_values!(v::GPUArrays.AbstractGPUArray{<:AbstractFloat}, next::GPUArrays.AbstractGPUArray{<:ForwardDiff.Dual})
+    backend = get_backend(v)
+    kernel = ka_update_values_ad_to_real_kernel!(backend)
+    kernel(v, next; ndrange = length(v))
+    return v
+end
+
+# Dual{Tag} array <- Dual{Tag} array: direct copy
+function Jutul.update_values!(v::GPUArrays.AbstractGPUArray{T}, next::GPUArrays.AbstractGPUArray{T}) where {T<:ForwardDiff.Dual}
+    copyto!(v, next)
+    return v
+end
+
+# Any GPU array <- any GPU array: direct broadcast
+function Jutul.update_values!(v::GPUArrays.AbstractGPUArray, next::GPUArrays.AbstractGPUArray)
+    v .= next
+    return v
+end
+
+# ──────────────────────────────────────────────────────────────
+# 8. GPU-compatible variable update (avoids scalar indexing)
+# ──────────────────────────────────────────────────────────────
+
+function Jutul.update_jutul_variable_internal!(v::GPUArrays.AbstractGPUVector, active, p, dx, w)
+    minval = Jutul.minimum_value(p)
+    maxval = Jutul.maximum_value(p)
+    has_min = !isnothing(minval)
+    has_max = !isnothing(maxval)
+    minval_f = has_min ? Float64(minval) : 0.0
+    maxval_f = has_max ? Float64(maxval) : 0.0
+    active_dev = _ensure_device(v, active)
+    # Flatten dx to a vector on device
+    dx_flat = _ensure_device_vec(v, dx)
+    backend = get_backend(v)
+    kernel = ka_update_primary_variable_kernel!(backend)
+    kernel(v, active_dev, dx_flat, Float64(w), minval_f, maxval_f, has_min, has_max; ndrange = length(active))
+    return v
+end
+
+@kernel function ka_update_primary_variable_kernel!(v, @Const(active), @Const(dx), w, minval_f, maxval_f, has_min::Bool, has_max::Bool)
+    idx = @index(Global)
+    @inbounds a_i = active[idx]
+    @inbounds old = v[a_i]
+    dv = w * dx[idx]
+    updated = ForwardDiff.value(old) + dv
+    if has_min
+        updated = max(updated, minval_f)
+    end
+    if has_max
+        updated = min(updated, maxval_f)
+    end
+    @inbounds v[a_i] = old - ForwardDiff.value(old) + updated
+end
+
+function _ensure_device(ref::GPUArrays.AbstractGPUArray, arr::AbstractArray)
+    if arr isa GPUArrays.AbstractGPUArray
+        return arr
+    else
+        backend = get_backend(ref)
+        return to_device(backend, Array(arr))
+    end
+end
+
+function _ensure_device(ref::GPUArrays.AbstractGPUArray, arr)
+    return arr
+end
+
+function _ensure_device_vec(ref::GPUArrays.AbstractGPUArray, dx)
+    # Convert dx (potentially Adjoint or reshaped view) to a flat GPU vector
+    backend = get_backend(ref)
+    dx_cpu = vec(Array(collect(dx)))
+    return to_device(backend, dx_cpu)
+end
+
+function _ensure_device_vec(ref::GPUArrays.AbstractGPUArray, dx::GPUArrays.AbstractGPUVector)
+    return dx
+end
+
+# ──────────────────────────────────────────────────────────────
+# 9. GPU-compatible increment_norm (avoids scalar indexing)
+# ──────────────────────────────────────────────────────────────
+
+function Jutul.increment_norm(dX::Union{GPUArrays.AbstractGPUArray, LinearAlgebra.Adjoint{<:Any, <:GPUArrays.AbstractGPUArray}}, state, model, X, pvar)
+    T = eltype(dX)
+    scale = @something Jutul.variable_scale(pvar) one(T)
+    # Use GPU-compatible reductions
+    dX_flat = vec(Array(dX))
+    max_v = maximum(abs, dX_flat)
+    sum_v = sum(abs, dX_flat)
+    return (sum = scale*sum_v, max = scale*max_v)
+end
+
+# ──────────────────────────────────────────────────────────────
+# 10. get_diagonal_entries for device caches
+# ──────────────────────────────────────────────────────────────
+
+@inline function Jutul.get_diagonal_entries(eq::Jutul.JutulEquation, eq_s::CompactAutoDiffCache_device)
+    return get_entries(eq_s)
+end
+
+# ──────────────────────────────────────────────────────────────
+# 11. apply_forces_to_equation! for PoissonSource on device
+#     The diagonal entries `d` may be a SubArray of a GPU array
+# ──────────────────────────────────────────────────────────────
+
+function _is_gpu_backed(x::GPUArrays.AbstractGPUArray)
+    return true
+end
+
+function _is_gpu_backed(x::SubArray)
+    return _is_gpu_backed(parent(x))
+end
+
+function _is_gpu_backed(x)
+    return false
+end
+
+function Jutul.apply_forces_to_equation!(d, storage, model::SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext}, eq::Jutul.AbstractPoissonEquation, eq_s, force::Vector{<:Jutul.PoissonSource}, time)
+    # PoissonSource forces are small, apply via CPU round-trip
+    d_cpu = Array(d)
+    for f in force
+        c = f.cell
+        d_cpu[c] += f.value
+    end
+    copyto!(d, d_cpu)
+end
+
+# ──────────────────────────────────────────────────────────────
+# 12. GPU-compatible convergence_criterion
+#     Replaces @tullio max reduction with GPU-compatible ops
+# ──────────────────────────────────────────────────────────────
+
+function Jutul.convergence_criterion(model::SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext}, storage, eq::Jutul.JutulEquation, eq_s, r; dt = 1.0, update_report = missing)
+    n = number_of_equations_per_entity(model, eq)
+    r_abs = abs.(r)
+    r_cpu = Array(r_abs)
+    # Max over columns (entities) for each row (equation component)
+    if n == 1
+        e = [maximum(r_cpu)]
+        names = "R"
+    else
+        e = vec(maximum(r_cpu, dims = 2))
+        names = map(i -> "R_$i", 1:n)
+    end
+    R = (AbsMax = (errors = e, names = names), )
+    return R
+end
+
+# ──────────────────────────────────────────────────────────────
+# 13. GPU-compatible variable_change_report
+# ──────────────────────────────────────────────────────────────
+
+function Jutul.variable_change_report(X::GPUArrays.AbstractGPUArray, X0::GPUArrays.AbstractGPUArray{T}, pvar) where T<:Real
+    # Copy to CPU for the report
+    X_cpu = Array(X)
+    X0_cpu = Array(X0)
+    return Jutul.variable_change_report(X_cpu, X0_cpu, pvar)
 end

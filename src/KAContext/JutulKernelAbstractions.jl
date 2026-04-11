@@ -25,6 +25,11 @@ module JutulKernelAbstractions
     using ..Jutul: update_equation_for_entity!
     using ..Jutul: EquationMajorLayout, EntityMajorLayout, BlockMajorLayout, JutulMatrixLayout
     using ..Jutul: update_values!
+    using ..Jutul: update_jutul_variable_internal!, update_primary_variable!
+    using ..Jutul: increment_norm
+    using ..Jutul: get_diagonal_entries, apply_forces_to_equation!
+    using ..Jutul: convergence_criterion, number_of_equations_per_entity
+    using ..Jutul: variable_change_report
     using ..Jutul: matrix_layout, float_type, index_type, nzval_index_type, minbatch
     using ..Jutul: build_sparse_matrix, jacobian_eltype
     using ..Jutul: linear_solve!, linear_solve_return
@@ -32,6 +37,8 @@ module JutulKernelAbstractions
     using ..Jutul: JutulContext
     using ..Jutul: convert_to_immutable_storage, data
     using ..Jutul: setup_equations_and_primary_variable_views
+    using ..Jutul: AbstractPoissonEquation, PoissonSource
+    using ..Jutul: diagonal_view
 
     using KernelAbstractions
     using GPUArrays
