@@ -137,9 +137,9 @@ function transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend, mod
         end
     end
 
-    # Transfer equation caches to device
+    # Transfer equation caches to device (equation-aware to support GPU kernels)
     if haskey(storage, :equations)
-        new_storage[:equations] = transfer_equation_storage(storage.equations, backend)
+        new_storage[:equations] = transfer_equation_storage(storage.equations, backend, model.equations)
     end
 
     # Transfer parameters to device (parameters are also in state, but need
@@ -154,21 +154,39 @@ function transfer_storage(storage, lsys_dev, state_dev, state0_dev, backend, mod
     return Jutul.convert_to_immutable_storage(new_storage)
 end
 
-function transfer_equation_storage(eq_storage, backend)
+function transfer_equation_storage(eq_storage, backend, model_equations = nothing)
     if eq_storage isa NamedTuple
         pairs_list = []
         for k in keys(eq_storage)
-            push!(pairs_list, k => transfer_eq_cache(eq_storage[k], backend))
+            model_eq = isnothing(model_equations) ? nothing : get(model_equations, k, nothing)
+            push!(pairs_list, k => transfer_eq_storage_entry(eq_storage[k], backend, model_eq))
         end
         return NamedTuple(pairs_list)
     elseif eq_storage isa AbstractDict
         new_eqs = copy(eq_storage)
         for (k, v) in eq_storage
-            new_eqs[k] = transfer_eq_cache(v, backend)
+            model_eq = isnothing(model_equations) ? nothing : get(model_equations, k, nothing)
+            new_eqs[k] = transfer_eq_storage_entry(v, backend, model_eq)
         end
         return new_eqs
     else
         return eq_storage
+    end
+end
+
+"""
+    transfer_eq_storage_entry(entity_caches, backend, model_eq)
+
+Transfer a single equation's entity caches (a NamedTuple like `(Cells = cache,)`)
+to device. If `model_eq` supports device evaluation (`equation_supports_device`
+returns true), the discretization is also transferred and a specialised device
+cache is created so that `update_equation_for_entity!` can run on the GPU.
+"""
+function transfer_eq_storage_entry(entity_caches, backend, model_eq)
+    if !isnothing(model_eq) && Jutul.equation_supports_device(model_eq)
+        return transfer_eq_storage_entry_device(entity_caches, backend, model_eq)
+    else
+        return transfer_eq_cache(entity_caches, backend)
     end
 end
 
@@ -199,6 +217,54 @@ end
 function transfer_eq_cache(cache, backend)
     # Unknown cache type - keep as is
     return cache
+end
+
+# ── Poisson device cache transfer ───────────────────────────────────────────
+
+"""
+    transfer_eq_storage_entry_device(entity_caches, backend, eq)
+
+Transfer equation entity caches for an equation that supports device evaluation.
+Transfers both the standard GenericAutoDiffCache fields and the equation's
+discretization data (half-face map) to device, producing a `PoissonDeviceCache`.
+"""
+function transfer_eq_storage_entry_device(entity_caches::NamedTuple, backend, eq::Jutul.AbstractPoissonEquation)
+    pairs_list = []
+    for k in keys(entity_caches)
+        cache = entity_caches[k]
+        if cache isa Jutul.GenericAutoDiffCache
+            dev_cache = _transfer_poisson_generic_cache(cache, eq, backend)
+            push!(pairs_list, k => dev_cache)
+        else
+            push!(pairs_list, k => transfer_eq_cache(cache, backend))
+        end
+    end
+    return NamedTuple(pairs_list)
+end
+
+function transfer_eq_storage_entry_device(entity_caches, backend, eq)
+    # Fallback for unknown structure
+    return transfer_eq_cache(entity_caches, backend)
+end
+
+function _transfer_poisson_generic_cache(cache::Jutul.GenericAutoDiffCache, eq::Jutul.AbstractPoissonEquation, backend)
+    # Transfer standard GenericAutoDiffCache fields
+    entries_dev = to_device(backend, Array(cache.entries))
+    jpos_dev    = to_device(backend, Array(cache.jacobian_positions))
+    vpos_dev    = to_device(backend, Array(cache.vpos))
+    vars_dev    = to_device(backend, Array(cache.variables))
+    dpos = cache.diagonal_positions
+    dpos_dev = isnothing(dpos) ? nothing : to_device(backend, Array(dpos))
+    inner = GenericAutoDiffCache_device(cache, entries_dev, jpos_dev, vpos_dev, vars_dev, dpos_dev)
+
+    # Transfer half-face map arrays
+    hfm = eq.discretization.half_face_map
+    disc_cells    = to_device(backend, Array(hfm.cells))
+    disc_faces    = to_device(backend, Array(hfm.faces))
+    disc_face_pos = to_device(backend, Array(hfm.face_pos))
+
+    td = isa(eq, Jutul.VariablePoissonEquationTimeDependent)
+    return PoissonDeviceCache(inner, disc_cells, disc_faces, disc_face_pos, td)
 end
 
 function replace_model_context(model::SimulationModel, new_context)

@@ -87,6 +87,9 @@ function setup_forces(model::PoissonModel; sources = nothing)
     return (sources = sources, )
 end
 
+# VariablePoissonEquation supports device (GPU) evaluation
+Jutul.equation_supports_device(::AbstractPoissonEquation) = true
+
 function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquation, model, dt, ldisc = local_discretization(eq, self_cell))
     U = state.U
     K = state.K

@@ -132,6 +132,132 @@ function _collect_state_to_cpu(state)
 end
 
 # ──────────────────────────────────────────────────────────────
+# 2b. Equation evaluation – GPU kernel for PoissonDeviceCache.
+#     Runs update_equation_in_entity! entirely on device for
+#     VariablePoissonEquation and VariablePoissonEquationTimeDependent.
+# ──────────────────────────────────────────────────────────────
+
+"""
+    ka_poisson_equation_kernel!
+
+KA kernel that evaluates the Poisson equation (∇·K∇U = 0) and its AD
+derivatives entirely on the device.
+
+Each thread handles one cell `self_cell` and loops over:
+  - Its variable entries (columns of `entries` in the GenericAutoDiffCache).
+  - Its half-face neighbours.
+
+For each (cell, source_variable) pair the kernel computes:
+  `entries[1, j] = Σ_face  -K[face] * (U[neighbour] - U[self])`
+
+with ForwardDiff AD tracking for the source variable, plus the optional
+accumulation term `(U_self - U0_self) / dt` for the time-dependent variant.
+"""
+@kernel function ka_poisson_equation_kernel!(
+        entries,
+        @Const(state_U),      # JLArray{Dual{Tag,Float64,1}} – AD primary variable
+        @Const(state_K),      # JLArray{Float64}             – face transmissibility
+        @Const(vpos),         # Int array, length nc+1
+        @Const(variables),    # Int array, total variable entries
+        @Const(disc_cells),   # Int array – neighbour cell per half-face
+        @Const(disc_faces),   # Int array – face id per half-face
+        @Const(disc_face_pos),# Int array, length nc+1
+        time_dependent::Bool,
+        @Const(state_U0),     # JLArray{Float64} – previous-step value (time-dep only)
+        dt::Float64
+    )
+    self_cell = @index(Global)
+
+    T = eltype(entries)  # e.g. ForwardDiff.Dual{Tag,Float64,1}
+
+    # Range of half-face entries for this cell
+    fp_start = @inbounds disc_face_pos[self_cell]
+    fp_end   = @inbounds disc_face_pos[self_cell + 1] - 1
+
+    # Cache the "self" U value (both as-Dual and as-Float)
+    @inbounds U_self_dual  = state_U[self_cell]   # Dual with partial = 1
+    U_self_float = ForwardDiff.value(U_self_dual)
+
+    # Range of variable (column) entries for this cell
+    j_start = @inbounds vpos[self_cell]
+    j_end   = @inbounds vpos[self_cell + 1] - 1
+
+    @inbounds for j in j_start:j_end
+        source_var = variables[j]
+
+        # Construct U_self in the local AD perspective:
+        # active (has partials) only when source_var == self_cell
+        U_self = (self_cell == source_var) ? U_self_dual : T(U_self_float)
+
+        # Accumulate divergence over all faces of this cell
+        d = zero(T)
+        @inbounds for k in fp_start:fp_end
+            other_cell = disc_cells[k]
+            face       = disc_faces[k]
+            K_face     = state_K[face]
+            U_other_dual  = state_U[other_cell]
+            U_other_float = ForwardDiff.value(U_other_dual)
+            U_other = (other_cell == source_var) ? U_other_dual : T(U_other_float)
+            d += -K_face * (U_other - U_self)
+        end
+
+        # Regularisation for the first cell (singular system fix)
+        if self_cell == 1
+            d = d + T(1e-10) * U_self
+        end
+
+        # Time-dependent accumulation term
+        if time_dependent
+            U0_self = state_U0[self_cell]
+            d = (U_self - T(U0_self)) / dt + d
+        end
+
+        entries[1, j] = d
+    end
+end
+
+# ── fill_equation_entries! forward for PoissonDeviceCache ───────────────────
+# Delegate to the inner GenericAutoDiffCache_device (kernels 1a/1b above).
+function Jutul.fill_equation_entries!(nz, r, model::SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext}, cache::PoissonDeviceCache)
+    Jutul.fill_equation_entries!(nz, r, model, cache.inner)
+end
+
+# ── update_equation_for_entity! on device for PoissonDeviceCache ────────────
+function Jutul.update_equation_for_entity!(
+        cache::PoissonDeviceCache,
+        eq::Jutul.AbstractPoissonEquation,
+        state, state0,
+        model::SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext},
+        dt
+    )
+    state_U  = state.U
+    state_K  = state.K
+    state_U0 = state0.U
+
+    backend = get_backend(state_U)
+
+    inner   = cache.inner
+    entries = inner.entries
+    vpos    = inner.vpos
+    vars    = inner.variables
+
+    disc_cells    = cache.disc_cells
+    disc_faces    = cache.disc_faces
+    disc_face_pos = cache.disc_face_pos
+    td            = cache.time_dependent
+
+    nc = number_of_entities(inner)
+    kernel = ka_poisson_equation_kernel!(backend)
+    kernel(
+        entries, state_U, state_K,
+        vpos, vars,
+        disc_cells, disc_faces, disc_face_pos,
+        td, state_U0, Float64(dt);
+        ndrange = nc
+    )
+end
+
+# ──────────────────────────────────────────────────────────────
 # 3. CSR matrix-vector multiply kernel
 # ──────────────────────────────────────────────────────────────
 

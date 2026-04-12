@@ -87,3 +87,41 @@ Jutul.ad_dims(c::GenericAutoDiffCache_device) = (number_of_entities(c), equation
 Jutul.ad_dims(c::CompactAutoDiffCache_device) = (number_of_entities(c), equations_per_entity(c), number_of_partials(c))
 
 Base.eltype(::GenericAutoDiffCache_device{N, E, ∂x}) where {N, E, ∂x} = ∂x
+
+# ────────────────────────────────────────────────────────────────────────────────
+# PoissonDeviceCache
+# Wraps a GenericAutoDiffCache_device and adds device-side half-face-map arrays
+# so that update_equation_for_entity! can run entirely on the device.
+# ────────────────────────────────────────────────────────────────────────────────
+
+"""
+    PoissonDeviceCache{C, V}
+
+Device-side cache for any `AbstractPoissonEquation`.  It wraps the inner
+`GenericAutoDiffCache_device` and adds the half-face-map connectivity arrays
+transferred to device memory.
+
+Fields:
+- `inner`         – `GenericAutoDiffCache_device` holding entries/jacobian-positions.
+- `disc_cells`    – device integer array: neighbour cell for each half-face entry.
+- `disc_faces`    – device integer array: face index for each half-face entry.
+- `disc_face_pos` – device integer array (length nc+1): CSR-style position array.
+- `time_dependent`– whether the equation has an accumulation term.
+"""
+struct PoissonDeviceCache{C<:GenericAutoDiffCache_device, V} <: JutulAutoDiffCache
+    inner::C
+    disc_cells::V
+    disc_faces::V
+    disc_face_pos::V
+    time_dependent::Bool
+end
+
+# ── Forward all JutulAutoDiffCache accessors to the inner cache ──────────────
+Jutul.get_entries(c::PoissonDeviceCache)              = Jutul.get_entries(c.inner)
+Jutul.equations_per_entity(c::PoissonDeviceCache)     = Jutul.equations_per_entity(c.inner)
+Jutul.number_of_entities(c::PoissonDeviceCache)       = Jutul.number_of_entities(c.inner)
+Jutul.number_of_partials(c::PoissonDeviceCache)       = Jutul.number_of_partials(c.inner)
+Jutul.ad_dims(c::PoissonDeviceCache)                  = Jutul.ad_dims(c.inner)
+Jutul.diagonal_view(c::PoissonDeviceCache)            = Jutul.diagonal_view(c.inner)
+
+Base.eltype(c::PoissonDeviceCache) = Base.eltype(c.inner)

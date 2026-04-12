@@ -1,5 +1,15 @@
 export allocate_array_ad, get_ad_entity_scalar, update_values!, update_linearized_system_equation!
 export value, find_sparse_position
+export equation_supports_device
+
+"""
+    equation_supports_device(eq)
+
+Return `true` if `update_equation_for_entity!` for the equation `eq` can run
+entirely on the device (GPU) inside a KernelAbstractions kernel, `false` if it
+requires a CPU fallback.  Default is `false`.
+"""
+equation_supports_device(::JutulEquation) = false
 
 function find_jac_position(A,
         target_entity_index, source_entity_index, # Typically row and column - global index

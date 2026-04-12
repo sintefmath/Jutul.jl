@@ -1,5 +1,5 @@
 using Jutul
-using Jutul.JutulKernelAbstractions: transfer_to_device
+using Jutul.JutulKernelAbstractions: transfer_to_device, PoissonDeviceCache
 using Test
 using SparseArrays
 using JLArrays
@@ -9,7 +9,35 @@ using GPUArrays
 @testset "KernelAbstractions device simulation" begin
     backend = JLBackend()
 
-    @testset "SimpleHeatSystem on device" begin
+    @testset "equation_supports_device" begin
+        # SimpleHeatSystem equations do NOT support device
+        sys_heat = SimpleHeatSystem()
+        g_heat = CartesianMesh((2, 2), (1.0, 1.0))
+        D_heat = DiscretizedDomain(g_heat)
+        model_heat = SimulationModel(D_heat, sys_heat, context = ParallelCSRContext(1))
+        for (k, eq) in model_heat.equations
+            @test Jutul.equation_supports_device(eq) == false
+        end
+
+        # VariablePoissonSystem equations DO support device (both variants)
+        sys_poisson = VariablePoissonSystem()
+        g_p = CartesianMesh((2, 1), (1.0, 1.0))
+        dom_p = DataDomain(g_p, poisson_coefficient = 1.0)
+        model_p = SimulationModel(dom_p, sys_poisson, context = ParallelCSRContext(1))
+        for (k, eq) in model_p.equations
+            @test Jutul.equation_supports_device(eq) == true
+        end
+
+        sys_ptd = VariablePoissonSystem(time_dependent = true)
+        disc_p = (poisson = Jutul.PoissonDiscretization(g_p), )
+        D_ptd = DiscretizedDomain(g_p, disc_p)
+        model_ptd = SimulationModel(D_ptd, sys_ptd, context = ParallelCSRContext(1))
+        for (k, eq) in model_ptd.equations
+            @test Jutul.equation_supports_device(eq) == true
+        end
+    end
+
+    @testset "SimpleHeatSystem on device (CPU fallback equation)" begin
         sys = SimpleHeatSystem()
         g = CartesianMesh((4, 4), (1.0, 1.0))
         D = DiscretizedDomain(g)
@@ -23,7 +51,7 @@ using GPUArrays
         states_cpu, = simulate!(sim_cpu, [1.0]; info_level = -1)
         T_cpu = states_cpu[1][:T]
 
-        # Run on device
+        # Run on device (uses CPU fallback for equation eval)
         sim2 = Simulator(model, state0 = state0)
         sim_dev = transfer_to_device(sim2, backend)
         states_dev, = simulate!(sim_dev, [1.0]; info_level = -1)
@@ -33,7 +61,7 @@ using GPUArrays
         @test T_dev ≈ T_cpu rtol=1e-10
     end
 
-    @testset "VariablePoissonSystem (steady-state) on device" begin
+    @testset "VariablePoissonSystem (steady-state) GPU equation kernel" begin
         sys = VariablePoissonSystem()
         g = CartesianMesh((3, 1), (1.0, 1.0))
         domain = DataDomain(g, poisson_coefficient = 1.0)
@@ -55,6 +83,15 @@ using GPUArrays
         # Run on device
         sim = Simulator(model, state0 = state0, parameters = param)
         sim_dev = transfer_to_device(sim, backend)
+
+        # Verify PoissonDeviceCache is used (GPU equation kernel)
+        eq_cache = sim_dev.storage.equations[:poisson][:Cells]
+        @test eq_cache isa PoissonDeviceCache
+        @test eq_cache.time_dependent == false
+        @test eq_cache.disc_cells isa JLArray
+        @test eq_cache.disc_faces isa JLArray
+        @test eq_cache.disc_face_pos isa JLArray
+
         states_dev, = simulate!(sim_dev, [1.0]; info_level = -1, forces = forces)
 
         @test length(states_dev) == 1
@@ -66,7 +103,7 @@ using GPUArrays
         @test U_dev_norm ≈ U_cpu_norm rtol=1e-10
     end
 
-    @testset "VariablePoissonSystem (time-dependent) on device" begin
+    @testset "VariablePoissonSystem (time-dependent) GPU equation kernel" begin
         sys = VariablePoissonSystem(time_dependent = true)
         g = CartesianMesh((2, 2), (1.0, 1.0))
         discretization = (poisson = Jutul.PoissonDiscretization(g), )
@@ -90,6 +127,12 @@ using GPUArrays
         # Run on device
         sim = Simulator(model, state0 = state0, parameters = param)
         sim_dev = transfer_to_device(sim, backend)
+
+        # Verify PoissonDeviceCache is used (GPU equation kernel, time-dependent)
+        eq_cache = sim_dev.storage.equations[:poisson][:Cells]
+        @test eq_cache isa PoissonDeviceCache
+        @test eq_cache.time_dependent == true
+
         states_dev, = simulate!(sim_dev, dt; info_level = -1, forces = forces)
 
         @test length(states_dev) == 2
@@ -100,7 +143,7 @@ using GPUArrays
         end
     end
 
-    @testset "Larger VariablePoissonSystem on device" begin
+    @testset "Larger VariablePoissonSystem GPU kernel" begin
         sys = VariablePoissonSystem()
         g = CartesianMesh((5, 5), (1.0, 1.0))
         domain = DataDomain(g, poisson_coefficient = 1.0)
@@ -120,6 +163,10 @@ using GPUArrays
         # Run on device
         sim = Simulator(model, state0 = state0, parameters = param)
         sim_dev = transfer_to_device(sim, backend)
+
+        eq_cache = sim_dev.storage.equations[:poisson][:Cells]
+        @test eq_cache isa PoissonDeviceCache
+
         states_dev, = simulate!(sim_dev, [1.0]; info_level = -1, forces = forces)
 
         @test length(states_dev) == 1

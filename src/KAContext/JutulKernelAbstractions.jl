@@ -37,7 +37,8 @@ module JutulKernelAbstractions
     using ..Jutul: JutulContext
     using ..Jutul: convert_to_immutable_storage, data
     using ..Jutul: setup_equations_and_primary_variable_views
-    using ..Jutul: AbstractPoissonEquation, PoissonSource
+    using ..Jutul: AbstractPoissonEquation, PoissonSource, VariablePoissonEquationTimeDependent
+    using ..Jutul: equation_supports_device
     using ..Jutul: diagonal_view
 
     using KernelAbstractions
