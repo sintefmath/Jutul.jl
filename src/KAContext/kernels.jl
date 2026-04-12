@@ -201,7 +201,10 @@ accumulation term `(U_self - U0_self) / dt` for the time-dependent variant.
             d += -K_face * (U_other - U_self)
         end
 
-        # Regularisation for the first cell (singular system fix)
+        # Tikhonov-style regularisation for the first cell: the pure-Neumann
+        # Poisson system is singular (solution defined up to a constant), so
+        # adding 1e-10*U at one cell pins the solution uniquely without
+        # significantly affecting the answer.
         if self_cell == 1
             d = d + T(1e-10) * U_self
         end
