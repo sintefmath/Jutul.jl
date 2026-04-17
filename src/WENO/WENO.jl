@@ -448,4 +448,9 @@ module WENO
         end
         return ∇g
     end
+
+    # Dispatch upwind to WENO scheme
+    @inline function Jutul.upwind(upw::WENOFaceDiscretization, F, q)
+        return weno_upwind(upw, F, q)
+    end
 end

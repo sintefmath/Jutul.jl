@@ -319,7 +319,7 @@ end
 
 function default_di_backend(; sparse = true)
     if sparse
-        sparsity_detector = TracerLocalSparsityDetector(gradient_pattern_type=Set{Int})
+        sparsity_detector = SCT.TracerLocalSparsityDetector(gradient_pattern_type=Set{Int})
         backend = AutoSparse(
             AutoForwardDiff();
             sparsity_detector = sparsity_detector,
