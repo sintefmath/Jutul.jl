@@ -18,7 +18,8 @@ Jutul is used for several applications. The primary package serves as a common i
 [BattMo.jl](https://github.com/BattMoTeam/BattMo.jl) is a battery simulator that implements a subset of the MATLAB-based [BattMo](https://github.com/BattMoTeam/BattMo) toolbox in Julia for improved performance.
 
 ## Carbon capture
-Jutul.jl powers a simulator that implements vacuum swing adsorption and direct air capture processes for the capture of CO2. This application is currently not public.
+[![Mocca logo](docs/src/assets/mocca_small_transparent.png)](https://github.com/sintefmath/Mocca.jl)
+[Mocca.jl](https://github.com/sintefmath/Mocca.jl) is a simulator for carbon capture processes.
 
 # Contact information
 You can use [GitHub discussions](https://github.com/sintefmath/Jutul.jl/discussions), [GitHub issues](https://github.com/sintefmath/Jutul.jl/issues) or send an e-mail to [Olav Møyner](mailto:olav.moyner@sintef.no).
