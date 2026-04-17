@@ -2,6 +2,7 @@ export SPU, TPFA, TwoPointPotentialFlowHardCoded, get_neighborship
 
 abstract type TwoPointDiscretization <: JutulDiscretization end
 
+export gradient, face_average, upwind
 export PotentialFlowDiscretization, TwoPointDiscretization, KGradDiscretization, UpwindDiscretization
 
 abstract type PotentialFlowDiscretization <: JutulDiscretization end
@@ -334,6 +335,83 @@ Two-point potential drop with gravity (generic)
 @inline function two_point_potential_drop(p_self::Real, p_other::Real, gΔz::Real, ρ_self::Real, ρ_other::Real)
     ρ_avg = 0.5*(ρ_self + ρ_other)
     return p_self - p_other + gΔz*ρ_avg
+end
+
+"""
+    gradient(X::AbstractVector, tpfa::TPFA)
+
+Compute the gradient of cell-centered values `X` across a face: `X[right] - X[left]`.
+"""
+@inline function gradient(X::AbstractVector, tpfa::TPFA)
+    return @inbounds X[tpfa.right] - X[tpfa.left]
+end
+
+"""
+    gradient(X::AbstractMatrix, i, tpfa::TPFA)
+
+Compute the gradient of row `i` of cell-centered matrix `X` across a face.
+"""
+@inline function gradient(X::AbstractMatrix, i, tpfa::TPFA)
+    return @inbounds X[i, tpfa.right] - X[i, tpfa.left]
+end
+
+"""
+    gradient(F, tpfa::TPFA)
+
+Compute the gradient using a function handle `F(cell)` across a face.
+"""
+@inline function gradient(F, tpfa::TPFA)
+    return F(tpfa.right) - F(tpfa.left)
+end
+
+"""
+    face_average(F, tpfa)
+
+Compute the arithmetic average of `F(left)` and `F(right)` across a face.
+"""
+@inline function face_average(F, tpfa)
+    l, r = cell_pair(tpfa)
+    return 0.5*(F(r) + F(l))
+end
+
+"""
+    upwind(upw::SPU, F, q)
+
+Single-point upwinding: evaluate `F(cell)` at the upwind cell.
+"""
+@inline function upwind(upw::SPU, F, q)
+    flag = q < zero(q)
+    if flag
+        up = upw.right
+    else
+        up = upw.left
+    end
+    return F(up)
+end
+
+"""
+    upwind(upw::SPU, X::AbstractArray, q)
+
+Single-point upwinding: index into array `X` at the upwind cell.
+"""
+@inline function upwind(upw::SPU, X::AbstractArray, q)
+    flag = q < zero(q)
+    if flag
+        up = upw.right
+    else
+        up = upw.left
+    end
+    return @inbounds X[up]
+end
+
+"""
+    upwind(upw::SPU, m::AbstractArray{<:SCT.Dual}, q)
+
+Adjoint pattern tracking overload: touches both cells so the sparsity tracker
+sees the full dependency pattern.
+"""
+@inline function upwind(upw::SPU, m::AbstractArray{T}, q) where T<:SCT.Dual
+    return m[upw.left] + m[upw.right]
 end
 
 export upw_flux
