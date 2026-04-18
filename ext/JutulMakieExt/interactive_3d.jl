@@ -568,8 +568,7 @@ function plot_interactive_impl(grid, states;
             kwarg...
         )
         if !isnothing(edge_color)
-            eplt = Jutul.plot_mesh_edges!(ax, grid; color = edge_color, edge_arg...)
-            connect!(eplt.visible, edge_toggle.active)
+            Jutul.plot_mesh_edges!(ax, grid; color = edge_color, visible = edge_toggle.active, edge_arg...)
         end
     elseif plot_type == :meshscatter
         sz = 0.8.*primitives.sizes
