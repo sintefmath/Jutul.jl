@@ -238,22 +238,27 @@ export JutulModel, FullyImplicitFormulation, SimulationModel, JutulEquation, Jut
 abstract type JutulModel end
 abstract type AbstractSimulationModel <: JutulModel end
 
-struct SimulationModel{O<:JutulDomain,
-                       S<:JutulSystem,
-                       F<:JutulFormulation,
-                       C<:JutulContext
-                       } <: AbstractSimulationModel
+
+const VARIABLE_STORAGE_UNION_TYPE = Union{NamedTuple, OrderedDict{Symbol, JutulVariables}}
+const EQUATION_STORAGE_UNION_TYPE = Union{NamedTuple, OrderedDict{Symbol, JutulEquation}}
+
+struct SimulationModel{
+        O<:JutulDomain,
+        S<:JutulSystem,
+        F<:JutulFormulation,
+        C<:JutulContext
+    } <: AbstractSimulationModel
     domain::O
     system::S
     context::C
     formulation::F
     data_domain
-    primary_variables::OrderedDict{Symbol, Any}
-    secondary_variables::OrderedDict{Symbol, Any}
-    parameters::OrderedDict{Symbol, Any}
-    equations::OrderedDict{Symbol, Any}
-    output_variables::Vector{Symbol}
-    extra::OrderedDict{Symbol, Any}
+    primary_variables::VARIABLE_STORAGE_UNION_TYPE
+    secondary_variables::VARIABLE_STORAGE_UNION_TYPE
+    parameters::VARIABLE_STORAGE_UNION_TYPE
+    equations::EQUATION_STORAGE_UNION_TYPE
+    output_variables::AbstractVector{Symbol}
+    extra::Union{OrderedDict{Symbol, Any}, NamedTuple}
     optimization_level::Int
 end
 
@@ -263,20 +268,20 @@ end
 Instantiate a model for a given `system` discretized on the `domain`.
 """
 function SimulationModel(domain, system;
-                            formulation=FullyImplicitFormulation(),
-                            context=DefaultContext(),
-                            output_level=:primary_variables,
-                            data_domain = missing,
-                            extra = OrderedDict{Symbol, Any}(),
-                            plot_mesh = missing,
-                            primary_variables = missing,
-                            secondary_variables = missing,
-                            parameters = missing,
-                            equations = missing,
-                            optimization_level = 1,
-                            outputs = Vector{Symbol}(),
-                            kwarg...
-                        )
+        formulation=FullyImplicitFormulation(),
+        context=DefaultContext(),
+        output_level=:primary_variables,
+        data_domain = missing,
+        extra = OrderedDict{Symbol, Any}(),
+        plot_mesh = missing,
+        primary_variables = missing,
+        secondary_variables = missing,
+        parameters = missing,
+        equations = missing,
+        optimization_level = 1,
+        outputs = Vector{Symbol}(),
+        kwarg...
+    )
     context = initialize_context!(context, domain, system, formulation)
     if ismissing(data_domain)
         if domain isa DataDomain
