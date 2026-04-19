@@ -326,7 +326,13 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(
+    PvarType = typeof(primary_variables)
+    SvarType = typeof(secondary_variables)
+    PrmType = typeof(parameters)
+    EqType = typeof(equations)
+    OutVarsType = typeof(outputs)
+    ExtraType = typeof(extra)
+    model = SimulationModel{D,S,F,C,PvarType,SvarType,PrmType,EqType,OutVarsType,ExtraType}(
         domain,
         system,
         context,
