@@ -1,12 +1,16 @@
 export ParallelCSRContext
 "A context that uses a CSR sparse matrix format together with threads. Experimental."
-struct ParallelCSRContext <: CPUJutulContext
-    matrix_layout
-    minbatch::Integer
-    nthreads::Integer
-    partitioner::JutulPartitioner
-    function ParallelCSRContext(nthreads = Threads.nthreads(); partitioner = MetisPartitioner(), matrix_layout = EquationMajorLayout(), minbatch = minbatch(nothing))
-        new(matrix_layout, minbatch, nthreads, partitioner)
+struct ParallelCSRContext{L, T<:JutulPartitioner} <: CPUJutulContext
+    matrix_layout::L
+    minbatch::Int
+    nthreads::Int
+    partitioner::T
+    function ParallelCSRContext(nthreads = Threads.nthreads();
+            matrix_layout = EquationMajorLayout(),
+            partitioner = MetisPartitioner(),
+            minbatch = minbatch(nothing)
+        )
+        new{typeof(matrix_layout), typeof(partitioner)}(matrix_layout, minbatch, nthreads, partitioner)
     end
 end
 
