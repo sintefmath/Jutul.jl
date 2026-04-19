@@ -246,19 +246,25 @@ struct SimulationModel{
         O<:JutulDomain,
         S<:JutulSystem,
         F<:JutulFormulation,
-        C<:JutulContext
+        C<:JutulContext,
+        PvarType<:VARIABLE_STORAGE_UNION_TYPE,
+        SvarType<:VARIABLE_STORAGE_UNION_TYPE,
+        PrmType<:VARIABLE_STORAGE_UNION_TYPE,
+        EqType<:EQUATION_STORAGE_UNION_TYPE,
+        OutVarsType<:AbstractVector{Symbol},
+        ExtraType<:Union{OrderedDict{Symbol, Any}, Nothing}
     } <: AbstractSimulationModel
     domain::O
     system::S
     context::C
     formulation::F
     data_domain
-    primary_variables::VARIABLE_STORAGE_UNION_TYPE
-    secondary_variables::VARIABLE_STORAGE_UNION_TYPE
-    parameters::VARIABLE_STORAGE_UNION_TYPE
-    equations::EQUATION_STORAGE_UNION_TYPE
-    output_variables::AbstractVector{Symbol}
-    extra::Union{OrderedDict{Symbol, Any}, NamedTuple}
+    primary_variables::PvarType
+    secondary_variables::SvarType
+    parameters::PrmType
+    equations::EqType
+    output_variables::OutVarsType
+    extra::ExtraType
     optimization_level::Int
 end
 
