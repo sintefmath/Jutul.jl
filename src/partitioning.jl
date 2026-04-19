@@ -26,16 +26,15 @@ function generate_lookup(partitioner, A, n)
     return partition_to_lookup(p, n)
 end
 
-struct MetisPartitioner <: JutulPartitioner
-    algorithm::Symbol
-    MetisPartitioner(m = :KWAY) = new(m)
+struct MetisPartitioner{A} <: JutulPartitioner
+    MetisPartitioner(m::Symbol = :KWAY) = new{m}()
 end
 
 function partition(mp::MetisPartitioner, A::AbstractSparseMatrix, m; kwarg...)
     return partition(mp, generate_metis_graph(A), m; kwarg...)
 end
 
-function partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
+function partition(mp::MetisPartitioner{A}, g, m; alg::Symbol = A, kwarg...) where A
     n = g.nvtxs
     if m == 1
         p = ones(Int, n)
