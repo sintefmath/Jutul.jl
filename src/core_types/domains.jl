@@ -12,8 +12,22 @@ usually some kind of mesh or domain that represents a physical domain.
 """
 physical_representation(x) = x
 
+
+struct EntityCounter{T, N}
+    counts::NTuple{N, Int}
+    entities::T
+end
+
+function EntityCounter(d::AbstractDict)
+    entities = keys(d)
+    counts = values(d)
+    return EntityCounter(tuple(counts...), tuple(entities...))
+end
+
+Base.getindex(ec::EntityCounter, entity) = ec.counts[findfirst(==(entity), ec.entities)]
+
 export DiscretizedDomain
-struct DiscretizedDomain{G, D, E, M} <: JutulDomain
+struct DiscretizedDomain{G, D, E<:EntityCounter, M} <: JutulDomain
     representation::G
     discretizations::D
     entities::E
@@ -37,20 +51,26 @@ function Base.show(io::IO, d::DiscretizedDomain)
     end
 end
 
+
 """
     DiscretizedDomain(domain, disc = nothing)
 
 A type for a discretized domain of some other domain or mesh. May contain one or
 more discretizations as-needed to write equations.
 """
-function DiscretizedDomain(domain::JutulDomain, disc = nothing; global_map = TrivialGlobalMap())
-    entities = declare_entities(domain)
-    u = Dict{JutulEntity, Int}()
-    for (entity, num) in entities
+function DiscretizedDomain(domain::JutulDomain, disc = nothing;
+        global_map = TrivialGlobalMap(),
+        entities = Dict{JutulEntity, Int}()
+    )
+    for (entity, num) in declare_entities(domain)
+        num::Int
         @assert num >= 0 "Units must have non-negative counts. $entity had $num values."
-        u[entity] = num
+        if !haskey(entities, entity)
+            entities[entity] = num
+        end
     end
-    return DiscretizedDomain(domain, disc, u, global_map)
+    entities = EntityCounter(entities)
+    return DiscretizedDomain(domain, disc, entities, global_map)
 end
 
 export DataDomain
