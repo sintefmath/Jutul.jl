@@ -59,9 +59,20 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMat
     end
 end
 
-function apply!(x, ilu::ILUZeroPreconditioner, y)
+function apply!(x, ilu::ILUZeroPreconditioner, y, α = 1.0, β = 0.0)
     factor = get_factorization(ilu)
     ilu_apply!(x, factor, y)
+    has_beta = β != 0.0
+    if has_beta
+        tmp = copy(x)
+    end
+    if α != 1.0
+        @. x *= 1.0
+    end
+    if has_beta
+        @. x += tmp
+    end
+    return x
 end
 
 function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}) where {F<:Real}
