@@ -72,13 +72,14 @@ function _add_cell_data!(vtk, nc, cell_data)
 end
 
 function _add_cell_field!(vtk, name, values, nc)
-    if values isa AbstractMatrix
+    if values isa AbstractMatrix && eltype(values) <: Number
         # Matrix: rows = components, cols = cells. VTK expects (ncomp, ncells).
         vtk[name, WriteVTK.VTKCellData()] = Float64.(values)
-    elseif values isa AbstractVector && length(values) == nc
+    elseif values isa AbstractVector && eltype(values) <: Number && length(values) == nc
         vtk[name, WriteVTK.VTKCellData()] = Float64.(values)
     end
-    # If size doesn't match (e.g. a scalar parameter or face-based array), skip silently.
+    # Skip fields whose element type is not a Number (e.g. BlackOilX) or whose
+    # size doesn't match the cell count (e.g. face arrays, scalars).
 end
 
 function _points_matrix(mesh)
