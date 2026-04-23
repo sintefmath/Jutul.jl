@@ -17,20 +17,67 @@ The mesh is expected to expose the following fields (as in Jutul's
 - `faces.cells_to_faces`, `faces.faces_to_nodes`, `faces.neighbors`
 - `boundary_faces.cells_to_faces`, `boundary_faces.faces_to_nodes`
 
+The `cell_data` argument can be:
+- A `NamedTuple` or `Dict` mapping names to arrays (one value per cell, or a
+  matrix with one column per cell), representing a single state.
+- A reservoir state `Dict` with keys like `:Pressure`, `:Saturations`, etc.
+  (as returned by a single simulation timestep).
+- A `Vector` of such state dicts (as returned by `simulate_reservoir`),
+  in which case a `.pvd` collection is written with one `.vtu` file per
+  timestep. `filename` should be given without extension.
+
 Returns the list of written file paths from `vtk_save`.
 """
 function Jutul.export_mesh_vtu(mesh, filename::AbstractString; point_data = NamedTuple(), cell_data = NamedTuple())
     points = _points_matrix(mesh)
     cells = _vtk_cells(mesh)
+    nc = length(mesh.faces.cells_to_faces)
 
+    # Determine if cell_data is a vector of states (one dict per timestep)
+    if cell_data isa AbstractVector && length(cell_data) > 0 && first(cell_data) isa AbstractDict
+        # Vector of states: write a PVD collection.
+        # Strip any extension from filename so WriteVTK can append .pvd correctly.
+        base = _strip_extension(filename)
+        pvd = WriteVTK.paraview_collection(base)
+        for (step, state) in enumerate(cell_data)
+            step_filename = "$(base)_step$(lpad(step, 4, '0'))"
+            vtk = _build_vtu(points, cells, nc, step_filename, point_data, state)
+            pvd[Float64(step)] = vtk
+        end
+        return WriteVTK.vtk_save(pvd)
+    else
+        return vtk_save(_build_vtu(points, cells, nc, filename, point_data, cell_data))
+    end
+end
+
+function _strip_extension(filename)
+    base, ext = splitext(filename)
+    return isempty(ext) ? filename : base
+end
+
+function _build_vtu(points, cells, nc, filename, point_data, cell_data)
     vtk = vtk_grid(filename, points, cells)
     for (name, values) in pairs(point_data)
         vtk[string(name), WriteVTK.VTKPointData()] = values
     end
+    _add_cell_data!(vtk, nc, cell_data)
+    return vtk
+end
+
+function _add_cell_data!(vtk, nc, cell_data)
     for (name, values) in pairs(cell_data)
-        vtk[string(name), WriteVTK.VTKCellData()] = values
+        _add_cell_field!(vtk, string(name), values, nc)
     end
-    return vtk_save(vtk)
+end
+
+function _add_cell_field!(vtk, name, values, nc)
+    if values isa AbstractMatrix
+        # Matrix: rows = components, cols = cells. VTK expects (ncomp, ncells).
+        vtk[name, WriteVTK.VTKCellData()] = Float64.(values)
+    elseif values isa AbstractVector && length(values) == nc
+        vtk[name, WriteVTK.VTKCellData()] = Float64.(values)
+    end
+    # If size doesn't match (e.g. a scalar parameter or face-based array), skip silently.
 end
 
 function _points_matrix(mesh)
