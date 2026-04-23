@@ -4,6 +4,7 @@ module JutulWriteVTKExt
 using Jutul
 using WriteVTK
 using WriteVTK: vtk_grid, vtk_save, MeshCell, VTKPolyhedron, VTKCellTypes
+using ProgressMeter
 
 """
     Jutul.export_mesh_vtu(mesh, filename; point_data = NamedTuple(), cell_data = NamedTuple())
@@ -39,7 +40,7 @@ function Jutul.export_mesh_vtu(mesh, filename::AbstractString; point_data = Name
         # Strip any extension from filename so WriteVTK can append .pvd correctly.
         base = _strip_extension(filename)
         pvd = WriteVTK.paraview_collection(base)
-        for (step, state) in enumerate(cell_data)
+        @showprogress desc="Exporting states to VTK..." for (step, state) in enumerate(cell_data)
             step_filename = "$(base)_step$(lpad(step, 4, '0'))"
             vtk = _build_vtu(points, cells, nc, step_filename, point_data, state)
             pvd[Float64(step)] = vtk
