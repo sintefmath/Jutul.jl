@@ -53,6 +53,7 @@ MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
+WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [extensions]
 JutulAMGCLWrapExt = "AMGCLWrap"
@@ -63,6 +64,7 @@ JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulLBFGSBExt = "LBFGSB"
 JutulMakieExt = "Makie"
+JutulWriteVTKExt = "WriteVTK"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 
 [compat]
@@ -103,6 +105,7 @@ Statistics = "1"
 SymRCM = "0.2.1"
 TimerOutputs = "0.5.19"
 Tullio = "0.3.4"
+WriteVTK = "1"
 julia = "1.7"
 
 [extras]
