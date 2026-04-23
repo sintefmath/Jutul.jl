@@ -7,10 +7,14 @@ using WriteVTK: vtk_grid, vtk_save, MeshCell, VTKPolyhedron, VTKCellTypes
 using ProgressMeter
 
 """
-    Jutul.export_mesh_vtu(mesh, filename; point_data = NamedTuple(), cell_data = NamedTuple())
+    Jutul.export_mesh_vtu(mesh, filename; folder = ".", point_data = NamedTuple(), cell_data = NamedTuple())
 
 Export a Jutul `UnstructuredMesh`/`JutulMesh`-compatible mesh to VTK unstructured
-format (`.vtu`) using WriteVTK.jl.
+format using WriteVTK.jl.
+
+`filename` should be given **without** an extension — the correct extension
+(`.vtu` or `.pvd`) is inferred automatically from `cell_data`. Use `folder` to
+control the output directory (defaults to the current directory).
 
 The mesh is expected to expose the following fields (as in Jutul's
 `UnstructuredMesh`):
@@ -25,20 +29,31 @@ The `cell_data` argument can be:
   (as returned by a single simulation timestep).
 - A `Vector` of such state dicts (as returned by `simulate_reservoir`),
   in which case a `.pvd` collection is written with one `.vtu` file per
-  timestep. `filename` should be given without extension.
+  timestep.
+
+Matrix fields (e.g. `Saturations` with shape `nphases × ncells`) are
+automatically split into one scalar field per row, named `Saturations_1`,
+`Saturations_2`, etc.
+
+When the mesh has `z_is_depth = true` (z increases downward, as is common in
+reservoir models), the z coordinates are negated on export so that the mesh
+appears correctly oriented in ParaView (z-up convention). Set `flip_z = false`
+to export raw coordinates instead.
 
 Returns the list of written file paths from `vtk_save`.
 """
-function Jutul.export_mesh_vtu(mesh, filename::AbstractString; point_data = NamedTuple(), cell_data = NamedTuple())
-    points = _points_matrix(mesh)
+function Jutul.export_mesh_vtu(mesh, filename::AbstractString; folder = ".", flip_z = true, point_data = NamedTuple(), cell_data = NamedTuple())
+    do_flip = flip_z && Jutul.mesh_z_is_depth(mesh)
+    points = _points_matrix(mesh, do_flip)
     cells = _vtk_cells(mesh)
     nc = length(mesh.faces.cells_to_faces)
+
+    base = joinpath(folder, _strip_extension(basename(filename)))
+    mkpath(folder)
 
     # Determine if cell_data is a vector of states (one dict per timestep)
     if cell_data isa AbstractVector && length(cell_data) > 0 && first(cell_data) isa AbstractDict
         # Vector of states: write a PVD collection.
-        # Strip any extension from filename so WriteVTK can append .pvd correctly.
-        base = _strip_extension(filename)
         pvd = WriteVTK.paraview_collection(base)
         @showprogress desc="Exporting states to VTK..." for (step, state) in enumerate(cell_data)
             step_filename = "$(base)_step$(lpad(step, 4, '0'))"
@@ -47,7 +62,7 @@ function Jutul.export_mesh_vtu(mesh, filename::AbstractString; point_data = Name
         end
         return WriteVTK.vtk_save(pvd)
     else
-        return vtk_save(_build_vtu(points, cells, nc, filename, point_data, cell_data))
+        return vtk_save(_build_vtu(points, cells, nc, base, point_data, cell_data))
     end
 end
 
@@ -72,9 +87,17 @@ function _add_cell_data!(vtk, nc, cell_data)
 end
 
 function _add_cell_field!(vtk, name, values, nc)
-    if values isa AbstractMatrix && eltype(values) <: Number
-        # Matrix: rows = components, cols = cells. VTK expects (ncomp, ncells).
-        vtk[name, WriteVTK.VTKCellData()] = Float64.(values)
+    if values isa AbstractMatrix && eltype(values) <: Number && size(values, 2) == nc
+        # Split each row into a separate scalar field to avoid VTK interpreting
+        # rows as X/Y/Z vector components (which requires exactly 3 rows).
+        nrows = size(values, 1)
+        if nrows == 1
+            vtk[name, WriteVTK.VTKCellData()] = Float64.(vec(values))
+        else
+            for row in 1:nrows
+                vtk["$(name)_$(row)", WriteVTK.VTKCellData()] = Float64.(values[row, :])
+            end
+        end
     elseif values isa AbstractVector && eltype(values) <: Number && length(values) == nc
         vtk[name, WriteVTK.VTKCellData()] = Float64.(values)
     end
@@ -82,7 +105,7 @@ function _add_cell_field!(vtk, name, values, nc)
     # size doesn't match the cell count (e.g. face arrays, scalars).
 end
 
-function _points_matrix(mesh)
+function _points_matrix(mesh, flip_z = false)
     nnodes = length(mesh.node_points)
     nnodes == 0 && throw(ArgumentError("Mesh has no nodes"))
 
@@ -94,6 +117,9 @@ function _points_matrix(mesh)
         for d in 1:dim
             pts[d, i] = Float64(p[d])
         end
+    end
+    if flip_z && dim == 3
+        @. pts[3, :] = -pts[3, :]
     end
     return pts
 end
