@@ -42,13 +42,17 @@ to export raw coordinates instead.
 
 Returns the list of written file paths from `vtk_save`.
 """
-function Jutul.export_mesh_vtu(mesh, filename::AbstractString; folder = ".", flip_z = true, point_data = NamedTuple(), cell_data = NamedTuple())
-    do_flip = flip_z && Jutul.mesh_z_is_depth(mesh)
-    points = _points_matrix(mesh, do_flip)
+function Jutul.export_mesh_vtu(mesh, filename::AbstractString;
+    folder = ".",
+    flip_z = Jutul.mesh_z_is_depth(mesh),
+    point_data = NamedTuple(), cell_data = NamedTuple()
+    )
+    mesh = UnstructuredMesh(mesh) # Convert to UnstructuredMesh
+    points = _points_matrix(mesh, flip_z)
     cells = _vtk_cells(mesh)
     nc = length(mesh.faces.cells_to_faces)
 
-    base = joinpath(folder, _strip_extension(basename(filename)))
+    base = joinpath(folder, first(splitext(filename)))
     mkpath(folder)
 
     # Determine if cell_data is a vector of states (one dict per timestep)
@@ -64,11 +68,6 @@ function Jutul.export_mesh_vtu(mesh, filename::AbstractString; folder = ".", fli
     else
         return vtk_save(_build_vtu(points, cells, nc, base, point_data, cell_data))
     end
-end
-
-function _strip_extension(filename)
-    base, ext = splitext(filename)
-    return isempty(ext) ? filename : base
 end
 
 function _build_vtu(points, cells, nc, filename, point_data, cell_data)
