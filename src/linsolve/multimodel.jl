@@ -106,12 +106,12 @@ function update_dx_from_vector!(sys::MultiLinearizedSystem, dx_from_solver; dx =
 
         schur_dx_update!(x, y, C, D, E, b, sys, dx_from_solver, Δx, sys.schur_buffer)
     else
-        @tullio dx[i] = -dx_from_solver[i]
+        @. dx = -dx_from_solver
     end
 end
 
 function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
-    @tullio x[i] = -dx[i]
+    @. x = -dx
     # We want to do (in-place):
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
     offset = 0

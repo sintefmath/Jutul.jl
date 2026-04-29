@@ -559,11 +559,7 @@ function update_accumulation!(eq_s, law, storage, model, dt)
     conserved = eq_s.accumulation_symbol
     acc = get_entries(eq_s.accumulation)
     m0, m = state_pair(storage, conserved, model)
-    if m isa AbstractVector
-        @tullio acc[i] = (m[i] - m0[i])/dt
-    else
-        @tullio acc[c, i] = (m[c, i] - m0[c, i])/dt
-    end
+    @. acc = (m - m0)/dt
     return acc
 end
 

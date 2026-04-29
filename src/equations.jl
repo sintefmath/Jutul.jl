@@ -618,7 +618,7 @@ Get the convergence criterion values for a given equation. Can be checked agains
 """
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1.0, update_report = missing)
     n = number_of_equations_per_entity(model, eq)
-    @tic "default" @tullio max e[i] := abs(r[i, j])
+    @tic "default" e = vec(maximum(abs, r; dims=2))
     if n == 1
         names = "R"
     else
