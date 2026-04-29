@@ -1,6 +1,6 @@
 name = "Jutul"
 uuid = "2b460a1a-8a2b-45b2-b125-b5c536396eb9"
-version = "0.4.22"
+version = "0.4.23"
 authors = ["Olav Møyner <olav.moyner@gmail.com>"]
 
 [deps]
@@ -38,7 +38,6 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 SymRCM = "286e6d88-80af-4590-acc9-0001b223b9bd"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
-Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 
 [weakdeps]
 AMGCLWrap = "4f76b812-4ba5-496d-b042-d70715554288"
@@ -104,7 +103,6 @@ StaticArrays = "1.5.17"
 Statistics = "1"
 SymRCM = "0.2.1"
 TimerOutputs = "0.5.19"
-Tullio = "0.3.4"
 WriteVTK = "1"
 julia = "1.7"
 

@@ -13,7 +13,6 @@ module Jutul
     using Printf
     using Dates
     # Gotta go fast
-    using Tullio
     using LoopVectorization
     using Polyester
     using PolyesterWeave
