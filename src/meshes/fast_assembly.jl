@@ -207,3 +207,11 @@ end
 function Base.show(io::IO, t::MIME"text/plain", data::FastAssemblyData{dim, num_type}) where {dim, num_type}
     print(io, "FastAssemblyData with dimension $dim and numerical type $num_type")
 end
+
+float_type(::FastAssemblyData{d, num_type}) where {d, num_type} = num_type
+dim(::FastAssemblyData{d, num_type}) where {d, num_type} = d
+
+number_of_nodes(data::FastAssemblyData) = length(data.node_points)
+number_of_cells(data::FastAssemblyData) = length(data.cell_centroids)
+number_of_faces(data::FastAssemblyData) = length(data.face_centroids) - number_of_boundary_faces(data)
+number_of_boundary_faces(data::FastAssemblyData) = sum(data.face_is_boundary)
