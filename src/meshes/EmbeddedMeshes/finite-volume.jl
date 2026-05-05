@@ -138,7 +138,7 @@ function cell_normal(mesh::EmbeddedMesh, c)
             k = mod(i+j-1, num_faces) + 1
             i == k && continue
             u,v = get_face_vectors(umesh, faces[i], entities[i], faces[k], entities[k], c)
-            if v === missing
+            if ismissing(v)
                 continue
             end
             normal = cross(u, v)
