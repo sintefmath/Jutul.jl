@@ -133,14 +133,18 @@ function cell_normal(mesh::EmbeddedMesh, c)
     entities = vcat(fill(Faces(), length(faces)), fill(BoundaryFaces(), length(bfaces)))
     faces = vcat(faces, bfaces)
     num_faces = length(faces)
-    for i = 1:num_faces-1
-        u,v = get_face_vectors(umesh, faces[i], entities[i], faces[i+1], entities[i+1], c)
-        if v === missing
-            continue
-        end
-        normal = cross(u, v)
-        if norm(normal, 2) > 0
-            return normal/norm(normal, 2)
+    for i = 1:num_faces
+        for j = 1:num_faces
+            k = mod(i+j-1, num_faces) + 1
+            i == k && continue
+            u,v = get_face_vectors(umesh, faces[i], entities[i], faces[k], entities[k], c)
+            if v === missing
+                continue
+            end
+            normal = cross(u, v)
+            if norm(normal, 2) > 0
+                return normal/norm(normal, 2)
+            end
         end
     end
 
