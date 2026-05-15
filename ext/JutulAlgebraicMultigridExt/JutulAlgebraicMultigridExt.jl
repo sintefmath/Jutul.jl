@@ -19,7 +19,6 @@ module JutulAlgebraicMultigridExt
         nthreads,
         minbatch,
         colvals,
-        sparse_indirection,
         @tic
 
     function Jutul.check_algebraicmultigrid_availability_impl()
