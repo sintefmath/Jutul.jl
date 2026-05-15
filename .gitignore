@@ -36,3 +36,4 @@ data/
 
 Tests/
 *.dat
+.log
