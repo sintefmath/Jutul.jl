@@ -20,7 +20,6 @@ module Jutul
     using ILUZero
     using LinearOperators
     using Krylov
-    using AlgebraicMultigrid
 
     # Misc. utils
     using ExprTools

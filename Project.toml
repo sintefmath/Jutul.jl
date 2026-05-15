@@ -4,7 +4,6 @@ version = "0.4.23"
 authors = ["Olav Møyner <olav.moyner@gmail.com>"]
 
 [deps]
-AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -40,6 +39,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [weakdeps]
+AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
 AMGCLWrap = "4f76b812-4ba5-496d-b042-d70715554288"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 Gmsh = "705231aa-382f-11e9-3f0c-b7cb4346fdeb"
@@ -55,6 +55,7 @@ PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [extensions]
+JutulAlgebraicMultigridExt = "AlgebraicMultigrid"
 JutulAMGCLWrapExt = "AMGCLWrap"
 JutulGLMakieExt = "GLMakie"
 JutulGmshExt = "Gmsh"
@@ -107,6 +108,7 @@ WriteVTK = "1"
 julia = "1.7"
 
 [extras]
+AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
 CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 Gmsh = "705231aa-382f-11e9-3f0c-b7cb4346fdeb"
@@ -121,4 +123,4 @@ NetworkLayout = "46757867-2c16-5918-afeb-47bfcb05e46a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [targets]
-test = ["KaHyPar", "HYPRE", "LBFGSB"]
+test = ["AlgebraicMultigrid", "KaHyPar", "HYPRE", "LBFGSB"]
