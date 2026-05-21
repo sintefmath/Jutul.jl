@@ -10,6 +10,10 @@ function number_of_faces(g::UnstructuredMesh)
     return length(g.faces.faces_to_nodes)
 end
 
+function number_of_nodes(g::UnstructuredMesh)
+    return length(g.node_points)
+end
+
 function Base.show(io::IO, t::MIME"text/plain", g::UnstructuredMesh)
     nc = number_of_cells(g)
     nf = number_of_faces(g)
