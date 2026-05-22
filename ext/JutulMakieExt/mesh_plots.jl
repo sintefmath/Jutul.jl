@@ -47,6 +47,9 @@ function Jutul.plot_mesh_impl!(ax, m;
         end
         if has_face_filter
             if is_unstructured
+                if faces isa Int
+                    faces = [faces]
+                end
                 faces = deepcopy(faces)
                 faces .+= number_of_boundary_faces(m)
             end
