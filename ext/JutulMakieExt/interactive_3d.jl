@@ -48,6 +48,7 @@ default_jutul_resolution() = (1600, 900)
 function plot_interactive_impl(grid, states;
         plot_type = nothing,
         primitives = nothing,
+        cells = nothing,
         transparency = false,
         resolution = default_jutul_resolution(),
         alpha = 1.0,
@@ -93,6 +94,19 @@ function plot_interactive_impl(grid, states;
         nc = number_of_cells(grid)
     end
     current_filter = collect(false for i in 1:nc)
+    cell_subset_filter = falses(nc)
+    if !isnothing(cells)
+        if eltype(cells) == Bool
+            @assert length(cells) == nc
+            @. cell_subset_filter = !cells
+        else
+            keep_cells = falses(nc)
+            for cell in cells
+                keep_cells[cell] = true
+            end
+            @. cell_subset_filter = !keep_cells
+        end
+    end
     if !has_primitives
         if isnothing(plot_type)
             plot_candidates = [:mesh, :meshscatter, :lines]
@@ -267,6 +281,7 @@ function plot_interactive_impl(grid, states;
                         $hi,
                         $lims,
                         $transform_name,
+                        cell_subset_filter,
                         active_filters
                         )
                 )::Vector{Float64}
@@ -629,7 +644,7 @@ function plot_interactive_impl(grid, states;
     return fig
 end
 
-function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, active_filters)
+function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, cell_subset_filter, active_filters)
     d = unpack(buffer, state[fld], ix)
     current_active = low > 0.0 || high < 1.0
     @. current_filter = false
@@ -655,6 +670,8 @@ function select_data(buffer, current_filter, state, fld, ix, low, high, limits, 
             update_filter!(filter_d, ix, L, U, low_dyn, high_dyn)
         end
     end
+
+    @. current_filter |= cell_subset_filter
 
     function apply_filter!(M::AbstractVector)
         for i in eachindex(M)
