@@ -64,6 +64,7 @@ function plot_interactive_impl(grid, states;
         colormap = :viridis,
         alphamap = :no_alpha_map,
         z_is_depth = missing,
+        axis_args = (;),
         kwarg...
     )
     if ismissing(z_is_depth)
@@ -245,12 +246,12 @@ function plot_interactive_impl(grid, states;
     is_3d = size(pts, 2) == 3
     ax_pos = fig[2, 1:3]
     if is_3d
-        ax = Axis3(ax_pos, title = fig_title, aspect = aspect, zreversed = z_is_depth)
+        ax = Axis3(ax_pos; title = fig_title, aspect = aspect, zreversed = z_is_depth, axis_args...)
         if free_cam
             Camera3D(ax.scene)
         end
     else
-        ax = Axis(ax_pos, title = fig_title)
+        ax = Axis(ax_pos; title = fig_title, axis_args...)
     end
     cell_buffer = zeros(nc)
     # Selection of data
