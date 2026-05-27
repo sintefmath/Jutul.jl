@@ -50,10 +50,10 @@ end
     Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
 
 Relaxation strategy based on convergence monitoring. The relaxation factor is
-decreased if the convergence status is "bad", and increased if the status is
-"good", determined by contraction factors computed from distance to convergence
-(in a user-defined metric) between consecutive iterates. These are computed
-during the cutting criterion check and stored in the reports.
+decreased when the recent distance history is oscillating and increased when
+the monitored status is acceptable or good. Bad but non-oscillating iterates
+leave the relaxation factor unchanged. The status is recomputed from the recent
+distance-to-convergence history derived from the iteration reports.
 """
 function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
 

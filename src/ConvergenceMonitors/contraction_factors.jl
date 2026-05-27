@@ -30,18 +30,16 @@ function compute_contraction_factor(distances, N_target)
 end
 
 """
-    oscillation(contraction_factors, tol)
+    oscillation(distances, tol)
 
-Check if the contraction factors are oscillating. The function checks if the
-contraction factors are oscillating by checking if the last three contraction
-factors are below a user-defined tolerance defining "slow" convergece. The
-function returns true if the contraction factors are oscillating, and false
-otherwise. If less than three contraction factors are provided, the function
-returns false.
+Check if the recent distance history is oscillating. The function compares the
+last three distance vectors and returns `true` for entries where the middle
+iterate is a local minimum or maximum, up to the supplied tolerance. If fewer
+than three iterates are provided, the function returns `false` for all entries.
 """
-function oscillation(distance_1, distace_2, distance_3, tol=1e-6)
+function oscillation(distance_1, distance_2, distance_3, tol=1e-6)
 
-    δ1, δ2, δ3 = distance_1, distace_2, distance_3
+    δ1, δ2, δ3 = distance_1, distance_2, distance_3
     # Check if δ1 > δ2 < δ3 or δ1 < δ2 > δ3
     gt_tol = (x,y) -> (x .- y) .> tol
     lt_tol = (x,y) -> gt_tol(y,x)
