@@ -1,10 +1,11 @@
 using LinearAlgebra
 """
-    compute_distance(report; distance_function = r -> scaled_residual_norm(r), mapping = v -> maximum(v))
+    compute_distance(report; distance_function = v -> max.(v, 1.0), pools = nothing, pooling_norm = Inf, pooling_args = NamedTuple())
 
-Compute distance from convergence using a user-defined distance function, and
-optionally apply a mapping to the distance. The function returns the distance
-and the names of equation residual norms used in the distance computation.
+Compute distance from convergence by flattening the scaled residual measures in
+the report, applying `distance_function`, and optionally pooling the resulting
+distances. The function returns the distance values and the names of the
+residual measures or pools used in the computation.
 """
 function compute_distance(report;
     distance_function = v -> max.(v, 1.0),
