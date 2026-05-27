@@ -194,8 +194,8 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, na
         dnv = maximum(Nv) - maximum(Nv0)
         status_it = (dnv < 0) - (dnv > 0)
         status_it = maximum(Nv) == 0 ? 1 : status_it
-    elseif cc.strategy .== :total
-        dnv = sum(cc.num_violations[it,:]) - sum(cc.num_violations[it-1,:])
+    elseif cc.strategy == :total
+        dnv = sum(Nv) - sum(Nv0)
         status_it = (dnv < 0) - (dnv > 0) 
     end
 
