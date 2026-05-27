@@ -98,7 +98,13 @@ function analyze_step(distances, memory, its_target, its_buffer, theta_fast, the
 end
 
 function analyze_convergence(distance;
-    memory=1, target_its=8, theta_fast=0.1, theta_slow=0.99, strategy=:per_measure)
+    memory=1,
+    target_its=8,
+    iteration_buffer=2,
+    max_iterations_left=2*target_its,
+    theta_fast=0.1,
+    theta_slow=0.99,
+    strategy=:per_measure)
 
     # Shorthand notation
     θf, θs = theta_fast, theta_slow
@@ -111,7 +117,15 @@ function analyze_convergence(distance;
     Nv_k = copy(Nv[1,:])
     for k in 1:size(distance,1)
         status[k,:], θ[k,:], θt[k,:], osc[k,:] = 
-        analyze_step(distance[1:k,:], memory, target_its, θf, θs)
+        analyze_step(
+            distance[1:k,:],
+            memory,
+            target_its,
+            iteration_buffer,
+            θf,
+            θs,
+            max_iterations_left
+        )
         update_violation_count!(Nv_k, status[k,:]; strategy=strategy)
         Nv[k,:] .= Nv_k
         Nv_k = copy(Nv[k,:])
