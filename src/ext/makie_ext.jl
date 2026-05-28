@@ -10,7 +10,8 @@ export plot_cumulative_solve, plot_cumulative_solve!
 
 Launch an interactive plot of a mesh with the given `vector_of_dicts` (or just a
 dict). Each dict can have cell data either as vectors (one value per cell) or
-matrices (one column per cell).
+matrices (one column per cell). For 3D plots, use `axis_view = :default|:xz|:yz|:xy`
+to set the initial camera preset programmatically.
 """
 function plot_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
