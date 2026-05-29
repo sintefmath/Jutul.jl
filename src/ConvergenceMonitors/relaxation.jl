@@ -63,8 +63,8 @@ function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMon
         (; dw_decrease, dw_increase, w_max, w_min) = rel_type
 
         d, _ = compute_distance(reports[1][:errors]; pools=:all)
-        distances = zeros(Float64, length(reports)-1, length(d))
-        for k in 1:(length(reports)-1)
+        distances = zeros(Float64, length(reports), length(d))
+        for k in 1:(length(reports))
             d, _ = compute_distance(reports[k][:errors]; pools=:all)
             distances[k, :] .= d
         end
