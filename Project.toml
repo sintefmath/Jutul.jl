@@ -63,8 +63,8 @@ JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulLBFGSBExt = "LBFGSB"
 JutulMakieExt = "Makie"
-JutulWriteVTKExt = "WriteVTK"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
+JutulWriteVTKExt = "WriteVTK"
 
 [compat]
 AMGCLWrap = "=0.3.2"
@@ -90,7 +90,7 @@ Makie = "0.21, 0.22, 0.23, 0.24"
 MappedArrays = "0.4.1"
 Metis = "1.1.0"
 NetworkLayout = "0.4.5"
-OrderedCollections = "1.4.1"
+OrderedCollections = "1.4.1, 2"
 Polyester = "0.6.11, 0.7.3"
 PolyesterWeave = "0.1.13, 0.2.1"
 Polynomials = "3 - 4"
