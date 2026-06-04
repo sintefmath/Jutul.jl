@@ -635,6 +635,6 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
             data[i, 9] = t
         end
         h = ["Name", "Entity", "N", "Scale", "Abs. limits", "Rel. limits", "Limits", "Lumping", "Type"]
-        pretty_table(data, header = h, title = "Parameters for $title")
+        pretty_table(data, column_labels = h, title = "Parameters for $title", title_alignment = :l)
     end
 end

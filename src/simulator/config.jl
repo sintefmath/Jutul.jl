@@ -78,9 +78,9 @@ Negative values disable output. The interpretation of this number is subject to 
         mkpath(pth)
     end
     if cfg[:ascii_terminal]
-        fmt = tf_markdown
+        fmt = JUTUL_TABLE_FORMAT_MARKDOWN
     else
-        fmt = tf_unicode_rounded
+        fmt = JUTUL_TABLE_FORMAT_UNICODE_ROUNDED
     end
     add_option!(cfg, :table_formatter, fmt, "Formatter for tables.")
     if output_unused
