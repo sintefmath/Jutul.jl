@@ -1,5 +1,6 @@
 export subdomain, submap_cells, subforces, subforce, global_map, coarse_neighborhood
-export SimplePartition, SimpleMultiModelPartition, number_of_subdomains, entity_subset
+export SimplePartition, SimpleMultiModelPartition, OverlapPartition, number_of_subdomains, entity_subset
+export partition_covers_full_domain, partition_has_overlap
 
 abstract type AbstractDomainPartition end
 
@@ -37,6 +38,40 @@ main_partition_label(sp::SimplePartition) = nothing
 number_of_subdomains(sp::SimplePartition) = maximum(sp.partition)
 entity_subset(sp, index) = entity_subset(sp, index, Cells())
 entity_subset(sp::SimplePartition, index, e::Cells) = sp.subsets[index]
+
+"""
+    OverlapPartition(subsets, nc)
+
+An explicit subset-based domain partition where subdomains may overlap and need
+not cover the entire domain.  Each element of `subsets` is a vector of global
+cell indices (1-based) for that subdomain.
+
+`nc` is the total number of cells in the global mesh and is used to compute the
+`covers_full_domain` and `has_overlap` flags at construction time.
+
+Intended use: NLDD Gauss-Seidel solves only.  ASPEN and Jacobi are unsupported.
+"""
+struct OverlapPartition{S} <: AbstractDomainPartition
+    subsets::S
+    covers_full_domain::Bool
+    has_overlap::Bool
+end
+
+function OverlapPartition(subsets::Vector{<:AbstractVector{<:Integer}}, nc::Integer)
+    cell_count = zeros(Int, nc)
+    for subset in subsets
+        for c in subset
+            1 <= c <= nc || throw(ArgumentError("Cell index $c is out of range 1:$nc"))
+            cell_count[c] += 1
+        end
+    end
+    covers_full_domain = all(>(0), cell_count)
+    has_overlap = any(>(1), cell_count)
+    return OverlapPartition(subsets, covers_full_domain, has_overlap)
+end
+
+number_of_subdomains(op::OverlapPartition) = length(op.subsets)
+entity_subset(op::OverlapPartition, index, ::Cells) = op.subsets[index]
 
 struct SimpleMultiModelPartition <: AbstractDomainPartition
     partition::Dict{Symbol, Any}
@@ -241,7 +276,40 @@ function coarse_neighborhood(p, submodel)
     return unique(p.partition[cells])
 end
 
+function coarse_neighborhood(op::OverlapPartition, submodel)
+    M = global_map(submodel.domain)
+    cells_in_submodel = Set(M.cells)
+    result = Int[]
+    for (j, subset) in enumerate(op.subsets)
+        if any(c -> c in cells_in_submodel, subset)
+            push!(result, j)
+        end
+    end
+    return result
+end
+
 function coarse_neighborhood(p::SimpleMultiModelPartition, submodel::MultiModel)
     s = p.main_symbol
     return coarse_neighborhood(main_partition(p), submodel.models[s])
 end
+
+# Partition capability queries
+"""
+    partition_covers_full_domain(partition)
+
+Return `true` if every cell in the global mesh belongs to at least one subdomain.
+Always `true` for `SimplePartition` (guaranteed by construction).
+"""
+partition_covers_full_domain(::AbstractDomainPartition) = true
+partition_covers_full_domain(op::OverlapPartition) = op.covers_full_domain
+partition_covers_full_domain(mp::SimpleMultiModelPartition) = partition_covers_full_domain(main_partition(mp))
+
+"""
+    partition_has_overlap(partition)
+
+Return `true` if any cell belongs to more than one subdomain.
+Always `false` for `SimplePartition` (guaranteed by construction).
+"""
+partition_has_overlap(::AbstractDomainPartition) = false
+partition_has_overlap(op::OverlapPartition) = op.has_overlap
+partition_has_overlap(mp::SimpleMultiModelPartition) = partition_has_overlap(main_partition(mp))
