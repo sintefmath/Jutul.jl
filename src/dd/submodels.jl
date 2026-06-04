@@ -1,4 +1,14 @@
 export submodel
+
+# Helper for flexible well-to-subdomain membership tests.
+# A well partition value can be:
+#   Int      – the single subdomain that owns the well (SimplePartition path)
+#   Set{Int} – the set of subdomains that fully contain the well (OverlapPartition path)
+#   Nothing  – no subdomain owns the well (should not occur; kept for safety)
+well_in_partition(v::Int, index) = v == index
+well_in_partition(v::AbstractSet, index) = index in v
+well_in_partition(::Nothing, index) = false
+
 function submodel(model::SimulationModel, partition::AbstractDomainPartition, index; kwarg...)
     p_i = entity_subset(partition, index)
     return submodel(model, p_i; kwarg...)
@@ -86,7 +96,7 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     for (i, k) in enumerate(keys(submodels))
         if k == main
             new_submodels[main] = main_submodel
-        elseif mp.partition[k] == index
+        elseif well_in_partition(mp.partition[k], index)
             # Include the whole model, somewhat of a hack for wells
             # TODO: Renumber
             m = deepcopy(submodels[k])
