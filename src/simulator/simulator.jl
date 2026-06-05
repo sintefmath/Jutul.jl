@@ -154,13 +154,18 @@ simulate(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE; kwarg...) = si
         restart = nothing,
         state0 = nothing,
         parameters = nothing,
+        states = Vector{JUTUL_OUTPUT_TYPE}(),
+        reports = [],
         kwarg...
     )
 
 Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
 # Arguments
-- `initialize=true`: Perform internal updates as if this is the first time 
+- `initialize=true`: Perform internal updates as if this is the first time
+- `states`, `reports`: Pre-allocated output containers. Defaults are fresh empty
+  vectors. Supply your own to retain partial output when `simulate!` throws
+  mid-loop (e.g. from a `post_ministep_hook`).
 
 See also [`simulate`](@ref) for additional supported input arguments.
 """
@@ -173,6 +178,8 @@ function simulate!(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
         parameters = nothing,
         forces_per_step = isa(forces, Vector),
         start_date = nothing,
+        states = Vector{JUTUL_OUTPUT_TYPE}(),
+        reports = [],
         kwarg...
     )
     if timesteps isa Real
@@ -207,7 +214,9 @@ function simulate!(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
         restart = restart,
         state0 = state0,
         parameters = parameters,
-        nsteps = no_steps
+        nsteps = no_steps,
+        states = states,
+        reports = reports
     )
     # Config options
     max_its = config[:max_nonlinear_iterations]
@@ -613,16 +622,20 @@ function initialize_before_first_timestep!(sim, first_dT; kwarg...)
     end
 end
 
-function initial_setup!(sim, config, timesteps; restart = nothing, parameters = nothing, state0 = nothing, nsteps = Inf)
+function initial_setup!(sim, config, timesteps;
+        restart = nothing,
+        parameters = nothing,
+        state0 = nothing,
+        nsteps = Inf,
+        states = Vector{JUTUL_OUTPUT_TYPE}(),
+        reports = []
+    )
     # Timing stuff
     set_global_timer!(config[:extra_timing])
     # Threading
     if Threads.nthreads() > 1
         PolyesterWeave.reset_workers!()
     end
-    # Set up storage
-    reports = []
-    states = Vector{JUTUL_OUTPUT_TYPE}()
     pth = config[:output_path]
     initialize_io(pth)
     has_restart = !(isnothing(restart) || restart === 0 || restart === 1 || restart == false)
