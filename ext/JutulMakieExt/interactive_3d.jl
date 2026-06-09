@@ -45,9 +45,32 @@ end
 
 default_jutul_resolution() = (1600, 900)
 
+function interactive_view_angles(axis_view)
+    view_key = if axis_view isa Symbol
+        lowercase(String(axis_view))
+    elseif axis_view isa AbstractString
+        lowercase(axis_view)
+    else
+        throw(ArgumentError("axis_view must be a Symbol or String"))
+    end
+
+    if view_key == "default"
+        return (label = "Default", azimuth = 1.275π, elevation = 0.125π)
+    elseif view_key == "xz"
+        return (label = "XZ", azimuth = -0.5π, elevation = 0.0)
+    elseif view_key == "yz"
+        return (label = "YZ", azimuth = 0.0, elevation = 0.0)
+    elseif view_key == "xy"
+        return (label = "XY", azimuth = -0.5π, elevation = 0.5π)
+    else
+        throw(ArgumentError("Unsupported axis_view $(repr(axis_view)). Expected one of :default, :xz, :yz, or :xy"))
+    end
+end
+
 function plot_interactive_impl(grid, states;
         plot_type = nothing,
         primitives = nothing,
+        cells = nothing,
         transparency = false,
         resolution = default_jutul_resolution(),
         alpha = 1.0,
@@ -63,7 +86,9 @@ function plot_interactive_impl(grid, states;
         aspect = (1.0, 1.0, 1/3),
         colormap = :viridis,
         alphamap = :no_alpha_map,
+        axis_view = :default,
         z_is_depth = missing,
+        axis_args = (;),
         kwarg...
     )
     if ismissing(z_is_depth)
@@ -92,6 +117,19 @@ function plot_interactive_impl(grid, states;
         nc = number_of_cells(grid)
     end
     current_filter = collect(false for i in 1:nc)
+    cell_subset_filter = falses(nc)
+    if !isnothing(cells)
+        if eltype(cells) == Bool
+            @assert length(cells) == nc
+            @. cell_subset_filter = !cells
+        else
+            keep_cells = falses(nc)
+            for cell in cells
+                keep_cells[cell] = true
+            end
+            @. cell_subset_filter = !keep_cells
+        end
+    end
     if !has_primitives
         if isnothing(plot_type)
             plot_candidates = [:mesh, :meshscatter, :lines]
@@ -245,12 +283,14 @@ function plot_interactive_impl(grid, states;
     is_3d = size(pts, 2) == 3
     ax_pos = fig[2, 1:3]
     if is_3d
-        ax = Axis3(ax_pos, title = fig_title, aspect = aspect, zreversed = z_is_depth)
+        view_preset = interactive_view_angles(axis_view)
+        axis_args = merge((; azimuth = view_preset.azimuth, elevation = view_preset.elevation), axis_args)
+        ax = Axis3(ax_pos; title = fig_title, aspect = aspect, zreversed = z_is_depth, axis_args...)
         if free_cam
             Camera3D(ax.scene)
         end
     else
-        ax = Axis(ax_pos, title = fig_title)
+        ax = Axis(ax_pos; title = fig_title, axis_args...)
     end
     cell_buffer = zeros(nc)
     # Selection of data
@@ -266,6 +306,7 @@ function plot_interactive_impl(grid, states;
                         $hi,
                         $lims,
                         $transform_name,
+                        cell_subset_filter,
                         active_filters
                         )
                 )::Vector{Float64}
@@ -487,27 +528,19 @@ function plot_interactive_impl(grid, states;
     N_mid = 1
     top_layout[2, N_mid] = genlabel("View")
     N_mid += 1
+    view_options = ["Default", "XZ", "YZ", "XY"]
     menu_view = Menu(
         top_layout[2, N_mid],
-        options = ["Default", "XZ", "YZ", "XY"]
+        options = view_options,
+        default = is_3d ? view_preset.label : "Default"
     )
     N_mid += 1
     on(menu_view.selection) do s
-        if s == "XZ"
-            az = -0.5π
-            el = 0.0
-        elseif s == "YZ"
-            az = 0
-            el = 0.0
-        elseif s == "XY"
-            az = -0.5π
-            el = 0.5π
-        elseif s == "Default"
-            az = 1.275π
-            el = 0.125π
+        if is_3d
+            preset = interactive_view_angles(s)
+            ax.azimuth[] = preset.azimuth
+            ax.elevation[] = preset.elevation
         end
-        ax.azimuth[] = az
-        ax.elevation[] = el
     end
 
 
@@ -628,7 +661,7 @@ function plot_interactive_impl(grid, states;
     return fig
 end
 
-function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, active_filters)
+function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, cell_subset_filter, active_filters)
     d = unpack(buffer, state[fld], ix)
     current_active = low > 0.0 || high < 1.0
     @. current_filter = false
@@ -654,6 +687,8 @@ function select_data(buffer, current_filter, state, fld, ix, low, high, limits, 
             update_filter!(filter_d, ix, L, U, low_dyn, high_dyn)
         end
     end
+
+    @. current_filter |= cell_subset_filter
 
     function apply_filter!(M::AbstractVector)
         for i in eachindex(M)
