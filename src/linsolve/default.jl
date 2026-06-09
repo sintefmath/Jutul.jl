@@ -82,11 +82,7 @@ end
 function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = nothing, reduction = nothing)
     n = 0
     schur_buffer = []
-    #if represented_as_adjoint(layout)
-    #    urng = 1:size(subsystems, 2)
-    #else
-        urng = 1:size(subsystems, 1)
-    #end
+    urng = 1:size(subsystems, 1)
     for i in urng
         J = subsystems[i, i].jac
         ni, mi = size(J)
@@ -144,6 +140,28 @@ function LinearizedSystem(A, r = nothing)
     return sys
 end
 
+function zero_jacobian_entries!(model, storage, executor)
+    if haskey(storage, :LinearizedSystem)
+        zero_jacobian_entries!(storage.LinearizedSystem)
+    end
+    return storage
+end
+
+function zero_jacobian_entries!(sys::LinearizedSystem)
+    nz = nonzeros(sys.jac)
+    T = eltype(nz)
+    @. nz = zero(T)
+    return sys
+end
+
+function zero_jacobian_entries!(sys::MultiLinearizedSystem)
+    for subsys in sys.subsystems
+        nz = nonzeros(subsys.jac)
+        T = eltype(nz)
+        @. nz = zero(T)
+    end
+    return sys
+end
 
 function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row)
     # @assert sparse_arg.layout == layout
