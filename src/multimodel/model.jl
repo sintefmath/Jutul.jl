@@ -746,7 +746,9 @@ function update_linearized_system!(storage, model::MultiModel, executor = defaul
         equation_offset = 0,
         targets = submodels_symbols(model),
         sources = submodels_symbols(model),
-        kwarg...)
+        kwarg...
+    )
+    zero_jacobian_entries!(storage.LinearizedSystem)
     @assert equation_offset == 0 "The multimodel version assumes equation_offset == 0, was $equation_offset"
     # Update diagonal blocks (model with respect to itself)
     @tic "models" update_diagonal_blocks!(storage, model, targets; kwarg...)
