@@ -140,6 +140,13 @@ function LinearizedSystem(A, r = nothing)
     return sys
 end
 
+function zero_jacobian_entries!(model, storage, executor)
+    if haskey(storage, :LinearizedSystem)
+        zero_jacobian_entries!(storage.LinearizedSystem)
+    end
+    return storage
+end
+
 function zero_jacobian_entries!(sys::LinearizedSystem)
     nz = nonzeros(sys.jac)
     T = eltype(nz)
