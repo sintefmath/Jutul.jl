@@ -1,23 +1,4 @@
 
-"""
-AMG on CPU (Julia native)
-"""
-mutable struct AMGPreconditioner{T} <: JutulPreconditioner
-    method_kwarg
-    cycle
-    factor
-    dim
-    hierarchy
-    smoothers
-    smoother_type::Symbol
-    npre::Int
-    npost::Int
-    function AMGPreconditioner(method::Symbol; smoother_type = :default, cycle = AlgebraicMultigrid.V(), npre = 1, npost = npre, kwarg...)
-        @assert method == :smoothed_aggregation || method == :ruge_stuben || method == :aggregation
-        new{method}(kwarg, cycle, nothing, nothing, nothing, nothing, smoother_type, npre, npost)
-    end
-end
-
 matrix_for_amg(A) = A
 matrix_for_amg(A::StaticSparsityMatrixCSR) = copy(A.At')
 
