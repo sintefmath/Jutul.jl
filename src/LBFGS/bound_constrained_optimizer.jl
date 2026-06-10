@@ -243,8 +243,10 @@ function optimize_bound_constrained(
             end
             # Check requirements for updating Hessian
             du, dg = u - u0, g - g0
-            # do_update = du' * dg > sqrt(eps()) * norm(du) * norm(dg)
-            do_update = du' * dg > sqrt(eps()) * norm(dg)^2
+            do_update = du' * dg > sqrt(eps()) * norm(du) * norm(dg)
+            # According to some textbooks one should use the condition
+            #   du' * dg >  sqrt(eps()) * norm(dg)^2
+            # but this is not a good idea for badly scaled problems (e.g., u << g) 
             if lbfgs_require_wolfe
                 do_update = do_update && lsinfo.flag > 0
             end
