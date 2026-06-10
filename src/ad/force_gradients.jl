@@ -483,7 +483,7 @@ function forces_optimization_config(
                 end
             end
             H = [i for i in cfg_keys]
-            pretty_table(tmp, row_labels = row_labels, header = H)
+            pretty_table(tmp, row_labels = row_labels, column_labels = H)
         end
         push!(configs, opt_config)
         push!(force_configs, config)

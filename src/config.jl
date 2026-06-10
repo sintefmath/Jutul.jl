@@ -93,13 +93,15 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
     pretty_table(io,
         out,
         title = "$(options.name)",
-        linebreaks = true,
-        header = header,
-        autowrap = true,
+        title_alignment = :l,
+        line_breaks = true,
+        column_labels = header,
+        auto_wrap = true,
         alignment = :l,
-        body_hlines = collect(1:n),
-        columns_width = cw,
-        crop = :none
+        table_format = TextTableFormat(horizontal_lines_at_data_rows = collect(1:n)),
+        fixed_data_column_widths = cw,
+        fit_table_in_display_horizontally = false,
+        fit_table_in_display_vertically = false
         )
 end
 

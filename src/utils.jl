@@ -3,6 +3,40 @@ export get_cell_faces, get_facepos, get_cell_neighbors
 
 const gravity_constant = 9.80665
 
+# Table formats used for report and configuration printing. PrettyTables v3 replaced the
+# v2 `TextFormat` presets (`tf_unicode_rounded`, `tf_markdown`) with `TextTableFormat`.
+const JUTUL_TABLE_FORMAT_UNICODE_ROUNDED = TextTableFormat(borders = text_table_borders__unicode_rounded)
+const JUTUL_TABLE_FORMAT_MARKDOWN = TextTableFormat(
+    borders = TextTableBorders(
+        up_right_corner = '|',
+        up_left_corner = '|',
+        bottom_left_corner = '|',
+        bottom_right_corner = '|',
+        up_intersection = '|',
+        left_intersection = '|',
+        right_intersection = '|',
+        middle_intersection = '|',
+        bottom_intersection = '|',
+        column = '|',
+        row = '-'
+    ),
+    horizontal_line_at_beginning = false,
+    horizontal_line_after_data_rows = false
+)
+
+"""
+    jutul_table_format_with_data_hlines(tf::TextTableFormat, hlines)
+
+Return a copy of `tf` with horizontal lines drawn after the data rows in `hlines`.
+PrettyTables v3 carries `horizontal_lines_at_data_rows` inside the immutable
+`TextTableFormat`, so this folds the old v2 `body_hlines` argument into the format.
+"""
+function jutul_table_format_with_data_hlines(tf::TextTableFormat, hlines)
+    fields = fieldnames(TextTableFormat)
+    vals = map(f -> f === :horizontal_lines_at_data_rows ? hlines : getfield(tf, f), fields)
+    return TextTableFormat(vals...)
+end
+
 function convert_to_immutable_storage(dct::AbstractDict)
     for (key, value) in dct
         dct[key] = convert_to_immutable_storage(value)
@@ -198,7 +232,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 return false
             end
         end
-        h1 = Highlighter(f = not_converged, crayon = crayon"red" )
+        h1 = TextHighlighter(not_converged, crayon"red")
         function nearly_converged(data, i, j)
             if j == rpos
                 d = data[i, j]
@@ -208,7 +242,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 return false
             end
         end
-        h2 = Highlighter(f = nearly_converged, crayon = crayon"yellow")
+        h2 = TextHighlighter(nearly_converged, crayon"yellow")
         function converged(data, i, j)
             if j == rpos
                 return data[i, j] <= tols[i]
@@ -216,15 +250,15 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 return false
             end
         end
-        h3 = Highlighter(f = converged, crayon = crayon"green")
-        highlighers = (h1, h2, h3)
-        pretty_table(tbl, header = header,
-                                alignment = alignment, 
-                                body_hlines = body_hlines,
+        h3 = TextHighlighter(converged, crayon"green")
+        highlighers = [h1, h2, h3]
+        pretty_table(tbl, column_labels = header,
+                                alignment = alignment,
                                 highlighters = highlighers,
-                                tf = fmt,
-                                formatters = ft_printf("%2.3e", [m_offset + 4]),
-                                crop=:none)
+                                table_format = jutul_table_format_with_data_hlines(fmt, body_hlines),
+                                formatters = [fmt__printf("%2.3e", [m_offset + 4])],
+                                fit_table_in_display_horizontally = false,
+                                fit_table_in_display_vertically = false)
     end
 end
 
@@ -496,7 +530,7 @@ function print_stats(reports::AbstractArray, io = stdout; kwarg...)
     print_stats(stats, io; kwarg...)
 end
 
-function print_stats(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded, kwarg...)
+function print_stats(stats, io = stdout; title = "", table_formatter = JUTUL_TABLE_FORMAT_UNICODE_ROUNDED, kwarg...)
     print_iterations(stats, io; title = title, table_formatter = table_formatter, kwarg...)
     print_timing(stats, io; title = title, table_formatter = table_formatter)
 end
@@ -508,7 +542,7 @@ end
 
 function print_iterations(stats, io = stdout;
         title = "",
-        table_formatter = tf_unicode_rounded,
+        table_formatter = JUTUL_TABLE_FORMAT_UNICODE_ROUNDED,
         scale = 1
     )
     flds = (:newtons, :linearizations, :linear_iterations, :linear_precond_iterations)
@@ -532,20 +566,20 @@ function print_iterations(stats, io = stdout;
     end
 
     pretty_table(io, data;
-        header = (
+        column_labels = [
             ["Avg/step", "Avg/ministep", "Total"],
             ["$nstep steps", "$nmini ministeps", "(wasted)"]
-        ),
+        ],
         row_labels = names,
         title = title,
-        title_alignment = :c,
-        row_label_alignment = :l,
-        tf = table_formatter,
-        row_label_column_title = "Iteration type"
+        title_alignment = :l,
+        row_label_column_alignment = :l,
+        table_format = table_formatter,
+        stubhead_label = "Iteration type"
     )
 end
 
-function print_timing(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded)
+function print_timing(stats, io = stdout; title = "", table_formatter = JUTUL_TABLE_FORMAT_UNICODE_ROUNDED)
     flds = collect(keys(stats.time_each))
     n = length(flds)
 
@@ -591,16 +625,15 @@ function print_timing(stats, io = stdout; title = "", table_formatter = tf_unico
         end
         return name
     end
-    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]),
+    pretty_table(io, data; column_labels = [["Each", "Relative", "Total"], [s, "Percentage", s_t]],
         row_labels = map(translate_for_table, flds),
-        formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
+        formatters = [fmt__printf("%3.4f", [1]), fmt__printf("%3.2f %%", [2]), fmt__printf("%3.4f", [3])],
         title = title,
-        title_alignment = :c,
-        tf = table_formatter,
-        row_label_alignment = :l,
+        title_alignment = :l,
+        table_format = jutul_table_format_with_data_hlines(table_formatter, [n-1]),
+        row_label_column_alignment = :l,
         alignment = [:r, :r, :r],
-        body_hlines = [n-1],
-        row_label_column_title = "Timing type"
+        stubhead_label = "Timing type"
     )
 end
 
@@ -1087,7 +1120,7 @@ function print_step_report_convergence_matrix!(io, step_reports, groups = missin
         rl = nothing
     end
 
-    karg = (formatters = fmt, header = (names, subheader), alignment = :c, row_labels = rl, kwarg...)
+    karg = (formatters = [fmt], column_labels = [names, subheader], alignment = :c, row_labels = rl, kwarg...)
     if io == stdout
         pretty_table(mat; karg...)
     else
