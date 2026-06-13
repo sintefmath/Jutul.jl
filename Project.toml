@@ -63,12 +63,12 @@ JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulLBFGSBExt = "LBFGSB"
 JutulMakieExt = "Makie"
-JutulWriteVTKExt = "WriteVTK"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
+JutulWriteVTKExt = "WriteVTK"
 
 [compat]
 AMGCLWrap = "=0.3.2"
-AlgebraicMultigrid = "0.5.1"
+AlgebraicMultigrid = "0.5.1, 2"
 Crayons = "4.1.1"
 DataStructures = "0.18.13"
 DifferentiationInterface = "0.7.0"
