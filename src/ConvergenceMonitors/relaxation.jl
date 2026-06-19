@@ -1,9 +1,9 @@
-struct ConvergenceMonitorRelaxation <: Jutul.NonLinearRelaxation
-    w_min::Float64
-    w_max::Float64
-    dw_decrease::Float64
-    dw_increase::Float64
-    warmup_iterations::Int
+Base.@kwdef struct ConvergenceMonitorRelaxation <: Jutul.NonLinearRelaxation
+    w_min::Float64 = 0.1
+    w_max::Float64 = 1.0
+    dw_decrease::Float64 = 0.2
+    dw_increase::Float64 = 0.1
+    warmup_iterations::Int = 4
 end
 
 """
@@ -55,29 +55,65 @@ the monitored status is acceptable or good. Bad but non-oscillating iterates
 leave the relaxation factor unchanged. The status is recomputed from the recent
 distance-to-convergence history derived from the iteration reports.
 """
+# function Jutul.select_nonlinear_relaxation_model___(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
+
+#     n = length(reports)-1
+
+#     if n > rel_type.warmup_iterations
+#         (; dw_decrease, dw_increase, w_max, w_min) = rel_type
+
+#         d, _ = compute_distance(reports[1][:errors]; pools=:all)
+#         distances = zeros(Float64, length(reports), length(d))
+#         for k in 1:(length(reports))
+#             d, _ = compute_distance(reports[k][:errors]; pools=:all)
+#             distances[k, :] .= d
+#         end
+#         status, _, _, oscillating = analyze_step(distances, 1, 8, 8, 0.1, 0.9, Inf)
+#         status = status[1]
+#         oscillating = oscillating[1]
+
+#         if oscillating
+#             ω = ω - dw_decrease
+#         elseif status >= 0
+#             ω = ω + dw_increase
+#         else
+#             @assert status == -1 "Unknown status: $status"
+#         end
+#         ω = clamp(ω, w_min, w_max)
+
+#     end
+
+#     return ω
+
+# end
+
 function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
 
-    n = length(reports)-1
-
-    if n > rel_type.warmup_iterations
+    if length(reports) > rel_type.warmup_iterations
         (; dw_decrease, dw_increase, w_max, w_min) = rel_type
-
-        d, _ = compute_distance(reports[1][:errors]; pools=:all)
-        distances = zeros(Float64, length(reports), length(d))
-        for k in 1:(length(reports))
-            d, _ = compute_distance(reports[k][:errors]; pools=:all)
-            distances[k, :] .= d
+        
+        report = reports[end-1]
+        @assert haskey(report, :convergence_monitor)
+        distance = report[:convergence_monitor][:distance]
+        status = report[:convergence_monitor][:status]
+        oscillating = report[:convergence_monitor][:oscillation]
+        oscillating = any(oscillating .&& (distance .> 1.0))
+        if any(status .== -1)
+            status = :bad
+        elseif all(status .== 1)
+            status = :good
+        else
+            status = :ok
         end
-        status, _, _, oscillating = analyze_step(distances, 1, 8, 8, 0.1, 0.9, Inf)
-        status = status[1]
-        oscillating = oscillating[1]
 
         if oscillating
             ω = ω - dw_decrease
-        elseif status >= 0
+        elseif status ∈ [:good, :ok]
             ω = ω + dw_increase
+        elseif status == :none
+            # No change
         else
-            @assert status == -1 "Unknown status: $status"
+            @assert status == :bad "Unknown status: $status"
         end
         ω = clamp(ω, w_min, w_max)
 
