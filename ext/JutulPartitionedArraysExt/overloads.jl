@@ -11,6 +11,8 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
     extra_timing = extra_timing && v
     add_option!(cfg, :consolidate_results, true, "Consolidate states after simulation (serially).", types = Bool)
     add_option!(cfg, :delete_on_consolidate, true, "Delete processor states once consolidated.", types = Bool)
+    add_option!(cfg, :store_partition_in_report, false, "Store global MPI partition metadata in the first report step.", types = Bool)
+    add_option!(cfg, :store_nldd_partition_in_report, false, "Store NLDD partition metadata in the first report step.", types = Bool)
     add_option!(cfg, :info_level_parray, main_process_info_level, "Info level for outer printing", types = Int)
 
     cfg, unused = Jutul.simulator_config!(cfg, sim;
@@ -126,6 +128,53 @@ function Jutul.get_output_state(psim::PArraySimulator)
 end
 
 function Jutul.store_output!(states, reports, step, psim::PArraySimulator, config, report; substates = missing)
+    if config[:store_partition_in_report] && step == 1
+        if haskey(psim.storage, :global_mpi_partition)
+            report[:global_mpi_partition] = copy(psim.storage[:global_mpi_partition])
+            report[:global_mpi_partition_source] = get(psim.storage, :global_mpi_partition_source, :unknown)
+        end
+    end
+    if config[:store_nldd_partition_in_report] && step == 1
+        if haskey(psim.storage, :global_nldd_partition)
+            report[:global_nldd_partition] = copy(psim.storage[:global_nldd_partition])
+            report[:global_nldd_partition_source] = get(psim.storage, :global_nldd_partition_source, :unknown)
+        else
+            # Auto-generated MPI+NLDD partitions are created locally per rank.
+            # Store owned local labels so consolidation can reconstruct a global vector.
+            for sim in psim.storage.simulators
+                if !hasproperty(sim, :partition) || !hasproperty(sim, :executor)
+                    continue
+                end
+                exec = getproperty(sim, :executor)
+                if !hasproperty(exec, :data)
+                    continue
+                end
+                data = exec.data
+                if !(haskey(data, :n_self) && haskey(data, :partition))
+                    continue
+                end
+                mp = try
+                    Jutul.main_partition(getproperty(sim, :partition))
+                catch
+                    nothing
+                end
+                if isnothing(mp) || !hasproperty(mp, :partition)
+                    continue
+                end
+                p_local = mp.partition
+                n_self = data[:n_self]
+                if n_self <= 0 || length(p_local) < n_self
+                    continue
+                end
+                owned_ix = Int.(data[:partition][1:n_self])
+                owned_labels = Int.(p_local[1:n_self])
+                report[:nldd_partition_owned_indices] = owned_ix
+                report[:nldd_partition_owned_labels] = owned_labels
+                report[:global_nldd_partition_source] = :auto_local_mpi
+                break
+            end
+        end
+    end
     subsims = psim.storage.simulators
     subconfigs = config[:configs]
     # TODO: Deal with substates for PArray.

@@ -114,4 +114,20 @@ function consolidate_report!(report, reports, partitions)
         # might be ok enough for most uses.
         report[k] = v
     end
+
+    # Optional: reconstruct global NLDD partition from per-rank owned data.
+    if all(rep -> haskey(rep, :nldd_partition_owned_indices) && haskey(rep, :nldd_partition_owned_labels), reports)
+        n_total = partitions[1]["n_total"]
+        global_nldd = zeros(Int, n_total)
+        for rep in reports
+            ix = rep[:nldd_partition_owned_indices]
+            lbl = rep[:nldd_partition_owned_labels]
+            @assert length(ix) == length(lbl)
+            for (g, p) in zip(ix, lbl)
+                global_nldd[g] = p
+            end
+        end
+        report[:global_nldd_partition] = global_nldd
+        report[:global_nldd_partition_source] = get(reports[1], :global_nldd_partition_source, :auto_local_mpi)
+    end
 end
