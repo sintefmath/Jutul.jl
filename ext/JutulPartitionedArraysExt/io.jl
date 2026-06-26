@@ -119,13 +119,20 @@ function consolidate_report!(report, reports, partitions)
     if all(rep -> haskey(rep, :nldd_partition_owned_indices) && haskey(rep, :nldd_partition_owned_labels), reports)
         n_total = partitions[1]["n_total"]
         global_nldd = zeros(Int, n_total)
+        label_offset = 0
         for rep in reports
             ix = rep[:nldd_partition_owned_indices]
             lbl = rep[:nldd_partition_owned_labels]
             @assert length(ix) == length(lbl)
+            local_max = 0
             for (g, p) in zip(ix, lbl)
-                global_nldd[g] = p
+                gp = Int(p) + label_offset
+                global_nldd[g] = gp
+                if p > local_max
+                    local_max = Int(p)
+                end
             end
+            label_offset += local_max
         end
         report[:global_nldd_partition] = global_nldd
         report[:global_nldd_partition_source] = get(reports[1], :global_nldd_partition_source, :auto_local_mpi)
