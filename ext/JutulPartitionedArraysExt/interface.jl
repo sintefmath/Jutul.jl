@@ -102,6 +102,10 @@ function Jutul.simulator_executor(sim::PArraySimulator)
     return Jutul.default_executor()
 end
 
+function Jutul.get_simulator_model(sim::PArraySimulator)
+    return sim.storage[:model]
+end
+
 function get_main_model(model, l, storage = nothing)
     if model isa MultiModel
         model = model[l]

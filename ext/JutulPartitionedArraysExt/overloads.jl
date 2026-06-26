@@ -131,27 +131,31 @@ function Jutul.store_output!(states, reports, step, psim::PArraySimulator, confi
     if config[:store_partition_in_report] && step == 1
         if haskey(psim.storage, :global_mpi_partition)
             report[:global_mpi_partition] = copy(psim.storage[:global_mpi_partition])
-            report[:global_mpi_partition_source] = get(psim.storage, :global_mpi_partition_source, :unknown)
+            report[:global_mpi_partition_source] = haskey(psim.storage, :global_mpi_partition_source) ? psim.storage[:global_mpi_partition_source] : :unknown
         end
     end
     if config[:store_nldd_partition_in_report] && step == 1
         if haskey(psim.storage, :global_nldd_partition)
             report[:global_nldd_partition] = copy(psim.storage[:global_nldd_partition])
-            report[:global_nldd_partition_source] = get(psim.storage, :global_nldd_partition_source, :unknown)
+            report[:global_nldd_partition_source] = haskey(psim.storage, :global_nldd_partition_source) ? psim.storage[:global_nldd_partition_source] : :unknown
         else
             # Auto-generated MPI+NLDD partitions are created locally per rank.
             # Store owned local labels so consolidation can reconstruct a global vector.
-            for sim in psim.storage.simulators
+            found_local = Ref(false)
+            map(psim.storage.simulators) do sim
+                if found_local[]
+                    return nothing
+                end
                 if !hasproperty(sim, :partition) || !hasproperty(sim, :executor)
-                    continue
+                    return nothing
                 end
                 exec = getproperty(sim, :executor)
                 if !hasproperty(exec, :data)
-                    continue
+                    return nothing
                 end
                 data = exec.data
                 if !(haskey(data, :n_self) && haskey(data, :partition))
-                    continue
+                    return nothing
                 end
                 mp = try
                     Jutul.main_partition(getproperty(sim, :partition))
@@ -159,19 +163,18 @@ function Jutul.store_output!(states, reports, step, psim::PArraySimulator, confi
                     nothing
                 end
                 if isnothing(mp) || !hasproperty(mp, :partition)
-                    continue
+                    return nothing
                 end
                 p_local = mp.partition
                 n_self = data[:n_self]
                 if n_self <= 0 || length(p_local) < n_self
-                    continue
+                    return nothing
                 end
-                owned_ix = Int.(data[:partition][1:n_self])
-                owned_labels = Int.(p_local[1:n_self])
-                report[:nldd_partition_owned_indices] = owned_ix
-                report[:nldd_partition_owned_labels] = owned_labels
+                report[:nldd_partition_owned_indices] = Int.(data[:partition][1:n_self])
+                report[:nldd_partition_owned_labels] = Int.(p_local[1:n_self])
                 report[:global_nldd_partition_source] = :auto_local_mpi
-                break
+                found_local[] = true
+                return nothing
             end
         end
     end
