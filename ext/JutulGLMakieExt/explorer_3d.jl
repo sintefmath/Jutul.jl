@@ -492,15 +492,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         autolimits!(ax_hist)
     end
 
-    if zreversed
-        upvector = Vec3f(0, 0, -1)
-    else
-        upvector = Vec3f(0, 0, 1)
-    end
-    cam = Makie.cam3d!(mesh_scene; upvector = upvector, camarg...)
-    if Jutul.mesh_z_is_depth(m)
-        # cam.upvector[] = Vec3f(0, 0, -1)
-    end
+    upvector = Vec3f(0, 0, 1.0 - 2.0*zreversed)
+    center = sum(points)./length(points)
+    cam = Makie.cam3d!(lscene.scene; upvector = upvector, lookat = center, camarg...)
     # w, h = size(scene_outer)
     # nearplane = 0.1f0
     # farplane = 100f0
