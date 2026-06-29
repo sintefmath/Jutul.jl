@@ -294,71 +294,75 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     if HAS_DYNAMIC_DATA
         menu_dyn = add_menu!(dyn_keys, "dynamic", prepend = HAS_DYNAMIC_DATA)
-
-        slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
-        idx_right_gl += 1
-
         sel_dyn = menu_dyn.selection
-        value_dynamic = slider_dynamic.interval
 
-        lpos_tstep = idx_stepgl
-        idx_stepgl += 1
-        step_slider = Slider(step_grid_layout[idx_stepgl, 1:5], range = 1:Nstep, startvalue = 1, horizontal = true)
-        step_idx = step_slider.selected_index
-        idx_stepgl += 1
+        if Nstep > 1
+            slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
+            idx_right_gl += 1
 
-        tlabel = @lift string("Dynamic data step: ", $step_idx, "/$Nstep")
-        Label(step_grid_layout[lpos_tstep, 1:5], tlabel, halign = :left, color = main_color)
-        wb = 100
+            value_dynamic = slider_dynamic.interval
+            lpos_tstep = idx_stepgl
+            idx_stepgl += 1
+            step_slider = Slider(step_grid_layout[idx_stepgl, 1:5], range = 1:Nstep, startvalue = 1, horizontal = true)
+            step_idx = step_slider.selected_index
+            idx_stepgl += 1
 
-        start = Button(step_grid_layout[idx_stepgl, 1], label = "Start", width = wb)
-        prev = Button(step_grid_layout[idx_stepgl, 2], label = "Previous", width = wb)
-        play = Button(step_grid_layout[idx_stepgl, 3], label = "Play", width = wb)
-        next = Button(step_grid_layout[idx_stepgl, 4], label = "Next", width = wb)
-        lasts = Button(step_grid_layout[idx_stepgl, 5], label = "Last", width = wb)
-        on(next.clicks) do _
-            step_idx[] = min(step_idx[] + 1, Nstep)
-            notify(step_idx)
-        end
-        on(prev.clicks) do _
-            step_idx[] = max(step_idx[] - 1, 1)
-            notify(step_idx)
-        end
-        on(start.clicks) do _
-            step_idx[] = 1
-            notify(step_idx)
-        end
-        on(lasts.clicks) do _
-            step_idx[] = Nstep
-            notify(step_idx)
-        end
-        # Play button logic
-        is_playing = Ref(false)
-        function playback()
-            start = step_idx.val
-            if start == Nstep
+            tlabel = @lift string("Dynamic data step: ", $step_idx, "/$Nstep")
+            Label(step_grid_layout[lpos_tstep, 1:5], tlabel, halign = :left, color = main_color)
+            wb = 100
+
+            start = Button(step_grid_layout[idx_stepgl, 1], label = "Start", width = wb)
+            prev = Button(step_grid_layout[idx_stepgl, 2], label = "Previous", width = wb)
+            play = Button(step_grid_layout[idx_stepgl, 3], label = "Play", width = wb)
+            next = Button(step_grid_layout[idx_stepgl, 4], label = "Next", width = wb)
+            lasts = Button(step_grid_layout[idx_stepgl, 5], label = "Last", width = wb)
+            on(next.clicks) do _
+                step_idx[] = min(step_idx[] + 1, Nstep)
+                notify(step_idx)
+            end
+            on(prev.clicks) do _
+                step_idx[] = max(step_idx[] - 1, 1)
+                notify(step_idx)
+            end
+            on(start.clicks) do _
                 step_idx[] = 1
-                start = 1
+                notify(step_idx)
             end
-            previndex = start
-            for _ in start:Nstep
-                current = step_idx.val
-                newindex = current + 1
-                if newindex > Nstep || previndex != newindex-1 || !is_playing[]
-                    break
+            on(lasts.clicks) do _
+                step_idx[] = Nstep
+                notify(step_idx)
+            end
+            # Play button logic
+            is_playing = Ref(false)
+            function playback()
+                start = step_idx.val
+                if start == Nstep
+                    step_idx[] = 1
+                    start = 1
                 end
-                plot_time = @elapsed step_idx[] = newindex
-                previndex = newindex
-                sleep(max(0, plot_pause - plot_time))
+                previndex = start
+                for _ in start:Nstep
+                    current = step_idx.val
+                    newindex = current + 1
+                    if newindex > Nstep || previndex != newindex-1 || !is_playing[]
+                        break
+                    end
+                    plot_time = @elapsed step_idx[] = newindex
+                    previndex = newindex
+                    sleep(max(0, plot_pause - plot_time))
+                end
             end
-        end
-        on(play.clicks) do _
-            if is_playing[]
-                is_playing[] = false
-            else
-                is_playing[] = true
-                @async playback()
+            on(play.clicks) do _
+                if is_playing[]
+                    is_playing[] = false
+                else
+                    is_playing[] = true
+                    @async playback()
+                end
             end
+        else
+            step_idx = Observable(1)
+            value_dynamic = Observable((0.0, 1.0))
         end
     else
         is_dynamic = Observable(false)
@@ -647,7 +651,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     if use_gradient
-        bgscene = Scene(lscene.scene)
+        bgscene = Scene(lscene.blockscene)
         bg_plt = missing
         function draw_bg()
             campixel!(bgscene)
@@ -658,11 +662,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 colormap = bgcmap,
                 colorrange = (minimum(bg), maximum(bg))
             )
-            translation_factor_bg = -10000
-            if !ismissing(aspect) && length(aspect) == 3
-                translation_factor_bg /= aspect[end]
-            end
-            translate!(bg_plt, 0, 0, translation_factor_bg)
+            translate!(bg_plt, 0, 0, -10000)
         end
         draw_bg()
 
