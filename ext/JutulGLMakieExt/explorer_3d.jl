@@ -589,6 +589,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 str *= " IJK=[$(ijk[1]),$(ijk[2]),$(ijk[3])]"
             catch
             end
+            fmt_flt(v) = round(v, sigdigits=4)
+            if haskey(plot_data, "X") && haskey(plot_data, "Y") && haskey(plot_data, "Z")
+                x = plot_data["X"][cell]
+                y = plot_data["Y"][cell]
+                z = plot_data["Z"][cell]
+                str *= "\nCoordinates: [$(fmt_flt(x)),$(fmt_flt(y)),$(fmt_flt(z))]"
+            end
             value = plot_data[static][cell]
             str *= "\n$static = $(round(value, sigdigits=4))"
 
