@@ -439,6 +439,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         color = vertex_val_buffer,
         visible = toggle_mesh.checked,
         colorrange = lims,
+        backlight = 1,
         mesh_arg...
     )
     plot_mesh_edges!(lscene, m, visible = toggle_edge.checked, color = main_color)
