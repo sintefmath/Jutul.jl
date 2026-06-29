@@ -647,7 +647,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     if use_gradient
-        bgscene = Scene(lscene.scene)
+        bgscene = Scene(lscene.blockscene)
         bg_plt = missing
         function draw_bg()
             campixel!(bgscene)
@@ -658,11 +658,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 colormap = bgcmap,
                 colorrange = (minimum(bg), maximum(bg))
             )
-            translation_factor_bg = -10000
-            if !ismissing(aspect) && length(aspect) == 3
-                translation_factor_bg /= aspect[end]
-            end
-            translate!(bg_plt, 0, 0, translation_factor_bg)
+            translate!(bg_plt, 0, 0, -10000)
         end
         draw_bg()
 
