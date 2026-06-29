@@ -543,9 +543,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                         while length(selected_cells.val) > max_clicked
                             popfirst!(selected_cells.val)
                         end
-                        selected_cells_idx = selected_cells.val
                         notify(selected_cells)
                     end
+                    selected_cells_idx = selected_cells.val
                 else
                     selected_cells_idx = [cell]
                     selected_cells[] = selected_cells_idx
@@ -636,9 +636,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             )
             for (cno, c) in enumerate(selected_c)
                 values = [dynamic_data[i][dyn_key][c] for i in 1:length(dynamic_data)]
-                lines!(side_axis, values, color = colors_clicks[cno], overdraw = true, label = "$c")
+                scatterlines!(side_axis, values, color = colors_clicks[cno], overdraw = true, label = "$c", markersize = 4)
             end
-            al = axislegend(framevisible = false, backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0), labelcolor = main_color)
+            al = axislegend("Cell", framevisible = false, backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0), labelcolor = main_color, titlecolor = main_color)
         end
         return missing
     end
