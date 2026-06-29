@@ -58,9 +58,9 @@ function convert_dict(d::AbstractDict, nc::Int)
             v = first(v)
         end
         sk = String(k)
-        if v isa Vector && length(v) == nc && eltype(v) <: Number
+        if v isa AbstractVector && length(v) == nc && eltype(v) <: Number
             out[sk] = v
-        elseif v isa Matrix && size(v, 2) == nc
+        elseif v isa AbstractMatrix && size(v, 2) == nc
             for row in axes(v, 1)
                 out["$sk row $row"] = view(v, row, :)
             end
