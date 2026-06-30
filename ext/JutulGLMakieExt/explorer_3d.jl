@@ -58,9 +58,9 @@ function convert_dict(d::AbstractDict, nc::Int)
             v = first(v)
         end
         sk = String(k)
-        if v isa Vector && length(v) == nc && eltype(v) <: Number
+        if v isa AbstractVector && length(v) == nc && eltype(v) <: Number
             out[sk] = v
-        elseif v isa Matrix && size(v, 2) == nc
+        elseif v isa AbstractMatrix && size(v, 2) == nc
             for row in axes(v, 1)
                 out["$sk row $row"] = view(v, row, :)
             end
@@ -439,6 +439,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         color = vertex_val_buffer,
         visible = toggle_mesh.checked,
         colorrange = lims,
+        backlight = 1,
         mesh_arg...
     )
     plot_mesh_edges!(lscene, m, visible = toggle_edge.checked, color = main_color)
@@ -491,15 +492,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         autolimits!(ax_hist)
     end
 
-    if zreversed
-        upvector = Vec3f(0, 0, -1)
-    else
-        upvector = Vec3f(0, 0, 1)
-    end
-    cam = Makie.cam3d!(mesh_scene; upvector = upvector, camarg...)
-    if Jutul.mesh_z_is_depth(m)
-        # cam.upvector[] = Vec3f(0, 0, -1)
-    end
+    upvector = Vec3f(0, 0, 1.0 - 2.0*zreversed)
+    center = sum(points)./length(points)
+    cam = Makie.cam3d!(lscene.scene; upvector = upvector, lookat = center, camarg...)
     # w, h = size(scene_outer)
     # nearplane = 0.1f0
     # farplane = 100f0
@@ -543,9 +538,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                         while length(selected_cells.val) > max_clicked
                             popfirst!(selected_cells.val)
                         end
-                        selected_cells_idx = selected_cells.val
                         notify(selected_cells)
                     end
+                    selected_cells_idx = selected_cells.val
                 else
                     selected_cells_idx = [cell]
                     selected_cells[] = selected_cells_idx
@@ -588,6 +583,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 ijk = cell_ijk(m, cell)
                 str *= " IJK=[$(ijk[1]),$(ijk[2]),$(ijk[3])]"
             catch
+            end
+            fmt_flt(v) = round(v, sigdigits=4)
+            if haskey(plot_data, "X") && haskey(plot_data, "Y") && haskey(plot_data, "Z")
+                x = plot_data["X"][cell]
+                y = plot_data["Y"][cell]
+                z = plot_data["Z"][cell]
+                str *= "\nCoordinates: [$(fmt_flt(x)),$(fmt_flt(y)),$(fmt_flt(z))]"
             end
             value = plot_data[static][cell]
             str *= "\n$static = $(round(value, sigdigits=4))"
@@ -636,9 +638,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             )
             for (cno, c) in enumerate(selected_c)
                 values = [dynamic_data[i][dyn_key][c] for i in 1:length(dynamic_data)]
-                lines!(side_axis, values, color = colors_clicks[cno], overdraw = true, label = "$c")
+                scatterlines!(side_axis, values, color = colors_clicks[cno], overdraw = true, label = "$c", markersize = 4)
             end
-            al = axislegend(framevisible = false, backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0), labelcolor = main_color)
+            al = axislegend("Cell", framevisible = false, backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0), labelcolor = main_color, titlecolor = main_color)
         end
         return missing
     end
