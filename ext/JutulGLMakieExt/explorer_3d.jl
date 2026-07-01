@@ -185,7 +185,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         length(aspect) == 3 || error("Aspect ratio must be a tuple of three values (scale_x, scale_y, scale_z)")
     end
     use_gradient = ismissing(backgroundcolor)
-    @info "???" use_gradient backgroundcolor
     if use_gradient
         scene_arg = (clear = false,)
     else
