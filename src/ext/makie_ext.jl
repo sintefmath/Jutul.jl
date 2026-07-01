@@ -43,6 +43,10 @@ function plot_explorer_impl
 
 end
 
+function makie_current_backend
+
+end
+
 function plot_multimodel_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
     plot_multimodel_interactive_impl(arg...; kwarg...)

@@ -97,6 +97,10 @@ function preset_colors(name::Symbol)
     else
         error("Unknown preset: $name")
     end
+    if Jutul.makie_current_backend(string = true) == "WGLMakie" && ismissing(background_color)
+        cm = to_colormap(background_colormap)
+        background_color = cm[Int(floor(length(cm)/2))]
+    end
     if ismissing(hist_colormap)
         hist_colormap = colormap
     end
@@ -175,6 +179,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
     if HAS_DYNAMIC_DATA
         dynamic_data = [convert_dict(d, nc) for d in dynamic_data]
+        if length(keys(dynamic_data[1])) == 0
+            HAS_DYNAMIC_DATA = false
+            dynamic_data = missing
+        end
     end
     background_colormap = to_colormap(background_colormap)
     if !ismissing(aspect)
@@ -199,20 +207,14 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     lights = [dl, pl]
 
     N = 20
-    cmap = :seaborn_icefire_gradient
-    cmap = :seaborn_mako_gradient
-    # cmap = dark_purple
-    bgcmap = :linear_ternary_blue_0_44_c57_n256
-    # bgcmap = black_teal
-    # bgcmap = midnight_blue_512
 
     bgcmap = background_colormap
     cmap = colormap
     lights = []
 
     fig = Figure(size = (1600, 800), figure_padding = 0.0)
-    lscene = LScene(fig[1:N, 1:N], scenekw = (clear = false, ), show_axis = show_axis)
-    mesh_scene = Scene(lscene.scene, scenekw = scene_arg)
+    lscene = LScene(fig[1:N, 1:N], scenekw = scene_arg, show_axis = show_axis)
+    mesh_scene = Scene(lscene.scene, scenekw = (clear = false, ))
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
 
