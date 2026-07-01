@@ -179,6 +179,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
     if HAS_DYNAMIC_DATA
         dynamic_data = [convert_dict(d, nc) for d in dynamic_data]
+        if length(keys(dynamic_data[1])) == 0
+            HAS_DYNAMIC_DATA = false
+            dynamic_data = missing
+        end
     end
     background_colormap = to_colormap(background_colormap)
     if !ismissing(aspect)
