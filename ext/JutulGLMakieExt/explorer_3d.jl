@@ -58,7 +58,14 @@ function convert_dict(d::AbstractDict, nc::Int)
             v = first(v)
         end
         sk = String(k)
-        if v isa AbstractVector && length(v) == nc && eltype(v) <: Number
+        if !(v isa AbstractArray)
+            continue
+        end
+        is_number = eltype(v) <: Number
+        if !is_number
+            continue
+        end
+        if v isa AbstractVector && length(v) == nc
             out[sk] = v
         elseif v isa AbstractMatrix && size(v, 2) == nc
             for row in axes(v, 1)

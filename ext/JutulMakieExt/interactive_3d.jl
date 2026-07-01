@@ -346,25 +346,28 @@ function plot_interactive_impl(grid, states;
         lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, nextn, states, transform_name[])
     end
     # Top row
-    fig[1, :] = top_layout = GridLayout(2, 1, tellwidth = false)
+    has_two_rows = transparency
+    fig[1, :] = top_layout = GridLayout(1 + has_two_rows, 1, tellwidth = false)
     N_top = 1
 
     # Alpha map selector
     genlabel(l) = Label(fig, l, font = :bold)
-    top_layout[1, N_top] = genlabel("Alphamap")
+    top_layout[1, N_top] = genlabel("View")
     N_top += 1
-
-    alphamaps = ["no_alpha_map", "linear", "linear_scaled", "inv_linear", "inv_linear_scaled"]
-    amap_str = "$alphamap"
-    if !(amap_str in alphamaps)
-        push!(alphamaps, cmap_str)
-    end
-    top_layout[1, N_top] = lmap = GridLayout()
-    menu_amap = Menu(lmap[1, 1], options = alphamaps, prompt = amap_str)
-    on(menu_amap.selection) do s
-        alphamap_name[] = Symbol(s)
-    end
+    view_options = ["Default", "XZ", "YZ", "XY"]
+    menu_view = Menu(
+        top_layout[1, N_top],
+        options = view_options,
+        default = is_3d ? view_preset.label : "Default"
+    )
     N_top += 1
+    on(menu_view.selection) do s
+        if is_3d
+            preset = interactive_view_angles(s)
+            ax.azimuth[] = preset.azimuth
+            ax.elevation[] = preset.elevation
+        end
+    end
 
     top_layout[1, N_top] = top_buttons = GridLayout(tellwidth = true)
     N_top += 1
@@ -525,24 +528,23 @@ function plot_interactive_impl(grid, states;
     end
     N_top += 1
 
-    N_mid = 1
-    top_layout[2, N_mid] = genlabel("View")
-    N_mid += 1
-    view_options = ["Default", "XZ", "YZ", "XY"]
-    menu_view = Menu(
-        top_layout[2, N_mid],
-        options = view_options,
-        default = is_3d ? view_preset.label : "Default"
-    )
-    N_mid += 1
-    on(menu_view.selection) do s
-        if is_3d
-            preset = interactive_view_angles(s)
-            ax.azimuth[] = preset.azimuth
-            ax.elevation[] = preset.elevation
-        end
-    end
+    if has_two_rows
+        N_mid = 1
+        top_layout[2, N_mid] = genlabel("Alphamap")
+        N_mid += 1
 
+        alphamaps = ["no_alpha_map", "linear", "linear_scaled", "inv_linear", "inv_linear_scaled"]
+        amap_str = "$alphamap"
+        if !(amap_str in alphamaps)
+            push!(alphamaps, cmap_str)
+        end
+        top_layout[2, N_mid] = lmap = GridLayout()
+        menu_amap = Menu(lmap[1, 1], options = alphamaps, prompt = amap_str)
+        on(menu_amap.selection) do s
+            alphamap_name[] = Symbol(s)
+        end
+        N_mid += 1
+    end
 
     function loopy()
         start = state_index.val
