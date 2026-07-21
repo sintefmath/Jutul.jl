@@ -63,8 +63,8 @@ JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulLBFGSBExt = "LBFGSB"
 JutulMakieExt = "Makie"
-JutulWriteVTKExt = "WriteVTK"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
+JutulWriteVTKExt = "WriteVTK"
 
 [compat]
 AMGCLWrap = "=0.3.2"
@@ -102,7 +102,7 @@ SparsityTracing = "0.2.4"
 StaticArrays = "1.5.17"
 Statistics = "1"
 SymRCM = "0.2.1"
-TimerOutputs = "0.5.19"
+TimerOutputs = "0.5.19, 1"
 WriteVTK = "1"
 julia = "1.7"
 
