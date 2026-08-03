@@ -326,12 +326,21 @@ end
 
 """
     parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function)
+    f, dfdx = parameters_gradient(dopt, objective)
 
 Compute the gradient of the objective function with respect to the parameters
 defined in the `DictParameters` object. This function will return the gradient
 as a dictionary with the same structure as the input parameters, where each
 entry is a vector of gradients for each parameter. Only gradients with respect
 to free parameters will be computed.
+
+Setting the `output_cache` argument to `true` will also return a `cache` object
+that can be passed to subsequent calls as `cache` to reuse setup and memory:
+```julia
+f, dfdx, cache = parameters_gradient(dopt, objective)
+# ... Mutate parameters in dopt ...
+f, dfdx = parameters_gradient(dopt, objective, cache = cache)
+```
 """
 function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         simulator = missing,
@@ -340,21 +349,19 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
         raw_output = false,
         output_cache = false,
         deps = :case,
-        backend_arg = (
-            use_sparsity = true,
-            di_sparse = true,
-            single_step_sparsity = deps != :case,
-            do_prep = true,
-        )
+        backend_arg = missing
     )
     x0, x_setup, = optimization_setup(dopt, include_limits = false)
     if ismissing(cache)
-        cache = setup_optimization_cache(dopt, simulator = simulator, config = config)
+        cache = JutulOptimizationProblem(dopt, objective, setup_fn;
+            simulator = simulator,
+            config = config,
+            backend_arg = backend_arg,
+            deps = deps
+        )
     end
 
-    f, g = solve_and_differentiate_for_optimization(x0, dopt, setup_fn, objective, x_setup, cache;
-        backend_arg = backend_arg
-    )
+    f, g = evaluate(cache, x0)
     if raw_output
         if output_cache
             out = (f, g, cache)
