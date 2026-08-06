@@ -289,6 +289,18 @@ end
                     @test dot(N, fc - cc) > 0
                 end
             end
+            @testset "logical indexing" begin
+                for c in 1:number_of_cells(m)
+                    @test cell_index(m, cell_ijk(m, c)) == c
+                end
+                if centerpoint
+                    @test cell_ijk(m, 1) == (1, 1, 1)
+                else
+                    @test cell_ijk(m, 1) == (1, 1, 1)
+                    @test cell_ijk(m, 2) == (1, 2, 1)
+                    @test cell_index(m, (2, 1); throw = false) === nothing
+                end
+            end
         end
     end
 end
@@ -341,4 +353,15 @@ end
         @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag1) == [1, 3, 5, 7]
         @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag2) == [2, 4, 6, 8]
     end
+end
+
+@testset "extrude radial mesh indexing" begin
+    m2d = Jutul.RadialMeshes.radial_mesh(10, [0.2, 0.5, 1.0]; centerpoint = false)
+    m3d = Jutul.extrude_mesh(m2d, 2)
+    for c in 1:number_of_cells(m3d)
+        @test cell_index(m3d, cell_ijk(m3d, c)) == c
+    end
+    @test cell_ijk(m3d, 1) == (1, 1, 1)
+    @test cell_ijk(m3d, 12) == (1, 1, 2)
+    @test cell_index(m3d, (2, 1, 1); throw = false) === nothing
 end
