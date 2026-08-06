@@ -362,6 +362,6 @@ end
         @test cell_index(m3d, cell_ijk(m3d, c)) == c
     end
     @test cell_ijk(m3d, 1) == (1, 1, 1)
-    @test cell_ijk(m3d, 12) == (1, 1, 2)
+    @test cell_ijk(m3d, 22) == (1, 1, 2)
     @test cell_index(m3d, (2, 1, 1); throw = false) === nothing
 end
