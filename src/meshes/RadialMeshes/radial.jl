@@ -183,6 +183,23 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
 
     cells_faces, cells_facepos = cellmap_to_posmap(cells_to_faces)
     boundary_cells_faces, boundary_cells_facepos = cellmap_to_posmap(cells_to_boundary)
+    cell_map = if centerpoint
+        nothing
+    else
+        logical_cells = Int[]
+        sizehint!(logical_cells, num_cells)
+        for radius_i in 1:Nradii
+            angles_here = if radius_i == 1
+                1:1
+            else
+                1:Nangles
+            end
+            for angle_i in angles_here
+                push!(logical_cells, angle_i + (radius_i - 1) * Nangles)
+            end
+        end
+        logical_cells
+    end
 
     m = UnstructuredMesh(
         cells_faces,
@@ -197,6 +214,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
         neighbors,
         bnd_cells;
         structure = CartesianIndex(Nangles, Nradii),
+        cell_map = cell_map,
         kwarg...
     )
     return m

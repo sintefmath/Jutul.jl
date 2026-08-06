@@ -142,6 +142,21 @@ function extrude_mesh(m2d::UnstructuredMesh, depths; kwarg...)
     else
         S = nothing
     end
+    cell_map = if isnothing(m2d.cell_map)
+        nothing
+    else
+        nx, ny = Tuple(m2d.structure)
+        cells_per_layer = nx * ny
+        map3d = Int[]
+        sizehint!(map3d, nc3d)
+        for layer in 1:nz
+            offset = (layer - 1) * cells_per_layer
+            for logical_cell in m2d.cell_map
+                push!(map3d, logical_cell + offset)
+            end
+        end
+        map3d
+    end
 
     extruded_mesh = UnstructuredMesh(
         cells_faces,
@@ -156,6 +171,7 @@ function extrude_mesh(m2d::UnstructuredMesh, depths; kwarg...)
         neighbors,
         bnd_cells;
         structure = S,
+        cell_map = cell_map,
         kwarg...
     )
 
