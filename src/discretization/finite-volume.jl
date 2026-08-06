@@ -43,7 +43,11 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
 end
 
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; version = :xyz, face_dir = missing)
+function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns;
+        version = :xyz,
+        face_dir = missing,
+        cell_face_centers = missing
+    )
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
@@ -101,7 +105,15 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
             throw(ArgumentError("face_dir entry is less than 1."))
         end
     end
+    if !ismissing(cell_face_centers)
+        cfc_dim, cfc_n = size(cell_face_centers)
+        cfc_dim == dim || throw(ArgumentError("Cell face centers had $cfc_dim rows but grid had $dim dimension."))
+        cfc_n == length(faces) || throw(ArgumentError("Cell face centers had $cfc_n columns but grid had $(length(faces)) cell-faces."))
+    end
     is_xyz = Val(version == :xyz)
+    function to_vec_of_svectors(x::Missing)
+        return x
+    end
     function to_vec_of_svectors(x)
         elT = eltype(x)
         if isbitstype(elT)
@@ -116,6 +128,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         to_vec_of_svectors(cell_centroids),
         to_vec_of_svectors(face_centroids),
         to_vec_of_svectors(face_normals),
+        to_vec_of_svectors(cell_face_centers),
         face_areas,
         perm,
         faces,
@@ -127,16 +140,20 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     return T_hf
 end
 
-function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, face_dir, ::Val{is_xyz} = Val(true)) where {is_xyz}
+function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_centroids, face_normals, cell_face_centers, face_areas, perm, faces, facepos, facesigns, face_dir, ::Val{is_xyz} = Val(true)) where {is_xyz}
     if length(cell_centroids) > 0
         dim = length(cell_centroids[1])
-        T = eltype(eltype(cell_centroids))
+        # T = eltype(eltype(cell_centroids))
         for cell in eachindex(cell_centroids)
             @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
                 face = faces[fpos]
                 sgn = facesigns[fpos]
                 cc = cell_centroids[cell]
-                fc = face_centroids[face]
+                if ismissing(cell_face_centers)
+                    fc = face_centroids[face]
+                else
+                    fc = cell_face_centers[fpos]
+                end
                 A = face_areas[face]
                 C = fc - cc
                 Nn = sgn*face_normals[face]
