@@ -46,7 +46,7 @@ end
 function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns;
         version = :xyz,
         face_dir = missing,
-        cell_face_centers = missing
+        half_face_centroids = missing
     )
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
@@ -121,12 +121,12 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     function to_vec_of_svectors(x::AbstractVector{<:AbstractVector})
         return x
     end
-    if !ismissing(cell_face_centers) && length(cell_face_centers) > 0
-        cell_face_centers = to_vec_of_svectors(cell_face_centers)
-        cfc_dim = length(first(cell_face_centers))
-        cfc_n = length(cell_face_centers)
-        cfc_dim == dim || throw(ArgumentError("Cell face centers had $cfc_dim rows but grid had $dim dimension."))
-        cfc_n == length(faces) || throw(ArgumentError("Cell face centers had $cfc_n columns but grid had $(length(faces)) cell-faces."))
+    if !ismissing(half_face_centroids) && length(half_face_centroids) > 0
+        half_face_centroids = to_vec_of_svectors(half_face_centroids)
+        cfc_dim = length(first(half_face_centroids))
+        cfc_n = length(half_face_centroids)
+        cfc_dim == dim || throw(ArgumentError("half_face_centroids had $cfc_dim rows but grid had $dim dimension."))
+        cfc_n == length(faces) || throw(ArgumentError("half_face_centroids had $cfc_n columns but grid had $(length(faces)) cell-faces."))
     end
 
     compute_half_face_trans!(
@@ -134,7 +134,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         to_vec_of_svectors(cell_centroids),
         to_vec_of_svectors(face_centroids),
         to_vec_of_svectors(face_normals),
-        cell_face_centers,
+        half_face_centroids,
         face_areas,
         perm,
         faces,
