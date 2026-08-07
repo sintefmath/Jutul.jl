@@ -105,11 +105,6 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
             throw(ArgumentError("face_dir entry is less than 1."))
         end
     end
-    if !ismissing(cell_face_centers)
-        cfc_dim, cfc_n = size(cell_face_centers)
-        cfc_dim == dim || throw(ArgumentError("Cell face centers had $cfc_dim rows but grid had $dim dimension."))
-        cfc_n == length(faces) || throw(ArgumentError("Cell face centers had $cfc_n columns but grid had $(length(faces)) cell-faces."))
-    end
     is_xyz = Val(version == :xyz)
     function to_vec_of_svectors(x::Missing)
         return x
@@ -123,12 +118,23 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
         return x_vec
     end
+    function to_vec_of_svectors(x::AbstractVector{<:AbstractVector})
+        return x
+    end
+    if !ismissing(cell_face_centers) && length(cell_face_centers) > 0
+        cell_face_centers = to_vec_of_svectors(cell_face_centers)
+        cfc_dim = length(first(cell_face_centers))
+        cfc_n = length(cell_face_centers)
+        cfc_dim == dim || throw(ArgumentError("Cell face centers had $cfc_dim rows but grid had $dim dimension."))
+        cfc_n == length(faces) || throw(ArgumentError("Cell face centers had $cfc_n columns but grid had $(length(faces)) cell-faces."))
+    end
+
     compute_half_face_trans!(
         T_hf,
         to_vec_of_svectors(cell_centroids),
         to_vec_of_svectors(face_centroids),
         to_vec_of_svectors(face_normals),
-        to_vec_of_svectors(cell_face_centers),
+        cell_face_centers,
         face_areas,
         perm,
         faces,
