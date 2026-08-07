@@ -231,6 +231,15 @@ function Base.getindex(domain::DataDomain, key::Symbol, entity = nothing)
     return v
 end
 
+function Base.get(domain::DataDomain, key::Symbol, fallback)
+    if haskey(domain.data, key)
+        ret = domain[key]
+    else
+        ret = fallback
+    end
+    return ret
+end
+
 function Base.keys(domain::DataDomain)
     return keys(domain.data)
 end
