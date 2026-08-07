@@ -154,11 +154,11 @@ function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_cen
             @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
                 face = faces[fpos]
                 sgn = facesigns[fpos]
-                cc = cell_centroids[cell]
+                fc = face_centroids[face]
                 if ismissing(cell_face_centers)
-                    fc = face_centroids[face]
+                    cc = cell_centroids[cell]
                 else
-                    fc = cell_face_centers[fpos]
+                    cc = cell_face_centers[fpos]
                 end
                 A = face_areas[face]
                 C = fc - cc
