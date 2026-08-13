@@ -2,6 +2,9 @@
 # This module provides functionality for tracing streamlines through unstructured meshes
 # by subdividing cells into centroid tesselations and using an octree for fast queries.
 
+using StaticArrays
+using LinearAlgebra
+
 export StreamlineTracer, setup_streamline_tracer, trace_streamlines
 
 """
