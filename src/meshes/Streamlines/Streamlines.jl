@@ -20,6 +20,7 @@ module Streamlines
 
 using StaticArrays
 using LinearAlgebra
+using ProgressMeter
 using ..Jutul
 
 export StreamlineTracer, setup_streamline_tracer, trace_streamlines, update_velocities!

@@ -115,7 +115,7 @@ function trace_streamlines(tracer::StreamlineTracer{D, T},
                           integrator::StreamlineIntegrator = EulerIntegrator()) where {D, T}
     streamlines = Vector{Vector{SVector{D, T}}}()
     
-    for start_point in start_points
+    @showprogress for start_point in start_points
         streamline = SVector{D, T}[]
         
         if forward
