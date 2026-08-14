@@ -98,6 +98,7 @@ Get the bounding box for a child octree node.
 function get_child_bbox(bbox_min::SVector{D, T}, bbox_max::SVector{D, T}, 
                         center::SVector{D, T}, child_idx::Int, ::Val{3}) where {D, T}
     # 3D octree: 8 children
+    @assert D == 3
     x_low = (child_idx - 1) & 1 == 0
     y_low = (child_idx - 1) & 2 == 0
     z_low = (child_idx - 1) & 4 == 0
@@ -119,6 +120,7 @@ end
 function get_child_bbox(bbox_min::SVector{D, T}, bbox_max::SVector{D, T}, 
                         center::SVector{D, T}, child_idx::Int, ::Val{2}) where {D, T}
     # 2D quadtree: 4 children
+    @assert D == 2
     x_low = (child_idx - 1) & 1 == 0
     y_low = (child_idx - 1) & 2 == 0
     

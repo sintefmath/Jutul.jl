@@ -162,7 +162,7 @@ function integrate_step(::RK4Integrator, tracer::StreamlineTracer{D, T},
     point4 = point + direction * step_size * k3_norm
     subcell_idx4 = find_subcell_at_point(tracer, point4)
     if isnothing(subcell_idx4)
-        # Fall back to RK3-like step
+        # Fall back to a three-stage weighted step
         k_avg = (k1 + 2*k2 + 2*k3) / 5
         speed_avg = norm(k_avg, 2)
         return point + direction * step_size * k_avg / speed_avg
