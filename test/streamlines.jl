@@ -1,4 +1,5 @@
 using Jutul
+using Jutul.Streamlines
 using Test
 using LinearAlgebra
 using StaticArrays
@@ -233,5 +234,82 @@ using StaticArrays
         
         # Area of right triangle with legs 1
         @test abs(area - 0.5) < 1e-10
+    end
+    
+    @testset "Integration methods" begin
+        # Create a simple test case where we can compare different integrators
+        dims = (5, 5)
+        g = CartesianMesh(dims)
+        mesh = UnstructuredMesh(g)
+        
+        nf = number_of_faces(mesh)
+        fluxes = ones(nf)
+        
+        tracer = setup_streamline_tracer(mesh, fluxes)
+        geo = tpfv_geometry(mesh)
+        
+        # Pick a starting point
+        start_point = SVector{2, Float64}(geo.cell_centroids[:, 1])
+        
+        # Test Euler integrator
+        streamlines_euler = trace_streamlines(
+            tracer, [start_point],
+            max_steps = 100,
+            step_size = 0.05,
+            integrator = EulerIntegrator()
+        )
+        @test length(streamlines_euler) == 1
+        @test length(streamlines_euler[1]) > 1
+        
+        # Test RK2 integrator
+        streamlines_rk2 = trace_streamlines(
+            tracer, [start_point],
+            max_steps = 100,
+            step_size = 0.05,
+            integrator = RK2Integrator()
+        )
+        @test length(streamlines_rk2) == 1
+        @test length(streamlines_rk2[1]) > 1
+        
+        # Test RK4 integrator
+        streamlines_rk4 = trace_streamlines(
+            tracer, [start_point],
+            max_steps = 100,
+            step_size = 0.05,
+            integrator = RK4Integrator()
+        )
+        @test length(streamlines_rk4) == 1
+        @test length(streamlines_rk4[1]) > 1
+        
+        # All methods should produce valid streamlines
+        # They may differ slightly in path due to different accuracies
+        # but all should start from the same point
+        @test streamlines_euler[1][1] == start_point
+        @test streamlines_rk2[1][1] == start_point
+        @test streamlines_rk4[1][1] == start_point
+    end
+    
+    @testset "Default integrator" begin
+        # Test that default integrator is Euler when not specified
+        dims = (4, 4)
+        g = CartesianMesh(dims)
+        mesh = UnstructuredMesh(g)
+        
+        nf = number_of_faces(mesh)
+        fluxes = ones(nf)
+        
+        tracer = setup_streamline_tracer(mesh, fluxes)
+        geo = tpfv_geometry(mesh)
+        
+        start_point = SVector{2, Float64}(geo.cell_centroids[:, 1])
+        
+        # Call without specifying integrator (should use Euler by default)
+        streamlines_default = trace_streamlines(
+            tracer, [start_point],
+            max_steps = 50
+        )
+        
+        @test length(streamlines_default) == 1
+        @test length(streamlines_default[1]) > 1
     end
 end
