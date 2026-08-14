@@ -27,9 +27,9 @@ using StaticArrays
         tracer = setup_streamline_tracer(mesh, fluxes)
         
         # Test that tracer was created
-        @test tracer isa StreamlineTracer
+        @test tracer isa Streamlines.StreamlineTracer
         @test length(tracer.subcells) > 0
-        @test tracer.octree isa OctreeNode
+        @test tracer.octree isa Streamlines.OctreeNode
         
         # Test streamline tracing from a single point
         geo = tpfv_geometry(mesh)
@@ -62,7 +62,7 @@ using StaticArrays
         @test avg_subcells_per_cell > 1  # Should have more than 1 sub-cell per cell
         
         # Test that octree is non-empty
-        @test tracer.octree isa OctreeNode
+        @test tracer.octree isa Streamlines.OctreeNode
         @test tracer.octree.max_depth >= 0
     end
     
@@ -81,7 +81,7 @@ using StaticArrays
         # Test finding sub-cell at various cell centroids
         for cell in 1:min(5, number_of_cells(mesh))
             point = SVector{2, Float64}(geo.cell_centroids[:, cell])
-            subcell_idx = Jutul.find_subcell_at_point(tracer, point)
+            subcell_idx = Streamlines.find_subcell_at_point(tracer, point)
             
             # Should find a sub-cell (might be nothing if point is exactly on boundary)
             # At least for interior cells we should find something
@@ -187,15 +187,15 @@ using StaticArrays
         bbox_min = SVector{2, Float64}(0.0, 0.0)
         bbox_max = SVector{2, Float64}(1.0, 1.0)
         
-        @test Jutul.bbox_overlap(point, bbox_min, bbox_max)
+        @test Streamlines.bbox_overlap(point, bbox_min, bbox_max)
         
         # Point outside
         point_out = SVector{2, Float64}(1.5, 0.5)
-        @test !Jutul.bbox_overlap(point_out, bbox_min, bbox_max)
+        @test !Streamlines.bbox_overlap(point_out, bbox_min, bbox_max)
         
         # Point on boundary (should be inside with tolerance)
         point_boundary = SVector{2, Float64}(1.0, 1.0)
-        @test Jutul.bbox_overlap(point_boundary, bbox_min, bbox_max)
+        @test Streamlines.bbox_overlap(point_boundary, bbox_min, bbox_max)
     end
     
     @testset "Tetrahedral centroid and volume" begin
@@ -207,7 +207,7 @@ using StaticArrays
             SVector{3, Float64}(0.0, 0.0, 1.0)
         ]
         
-        centroid, volume = Jutul.compute_tet_centroid_and_volume(vertices)
+        centroid, volume = Streamlines.compute_tet_centroid_and_volume(vertices)
         
         # Centroid should be average of vertices
         expected_centroid = SVector{3, Float64}(0.25, 0.25, 0.25)
@@ -226,7 +226,7 @@ using StaticArrays
             SVector{2, Float64}(0.0, 1.0)
         ]
         
-        centroid, area = Jutul.compute_tri_centroid_and_area(vertices)
+        centroid, area = Streamlines.compute_tri_centroid_and_area(vertices)
         
         # Centroid should be average of vertices
         expected_centroid = SVector{2, Float64}(1.0/3.0, 1.0/3.0)
