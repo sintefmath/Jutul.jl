@@ -12,8 +12,7 @@ module Jutul
     using Logging
     using Printf
     using Dates
-    # Gotta go fast
-    using LoopVectorization
+    # Lightweight threads
     using Polyester
     using PolyesterWeave
     # Linear solvers and preconditioners
