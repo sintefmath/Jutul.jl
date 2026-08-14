@@ -4,14 +4,18 @@ This implementation adds streamline tracing functionality to the Jutul.jl packag
 
 ## Architecture
 
-The implementation follows a two-phase design as requested:
+The implementation follows a two-phase design for optimal performance:
 
-### Phase 1: Setup (Preprocessing)
+### Phase 1: Geometry Setup (mesh-dependent, flux-independent)
 - **Cell Tesselation**: Each cell is subdivided into tetrahedral (3D) or triangular (2D) sub-cells using centroid-based tesselation
-- **Velocity Reconstruction**: Velocities are reconstructed in each sub-cell from face fluxes
 - **Octree Construction**: An octree (or quadtree in 2D) spatial index is built for fast point location queries
+- This phase only needs to be done once per mesh
 
-### Phase 2: Tracing (Fast Queries)
+### Phase 2: Velocity Update (flux-dependent)
+- **Velocity Reconstruction**: Velocities are reconstructed in each sub-cell from face fluxes
+- This phase can be repeated to update velocities without rebuilding geometry
+
+### Phase 3: Tracing (Fast Queries)
 - **Point Location**: Fast lookup of sub-cells using the octree
 - **Integration**: Multiple integration methods available (Euler, RK2, RK4)
 - **Multi-directional**: Supports forward, backward, or bidirectional tracing
@@ -94,7 +98,14 @@ streamlines = trace_streamlines(tracer, start_points, integrator = RK4Integrator
 using Jutul
 using Jutul.Streamlines
 
-# Setup phase (done once per mesh/flux combination)
+# Option 1: Two-phase setup (recommended for multiple velocity updates)
+# Phase 1: Setup mesh tesselation and octree (once per mesh)
+tracer = setup_streamline_tracer(mesh; geometry, max_depth)
+
+# Phase 2: Update velocities (can be called multiple times)
+update_velocities!(tracer, fluxes)
+
+# Option 2: Single-phase setup (convenience function)
 tracer = setup_streamline_tracer(mesh, fluxes; geometry, max_depth)
 
 # Tracing phase (can be called many times with different integrators)
@@ -115,12 +126,13 @@ streamlines = trace_streamlines(tracer, start_points;
 ### Cell Tesselation
 - **3D**: Polygonal faces are triangulated, then tetrahedra formed with cell centroid
 - **2D**: Edges form triangles with cell centroid
-- Each sub-cell stores: parent cell, vertices, centroid, velocity, measure
+- Each sub-cell stores: parent cell, parent face, vertices, centroid, velocity, measure
 
 ### Velocity Reconstruction
 ```julia
-velocity = (flux / face_area) × normal × (subcell_measure / cell_volume)
+velocity = (flux / face_area) × normal
 ```
+All subcells from the same face share the same velocity vector.
 
 ### Octree Structure
 - Recursively subdivides space into 8 (3D) or 4 (2D) regions
