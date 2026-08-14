@@ -161,7 +161,7 @@ An octree (or quadtree in 2D) is built to enable fast point location queries. Th
 
 ### Streamline Integration
 
-Streamlines are computed using simple Euler integration:
+Streamlines are computed with `EulerIntegrator()`, `RK2Integrator()`, or `RK4Integrator()`. All methods advance along the normalized local velocity direction:
 ```
 next_point = current_point + step_size × (velocity / ||velocity||)
 ```
@@ -182,13 +182,11 @@ The setup phase is more expensive but only needs to be done once per mesh/flux c
 ## Limitations and Future Improvements
 
 Current limitations:
-- Uses first-order Euler integration (could be improved with higher-order methods)
 - Velocity reconstruction is simplified (could use more sophisticated interpolation)
 - No adaptive step sizing
 - No cycle detection beyond simple checks
 
 Possible improvements:
-- Implement Runge-Kutta integration for better accuracy
 - Add adaptive step sizing based on local velocity gradient
 - Implement proper cycle detection
 - Support for time-varying velocity fields

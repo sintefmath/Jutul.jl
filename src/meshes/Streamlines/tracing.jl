@@ -184,13 +184,3 @@ function trace_single_streamline(tracer::StreamlineTracer{D, T},
     
     return points
 end
-
-# Helper to convert various start point formats
-function convert_start_points(start_points::AbstractMatrix{T}, ::Val{D}) where {D, T}
-    @assert size(start_points, 1) == D
-    return [SVector{D, T}(start_points[:, i]) for i in 1:size(start_points, 2)]
-end
-
-function convert_start_points(start_points::Vector{SVector{D, T}}, ::Val{D}) where {D, T}
-    return start_points
-end
