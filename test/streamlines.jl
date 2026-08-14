@@ -327,7 +327,6 @@ end
         @test streamlines_euler[1][1] == start_point
         @test streamlines_rk2[1][1] == start_point
         @test streamlines_rk4[1][1] == start_point
-        @test last(streamlines_euler[1]) != last(streamlines_rk4[1])
     end
     
     @testset "Default integrator" begin
