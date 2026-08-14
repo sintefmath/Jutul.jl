@@ -31,7 +31,7 @@ The streamline functionality is now organized in `src/meshes/Streamlines/` with 
 5. **tesselation.jl** - Cell subdivision and velocity reconstruction
 6. **tracing.jl** - Main streamline tracing functionality
 
-2. **test/streamlines.jl** - Comprehensive test suite
+- **test/streamlines.jl** - Comprehensive test suite
    - Tests for 2D and 3D meshes
    - Point location tests
    - Forward/backward tracing tests
@@ -39,13 +39,13 @@ The streamline functionality is now organized in `src/meshes/Streamlines/` with 
    - Geometric computation tests
    - Integration method tests (Euler, RK2, RK4)
 
-3. **docs/streamline_tracing.md** - Documentation
+- **docs/streamline_tracing.md** - Documentation
    - Usage examples
    - API reference
    - Implementation details
    - Performance considerations
 
-4. **examples/streamline_example.jl** - Example usage
+- **examples/streamline_example.jl** - Example usage
    - Complete working example
    - Demonstrates typical workflow
    - Compares different integration methods
@@ -130,9 +130,9 @@ streamlines = trace_streamlines(tracer, start_points;
 
 ### Velocity Reconstruction
 ```julia
-velocity = (flux / face_area) × normal
+minimize  Σ_faces (area(face) * (n(face) ⋅ velocity) - flux(face))^2
 ```
-All subcells from the same face share the same velocity vector.
+Each cell gets a least-squares velocity reconstructed from all of its local face fluxes, and that velocity is assigned to the subcells belonging to the cell.
 
 ### Octree Structure
 - Recursively subdivides space into 8 (3D) or 4 (2D) regions

@@ -11,7 +11,7 @@ The streamline tracer works by:
 1. Subdividing each cell into tetrahedral (3D) or triangular (2D) sub-cells using centroid tesselation
 2. Reconstructing velocity fields in each sub-cell from face fluxes
 3. Building an octree spatial index for fast point location
-4. Tracing streamlines using Euler integration
+4. Tracing streamlines with Euler, RK2, or RK4 integration
 
 ## Basic Usage
 
