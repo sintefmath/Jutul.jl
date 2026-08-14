@@ -26,9 +26,11 @@ end
 Represents a tetrahedral/triangular sub-cell created from cell tesselation.
 Each sub-cell has vertices, a centroid, and reconstructed velocity.
 """
-struct SubCell{D, T}
+mutable struct SubCell{D, T}
     "Parent cell index in the mesh"
     parent_cell::Int
+    "Parent face index in the mesh"
+    parent_face::Int
     "Vertex coordinates"
     vertices::Vector{SVector{D, T}}
     "Centroid of the sub-cell"

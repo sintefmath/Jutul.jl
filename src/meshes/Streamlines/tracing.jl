@@ -3,33 +3,31 @@ Main streamline tracing functionality
 """
 
 """
-    setup_streamline_tracer(mesh::UnstructuredMesh, fluxes::AbstractVector; geometry = tpfv_geometry(mesh), max_depth = 8)
+    setup_streamline_tracer(mesh::UnstructuredMesh; geometry = tpfv_geometry(mesh), max_depth = 8)
 
-Setup phase for streamline tracing. This function:
-1. Subdivides each cell into centroid-based tesselations
-2. Reconstructs velocities from face fluxes for each sub-cell
-3. Builds an octree spatial index for fast point location
+Phase 1 setup for streamline tracing: Build mesh tesselation and octree.
+This phase is independent of velocities and only needs to be done once per mesh.
 
 # Arguments
 - `mesh`: The unstructured mesh
-- `fluxes`: Vector of face fluxes (one value per interior face)
 - `geometry`: Optional pre-computed geometry (defaults to tpfv_geometry(mesh))
 - `max_depth`: Maximum octree depth for spatial indexing
 
 # Returns
-A `StreamlineTracer` object that can be used with `trace_streamlines`.
+A `StreamlineTracer` object with geometry but no velocities yet.
+Use `update_velocities!` to add flux information.
 """
-function setup_streamline_tracer(mesh::UnstructuredMesh{D}, fluxes::AbstractVector; 
-                                 geometry = Jutul.tpfv_geometry(mesh), 
-                                 max_depth::Int = 8) where D
+function setup_streamline_tracer(mesh::UnstructuredMesh{D}; 
+                                geometry = Jutul.tpfv_geometry(mesh), 
+                                max_depth::Int = 8) where D
     T = Jutul.float_type(mesh)
     nc = Jutul.number_of_cells(mesh)
     
-    # Create sub-cells from centroid tesselation and reconstruct velocities
+    # Phase 1: Create sub-cells from centroid tesselation (without velocities)
     subcells = SubCell{D, T}[]
     
     for cell in 1:nc
-        cell_subcells = tesselate_cell_and_reconstruct_velocity(mesh, cell, fluxes, geometry)
+        cell_subcells = tesselate_cell(mesh, cell, geometry)
         append!(subcells, cell_subcells)
     end
     
@@ -38,6 +36,51 @@ function setup_streamline_tracer(mesh::UnstructuredMesh{D}, fluxes::AbstractVect
     octree = build_octree(subcells, bbox_min, bbox_max, max_depth)
     
     return StreamlineTracer(mesh, subcells, octree, geometry)
+end
+
+"""
+    setup_streamline_tracer(mesh::UnstructuredMesh, fluxes::AbstractVector; geometry = tpfv_geometry(mesh), max_depth = 8)
+
+Complete setup for streamline tracing (both phases in one call).
+This is a convenience function that calls both setup_streamline_tracer and update_velocities!.
+
+# Arguments
+- `mesh`: The unstructured mesh
+- `fluxes`: Vector of face fluxes (one value per interior face)
+- `geometry`: Optional pre-computed geometry (defaults to tpfv_geometry(mesh))
+- `max_depth`: Maximum octree depth for spatial indexing
+
+# Returns
+A `StreamlineTracer` object ready for tracing.
+"""
+function setup_streamline_tracer(mesh::UnstructuredMesh{D}, fluxes::AbstractVector; 
+                                geometry = Jutul.tpfv_geometry(mesh), 
+                                max_depth::Int = 8) where D
+    # Phase 1: Setup mesh and octree
+    tracer = setup_streamline_tracer(mesh; geometry=geometry, max_depth=max_depth)
+    
+    # Phase 2: Update velocities
+    update_velocities!(tracer, fluxes)
+    
+    return tracer
+end
+
+"""
+    update_velocities!(tracer::StreamlineTracer, fluxes::AbstractVector)
+
+Phase 2 setup: Update velocities in an existing tracer based on new face fluxes.
+This allows you to update velocities without rebuilding the mesh tesselation and octree.
+
+# Arguments
+- `tracer`: Existing StreamlineTracer from phase 1 setup
+- `fluxes`: Vector of face fluxes (one value per interior face)
+
+# Returns
+The updated tracer (modified in-place).
+"""
+function update_velocities!(tracer::StreamlineTracer{D, T}, fluxes::AbstractVector) where {D, T}
+    update_subcell_velocities!(tracer.subcells, tracer.mesh, fluxes, tracer.geometry)
+    return tracer
 end
 
 """
