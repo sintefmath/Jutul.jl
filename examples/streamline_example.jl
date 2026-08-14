@@ -9,6 +9,7 @@ It also shows the different integration methods available (Euler, RK2, RK4).
 using Jutul
 using Jutul.Streamlines
 using StaticArrays
+using LinearAlgebra
 
 # Create a simple 2D Cartesian mesh
 nx, ny = 10, 10
