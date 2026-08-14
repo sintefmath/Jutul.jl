@@ -4,24 +4,43 @@ using Test
 using LinearAlgebra
 using StaticArrays
 
+function constant_velocity_fluxes(mesh, geo, velocity::SVector{D, T}) where {D, T}
+    nf = number_of_faces(mesh)
+    fluxes = zeros(T, nf)
+    for face in 1:nf
+        normal = SVector{D, T}(geo.normals[:, face])
+        fluxes[face] = geo.areas[face] * dot(velocity, normal)
+    end
+    return fluxes
+end
+
+function rotational_velocity_fluxes(mesh, geo)
+    T = eltype(geo.areas)
+    D = size(geo.cell_centroids, 1)
+    mins = map(d -> minimum(pt[d] for pt in mesh.node_points), 1:D)
+    maxs = map(d -> maximum(pt[d] for pt in mesh.node_points), 1:D)
+    center = SVector{D, T}(ntuple(d -> T((mins[d] + maxs[d]) / 2), D))
+    nf = number_of_faces(mesh)
+    fluxes = zeros(T, nf)
+    for face in 1:nf
+        x = SVector{D, T}(geo.face_centroids[:, face])
+        normal = SVector{D, T}(geo.normals[:, face])
+        velocity = SVector{D, T}(-(x[2] - center[2]), x[1] - center[1])
+        fluxes[face] = geo.areas[face] * dot(velocity, normal)
+    end
+    return fluxes
+end
+
 @testset "Streamline Tracing" begin
     @testset "2D Cartesian mesh streamline tracing" begin
         # Create a simple 2D Cartesian mesh
         dims = (5, 5)
         g = CartesianMesh(dims)
         mesh = UnstructuredMesh(g)
+        geo = tpfv_geometry(mesh)
         
         # Create a simple uniform flow field (constant velocity in x-direction)
-        nf = number_of_faces(mesh)
-        fluxes = zeros(nf)
-        
-        # Set up a uniform flow from left to right
-        # For a Cartesian mesh, we need to set fluxes appropriately
-        # This is a simplified example
-        for i in 1:nf
-            # Assign a constant flux in x-direction
-            fluxes[i] = 1.0
-        end
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
         
         # Setup streamline tracer
         tracer = setup_streamline_tracer(mesh, fluxes)
@@ -32,12 +51,13 @@ using StaticArrays
         @test tracer.octree isa Streamlines.OctreeNode
         
         # Test streamline tracing from a single point
-        geo = tpfv_geometry(mesh)
         start_point = SVector{2, Float64}(geo.cell_centroids[:, 1])
         streamlines = trace_streamlines(tracer, [start_point], max_steps = 100, step_size = 0.1)
         
         @test length(streamlines) == 1
-        @test length(streamlines[1]) > 0
+        @test length(streamlines[1]) > 1
+        @test last(streamlines[1])[1] > start_point[1]
+        @test abs(last(streamlines[1])[2] - start_point[2]) < 1e-6
     end
     
     @testset "3D mesh sub-cell tesselation" begin
@@ -47,8 +67,8 @@ using StaticArrays
         mesh = UnstructuredMesh(g)
         
         # Create fluxes
-        nf = number_of_faces(mesh)
-        fluxes = randn(nf) * 0.1 .+ 1.0  # Small random perturbation around 1.0
+        geo = tpfv_geometry(mesh)
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.25, -0.1))
         
         # Setup tracer
         tracer = setup_streamline_tracer(mesh, fluxes, max_depth = 6)
@@ -72,22 +92,44 @@ using StaticArrays
         g = CartesianMesh(dims)
         mesh = UnstructuredMesh(g)
         
-        nf = number_of_faces(mesh)
-        fluxes = ones(nf)
-        
-        tracer = setup_streamline_tracer(mesh, fluxes)
         geo = tpfv_geometry(mesh)
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
+
+        tracer = setup_streamline_tracer(mesh, fluxes)
         
         # Test finding sub-cell at various cell centroids
         for cell in 1:min(5, number_of_cells(mesh))
             point = SVector{2, Float64}(geo.cell_centroids[:, cell])
             subcell_idx = Streamlines.find_subcell_at_point(tracer, point)
-            
-            # Should find a sub-cell (might be nothing if point is exactly on boundary)
-            # At least for interior cells we should find something
-            if cell > 1
-                # Allow for some cells to not be found due to numerical issues
-                # but most should be found
+            @test !isnothing(subcell_idx)
+            @test tracer.subcells[subcell_idx].parent_cell == cell
+        end
+    end
+
+    @testset "Point location covers boundary cells" begin
+        dims = (4, 4)
+        mesh = UnstructuredMesh(CartesianMesh(dims))
+        geo = tpfv_geometry(mesh)
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
+        tracer = setup_streamline_tracer(mesh, fluxes)
+
+        for cell in 1:number_of_cells(mesh)
+            cell_center = SVector{2, Float64}(geo.cell_centroids[:, cell])
+
+            for face in mesh.faces.cells_to_faces[cell]
+                face_center = SVector{2, Float64}(geo.face_centroids[:, face])
+                pt = (cell_center + face_center) / 2
+                idx = Streamlines.find_subcell_at_point(tracer, pt)
+                @test !isnothing(idx)
+                @test tracer.subcells[idx].parent_cell == cell
+            end
+
+            for face in mesh.boundary_faces.cells_to_faces[cell]
+                face_center = SVector{2, Float64}(geo.boundary_centroids[:, face])
+                pt = (cell_center + face_center) / 2
+                idx = Streamlines.find_subcell_at_point(tracer, pt)
+                @test !isnothing(idx)
+                @test tracer.subcells[idx].parent_cell == cell
             end
         end
     end
@@ -98,11 +140,10 @@ using StaticArrays
         g = CartesianMesh(dims)
         mesh = UnstructuredMesh(g)
         
-        nf = number_of_faces(mesh)
-        fluxes = ones(nf) * 0.5
+        geo = tpfv_geometry(mesh)
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
         
         tracer = setup_streamline_tracer(mesh, fluxes)
-        geo = tpfv_geometry(mesh)
         
         # Pick a point in the middle
         mid_cell = div(number_of_cells(mesh), 2)
@@ -133,6 +174,8 @@ using StaticArrays
         @test length(streamlines_both) == 1
         # Combined should generally be longer (or equal if hit boundary immediately)
         @test length(streamlines_both[1]) >= max(length(streamlines_fwd[1]), length(streamlines_bwd[1]))
+        @test streamlines_both[1][1][1] <= start_point[1]
+        @test streamlines_both[1][end][1] >= start_point[1]
     end
     
     @testset "Multiple starting points" begin
@@ -141,11 +184,10 @@ using StaticArrays
         g = CartesianMesh(dims)
         mesh = UnstructuredMesh(g)
         
-        nf = number_of_faces(mesh)
-        fluxes = ones(nf)
+        geo = tpfv_geometry(mesh)
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
         
         tracer = setup_streamline_tracer(mesh, fluxes)
-        geo = tpfv_geometry(mesh)
         
         # Create multiple starting points
         n_starts = 5
@@ -166,11 +208,10 @@ using StaticArrays
         g = CartesianMesh(dims)
         mesh = UnstructuredMesh(g)
         
-        nf = number_of_faces(mesh)
-        fluxes = ones(nf)
+        geo = tpfv_geometry(mesh)
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
         
         tracer = setup_streamline_tracer(mesh, fluxes)
-        geo = tpfv_geometry(mesh)
         
         # Create starting points as a matrix (2 x n)
         n_starts = 3
@@ -242,11 +283,10 @@ using StaticArrays
         g = CartesianMesh(dims)
         mesh = UnstructuredMesh(g)
         
-        nf = number_of_faces(mesh)
-        fluxes = ones(nf)
+        geo = tpfv_geometry(mesh)
+        fluxes = rotational_velocity_fluxes(mesh, geo)
         
         tracer = setup_streamline_tracer(mesh, fluxes)
-        geo = tpfv_geometry(mesh)
         
         # Pick a starting point
         start_point = SVector{2, Float64}(geo.cell_centroids[:, 1])
@@ -287,6 +327,7 @@ using StaticArrays
         @test streamlines_euler[1][1] == start_point
         @test streamlines_rk2[1][1] == start_point
         @test streamlines_rk4[1][1] == start_point
+        @test last(streamlines_euler[1]) != last(streamlines_rk4[1])
     end
     
     @testset "Default integrator" begin
@@ -295,11 +336,10 @@ using StaticArrays
         g = CartesianMesh(dims)
         mesh = UnstructuredMesh(g)
         
-        nf = number_of_faces(mesh)
-        fluxes = ones(nf)
+        geo = tpfv_geometry(mesh)
+        fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
         
         tracer = setup_streamline_tracer(mesh, fluxes)
-        geo = tpfv_geometry(mesh)
         
         start_point = SVector{2, Float64}(geo.cell_centroids[:, 1])
         
@@ -311,5 +351,24 @@ using StaticArrays
         
         @test length(streamlines_default) == 1
         @test length(streamlines_default[1]) > 1
+    end
+
+    @testset "Different flux fields produce different paths" begin
+        mesh = UnstructuredMesh(CartesianMesh((8, 8)))
+        geo = tpfv_geometry(mesh)
+        start_point = SVector{2, Float64}(geo.cell_centroids[:, 1 + 3*8])
+
+        uniform_fluxes = constant_velocity_fluxes(mesh, geo, SVector(1.0, 0.0))
+        rotational_fluxes = rotational_velocity_fluxes(mesh, geo)
+
+        uniform_tracer = setup_streamline_tracer(mesh, uniform_fluxes)
+        rotational_tracer = setup_streamline_tracer(mesh, rotational_fluxes)
+
+        uniform_streamline = only(trace_streamlines(uniform_tracer, [start_point], max_steps = 80, step_size = 0.05))
+        rotational_streamline = only(trace_streamlines(rotational_tracer, [start_point], max_steps = 80, step_size = 0.05))
+
+        @test length(uniform_streamline) > 1
+        @test length(rotational_streamline) > 1
+        @test norm(last(uniform_streamline) - last(rotational_streamline)) > 0.1
     end
 end

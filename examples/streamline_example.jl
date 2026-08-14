@@ -21,15 +21,13 @@ println("Created mesh with $(number_of_cells(mesh)) cells and $(number_of_faces(
 
 # Create a simple uniform flow field (left to right)
 nf = number_of_faces(mesh)
-fluxes = ones(nf)
-
-# For a more realistic example, you could set fluxes based on face orientation:
-# geo = tpfv_geometry(mesh)
-# for i in 1:nf
-#     normal = geo.normals[:, i]
-#     # Flow in x-direction: flux proportional to x-component of normal
-#     fluxes[i] = normal[1]
-# end
+geo = tpfv_geometry(mesh)
+uniform_velocity = SVector(1.0, 0.0)
+fluxes = zeros(nf)
+for i in 1:nf
+    normal = SVector{2, Float64}(geo.normals[:, i])
+    fluxes[i] = geo.areas[i] * dot(uniform_velocity, normal)
+end
 
 println("\nSetup phase: Creating streamline tracer...")
 tracer = setup_streamline_tracer(mesh, fluxes, max_depth = 6)
@@ -39,7 +37,6 @@ println("Octree depth: $(tracer.octree.max_depth)")
 
 # Define starting points along the left edge
 n_streamlines = 5
-geo = tpfv_geometry(mesh)
 
 # Get cells on the left edge and create starting points
 start_points = SVector{2, Float64}[]

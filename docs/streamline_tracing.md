@@ -41,7 +41,8 @@ tracer = setup_streamline_tracer(
     mesh,           # UnstructuredMesh
     fluxes;         # Vector of face fluxes
     geometry = tpfv_geometry(mesh),  # Optional: pre-computed geometry
-    max_depth = 8   # Maximum octree depth
+    max_depth = 8,  # Maximum octree depth
+    boundary_fluxes = nothing # Optional boundary face fluxes (defaults to zero)
 )
 ```
 
@@ -140,14 +141,16 @@ Each cell is subdivided into sub-cells by connecting each face to the cell centr
 - In 3D: Each polygonal face is triangulated, and tetrahedra are formed from each triangle + cell centroid
 - In 2D: Triangles are formed from each edge + cell centroid
 
+Both interior and boundary faces are included so the sub-cells cover the full cell volume/area.
+
 ### Velocity Reconstruction
 
-Velocity in each sub-cell is reconstructed from the face flux:
+Velocity is reconstructed per cell from the available face fluxes by solving a small least-squares problem:
 ```
-velocity = (flux / face_area) × normal × (subcell_volume / cell_volume)
+minimize  Σ_faces (area(face) * (n(face) ⋅ velocity) - flux(face))^2
 ```
 
-This distributes the flux proportionally to sub-cell size.
+The resulting cell velocity is then used in all sub-cells belonging to that cell. This makes the traced paths depend on the full local flux pattern instead of only a single face normal.
 
 ### Octree Spatial Index
 

@@ -39,7 +39,7 @@ function setup_streamline_tracer(mesh::UnstructuredMesh{D};
 end
 
 """
-    setup_streamline_tracer(mesh::UnstructuredMesh, fluxes::AbstractVector; geometry = tpfv_geometry(mesh), max_depth = 8)
+    setup_streamline_tracer(mesh::UnstructuredMesh, fluxes::AbstractVector; geometry = tpfv_geometry(mesh), max_depth = 8, boundary_fluxes = nothing)
 
 Complete setup for streamline tracing (both phases in one call).
 This is a convenience function that calls both setup_streamline_tracer and update_velocities!.
@@ -49,24 +49,26 @@ This is a convenience function that calls both setup_streamline_tracer and updat
 - `fluxes`: Vector of face fluxes (one value per interior face)
 - `geometry`: Optional pre-computed geometry (defaults to tpfv_geometry(mesh))
 - `max_depth`: Maximum octree depth for spatial indexing
+- `boundary_fluxes`: Optional vector of boundary face fluxes (defaults to zero flux)
 
 # Returns
 A `StreamlineTracer` object ready for tracing.
 """
-function setup_streamline_tracer(mesh::UnstructuredMesh{D}, fluxes::AbstractVector; 
-                                geometry = Jutul.tpfv_geometry(mesh), 
-                                max_depth::Int = 8) where D
+function setup_streamline_tracer(mesh::UnstructuredMesh{D}, fluxes::AbstractVector;
+                                geometry = Jutul.tpfv_geometry(mesh),
+                                max_depth::Int = 8,
+                                boundary_fluxes = nothing) where D
     # Phase 1: Setup mesh and octree
     tracer = setup_streamline_tracer(mesh; geometry=geometry, max_depth=max_depth)
     
     # Phase 2: Update velocities
-    update_velocities!(tracer, fluxes)
+    update_velocities!(tracer, fluxes; boundary_fluxes=boundary_fluxes)
     
     return tracer
 end
 
 """
-    update_velocities!(tracer::StreamlineTracer, fluxes::AbstractVector)
+    update_velocities!(tracer::StreamlineTracer, fluxes::AbstractVector; boundary_fluxes = nothing)
 
 Phase 2 setup: Update velocities in an existing tracer based on new face fluxes.
 This allows you to update velocities without rebuilding the mesh tesselation and octree.
@@ -74,12 +76,13 @@ This allows you to update velocities without rebuilding the mesh tesselation and
 # Arguments
 - `tracer`: Existing StreamlineTracer from phase 1 setup
 - `fluxes`: Vector of face fluxes (one value per interior face)
+- `boundary_fluxes`: Optional vector of boundary face fluxes (defaults to zero flux)
 
 # Returns
 The updated tracer (modified in-place).
 """
-function update_velocities!(tracer::StreamlineTracer{D, T}, fluxes::AbstractVector) where {D, T}
-    update_subcell_velocities!(tracer.subcells, tracer.mesh, fluxes, tracer.geometry)
+function update_velocities!(tracer::StreamlineTracer{D, T}, fluxes::AbstractVector; boundary_fluxes = nothing) where {D, T}
+    update_subcell_velocities!(tracer.subcells, tracer.mesh, fluxes, tracer.geometry; boundary_fluxes=boundary_fluxes)
     return tracer
 end
 
@@ -122,8 +125,12 @@ function trace_streamlines(tracer::StreamlineTracer{D, T},
         
         if backward
             line = trace_single_streamline(tracer, start_point, step_size, max_steps, T(-1), integrator)
-            # Reverse and append (excluding start point to avoid duplication)
-            append!(streamline, reverse(line[2:end]))
+            backward_line = reverse(line)
+            if forward
+                streamline = vcat(backward_line, streamline[2:end])
+            else
+                streamline = backward_line
+            end
         end
         
         push!(streamlines, streamline)

@@ -61,7 +61,7 @@ function build_octree_recursive(subcells::Vector{SubCell{D, T}}, indices::Vector
         child_indices = Int[]
         for idx in indices
             subcell = subcells[idx]
-            if bbox_overlap(subcell.centroid, child_min, child_max)
+            if bbox_intersects(subcell.bbox_min, subcell.bbox_max, child_min, child_max)
                 push!(child_indices, idx)
             end
         end
@@ -77,6 +77,17 @@ function build_octree_recursive(subcells::Vector{SubCell{D, T}}, indices::Vector
     max_child_depth = isempty(children) ? 0 : maximum(c.max_depth for c in children) + 1
     
     return OctreeNode(bbox_min, bbox_max, children, Int[], max_child_depth)
+end
+
+function bbox_intersects(a_min::SVector{D, T}, a_max::SVector{D, T},
+                         b_min::SVector{D, T}, b_max::SVector{D, T};
+                         tol::T = T(1e-10)) where {D, T}
+    for d in 1:D
+        if a_max[d] < b_min[d] - tol || b_max[d] < a_min[d] - tol
+            return false
+        end
+    end
+    return true
 end
 
 """

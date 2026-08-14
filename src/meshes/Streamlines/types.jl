@@ -31,6 +31,8 @@ mutable struct SubCell{D, T}
     parent_cell::Int
     "Parent face index in the mesh"
     parent_face::Int
+    "True if the parent face is a boundary face"
+    parent_face_is_boundary::Bool
     "Vertex coordinates"
     vertices::Vector{SVector{D, T}}
     "Centroid of the sub-cell"
@@ -39,6 +41,10 @@ mutable struct SubCell{D, T}
     velocity::SVector{D, T}
     "Volume/area of the sub-cell"
     measure::T
+    "Bounding box minimum coordinates"
+    bbox_min::SVector{D, T}
+    "Bounding box maximum coordinates"
+    bbox_max::SVector{D, T}
 end
 
 """
