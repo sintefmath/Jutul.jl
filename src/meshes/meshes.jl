@@ -217,7 +217,8 @@ include("cart.jl")
 include("unstructured/unstructured.jl")
 include("coarse.jl")
 include("trajectories.jl")
-include("streamlines.jl")
+include("Streamlines/Streamlines.jl")
+using .Streamlines
 include("extruded.jl")
 
 function declare_entities(G::JutulMesh)
