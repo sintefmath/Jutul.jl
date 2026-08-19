@@ -136,7 +136,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         show_axis = false,
         aspect = missing,
         plot_pause = 1.0/30.0,
-        verbose = false
+        verbose = false,
+        kwarg...
     )
     default_colors = preset_colors(preset)
     if ismissing(colormap)
@@ -304,12 +305,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     if HAS_DYNAMIC_DATA
         menu_dyn = add_menu!(dyn_keys, "dynamic", prepend = HAS_DYNAMIC_DATA)
         sel_dyn = menu_dyn.selection
+        slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
+        idx_right_gl += 1
+        value_dynamic = slider_dynamic.interval
 
         if Nstep > 1
-            slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
-            idx_right_gl += 1
-
-            value_dynamic = slider_dynamic.interval
             lpos_tstep = idx_stepgl
             idx_stepgl += 1
             step_slider = Slider(step_grid_layout[idx_stepgl, 1:5], range = 1:Nstep, startvalue = 1, horizontal = true)
@@ -371,7 +371,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             end
         else
             step_idx = Observable(1)
-            value_dynamic = Observable((0.0, 1.0))
         end
     else
         is_dynamic = Observable(false)
@@ -449,7 +448,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         visible = toggle_mesh.checked,
         colorrange = lims,
         backlight = 1,
-        mesh_arg...
+        mesh_arg...,
+        kwarg...
     )
     plot_mesh_edges!(lscene, m, visible = toggle_edge.checked, color = main_color)
     # plot_faults!(lscene, m, colormap = cmap)
