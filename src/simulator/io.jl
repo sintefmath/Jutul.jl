@@ -65,6 +65,7 @@ function store_output!(states, reports, step, sim, config, report; substates = m
             end
         end
         @tic "output report" out_report = get_output_report(sim, report, config[:report_level])
+        out_report[:step] = step
         F = config[:output_function]
         if !ismissing(F)
             state = F(state, out_report)
