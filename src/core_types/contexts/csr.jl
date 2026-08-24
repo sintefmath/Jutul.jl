@@ -16,7 +16,7 @@ struct ParallelCSRContext <: CPUJutulContext
             partitioner = MetisPartitioner(),
             matrix_layout = EquationMajorLayout(),
             minbatch = minbatch(nothing),
-            thread_type = :threads
+            thread_type = :batch
         )
         maxthreads = Threads.nthreads()
         if nthreads > maxthreads
