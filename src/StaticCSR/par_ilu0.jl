@@ -73,15 +73,23 @@ update_factor!(LU::ParallelILUFactorCSR, A, i) = ilu0_csr!(LU.factors[i], A)
 apply_factor!(x, LU::ParallelILUFactorCSR, b, i) = ldiv!(x, LU.factors[i], b)
 
 function ilu0_csr!(LU::ParallelILUFactorCSR{N, T, G}, A::StaticSparsityMatrixCSR) where {N, T, G}
-    @batch for i in 1:N
-        update_factor!(LU, A, i)
+    if N == 1
+        update_factor!(LU, A, 1)
+    else
+        Threads.@threads :static for i in 1:N
+            update_factor!(LU, A, i)
+        end
     end
     return LU
 end
 
 function ldiv!(x::AbstractVector, LU::ParallelILUFactorCSR{N, T, A}, b::AbstractVector) where {N, T, A}
-    @batch for i in 1:N
-        apply_factor!(x, LU, b, i)
+    if N == 1
+        apply_factor!(x, LU, b, 1)
+    else
+        Threads.@threads :static for i in 1:N
+            apply_factor!(x, LU, b, i)
+        end
     end
     return x
 end

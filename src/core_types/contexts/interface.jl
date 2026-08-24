@@ -16,6 +16,69 @@ end
 
 minbatch(x, n) = max(n ÷ nthreads(x), minbatch(x))
 
+function thread_type(context::JutulContext)
+    return :threads
+end
+
+function threaded_loop(F, N, context::JutulContext)
+    threads = thread_type(context)
+    if threads == :threads
+        Threads.@threads for i in 1:N
+            F(i)
+        end
+    elseif threads == :threads_static
+        Threads.@threads :static for i in 1:N
+            F(i)
+        end
+    elseif threads == :batch
+        @batch for i in 1:N
+            F(i)
+        end
+    elseif threads == :serial
+        for i in 1:N
+            F(i)
+        end
+    else
+        throw(ArgumentError("Unknown thread_type $threads"))
+    end
+end
+
+function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = minbatch(context))
+    N_threads = nthreads(context)
+    N_batches = clamp(N_threads ÷ minbatch, 1, N)
+    threads = thread_type(context)
+    if N_batches == 1 || threads == :serial
+        for i in 1:N
+            F(i)
+        end
+    else
+        if threads == :threads
+            Threads.@threads for batch in 1:N_batches
+                for i in load_balanced_interval(batch, N, N_batches)
+                    F(i)
+                end
+            end
+        elseif threads == :threads_static
+            Threads.@threads :static for batch in 1:N_batches
+                for i in load_balanced_interval(batch, N, N_batches)
+                    F(i)
+                end
+            end
+        elseif threads == :batch
+            @batch minbatch = minbatch for i in 1:N
+                F(i)
+            end
+        else
+            throw(ArgumentError("Unknown thread_type $threads"))
+        end
+    end
+end
+
+function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads)
+    ctx = ParallelCSRContext(thread_type = thread_type, minbatch = minbatch)
+    threaded_loop_minbatch(F, N, ctx)
+end
+
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)
 end

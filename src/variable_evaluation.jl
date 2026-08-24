@@ -136,13 +136,14 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 end
             end
         else
-            @batch for i in 1:N_batches
+            function batch_update(i)
                 for (symbol, var) in var_pairs
                     v = state[symbol]
                     ix = entity_eachindex(v, i, N_batches)
                     update_secondary_variable!(v, var, model, state, ix)
                 end
             end
+            threaded_loop(batch_update, N_batches, ctx)
         end
     end
 end

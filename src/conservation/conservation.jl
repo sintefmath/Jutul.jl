@@ -364,10 +364,9 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 end
 
 function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, conn_pos, nc, ne, np)
-    tb = minbatch(context, nc)
-    @batch minbatch=tb for cell = 1:nc
-        fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, np, ne)
-    end
+    F(cell) = fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, np, ne)
+    threaded_loop_minbatch(F, nc, context)
+    return nz
 end
 
 function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np}, ::Val{Ne}) where {Np, Ne}
@@ -439,8 +438,7 @@ end
 
 function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, context, dims)
     nc, _, np = dims
-    tb = minbatch(context, nc)
-    @batch minbatch=tb for cell = 1:nc
+    function F(cell)
         @inbounds for rp in nzrange(src, cell)
             e = rv_src[rp]
             v = nz_src[rp]
@@ -453,6 +451,8 @@ function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, conte
             end
         end
     end
+    threaded_loop_minbatch(F, nc, context)
+    return nz
 end
 
 function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_pos, conn_data)
@@ -465,8 +465,7 @@ end
 function update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fentries, fp, context, dims)
     _, ne, np = dims
     nc = length(conn_pos) - 1
-    tb = minbatch(context, nc)
-    @batch minbatch=tb for cell = 1:nc
+    function F(cell)
         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
             @inbounds for e in 1:ne
                 c = conn_data[i]
@@ -481,6 +480,8 @@ function update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fen
             end
         end
     end
+    threaded_loop_minbatch(F, nc, context)
+    return Jz
 end
 
 function declare_pattern(model, eq::ConservationLaw, e_s::ConservationLawTPFAStorage, entity::Cells)
@@ -608,12 +609,13 @@ function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}
     conn_pos = flow_disc.conn_pos
     M = global_map(model.domain)
     nc = length(conn_pos)-1
-    tb = minbatch(model.context, nc)
-    @tic "flux (cells)" @batch minbatch=tb for c in 1:nc
+    function F(c)
         self = full_cell(c, M)
         state_c = new_entity_index(state, self)
         update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
     end
+    @tic "flux (cells)" threaded_loop_minbatch(F, nc, model.context)
+    return hf_cells
 end
 
 function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
@@ -629,15 +631,14 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
     nf = number_of_faces(model.domain)
     pr = physical_representation(model.domain)
     neighbors = get_neighborship(pr)
-    tb = minbatch(model.context, nf)
-    @tic "flux (faces)" @batch minbatch = tb for f in 1:nf
+    function F(f)
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
         @inbounds hf_faces[f] = face_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
     end
+    @tic "flux (faces)" threaded_loop_minbatch(F, nf, model.context)
 end
-
 
 function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, disc)
     error("Not specialized for $eq")

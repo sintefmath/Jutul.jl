@@ -327,7 +327,20 @@ end
 """
     load_balanced_interval(b, n, m)
 
-Create UnitRange for block b ∈ [1, m] for interval of total length n
+Create UnitRange for block b ∈ [1, m] for interval of total length n, dividing
+each block into a load balanced interval.
+
+# Example
+We have the interval 1:10 and want to divide it into 3 blocks. The first block
+will have 4 elements, the second will have 3, and the third will have 3.
+
+```julia
+julia> Jutul.load_balanced_interval(1, 10, 3)
+1:4
+julia> Jutul.load_balanced_interval(2, 10, 3)
+5:7
+julia> Jutul.load_balanced_interval(3, 10, 3)
+8:10
 """
 function load_balanced_interval(b, n, m)
     start = load_balanced_endpoint(b-1, n, m) + 1
