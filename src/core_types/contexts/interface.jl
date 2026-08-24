@@ -39,6 +39,31 @@ function threaded_loop(F, N, context::JutulContext)
     end
 end
 
+function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = minbatch(context))
+    N_threads = nthreads(context)
+    N_batches = clamp(N_threads ÷ minbatch, 1, N)
+    threads = thread_type(context)
+    if N_batches == 1 || threads == :serial
+        for i in 1:N
+            F(i)
+        end
+    else
+        if threads == :threads
+            Threads.@threads for batch in 1:N_batches
+                for i in load_balanced_interval(batch, N, N_batches)
+                    F(i)
+                end
+            end
+        elseif threads == :batch
+            @batch minbatch = minbatch for i in 1:N
+                F(i)
+            end
+        else
+            throw(ArgumentError("Unknown thread_type $threads"))
+        end
+    end
+end
+
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)
 end

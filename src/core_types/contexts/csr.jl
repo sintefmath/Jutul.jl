@@ -23,7 +23,7 @@ struct ParallelCSRContext <: CPUJutulContext
             @warn "nthreads > Threads.nthreads() in ParallelCSRContext. Using Threads.nthreads() instead."
             nthreads = maxthreads
         end
-        thread_type in (:threads, :batch) || throw(ArgumentError("thread_type must be :threads or :batch"))
+        thread_type in (:threads, :batch, :serial) || throw(ArgumentError("thread_type must be :threads, :serial or :batch"))
         new(matrix_layout, minbatch, nthreads, partitioner, thread_type)
     end
 end
