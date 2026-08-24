@@ -634,7 +634,7 @@ function initial_setup!(sim, config, timesteps;
     set_global_timer!(config[:extra_timing])
     # Threading
     if Threads.nthreads() > 1
-        PolyesterWeave.reset_workers!()
+        Polyester.reset_threads!()
     end
     pth = config[:output_path]
     initialize_io(pth)

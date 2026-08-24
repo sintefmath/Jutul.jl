@@ -16,6 +16,29 @@ end
 
 minbatch(x, n) = max(n ÷ nthreads(x), minbatch(x))
 
+function thread_type(context::JutulContext)
+    return :threads
+end
+
+function threaded_loop(F, N, context::JutulContext)
+    threads = thread_type(context)
+    if threads == :threads
+        Threads.@threads for i in 1:N
+            F(i)
+        end
+    elseif threads == :batch
+        @batch for i in 1:N
+            F(i)
+        end
+    elseif threads == :serial
+        for i in 1:N
+            F(i)
+        end
+    else
+        throw(ArgumentError("Unknown thread_type $threads"))
+    end
+end
+
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)
 end

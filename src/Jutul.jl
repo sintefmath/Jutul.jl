@@ -14,7 +14,6 @@ module Jutul
     using Dates
     # Lightweight threads
     using Polyester
-    using PolyesterWeave
     # Linear solvers and preconditioners
     using ILUZero
     using LinearOperators
