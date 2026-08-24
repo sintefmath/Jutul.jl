@@ -578,10 +578,8 @@ end
 function inner_update_equation_for_entity(cache, eq, state, state0, model, dt)
     v = cache.entries
     vars = cache.variables
-
     ne = number_of_entities(cache)
-    tb = minbatch(model.context, ne)
-    @batch minbatch=tb for i in 1:ne
+    function F(i)
         ldisc = local_discretization(eq, i)
         @inbounds for j in vrange(cache, i)
             v_i = @views v[:, j]
@@ -591,6 +589,8 @@ function inner_update_equation_for_entity(cache, eq, state, state0, model, dt)
             @inbounds update_equation_in_entity!(v_i, i, state_i, state0_i, eq, model, dt, ldisc)
         end
     end
+    threaded_loop_minbatch(F, ne, model.context)
+    return cache
 end
 
 """
