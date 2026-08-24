@@ -88,8 +88,7 @@ end
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
-    tb = minbatch(model.context, nu)
-    @batch minbatch = tb for i in 1:nu
+    function F(i)
         @inbounds for e in 1:ne
             a = get_entry(cache, i, e)
             insert_residual_value(r, i + nu*(e-1), a.value)
@@ -98,6 +97,8 @@ function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
             end
         end
     end
+    threaded_loop(F, nu, model.context)
+    return nz
 end
 
 function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entities, kwarg...)

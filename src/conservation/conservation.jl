@@ -364,10 +364,9 @@ function update_linearized_system_subset_conservation_accumulation!(nz, r, model
 end
 
 function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, conn_pos, nc, ne, np)
-    tb = minbatch(context, nc)
-    @batch minbatch=tb for cell = 1:nc
-        fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, np, ne)
-    end
+    F(cell) = fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, np, ne)
+    threaded_loop_minbatch(F, nc, context)
+    return nz
 end
 
 function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np}, ::Val{Ne}) where {Np, Ne}
