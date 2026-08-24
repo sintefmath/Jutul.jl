@@ -76,7 +76,7 @@ function ilu0_csr!(LU::ParallelILUFactorCSR{N, T, G}, A::StaticSparsityMatrixCSR
     if N == 1
         update_factor!(LU, A, 1)
     else
-        Threads.@threads for i in 1:N
+        Threads.@threads :static for i in 1:N
             update_factor!(LU, A, i)
         end
     end
@@ -87,7 +87,7 @@ function ldiv!(x::AbstractVector, LU::ParallelILUFactorCSR{N, T, A}, b::Abstract
     if N == 1
         apply_factor!(x, LU, b, 1)
     else
-        Threads.@threads for i in 1:N
+        Threads.@threads :static for i in 1:N
             apply_factor!(x, LU, b, i)
         end
     end
