@@ -631,15 +631,14 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq,
     nf = number_of_faces(model.domain)
     pr = physical_representation(model.domain)
     neighbors = get_neighborship(pr)
-    tb = minbatch(model.context, nf)
-    @tic "flux (faces)" @batch minbatch = tb for f in 1:nf
+    function F(f)
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
         @inbounds hf_faces[f] = face_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
     end
+    @tic "flux (faces)" threaded_loop_minbatch(F, nf, model.context)
 end
-
 
 function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, disc)
     error("Not specialized for $eq")

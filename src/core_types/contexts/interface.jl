@@ -64,6 +64,11 @@ function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = min
     end
 end
 
+function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads)
+    ctx = ParallelCSRContext(thread_type = thread_type, minbatch = minbatch)
+    threaded_loop_minbatch(F, N, ctx)
+end
+
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)
 end
