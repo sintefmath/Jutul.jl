@@ -26,6 +26,10 @@ function threaded_loop(F, N, context::JutulContext)
         Threads.@threads for i in 1:N
             F(i)
         end
+    elseif threads == :threads_static
+        Threads.@threads :static for i in 1:N
+            F(i)
+        end
     elseif threads == :batch
         @batch for i in 1:N
             F(i)
@@ -50,6 +54,12 @@ function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = min
     else
         if threads == :threads
             Threads.@threads for batch in 1:N_batches
+                for i in load_balanced_interval(batch, N, N_batches)
+                    F(i)
+                end
+            end
+        elseif threads == :threads_static
+            Threads.@threads :static for batch in 1:N_batches
                 for i in load_balanced_interval(batch, N, N_batches)
                     F(i)
                 end

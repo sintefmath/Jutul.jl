@@ -5,6 +5,7 @@ using Jutul, Test
     ctx_csr = ParallelCSRContext(thread_type = :threads)
     ctx_csr_batch = ParallelCSRContext(thread_type = :batch)
     ctx_csr_serial = ParallelCSRContext(thread_type = :serial)
+    ctx_csr_static = ParallelCSRContext(thread_type = :threads_static)
 
     function test_context(ctx)
         N = 1000
@@ -23,7 +24,7 @@ using Jutul, Test
         @test v2 == collect(1:N)
     end
 
-    for ctx in (ctx_def, ctx_csr, ctx_csr_batch, ctx_csr_serial)
+    for ctx in (ctx_def, ctx_csr, ctx_csr_batch, ctx_csr_serial, ctx_csr_static)
         test_context(ctx)
     end
 end

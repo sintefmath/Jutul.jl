@@ -3,6 +3,12 @@ export ParallelCSRContext
     ParallelCSRContext()
     # 5 threads (provided that Julia was started at least --threads=5)
     ParalellCSRContext(5)
+    # Use @threads :static for the threaded loops
+    ParalellCSRContext(thread_type = :threads_static)
+    # Use batch threading for the threaded loops
+    ParalellCSRContext(thread_type = :batch)
+    # Use serial loops for the threaded loops
+    ParalellCSRContext(thread_type = :serial)
 
 A context that uses a CSR sparse matrix format together with threads.
 """
@@ -23,7 +29,7 @@ struct ParallelCSRContext <: CPUJutulContext
             @warn "nthreads > Threads.nthreads() in ParallelCSRContext. Using Threads.nthreads() instead."
             nthreads = maxthreads
         end
-        thread_type in (:threads, :batch, :serial) || throw(ArgumentError("thread_type must be :threads, :serial or :batch"))
+        thread_type in (:threads, :threads_static, :batch, :serial) || throw(ArgumentError("thread_type must be :threads, :serial, :threads_static or :batch"))
         new(matrix_layout, minbatch, nthreads, partitioner, thread_type)
     end
 end
