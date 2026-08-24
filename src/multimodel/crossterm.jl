@@ -289,9 +289,8 @@ end
 function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, positions, sgn)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
-    tb = minbatch(model.context, nu)
-    @batch minbatch = tb for i in 1:nu
-        for (jno, j) in enumerate(vrange(cache, i))
+    function F(i)
+        for j in vrange(cache, i)
             @inbounds for e in 1:ne
                 a = sgn*entries[e, j]
                 @inbounds for d = 1:np
@@ -301,6 +300,7 @@ function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, positio
             end
         end
     end
+    threaded_loop_minbatch(F, nu, model.context)
 end
 
 sub_number_of_equations(model::MultiModel) = map(number_of_equations, model.models)
