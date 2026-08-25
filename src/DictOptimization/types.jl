@@ -267,6 +267,27 @@ function evaluate(opt::JutulOptimizationProblem, x::AbstractDict; kwarg...)
     return evaluate(opt, x_vec; dict_out = true, kwarg...)
 end
 
+"""
+    obj, dobj_dx = evaluate(opt)
+    obj, dobj_dx = evaluate(opt, x)
+
+Evaluate the objective function and its gradient for a
+`JutulOptimizationProblem` `opt` at a given point `x`. If `x` is not provided,
+the initial guess `opt.x0` is used. The function returns the objective value and
+its gradient with respect to the optimization parameters. If `x` is a `Dict`, it
+will be vectorized before evaluation and the return gradient will be a `Dict`
+with the same structure as `x`.
+
+# Keyword arguments
+- `gradient = true`: Compute the gradient. If false, only the objective value is
+  computed (but the function still produces two outputs, `obj` and a `missing`
+  instance).
+- `extra_timing = false`: If true, additional timing information is printed during the
+  evaluation of the objective function and its gradient.
+- `dict_out`: Can be used to override the behavior of the return gradient (see
+  above). If true, the gradient is returned as a `Dict` with the same structure
+  as `x`, otherwise it will be a vector.
+"""
 function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
         gradient = true,
         extra_timing = false,
