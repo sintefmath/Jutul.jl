@@ -130,7 +130,8 @@ module Jutul
         free_optimization_parameters!,
         set_optimization_parameter!,
         add_optimization_multiplier!,
-        parameters_gradient
+        parameters_gradient,
+        optimization_problem
 
     export DictParameters,
         optimize,

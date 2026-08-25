@@ -379,6 +379,20 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
 end
 
 """
+    opt = optimization_problem(dopt::DictParameters, objective)
+    opt = optimization_problem(dopt, objective, setup_fn = dopt.setup_function; kwarg...)
+
+Set up a standalone optimization problem from a [`DictParameters`](@ref)
+instance and an objective function that can be used to efficiently evaluate
+objectives and gradients for use in external optimization routines (or
+debugging/testing).
+
+"""
+function optimization_problem(dopt::DictParameters, objective, setup_fn = dopt.setup_function; kwarg...)
+    return JutulOptimizationProblem(dopt, objective, setup_fn; kwarg...)
+end
+
+"""
     freeze_optimization_parameter!(dopt, "parameter_name")
     freeze_optimization_parameter!(dopt, ["dict_name", "parameter_name"])
     freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
@@ -391,7 +405,7 @@ removed.
 function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
     parameter_name = convert_key(parameter_name, dopt.parameters)
     if !ismissing(val)
-        set_optimization_parameter!(vc, parameter_name, val)
+        set_optimization_parameter!(dopt, parameter_name, val)
     end
     delete!(dopt.parameter_targets, parameter_name)
 end

@@ -215,6 +215,11 @@ struct JutulOptimizationProblem
     end
 end
 
+import Base: length
+function length(I::JutulOptimizationProblem)
+    return length(I.x0)
+end
+
 function setup_optimization_backend_kwarg(;
         deps::Symbol = :case,
         deps_ad::Symbol = :jutul,
@@ -245,7 +250,17 @@ function setup_optimization_backend_kwarg(;
     return NamedTuple(backend_arg)
 end
 
-function evaluate(opt::JutulOptimizationProblem, x = opt.x0; gradient = true, extra_timing = false)
+function evaluate(opt::JutulOptimizationProblem, x::AbstractDict; kwarg...)
+    x_vec, = Jutul.AdjointsDI.vectorize_nested(x,
+        setup = opt.x_setup,
+    )
+    return evaluate(opt, x_vec; kwarg...)
+end
+
+function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
+        gradient = true,
+        extra_timing = false
+    )
     dopt = opt.dict_parameters
     setup_fn = opt.setup_function
     objective = opt.objective
