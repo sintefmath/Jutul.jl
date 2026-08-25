@@ -23,7 +23,6 @@ function update(H::LimitedMemoryHessianLegacy, s, y)
         # limit m to number of vars
         if H.m > length(s)
             H.m = length(s)
-            Jutul.jutul_message("LBFGS", "Resetting 'm' to number of parameters: m = $(length(s))", color = :yellow)
         end
     end
     return H
