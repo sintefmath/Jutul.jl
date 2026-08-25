@@ -250,8 +250,10 @@ function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPacked
     update_objective_sparsity!(storage, G, packed_steps, :parameter, objective_sparsity_steps)
     # Set gradient to zero before solve starts
     @. ∇G = 0
-    if info_level == 0 && !JUTUL_IS_CI
+    if info_level > 0
         jutul_message("Jutul", "Solving adjoint for $N substeps")
+    end
+    if info_level == 0 && !JUTUL_IS_CI
         p = Progress(N, color = :blue, desc = "Progress")
     else
         p = missing

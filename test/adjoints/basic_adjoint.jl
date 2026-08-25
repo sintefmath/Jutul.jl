@@ -394,6 +394,25 @@ import Jutul.DictOptimization as DictOptimization
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
 
+        # Test evaluation and optimization_problem
+        p = Jutul.optimization_problem(dprm, poisson_mismatch_objective)
+        obj, grad_vec = p()
+        @test obj ≈ 0.08232643800187239
+        # Two active parameters
+        @test length(grad_vec) == 2
+        @test length(p) == 2
+        for (i, dobj) in enumerate(grad_vec)
+            dobj_num = Jutul.DictOptimization.finite_difference_gradient_entry(p, index = i)
+            @test isapprox(dobj, dobj_num; atol = 1e-3)
+        end
+
+        obj1, grad_vec1 = p(prm; dict_out = false)
+        @test grad_vec == grad_vec1
+        @test obj1 == obj
+        _, grad_dict = p(prm)
+        @test grad_dict == p(prm, dict_out = true)[2]
+
+
         # Test with lbfgsb_qp optimizer
         outpth = tempname()
         prm_opt = optimize(dprm, poisson_mismatch_objective,

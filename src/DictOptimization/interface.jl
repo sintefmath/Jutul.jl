@@ -379,6 +379,40 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
 end
 
 """
+    opt = optimization_problem(dopt::DictParameters, objective)
+    opt = optimization_problem(dopt, objective, setup_fn = dopt.setup_function; kwarg...)
+
+Set up a standalone optimization problem from a [`DictParameters`](@ref)
+instance and an objective function that can be used to efficiently evaluate
+objectives and gradients for use in external optimization routines (or
+debugging/testing).
+
+# Keyword arguments
+See [`optimize`] for more details on possible keyword arguments.
+
+Once set up, the optimization problem can be used to evaluate using the following interface:
+```julia
+opt = optimization_problem(dopt, objective)
+# Evaluate objective and gradient at x
+# Note that x can be either a vector of optimization parameters
+# or a parameter Dict. The output will be on the same format
+# (Vector output for Vector input and Dict output for Dict input)
+f, g = opt(x)
+# Evaluate objective only
+f, _ = opt(x; gradient = false)
+f = first(opt(x; gradient = false))
+```
+
+# Notes
+This is structure used internally by the `optimize` function and takes care to
+avoid redundant memory allocations and setup. This is *highly* advantageous for
+multiple evaluations of the objective and gradient.
+"""
+function optimization_problem(dopt::DictParameters, objective, setup_fn = dopt.setup_function; kwarg...)
+    return JutulOptimizationProblem(dopt, objective, setup_fn; kwarg...)
+end
+
+"""
     freeze_optimization_parameter!(dopt, "parameter_name")
     freeze_optimization_parameter!(dopt, ["dict_name", "parameter_name"])
     freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
@@ -391,7 +425,7 @@ removed.
 function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
     parameter_name = convert_key(parameter_name, dopt.parameters)
     if !ismissing(val)
-        set_optimization_parameter!(vc, parameter_name, val)
+        set_optimization_parameter!(dopt, parameter_name, val)
     end
     delete!(dopt.parameter_targets, parameter_name)
 end
