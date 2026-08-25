@@ -63,30 +63,41 @@ mutable struct DictParameters
     active_type
     setup_function
     history
-    @doc"""
-        DictParameters(parameters)
-        DictParameters(parameters::AbstractDict, setup_function = missing;
-                strict = true,
-                verbose = true,
-                active_type = Float64
-            )
+end
 
-    Set up a `DictParameters` object for optimization. Optionally, the setup
-    function that takes an instance with the same keys as `parameters` together
-    with a `step_info` dictionary can be provided. The setup function should
-    return a `JutulCase` set up from the parameters in the Dict.
+"""
+    DictParameters(parameters)
+    DictParameters(parameters::AbstractDict, setup_function = missing;
+            strict = true,
+            verbose = true,
+            active_type = Float64
+        )
 
-    Optional keyword arguments:
-    - `strict`: If true, the optimization will throw an error if any of the
-      parameters are not set with at least one of the upper or lower bounds.
-    - `verbose`: If true, the optimization will print information about the
-      optimization process.
-    - `active_type`: The type of the parameters that are considered active in
-      the optimization. Defaults to `Float64`. This is used to determine which
-      parameters are active and should be optimized. This means that all entries
-      (and entries in nested dictionaries) of the `parameters` dictionary must
-      be of this type or an array with this type as element type.
-    """
+Set up a `DictParameters` object for optimization. Optionally, the setup
+function that takes an instance with the same keys as `parameters` together with
+a `step_info` dictionary can be provided. The setup function should return a
+`JutulCase` set up from the parameters in the Dict. To be precise:
+
+```julia
+setup_function(parameters::AbstractDict, step_info = missing)::JutulCase
+```
+
+This exposes the parameters in the Dict to the optimization framework and makes
+it possible to free parameters for optimization and set bounds on them using
+[`free_optimization_parameter!`](@ref). The `setup_function` is used to build
+the case for each evaluation of the objective function during optimization.
+
+# Optional keyword arguments:
+- `strict`: If true, the optimization will throw an error if any of the
+    parameters are not set with at least one of the upper or lower bounds.
+- `verbose`: If true, the optimization will print information about the
+    optimization process.
+- `active_type`: The type of the parameters that are considered active in
+    the optimization. Defaults to `Float64`. This is used to determine which
+    parameters are active and should be optimized. This means that all entries
+    (and entries in nested dictionaries) of the `parameters` dictionary must
+    be of this type or an array with this type as element type.
+"""
 function DictParameters(parameters::AbstractDict, setup_function = missing;
             strict = true,
             verbose = true,
@@ -95,7 +106,7 @@ function DictParameters(parameters::AbstractDict, setup_function = missing;
         possible_targets = Jutul.AdjointsDI.setup_vectorize_nested(parameters; active_type = active_type)
         pkeys = possible_targets.names
         length(pkeys) > 0 || error("No targets found.")
-        return new(
+        return DictParameters(
             deepcopy(parameters),
             missing,
             Jutul.OrderedDict{Vector{KEYTYPE}, KeyLimits}(),
@@ -108,7 +119,6 @@ function DictParameters(parameters::AbstractDict, setup_function = missing;
             setup_function, missing
         )
     end
-end
 
 function Base.show(io::IO, t::MIME"text/plain", dopt::DictParameters)
     active_names = active_keys(dopt)
@@ -290,6 +300,14 @@ function (I::JutulOptimizationProblem)(x = I.x0; kwarg...)
     return evaluate(I, x; kwarg...)
 end
 
+"""
+    dg = finite_difference_gradient_entry(I, x; index = 1)
+    dg = finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; index = 1, eps = 1e-6)
+
+Take a finite difference approximation of the gradient of the objective function
+at the given index in the optimization parameters. This is useful for testing
+and verifying the correctness of the gradient computed by the adjoint method.
+"""
 function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; index = 1, eps = 1e-6)
     f0, _ = I(x; gradient = false)
     xd = copy(x)
