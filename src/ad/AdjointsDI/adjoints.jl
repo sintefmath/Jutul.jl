@@ -105,8 +105,10 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
             # Set gradient to zero before solve starts
             @. dG_dynamic = 0.0
             @tic "sensitivities" begin
-                if info_level == 0 && !JUTUL_IS_CI
+                if info_level > 0
                     jutul_message("Jutul", "Solving $N adjoint steps")
+                end
+                if info_level == 0 && !JUTUL_IS_CI
                     p = Progress(N, color = :blue, desc = "Progress")
                 else
                     p = missing
