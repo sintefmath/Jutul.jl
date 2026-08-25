@@ -394,6 +394,25 @@ import Jutul.DictOptimization as DictOptimization
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
 
+        # Test evaluation and optimization_problem
+        p = Jutul.optimization_problem(dprm, poisson_mismatch_objective)
+        obj, grad_vec = p()
+        @test obj ≈ 0.08232643800187239
+        # Two active parameters
+        @test length(grad_vec) == 2
+        @test length(p) == 2
+        for (i, dobj) in enumerate(grad_vec)
+            dobj_num = Jutul.DictOptimization.finite_difference_gradient_entry(p, index = i)
+            @test isapprox(dobj, dobj_num; atol = 1e-3)
+        end
+
+        obj1, grad_vec1 = p(prm; dict_out = false)
+        @test grad_vec == grad_vec1
+        @test obj1 == obj
+        _, grad_dict = p(prm)
+        @test grad_dict == p(prm, dict_out = true)[2]
+
+
         # Test with lbfgsb_qp optimizer
         outpth = tempname()
         prm_opt = optimize(dprm, poisson_mismatch_objective,
@@ -599,55 +618,3 @@ end
     @test isfinite(scaled_low)
     @test isfinite(scaled_high)
 end
-##
-function default_poisson_dict()
-    return Dict(
-        "dx" => 1.0,
-        "dy" => 1.0,
-        "U0" => 1.0,
-        "k_val" => 1.0,
-        "srcval" => 1.0
-    )
-end
-
-function setup_poisson_test_case_from_dict(d::AbstractDict, step_info = missing; fmt = :case, kwarg...)
-    return setup_poisson_test_case(d["dx"], d["dy"], d["U0"], d["k_val"], d["srcval"]; dim = (2, 2), dt = [1.0])
-end
-
-prm_truth = default_poisson_dict()
-states, = simulate(setup_poisson_test_case_from_dict(prm_truth), info_level = -1)
-function poisson_mismatch_objective(m, s, dt, step_info, forces)
-    step = step_info[:step]
-    U = s[:U]
-    U_ref = states[step][:U]
-    v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
-    return dt*v
-end
-# Perturb a parameter
-prm = default_poisson_dict()
-prm["k_val"] = 3.333
-
-dprm = DictParameters(prm, setup_poisson_test_case_from_dict, verbose = false)
-free_optimization_parameter!(dprm, "k_val", abs_max = 10.0, abs_min = 0.1)
-# Also do one with relative limits that should not change much
-free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
-
-p = Jutul.optimization_problem(dprm, poisson_mismatch_objective)
-##
-obj, grad_vec = p()
-@test obj ≈ 0.08232643800187239
-# Two active parameters
-@test length(grad_vec) == 2
-@test length(p) == 2
-for (i, dobj) in enumerate(grad_vec)
-    dobj_num = Jutul.DictOptimization.finite_difference_gradient_entry(p, index = i)
-    @test isapprox(dobj, dobj_num; atol = 1e-3)
-end
-
-##
-obj1, grad_vec1 = p(prm; dict_out = false)
-@test grad_vec == grad_vec1
-@test obj1 == obj
-##
-_, grad_dict = p(prm)
-@test grad_dict == p(prm, dict_out = true)[2]
