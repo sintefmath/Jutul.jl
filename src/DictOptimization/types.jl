@@ -254,12 +254,13 @@ function evaluate(opt::JutulOptimizationProblem, x::AbstractDict; kwarg...)
     x_vec, = Jutul.AdjointsDI.vectorize_nested(x,
         setup = opt.x_setup,
     )
-    return evaluate(opt, x_vec; kwarg...)
+    return evaluate(opt, x_vec; dict_out = true, kwarg...)
 end
 
 function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
         gradient = true,
-        extra_timing = false
+        extra_timing = false,
+        dict_out::Bool = false
     )
     dopt = opt.dict_parameters
     setup_fn = opt.setup_function
@@ -277,7 +278,12 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
         extra_timing = extra_timing,
         output_path = opt.output_path
     )
-    return (obj, dobj_dx)
+    if dict_out
+        grad = Jutul.AdjointsDI.devectorize_nested(dobj_dx, x_setup)
+    else
+        grad = dobj_dx
+    end
+    return (obj, grad)
 end
 
 function (I::JutulOptimizationProblem)(x = I.x0; kwarg...)

@@ -645,6 +645,9 @@ for (i, dobj) in enumerate(grad_vec)
 end
 
 ##
-obj1, grad_vec1 = p(prm)
+obj1, grad_vec1 = p(prm; dict_out = false)
 @test grad_vec == grad_vec1
 @test obj1 == obj
+##
+_, grad_dict = p(prm)
+@test grad_dict == p(prm, dict_out = true)[2]
