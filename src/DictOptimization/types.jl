@@ -337,9 +337,14 @@ end
 
 function finite_difference_gradient(I::JutulOptimizationProblem, x = I.x0; eps = 1e-6)
     n = length(x)
+    f0, _ = I(x; gradient = false)
     grad_fd = zeros(n)
+    xd = copy(x)
     for i in 1:n
-        grad_fd[i] = finite_difference_gradient_entry(I, x; index = i, eps = eps)
+        xd .= x
+        xd[i] += eps
+        fd, _ = I(xd; gradient = false)
+        grad_fd[i] = (fd - f0)/eps
     end
     return grad_fd
 end
