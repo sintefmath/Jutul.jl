@@ -308,7 +308,7 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
         output_path = opt.output_path
     )
     if dict_out
-        grad = Jutul.AdjointsDI.devectorize_nested(dobj_dx, x_setup)
+        grad = optimizer_devectorize(opt, dobj_dx)
     else
         grad = dobj_dx
     end
