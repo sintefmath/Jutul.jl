@@ -337,8 +337,12 @@ function group_limits(minlims, maxlims, ind)
     return (min = min_limit, max = max_limit)
 end
 
-function optimization_setup(dopt::DictParameters; include_limits = true)
-    x0, x_setup = Jutul.AdjointsDI.vectorize_nested(dopt.parameters,
+function optimization_setup(opt::JutulOptimizationProblem, arg...)
+    return optimization_setup(opt.dict_parameters, arg...)
+end
+
+function optimization_setup(dopt::DictParameters, prm = dopt.parameters; include_limits = true)
+    x0, x_setup = Jutul.AdjointsDI.vectorize_nested(prm,
         multipliers = dopt.multipliers,
         active = active_keys(dopt),
         active_type = dopt.active_type
