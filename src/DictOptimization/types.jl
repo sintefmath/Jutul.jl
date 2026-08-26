@@ -327,10 +327,16 @@ Take a finite difference approximation of the gradient of the objective function
 at the given index in the optimization parameters. This is useful for testing
 and verifying the correctness of the gradient computed by the adjoint method.
 """
-function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; index = 1, eps = 1e-6)
+function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; lumping = missing, index = 1, eps = 1e-6)
     f0, _ = I(x; gradient = false)
     xd = copy(x)
-    xd[index] += eps
+    if ismissing(lumping)
+        xd[index] += eps
+    else
+        for i in findall(x -> x == lumping[index], lumping)
+            xd[i] += eps
+        end
+    end
     fd, _ = I(xd; gradient = false)
     return (fd - f0)/eps
 end
