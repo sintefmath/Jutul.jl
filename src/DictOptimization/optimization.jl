@@ -257,13 +257,17 @@ function forward_simulate_for_optimization(case, adj_cache; extra_timing = false
     return out
 end
 
-function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
+function optimizer_devectorize!(prm, X, x_setup; multipliers = missing, scale = true)
     if haskey(x_setup, :lumping) || haskey(x_setup, :scalers)
         X_new = similar(X, 0)
         sizehint!(X_new, length(X))
         pos = 0
         for (i, k) in enumerate(x_setup.names)
-            scaler = get(x_setup.scalers, k, missing)
+            if scale
+                scaler = get(x_setup.scalers, k, missing)
+            else
+                scaler = missing
+            end
             lumping = get(x_setup.lumping, k, missing)
             stats = x_setup.statistics[k]
             if ismissing(x_setup.limits)

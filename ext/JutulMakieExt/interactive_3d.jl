@@ -208,7 +208,10 @@ function plot_interactive_impl(grid, states;
         end
     end
     function get_valid_rows(s)
-        sample = data[Symbol(s)]
+        sample = get(data, s, missing)
+        if ismissing(sample)
+            sample = data[Symbol[s]]
+        end
         if sample isa AbstractVector
             n = 1
         else

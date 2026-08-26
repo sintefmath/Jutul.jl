@@ -308,7 +308,7 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
         output_path = opt.output_path
     )
     if dict_out
-        grad = optimizer_devectorize(opt, dobj_dx)
+        grad = optimizer_devectorize(opt, dobj_dx, scale = false)
     else
         grad = dobj_dx
     end
@@ -335,8 +335,8 @@ function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0;
     return (fd - f0)/eps
 end
 
-function optimizer_devectorize(P::JutulOptimizationProblem, x)
+function optimizer_devectorize(P::JutulOptimizationProblem, x; kwarg...)
     prm_out = deepcopy(P.dict_parameters.parameters)
-    optimizer_devectorize!(prm_out, x, P.x_setup, multipliers = P.dict_parameters.multipliers_optimized)
+    optimizer_devectorize!(prm_out, x, P.x_setup; multipliers = P.dict_parameters.multipliers_optimized, kwarg...)
     return prm_out
 end
