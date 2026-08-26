@@ -335,6 +335,15 @@ function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0;
     return (fd - f0)/eps
 end
 
+function finite_difference_gradient(I::JutulOptimizationProblem, x = I.x0; eps = 1e-6)
+    n = length(x)
+    grad_fd = zeros(n)
+    for i in 1:n
+        grad_fd[i] = finite_difference_gradient_entry(I, x; index = i, eps = eps)
+    end
+    return grad_fd
+end
+
 function optimizer_devectorize(P::JutulOptimizationProblem, x; kwarg...)
     prm_out = deepcopy(P.dict_parameters.parameters)
     optimizer_devectorize!(prm_out, x, P.x_setup; multipliers = P.dict_parameters.multipliers_optimized, kwarg...)
