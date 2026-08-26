@@ -337,12 +337,16 @@ function group_limits(minlims, maxlims, ind)
     return (min = min_limit, max = max_limit)
 end
 
-function optimization_setup(dopt::DictParameters; include_limits = true)
-    x0, x_setup = Jutul.AdjointsDI.vectorize_nested(dopt.parameters,
+function vectorize_nested_for_optimizer(dopt::DictParameters, prm = dopt.parameters)
+    return Jutul.AdjointsDI.vectorize_nested(prm,
         multipliers = dopt.multipliers,
         active = active_keys(dopt),
         active_type = dopt.active_type
     )
+end
+
+function optimization_setup(dopt::DictParameters; include_limits = true)
+    x0, x_setup = vectorize_nested_for_optimizer(dopt)
     length(x0) > 0 || error("Cannot optimize/differentiate zero active parameters. Call free_optimization_parameter! first.")
     if include_limits
         lims = realize_limits(dopt, x_setup)

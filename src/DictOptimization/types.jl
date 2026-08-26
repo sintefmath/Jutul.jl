@@ -261,9 +261,8 @@ function setup_optimization_backend_kwarg(;
 end
 
 function evaluate(opt::JutulOptimizationProblem, x::AbstractDict; kwarg...)
-    x_vec, = Jutul.AdjointsDI.vectorize_nested(x,
-        setup = opt.x_setup,
-    )
+    x_vec, = vectorize_nested_for_optimizer(opt, x)
+    @assert length(x_vec) == length(opt)
     return evaluate(opt, x_vec; dict_out = true, kwarg...)
 end
 
