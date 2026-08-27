@@ -1513,17 +1513,6 @@ end
 
 function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     N_report_step = maximum(step_index)
-    N_mini_step = length(dt)
-    if forces isa Vector
-        N_forces = length(forces)
-        if N_forces != N_mini_step
-            if N_forces == N_report_step
-                forces = forces[step_index]
-            else
-                error("Forces must have the same length as either states ($(N_mini_step)) or report steps ($(N_report_step)), was $(N_forces).")
-            end
-        end
-    end
     length(states) == length(dt) || error("States and timesteps must have the same length, was $(length(states)) and $(length(dt))")
     total_time = sum(dt)
     # Set
