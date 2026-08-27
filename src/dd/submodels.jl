@@ -3,7 +3,7 @@ export submodel
 # Helper for flexible well-to-subdomain membership tests.
 # A well partition value can be:
 #   Integer  – the single subdomain that owns the well (SimplePartition path)
-#   Set{Integer} – the set of subdomains that fully contain the well (OverlapPartition path)
+#   Set{Integer} – the set of subdomains that fully contain the well (GenericPartition path)
 #   Nothing  – no subdomain owns the well (should not occur; kept for safety)
 well_in_partition(v::Integer, index::Integer) = v == index
 well_in_partition(v::AbstractSet, index) = index in v
