@@ -2,6 +2,7 @@
 struct ParallelILUFactorCSR{N, T, A} <: AbstractILUFactorization
     factors::NTuple{N, T}
     active::NTuple{N, A}
+    threads::Symbol
 end
 
 Base.eltype(ilu::ParallelILUFactorCSR) = Base.eltype(first(ilu.factors))
@@ -41,7 +42,7 @@ function ParallelILUFactorCSR(A::StaticSparsityMatrixCSR{Tv, Ti}, active::Tuple)
     ilu_initial_setup_par!(factors, A, active, N)
     F = tuple(factors...)
     F::NTuple{N, T}
-    return ParallelILUFactorCSR{N, T, VT}(F, active)
+    return ParallelILUFactorCSR{N, T, VT}(F, active, A.thread_type)
 end
 
 function ilu0_csr(A::StaticSparsityMatrixCSR, partition::V) where {V<:AbstractVector}
@@ -56,11 +57,13 @@ end
 
 
 function ilu_initial_setup_par!(factors, A, active, N)
-    Threads.@threads :static for i in 1:N
+    function F(i)
         f = ilu0_csr(A, active = active[i])
         f::eltype(factors)
         factors[i] = f
     end
+    threaded_loop(F, N, A.thread_type)
+    return factors
 end
 
 
@@ -69,27 +72,23 @@ function ilu0_csr(A::StaticSparsityMatrixCSR, active::NTuple)
     return factor
 end
 
-update_factor!(LU::ParallelILUFactorCSR, A, i) = ilu0_csr!(LU.factors[i], A)
-apply_factor!(x, LU::ParallelILUFactorCSR, b, i) = ldiv!(x, LU.factors[i], b)
+function update_factor!(LU::ParallelILUFactorCSR, A, i)
+    return ilu0_csr!(LU.factors[i], A)
+end
+
+function apply_factor!(x, LU::ParallelILUFactorCSR, b, i)
+    return ldiv!(x, LU.factors[i], b)
+end
 
 function ilu0_csr!(LU::ParallelILUFactorCSR{N, T, G}, A::StaticSparsityMatrixCSR) where {N, T, G}
-    if N == 1
-        update_factor!(LU, A, 1)
-    else
-        Threads.@threads :static for i in 1:N
-            update_factor!(LU, A, i)
-        end
-    end
+    F(i) = update_factor!(LU, A, i)
+    threaded_loop(F, N, LU.threads)
     return LU
 end
 
 function ldiv!(x::AbstractVector, LU::ParallelILUFactorCSR{N, T, A}, b::AbstractVector) where {N, T, A}
-    if N == 1
-        apply_factor!(x, LU, b, 1)
-    else
-        Threads.@threads :static for i in 1:N
-            apply_factor!(x, LU, b, i)
-        end
-    end
+    F(i) = apply_factor!(x, LU, b, i)
+    threaded_loop(F, N, LU.threads)
     return x
 end
+
