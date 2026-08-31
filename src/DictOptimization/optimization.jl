@@ -257,13 +257,17 @@ function forward_simulate_for_optimization(case, adj_cache; extra_timing = false
     return out
 end
 
-function optimizer_devectorize!(prm, X, x_setup; multipliers = missing)
+function optimizer_devectorize!(prm, X, x_setup; multipliers = missing, scale = true)
     if haskey(x_setup, :lumping) || haskey(x_setup, :scalers)
         X_new = similar(X, 0)
         sizehint!(X_new, length(X))
         pos = 0
         for (i, k) in enumerate(x_setup.names)
-            scaler = get(x_setup.scalers, k, missing)
+            if scale
+                scaler = get(x_setup.scalers, k, missing)
+            else
+                scaler = missing
+            end
             lumping = get(x_setup.lumping, k, missing)
             stats = x_setup.statistics[k]
             if ismissing(x_setup.limits)
@@ -337,8 +341,12 @@ function group_limits(minlims, maxlims, ind)
     return (min = min_limit, max = max_limit)
 end
 
-function optimization_setup(dopt::DictParameters; include_limits = true)
-    x0, x_setup = Jutul.AdjointsDI.vectorize_nested(dopt.parameters,
+function optimization_setup(opt::JutulOptimizationProblem, arg...)
+    return optimization_setup(opt.dict_parameters, arg...)
+end
+
+function optimization_setup(dopt::DictParameters, prm = dopt.parameters; include_limits = true)
+    x0, x_setup = Jutul.AdjointsDI.vectorize_nested(prm,
         multipliers = dopt.multipliers,
         active = active_keys(dopt),
         active_type = dopt.active_type

@@ -21,6 +21,7 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
         forces = setup_forces(model),
         raw_output = false,
         extra_output = false,
+        storage = missing,
         info_level = 0,
         kwarg...
     )
@@ -31,7 +32,10 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Setting up storage...", color = :blue)
     end
-    t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
+    t_storage = 0.0
+    if ismissing(storage)
+        t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
+    end
     if info_level > 1
         jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
     end
@@ -163,6 +167,10 @@ function setup_adjoint_storage(model;
     storage[:n] = n_prm
 
     return storage
+end
+
+function setup_adjoint_storage(case::JutulCase; kwarg...)
+    return setup_adjoint_storage(case.model; state0 = case.state0, parameters = case.parameters, kwarg...)
 end
 
 function setup_adjoint_storage_base(model, state0, parameters;
