@@ -22,7 +22,13 @@ end
 
 function threaded_loop(F, N, context::JutulContext)
     threads = thread_type(context)
-    if threads == :threads
+    return threaded_loop(F, N, threads)
+end
+
+function threaded_loop(F, N, threads::Symbol)
+    if N == 1
+        F(1)
+    elseif threads == :threads
         Threads.@threads for i in 1:N
             F(i)
         end
