@@ -192,7 +192,11 @@ function model_residual(state, state0, sim::HelperSimulator;
     update_secondary_variables!(storage, model, true)
     reset_variables!(storage, model, state, type = :state)
     update_secondary_variables!(storage, model, false)
-    update_before_step!(sim, dt, forces, time = time)
+    # `state`/`state0` here come from a previously converged (stored) solution.
+    # Signal this so path-dependent, non-differentiable per-step configuration
+    # (e.g. well control-vs-limit switching) is taken from the restored state
+    # rather than re-derived at the converged point, where it may not reproduce.
+    update_before_step!(sim, dt, forces, time = time, from_state_reference = true)
     # Update equations and residual
     update_extra_state_fields!(storage, model, dt, time)
     update_state_dependents!(storage, model, dt, forces; update_secondary = false, time = time, kwarg...) # time is important potential kwarg...

@@ -973,7 +973,7 @@ function update_before_step!(storage, model, dt, forces; kwarg...)
     update_before_step!(storage, model.formulation, model, dt, forces; kwarg...)
 end
 
-function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
+function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true, kwarg...)
     state = storage.state
     for (k, prm) in pairs(storage.variable_definitions.parameters)
         update_parameter_before_step!(state[k], prm, storage, model, dt, forces)
