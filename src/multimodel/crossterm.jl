@@ -157,7 +157,7 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
         offset = offsets[index]
         m = model.models[key]
         eq_views = storage[key].views.equations
-        ct, ct_s = cross_term_target(model, storage, key, true)
+        ct, ct_s = storage.cross_term_targets_with_symmetry[key]
         update_linearized_system_cross_terms!(lsys, eq_views, ct, ct_s, m, key; equation_offset = offset, kwarg...)
     end
 end
