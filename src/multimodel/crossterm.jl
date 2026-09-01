@@ -157,7 +157,7 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
         offset = offsets[index]
         m = model.models[key]
         eq_views = storage[key].views.equations
-        ct, ct_s = cross_term_target(model, storage, key, true)
+        ct, ct_s = storage.cross_term_targets_with_symmetry[key]
         update_linearized_system_cross_terms!(lsys, eq_views, ct, ct_s, m, key; equation_offset = offset, kwarg...)
     end
 end
@@ -367,11 +367,9 @@ function crossterm_subsystem(model, lsys, target, source; diag = false)
     return (lsys, target_keys, source_keys)
 end
 
-function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset)
+function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source, eq_label, impact, equation_offset, variable_offset, ndofs, neqs)
     lsys, target_keys, source_keys = crossterm_subsystem(model, lsys, target, source, diag = true)
     target_model = model[target]
-    ndofs = sub_number_of_degrees_of_freedom(model)
-    neqs = sub_number_of_equations(model)
     # Diagonal part: Into target equation, and with respect to target variables
     bz = model_block_size(target_model)
 
@@ -390,11 +388,9 @@ function diagonal_crossterm_alignment!(s_target, ct, lsys, model, target, source
     end
 end
 
-function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact, offdiag_alignment, equation_offset, variable_offset)
+function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, source, eq_label, impact, offdiag_alignment, equation_offset, variable_offset, ndofs, neqs)
     lsys, target_keys, source_keys = crossterm_subsystem(model, lsys, target, source, diag = false)
     J = lsys.jac
-    ndofs = sub_number_of_degrees_of_freedom(model)
-    neqs = sub_number_of_equations(model)
     target_model = model[target]
     source_model = model[source]
 
@@ -447,6 +443,8 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
     cross_terms = model.cross_terms
     cross_term_storage = storage[:cross_terms]
     lsys = storage[:LinearizedSystem]
+    ndofs = sub_number_of_degrees_of_freedom(model)
+    neqs = sub_number_of_equations(model)
     for (ctp, ct_s) in zip(cross_terms, cross_term_storage)
         ct = ctp.cross_term
         target = ctp.target
@@ -456,17 +454,17 @@ function align_cross_terms_to_linearized_system!(storage, model::MultiModel; equ
         o_algn_t = ct_s.offdiagonal_alignment.from_source
 
         # Align diagonal
-        diagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, target, source, eq_label, impact_t, equation_offset, variable_offset)
+        diagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, target, source, eq_label, impact_t, equation_offset, variable_offset, ndofs, neqs)
         # Align offdiagonal
-        offdiagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, target, source, eq_label, impact_t, o_algn_t, equation_offset, variable_offset)
+        offdiagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, target, source, eq_label, impact_t, o_algn_t, equation_offset, variable_offset, ndofs, neqs)
 
         # If symmetry, repeat the process with reversed terms
         if has_symmetry(ct)
             eq_label = ctp.source_equation
             impact_s = ct_s.source_entities
             o_algn_s = ct_s.offdiagonal_alignment.from_target
-            diagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, source, target, eq_label, impact_s, equation_offset, variable_offset)
-            offdiagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, source, target, eq_label, impact_s, o_algn_s, equation_offset, variable_offset)
+            diagonal_crossterm_alignment!(ct_s.source, ct, lsys, model, source, target, eq_label, impact_s, equation_offset, variable_offset, ndofs, neqs)
+            offdiagonal_crossterm_alignment!(ct_s.target, ct, lsys, model, source, target, eq_label, impact_s, o_algn_s, equation_offset, variable_offset, ndofs, neqs)
         end
     end
 end
