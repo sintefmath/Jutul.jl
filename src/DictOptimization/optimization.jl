@@ -60,20 +60,6 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         if is_first_iteration
             error("First simulation failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate.")
         end
-        f = objectives[1]*100.0
-        if gradient
-            g = similar(x)
-            if use_gradient_norm_scaling
-                # 1.0 is a huge value
-                fill!(g, 1.0)
-            else
-                # We don't know if the gradient is large or small, so return a
-                # very large value
-                fill!(g, 1e16)
-            end
-        else
-            g = missing
-        end
     else
         packed_steps = Jutul.AdjointPackedResult(result, case)
         packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)
@@ -81,6 +67,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
         # Evaluate the objective function
         f = Jutul.evaluate_objective(objective, case.model, packed_steps)
         # Solve adjoints
+        adjoint_failure = false
+        adjoint_msg = ""
         if gradient
             S = get(adj_cache, :storage, missing)
             if ismissing(S)
@@ -103,9 +91,20 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             # create a new gradient array each time to avoid having this be aliased
             # with a previous output.
             g = similar(x)
-            t_reverse = @elapsed Jutul.AdjointsDI.solve_adjoint_generic!(
-                g, x, setup_from_vector, S, packed_steps, objective, extra_timing = extra_timing
-            )
+            t_reverse = @elapsed try
+                Jutul.AdjointsDI.solve_adjoint_generic!(
+                    g, x, setup_from_vector, S, packed_steps, objective, extra_timing = extra_timing
+                )
+            catch excpt
+                adjoint_failure = true
+                adjoint_msg = excpt
+                if excpt isa InterruptException || !allow_errors
+                    rethrow(excpt)
+                end
+            end
+            if is_first_iteration && adjoint_failure
+                error("First adjoint solve failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate and differentiate.")
+            end
             if dopt.verbose
                 jutul_message("Optimization", "Adjoint solve took $t_reverse seconds.", color = :green)
             end
@@ -116,11 +115,32 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             g = missing
         end
     end
+
+    failure_in_evaluation = solve_failure
+
+    if failure_in_evaluation
+        f = objectives[1]*100.0
+        if gradient
+            g = similar(x)
+            if use_gradient_norm_scaling
+                # 1.0 is a huge value
+                fill!(g, 1.0)
+            else
+                # We don't know if the gradient is large or small, so return a
+                # very large value
+                fill!(g, 1e16)
+            end
+        else
+            g = missing
+        end
+    end
     # Store the results
     store_solution_history!(adj_cache, f, g, prm, x, x_setup, result, solution_history, solve_failure, output_path)
 
     if solve_failure
         jutul_message("Optimization", "Simulation failed, returning objective = $f", color = :red)
+    elseif adjoint_failure
+        jutul_message("Optimization", "Adjoint solve failed: $adjoint_msg", color = :red)
     else
         if dopt.verbose
             num_f = adj_cache[:forward_count]
