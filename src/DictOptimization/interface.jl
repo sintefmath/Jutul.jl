@@ -100,12 +100,6 @@ This interface is dependent on the model supporting use of
 which should be the case for most Jutul models.
 """
 function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
-        grad_tol = 1e-6,
-        obj_change_tol = 1e-6,
-        max_it = 25,
-        opt_fun = missing,
-        optimizer = :lbfgs,
-        maximize = false,
         backend_arg = missing,
         info_level = 0,
         deps::Symbol = :case,
@@ -115,7 +109,6 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         solution_history = false,
         print_parameters = false,
         allow_errors = false,
-        scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
         output_path = nothing,
         randomized_start = false,
@@ -138,11 +131,28 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         randomized_start = randomized_start,
         output_path = output_path
     )
+    return optimize!(problem; kwarg...)
+end
 
+function optimize!(problem::JutulOptimizationProblem, prm0 = missing;
+        grad_tol = 1e-6,
+        obj_change_tol = 1e-6,
+        max_it = 25,
+        opt_fun = missing,
+        optimizer = :lbfgs,
+        extra_out = false,
+        maximize = false,
+        scale = optimizer != :lbfgsb_qp,
+        kwarg...
+    )
+    if !ismissing(prm0)
+        x0, = optimization_setup(problem, prm0)
+        @. problem.x0 = x0
+    end
+    dopt = problem.dict_parameters
     if dopt.verbose
         jutul_message("Optimization", "Starting calibration of $(length(problem.x0)) parameters.", color = :green)
     end
-
     t_opt = @elapsed if ismissing(opt_fun)
         x, solver_history = optimize_implementation(problem, Val(optimizer); 
             grad_tol = grad_tol,
@@ -173,6 +183,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     history[:solver_history] = solver_history
     dopt.history = NamedTuple(history)
 
+    output_path = problem.output_path
     if !isnothing(output_path)
         to_disk = Dict{String, Any}()
         to_disk["parameters"] = prm_out
@@ -185,7 +196,12 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             save(filename, to_disk)
         end
     end
-    return prm_out
+    if extra_out
+        out = (prm_out, problem)
+    else
+        out = prm_out
+    end
+    return out
 end
 
 function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
