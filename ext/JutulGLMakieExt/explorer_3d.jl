@@ -145,7 +145,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         verbose = false,
         sens = missing,
         sens_normalization = :none,
-        sens_colormap = :vik,
+        sens_colormap = :seismic,
         static_color_range_enabled = true,
         split_filters_enabled = false,
         toggle_dynamic_data_enabled = true,
@@ -420,7 +420,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         idx_right_gl += 1
         value_sens = slider_sens.interval
         if HAS_SENS
-            toggle_sens = add_toggle!("Sensitivities in cells", sens_enabled)
+            toggle_sens = add_toggle!("Sensitivities", sens_enabled)
         end
     else
         sel_sens = Observable("No sensitivities")
@@ -501,7 +501,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     use_symlog = symlog_toggle.checked
     # cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
-    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $sel_sens, $step_idx, $value_static, $value_sens, $value_dynamic, $is_dynamic, $is_independent, $is_global_limit, $use_symlog)
+    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $sel_sens, $step_idx, $value_static, $value_dynamic, $value_sens, $is_dynamic, $is_independent, $is_global_limit, $use_symlog)
     lims = @lift get_limits(static_lims, dynamic_lims, $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit, $use_symlog)
     if use_highclip
         mesh_arg = (highclip = :transparent, )
