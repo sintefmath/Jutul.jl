@@ -12,7 +12,11 @@ end
 
 Base.display(pe::PlotExplorerOutput) = display(pe.fig)
 
-function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}; static = missing, dynamic = missing, kwarg...)
+function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain};
+        static = missing,
+        dynamic = missing,
+        kwarg...
+    )
     if ismissing(static)
         if m isa DataDomain
             static = convert_dict(m.data, number_of_cells(m))
@@ -139,6 +143,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         step::Int = 1,
         plot_pause = 1.0/30.0,
         verbose = false,
+        sens = missing,
+        sens_normalization = :largest,
+        sens_colormap = :vik,
         kwarg...
     )
     default_colors = preset_colors(preset)
@@ -164,6 +171,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         textcolor = textcolor,
         backgroundcolor = backgroundcolor
     )
+
+    # Setup for sens
+    sens = normalize_sensitivities(sens, sens_normalization)
+    sens_lims = sensitivities_limits(sens)
+
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
     nc = number_of_cells(m)
@@ -780,6 +792,66 @@ function setup_limits(static, dynamic)
     end
     return (static_lims, dynamic_lims)
 end
+
+function normalize_sensitivities(sens::Missing, snorm)
+    return sens
+end
+
+function normalize_sensitivities(sens::DataDomain, snorm)
+    out = Dict()
+    for (k, v) in pairs(sens)
+        out[k] = v[1]
+    end
+    return out
+end
+
+
+function normalize_sensitivities(sens::AbstractDict, snorm)
+    new_sens = Dict()
+    for (k, v) in pairs(sens)
+        if v isa AbstractArray && eltype(v)<:Number
+            new_sens[k] = v
+        end
+    end
+    snorm = Symbol(snorm)
+    if snorm == :largest
+        maxval = -Inf
+        for (k, v) in pairs(sens)
+            @info "??" k v
+            maxval = max(maxval, maximum(abs, v))
+        end
+        for (k, v) in sens
+            sens[k] = v ./ maxval
+        end
+    elseif snorm == :norm
+        for (k, v) in sens
+            sens[k] = v ./ norm(v)
+        end
+    elseif snorm == :unit
+        for (k, v) in sens
+            maxval = maximum(abs)
+            minval = minimum(abs)
+            rng = maxval - minval
+            sens[k] = v ./ max(rng, 1e-20)
+        end
+    else
+        snorm == :none || error("Unknown sens_normalization: $snorm. Options: :largest, :norm, :unit, :none")
+    end
+    return sens
+end
+
+function sensitivities_limits(sens)
+    out = Dict()
+    if !ismissing(sens)
+        for (k, v) in sens
+            minv, maxv = extrema(v)
+            maxv = max(abs(minv), abs(maxv))
+            out[k] = (-maxv, maxv)
+        end
+    end
+    return out
+end
+
 
 function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, is_global_limit, to_symlog)
     if is_dynamic
