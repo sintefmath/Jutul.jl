@@ -508,6 +508,18 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         mesh_arg...,
         kwarg...
     )
+    plot_mesh_edges!(lscene, m, visible = toggle_edge.checked, color = main_color)
+    # plot_faults!(lscene, m, colormap = cmap)
+
+
+    Colorbar(hist_grid_layout[2, 1], mplt,
+        vertical = false,
+        ticklabelsize = 12,
+        flipaxis = false,
+        ticklabelcolor = main_color,
+        tickcolor = main_color
+    )
+
     if has_sens
         function get_slims(vdyn, vstatic, is_dyn)
             if is_dyn
@@ -524,23 +536,19 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             colormap = sens_colormap,
             color = vertex_val_buffer_sens,
             visible = toggle_sens.checked,
-            colorrange = slims,
+            # colorrange = slims,
             backlight = 1,
             mesh_arg...,
             kwarg...
         )
+        Colorbar(hist_grid_layout[3, 1], mplt_sens,
+            vertical = false,
+            ticklabelsize = 12,
+            flipaxis = false,
+            ticklabelcolor = main_color,
+            tickcolor = main_color
+        )
     end
-    plot_mesh_edges!(lscene, m, visible = toggle_edge.checked, color = main_color)
-    # plot_faults!(lscene, m, colormap = cmap)
-
-
-    Colorbar(hist_grid_layout[2, 1], mplt,
-        vertical = false,
-        ticklabelsize = 12,
-        flipaxis = false,
-        ticklabelcolor = main_color,
-        tickcolor = main_color
-    )
 
     bins = @lift range($lims[1], $lims[2], length = nbins+1)
     bin_centers = @lift [($lims[1] + bin_idx*($lims[2] - $lims[1])/(2*nbins)) for bin_idx in 1:nbins]
