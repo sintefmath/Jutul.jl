@@ -175,6 +175,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     # Setup for sens
     sens = normalize_sensitivities(sens, sens_normalization)
     sens_lims = sensitivities_limits(sens)
+    has_sens = !ismissing(sens) && length(keys(sens)) > 0
 
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
@@ -411,6 +412,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
     toggle_mesh = add_toggle!("Mesh cells")
+    if has_sens
+        toggle_sens = add_toggle!("Sensitivities", true)
+    end
 
     # Toggle mesh itself
     # transparency_toggle = add_toggle!("Transparency", false)
@@ -422,6 +426,10 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     T_f = Float32
     vertex_val_buffer = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
+    if has_sens
+        vertex_val_buffer_sens = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
+        vertex_values_sens = zeros(T_f, length(cell_to_vertex))
+    end
     vertex_values = zeros(T_f, length(cell_to_vertex))
     function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_indep, is_glob, to_symlog)
         # Doing two things:
@@ -449,7 +457,27 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
         map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F, verbose)
-
+        if has_sens
+            if is_dyn
+                k = dyn_key
+            else
+                k = static_key
+            end
+            @info "???" k sens
+            if haskey(sens, k)
+                @info "Plotting $k"
+                @. vertex_values_sens = sens[k][cell_to_vertex]
+                for (i, v) in enumerate(vertex_values)
+                    if !isfinite(v)
+                        vertex_values_sens[i] = v
+                    end
+                end
+            else
+                @. vertex_values = NaN
+            end
+            n = length(vertex_values)
+            vertex_val_buffer_sens[1:n] = vertex_values
+        end
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
         #     out = face_val_buffer
@@ -459,8 +487,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         # end
         return cell_val_buffer
     end
-
-    # active = Tri_T[]
 
     use_symlog = symlog_toggle.checked
     # cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
@@ -480,6 +506,17 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         mesh_arg...,
         kwarg...
     )
+    if has_sens
+        mplt_sens = mesh!(lscene, points, ttri;
+            colormap = sens_colormap,
+            color = vertex_val_buffer_sens,
+            visible = toggle_sens.checked,
+            colorrange = lims,
+            backlight = 1,
+            mesh_arg...,
+            kwarg...
+        )
+    end
     plot_mesh_edges!(lscene, m, visible = toggle_edge.checked, color = main_color)
     # plot_faults!(lscene, m, colormap = cmap)
 
@@ -802,42 +839,41 @@ function normalize_sensitivities(sens::DataDomain, snorm)
     for (k, v) in pairs(sens)
         out[k] = v[1]
     end
-    return out
+    return normalize_sensitivities(out, snorm)
 end
 
 
 function normalize_sensitivities(sens::AbstractDict, snorm)
-    new_sens = Dict()
+    new_sens = Dict{String, Any}()
     for (k, v) in pairs(sens)
         if v isa AbstractArray && eltype(v)<:Number
-            new_sens[k] = v
+            new_sens[String(k)] = v
         end
     end
     snorm = Symbol(snorm)
     if snorm == :largest
         maxval = -Inf
-        for (k, v) in pairs(sens)
-            @info "??" k v
+        for (k, v) in pairs(new_sens)
             maxval = max(maxval, maximum(abs, v))
         end
-        for (k, v) in sens
-            sens[k] = v ./ maxval
+        for (k, v) in new_sens
+            new_sens[k] = v ./ maxval
         end
     elseif snorm == :norm
-        for (k, v) in sens
-            sens[k] = v ./ norm(v)
+        for (k, v) in new_sens
+            new_sens[k] = v ./ norm(v)
         end
     elseif snorm == :unit
-        for (k, v) in sens
+        for (k, v) in new_sens
             maxval = maximum(abs)
             minval = minimum(abs)
             rng = maxval - minval
-            sens[k] = v ./ max(rng, 1e-20)
+            new_sens[k] = v ./ max(rng, 1e-20)
         end
     else
         snorm == :none || error("Unknown sens_normalization: $snorm. Options: :largest, :norm, :unit, :none")
     end
-    return sens
+    return new_sens
 end
 
 function sensitivities_limits(sens)
