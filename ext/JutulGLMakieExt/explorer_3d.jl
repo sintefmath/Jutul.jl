@@ -144,7 +144,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         plot_pause = 1.0/30.0,
         verbose = false,
         sens = missing,
-        sens_normalization = :unit,
+        sens_normalization = :none,
         sens_colormap = :vik,
         kwarg...
     )
@@ -464,9 +464,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
         map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F, verbose)
         if has_sens
-            sens_val = sens[sens_key][cell_to_vertex]
+            sens_val = sens[sens_key]
             @. vertex_values_sens = sens_val[cell_to_vertex]
-            @info "???" extrema(sens_val)
             for (i, v) in enumerate(vertex_values)
                 if !isfinite(v)
                     vertex_values_sens[i] = v
