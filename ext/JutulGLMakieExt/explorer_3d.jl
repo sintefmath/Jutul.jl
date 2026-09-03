@@ -144,7 +144,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         plot_pause = 1.0/30.0,
         verbose = false,
         sens = missing,
-        sens_normalization = :largest,
+        sens_normalization = :unit,
         sens_colormap = :vik,
         kwarg...
     )
@@ -466,7 +466,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             @info "???" k sens
             if haskey(sens, k)
                 @info "Plotting $k"
-                @. vertex_values_sens = sens[k][cell_to_vertex]
+                sens_val = sens[k][cell_to_vertex]
+                @. vertex_values_sens = sens_val[cell_to_vertex]
+                @info "???" extrema(sens_val)
                 for (i, v) in enumerate(vertex_values)
                     if !isfinite(v)
                         vertex_values_sens[i] = v
@@ -507,11 +509,22 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         kwarg...
     )
     if has_sens
+        function get_slims(vdyn, vstatic, is_dyn)
+            if is_dyn
+                vk = vdyn
+            else
+                vk = vstatic
+            end
+            active_lims = get(sens_lims, vk, (0.0, 1.0))
+            @info "??" active_lims keys(sens_lims) vk
+            return active_lims
+        end
+        slims = @lift get_slims($sel_dyn, $sel, $is_dynamic)
         mplt_sens = mesh!(lscene, points, ttri;
             colormap = sens_colormap,
             color = vertex_val_buffer_sens,
             visible = toggle_sens.checked,
-            colorrange = lims,
+            colorrange = slims,
             backlight = 1,
             mesh_arg...,
             kwarg...
@@ -865,8 +878,8 @@ function normalize_sensitivities(sens::AbstractDict, snorm)
         end
     elseif snorm == :unit
         for (k, v) in new_sens
-            maxval = maximum(abs)
-            minval = minimum(abs)
+            maxval = maximum(abs, v)
+            minval = minimum(abs, v)
             rng = maxval - minval
             new_sens[k] = v ./ max(rng, 1e-20)
         end
