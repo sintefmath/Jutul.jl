@@ -180,7 +180,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     # Setup for sens
     sens = normalize_sensitivities(sens, sens_normalization)
     sens_lims = sensitivities_limits(sens)
-    has_sens = !ismissing(sens) && length(keys(sens)) > 0
+    HAS_SENS = !ismissing(sens) && length(keys(sens)) > 0
 
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
@@ -413,7 +413,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         sel_dyn = Observable("No dynamic data")
         value_dynamic = Observable((0.0, 1.0))
     end
-    if has_sens
+    if HAS_SENS
         menu_sens = add_menu!(keys(sens), "Sensitivities")
         sel_sens = menu_sens.selection
         slider_sens = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
@@ -427,7 +427,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
     toggle_mesh = add_toggle!("Mesh cells", mesh_enabled)
-    if has_sens
+    if HAS_SENS
         toggle_sens = add_toggle!("Sensitivities", sens_enabled)
     end
 
@@ -441,7 +441,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     T_f = Float32
     vertex_val_buffer = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
-    if has_sens
+    if HAS_SENS
         vertex_val_buffer_sens = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
         vertex_values_sens = zeros(T_f, length(cell_to_vertex))
     end
@@ -472,7 +472,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
         map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F, verbose)
-        if has_sens
+        if HAS_SENS
             sens_val = sens[sens_key]
             lo_s, hi_s = sens_lims[sens_key]
             lo_bnd_s = (1 - 1e-10) * bounds_sens[1]
@@ -529,7 +529,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         tickcolor = main_color
     )
 
-    if has_sens
+    if HAS_SENS
         slims = @lift sens_lims[$sel_sens]
         mplt_sens = mesh!(lscene, points, ttri;
             colormap = sens_colormap,
@@ -589,6 +589,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         autolimits!(ax_hist)
     end
 
+    if HAS_SENS
+        on(menu_sens.selection) do s
+            if HAS_DYNAMIC_DATA
+                toggle_sens.active[] = false
+            end
+        end
+    end
     upvector = Vec3f(0, 0, 1.0 - 2.0*zreversed)
     center = sum(points)./length(points)
     cam = Makie.cam3d!(lscene.scene; upvector = upvector, lookat = center, camarg...)
