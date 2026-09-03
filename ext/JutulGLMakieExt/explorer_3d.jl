@@ -546,7 +546,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             ticklabelsize = 12,
             flipaxis = false,
             ticklabelcolor = main_color,
-            tickcolor = main_color
+            tickcolor = main_color,
+            label = "Sensitivity",
+            labelcolor = main_color
         )
     end
 
