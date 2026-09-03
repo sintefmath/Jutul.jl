@@ -7,6 +7,7 @@ struct PlotExplorerOutput
     right_grid
     add_menu
     add_toggle
+    colors
 end
 
 Base.display(pe::PlotExplorerOutput) = display(pe.fig)
@@ -135,6 +136,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         camarg = NamedTuple(),
         show_axis = false,
         aspect = missing,
+        step::Int = 1,
         plot_pause = 1.0/30.0,
         verbose = false,
         kwarg...
@@ -155,6 +157,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     if ismissing(hist_colormap)
         hist_colormap = default_colors.hist_colormap
     end
+    color_information = (
+        colormap = colormap,
+        background_colormap = background_colormap,
+        hist_colormap = hist_colormap,
+        textcolor = textcolor,
+        backgroundcolor = backgroundcolor
+    )
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
     nc = number_of_cells(m)
@@ -262,40 +271,43 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         return tog
     end
 
-    function add_menu!(options, title = ""; prepend = false)
+    function add_menu!(options, title = "")
         options = collect(options)
-        if prepend
-            labels = map(o -> "$o ($title)", options)
-        else
-            labels = options
-        end
-        new_menu = Menu(right_grid_layout[idx_right_gl, 1:5],
+        labels = options
+        Label(right_grid_layout[idx_right_gl, 5], title,
+            justification = :left,
+            halign = :left,
+            color = main_color
+        )
+        new_menu = Menu(right_grid_layout[idx_right_gl, 1:4],
             options = zip(labels, options),
             selection_cell_color_inactive = RGBAf(1, 1, 1, menu_alpha),
-            textcolor = main_color
+            textcolor = main_color,
+            cell_color_inactive_even = :gray,
+            cell_color_inactive_odd = :gray
         )
         idx_right_gl += 1
         return new_menu
     end
 
     if HAS_DYNAMIC_DATA
-        dyn_keys = keys(first(dynamic_data))
         Nstep = length(dynamic_data)
-        toggle_dyn = add_toggle!("Show dynamic values", true, type = :toggle)
+        dyn_keys = keys(first(dynamic_data))
         toggle_static_limits = add_toggle!("Static color range", true, type = :toggle)
         toggle_independent = add_toggle!("Split filters", false, type = :toggle)
+        toggle_dyn = add_toggle!("Toggle dynamic data", true, type = :toggle)
         is_dynamic = toggle_dyn.active
         is_independent = toggle_independent.active
         is_global_limit = toggle_static_limits.active
     else
+        Nstep = 1
         dyn_keys = ["No dynamic data"]
         is_global_limit = Observable(false)
         is_independent = Observable(false)
     end
 
-
-    menu_cell = add_menu!(keys(plot_data), "static", prepend = HAS_DYNAMIC_DATA)
-
+    # Label(right_grid_layout[idx_right_gl, 4:5], "static", justification = :right, color = main_color)
+    menu_cell = add_menu!(keys(plot_data), "Static")
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
@@ -303,7 +315,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     value_static = slider_static.interval
 
     if HAS_DYNAMIC_DATA
-        menu_dyn = add_menu!(dyn_keys, "dynamic", prepend = HAS_DYNAMIC_DATA)
+        # Label(right_grid_layout[idx_right_gl, 1], "dynamic", justification = :right, color = main_color)
+        menu_dyn = add_menu!(dyn_keys, "Dynamic")
         sel_dyn = menu_dyn.selection
         slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
         idx_right_gl += 1
@@ -312,7 +325,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if Nstep > 1
             lpos_tstep = idx_stepgl
             idx_stepgl += 1
-            step_slider = Slider(step_grid_layout[idx_stepgl, 1:5], range = 1:Nstep, startvalue = 1, horizontal = true)
+            step_slider = Slider(step_grid_layout[idx_stepgl, 1:5],
+                range = 1:Nstep,
+                startvalue = step,
+                horizontal = true
+            )
             step_idx = step_slider.selected_index
             idx_stepgl += 1
 
@@ -682,7 +699,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             draw_bg()
         end
     end
-    return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!)
+    return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!, color_information)
 end
 
 function mesh_as_static(m; kwarg...)
