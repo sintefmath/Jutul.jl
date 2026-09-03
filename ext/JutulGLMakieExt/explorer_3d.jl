@@ -135,6 +135,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         camarg = NamedTuple(),
         show_axis = false,
         aspect = missing,
+        step::Int = 1,
         plot_pause = 1.0/30.0,
         verbose = false,
         kwarg...
@@ -279,15 +280,16 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     if HAS_DYNAMIC_DATA
-        dyn_keys = keys(first(dynamic_data))
         Nstep = length(dynamic_data)
-        toggle_dyn = add_toggle!("Show dynamic values", true, type = :toggle)
+        dyn_keys = keys(first(dynamic_data))
         toggle_static_limits = add_toggle!("Static color range", true, type = :toggle)
         toggle_independent = add_toggle!("Split filters", false, type = :toggle)
+        toggle_dyn = add_toggle!("Toggle dynamic data", true, type = :toggle)
         is_dynamic = toggle_dyn.active
         is_independent = toggle_independent.active
         is_global_limit = toggle_static_limits.active
     else
+        Nstep = 1
         dyn_keys = ["No dynamic data"]
         is_global_limit = Observable(false)
         is_independent = Observable(false)
@@ -312,7 +314,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if Nstep > 1
             lpos_tstep = idx_stepgl
             idx_stepgl += 1
-            step_slider = Slider(step_grid_layout[idx_stepgl, 1:5], range = 1:Nstep, startvalue = 1, horizontal = true)
+            step_slider = Slider(step_grid_layout[idx_stepgl, 1:5],
+                range = 1:Nstep,
+                startvalue = step,
+                horizontal = true
+            )
             step_idx = step_slider.selected_index
             idx_stepgl += 1
 
