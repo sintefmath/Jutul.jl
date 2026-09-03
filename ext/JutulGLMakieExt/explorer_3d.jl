@@ -516,22 +516,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     )
 
     if has_sens
-        function get_slims(vdyn, vstatic, is_dyn)
-            if is_dyn
-                vk = vdyn
-            else
-                vk = vstatic
-            end
-            active_lims = get(sens_lims, vk, (0.0, 1.0))
-            @info "??" active_lims keys(sens_lims) vk
-            return active_lims
-        end
-        slims = @lift get_slims($sel_dyn, $sel, $is_dynamic)
+        slims = @lift sens_lims[$sel_sens]
         mplt_sens = mesh!(lscene, points, ttri;
             colormap = sens_colormap,
             color = vertex_val_buffer_sens,
             visible = toggle_sens.checked,
-            # colorrange = slims,
+            colorrange = slims,
             backlight = 1,
             mesh_arg...,
             kwarg...
