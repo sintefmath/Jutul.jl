@@ -7,6 +7,7 @@ struct PlotExplorerOutput
     right_grid
     add_menu
     add_toggle
+    colors
 end
 
 Base.display(pe::PlotExplorerOutput) = display(pe.fig)
@@ -156,6 +157,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     if ismissing(hist_colormap)
         hist_colormap = default_colors.hist_colormap
     end
+    color_information = (
+        colormap = colormap,
+        background_colormap = background_colormap,
+        hist_colormap = hist_colormap,
+        textcolor = textcolor,
+        backgroundcolor = backgroundcolor
+    )
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
     nc = number_of_cells(m)
@@ -295,9 +303,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         is_independent = Observable(false)
     end
 
-
     menu_cell = add_menu!(keys(plot_data), "static", prepend = HAS_DYNAMIC_DATA)
-
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
@@ -688,7 +694,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             draw_bg()
         end
     end
-    return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!)
+    return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!, color_information)
 end
 
 function mesh_as_static(m; kwarg...)
