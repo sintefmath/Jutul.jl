@@ -271,17 +271,20 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         return tog
     end
 
-    function add_menu!(options, title = ""; prepend = false)
+    function add_menu!(options, title = "")
         options = collect(options)
-        if prepend
-            labels = map(o -> "$o ($title)", options)
-        else
-            labels = options
-        end
-        new_menu = Menu(right_grid_layout[idx_right_gl, 1:5],
+        labels = options
+        Label(right_grid_layout[idx_right_gl, 5], title,
+            justification = :left,
+            halign = :left,
+            color = main_color
+        )
+        new_menu = Menu(right_grid_layout[idx_right_gl, 1:4],
             options = zip(labels, options),
             selection_cell_color_inactive = RGBAf(1, 1, 1, menu_alpha),
-            textcolor = main_color
+            textcolor = main_color,
+            cell_color_inactive_even = :gray,
+            cell_color_inactive_odd = :gray
         )
         idx_right_gl += 1
         return new_menu
@@ -303,7 +306,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         is_independent = Observable(false)
     end
 
-    menu_cell = add_menu!(keys(plot_data), "static", prepend = HAS_DYNAMIC_DATA)
+    # Label(right_grid_layout[idx_right_gl, 4:5], "static", justification = :right, color = main_color)
+    menu_cell = add_menu!(keys(plot_data), "Static")
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
@@ -311,7 +315,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     value_static = slider_static.interval
 
     if HAS_DYNAMIC_DATA
-        menu_dyn = add_menu!(dyn_keys, "dynamic", prepend = HAS_DYNAMIC_DATA)
+        # Label(right_grid_layout[idx_right_gl, 1], "dynamic", justification = :right, color = main_color)
+        menu_dyn = add_menu!(dyn_keys, "Dynamic")
         sel_dyn = menu_dyn.selection
         slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
         idx_right_gl += 1
