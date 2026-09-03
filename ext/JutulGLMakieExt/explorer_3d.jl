@@ -549,6 +549,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             label = "Sensitivity",
             labelcolor = main_color
         )
+    else
+        mplt_sens = nothing
     end
 
     bins = @lift range($lims[1], $lims[2], length = nbins+1)
@@ -625,7 +627,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 empty!(cell_outline)
                 selected_cells[] = Int[]
                 return Consume(false)
-            elseif plt == mplt
+            elseif plt == mplt || (HAS_SENS && plt == mplt_sens)
                 cell = cell_for_click(i)
                 if verbose
                     jutul_message("plot_explorer", "Clicked cell: $cell")
@@ -674,7 +676,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         return Consume(false)
     end
 
-    function format_clicked_cell(cells::Vector{Int}, static::String, dynamic::String, step_idx)
+    function format_clicked_cell(cells::Vector{Int}, static::String, dynamic::String, sensk::String, step_idx)
         if length(cells) == 0
             return ""
         elseif length(cells) == 1
@@ -700,12 +702,16 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 dyn_val = dynamic_data[step_idx][dynamic][cell]
                 str *= "\n$dynamic = $(round(dyn_val, sigdigits=4))"
             end
+            if HAS_SENS
+                sens_val = sens[sensk][cell]
+                str *= "\nsensitivity with respect to $(sensk) = $(round(sens_val, sigdigits=4))"
+            end
         else
             str = "Cells:\n" * join(cells, ",\n")
         end
         return str
     end
-    clicklabel = @lift format_clicked_cell($selected_cells, $sel, $sel_dyn, $step_idx)
+    clicklabel = @lift format_clicked_cell($selected_cells, $sel, $sel_dyn, $sel_sens, $step_idx)
 
     al = missing
     side_axis = missing
