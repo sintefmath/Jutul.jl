@@ -419,6 +419,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         slider_sens = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
         idx_right_gl += 1
         value_sens = slider_sens.interval
+        if HAS_SENS
+            toggle_sens = add_toggle!("Sensitivities in cells", sens_enabled)
+        end
     else
         sel_sens = Observable("No sensitivities")
         value_sens = Observable((0.0, 1.0))
@@ -427,9 +430,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
     toggle_mesh = add_toggle!("Mesh cells", mesh_enabled)
-    if HAS_SENS
-        toggle_sens = add_toggle!("Sensitivities", sens_enabled)
-    end
 
     # Toggle mesh itself
     # transparency_toggle = add_toggle!("Transparency", false)
@@ -591,9 +591,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     if HAS_SENS
         on(menu_sens.selection) do s
-            if HAS_DYNAMIC_DATA
-                toggle_sens.active[] = false
-            end
+            toggle_sens.checked[] = true
         end
     end
     upvector = Vec3f(0, 0, 1.0 - 2.0*zreversed)
