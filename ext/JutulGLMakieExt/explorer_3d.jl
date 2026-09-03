@@ -242,7 +242,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     cmap = colormap
     lights = []
 
-    fig = Figure(size = (1600, 800), figure_padding = 0.0)
+    fig = Figure(size = (1650, 1000), figure_padding = 0.0)
     lscene = LScene(fig[1:N, 1:N], scenekw = scene_arg, show_axis = show_axis)
     mesh_scene = Scene(lscene.scene, scenekw = (clear = false, ))
 
@@ -408,6 +408,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         sel_dyn = Observable("No dynamic data")
         value_dynamic = Observable((0.0, 1.0))
     end
+    if has_sens
+        menu_sens = add_menu!(keys(sens), "Sensitivities")
+    end
     # Toggle mesh lines
     toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
@@ -471,7 +474,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 @info "???" extrema(sens_val)
                 for (i, v) in enumerate(vertex_values)
                     if !isfinite(v)
-                        vertex_values_sens[i] = v
+                        # vertex_values_sens[i] = v
                     end
                 end
             else
