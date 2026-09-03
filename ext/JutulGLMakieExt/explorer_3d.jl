@@ -410,6 +410,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
     if has_sens
         menu_sens = add_menu!(keys(sens), "Sensitivities")
+        sel_sens = menu_sens.selection
+    else
+        sel_sens = Observable("No sensitivities")
     end
     # Toggle mesh lines
     toggle_edge = add_toggle!("Mesh lines", edges)
@@ -434,7 +437,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         vertex_values_sens = zeros(T_f, length(cell_to_vertex))
     end
     vertex_values = zeros(T_f, length(cell_to_vertex))
-    function update_cell_values(static_key::String, dyn_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_indep, is_glob, to_symlog)
+    function update_cell_values(static_key::String, dyn_key::String, sens_key::String, step_idx::Int, bounds_static, bounds_dynamic, is_dyn, is_indep, is_glob, to_symlog)
         # Doing two things:
         # - Return the values in val_buffer for histogram
         # - Update the vertex_val_buffer for the mesh plotting
@@ -461,27 +464,16 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
         map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F, verbose)
         if has_sens
-            if is_dyn
-                k = dyn_key
-            else
-                k = static_key
-            end
-            @info "???" k sens
-            if haskey(sens, k)
-                @info "Plotting $k"
-                sens_val = sens[k][cell_to_vertex]
-                @. vertex_values_sens = sens_val[cell_to_vertex]
-                @info "???" extrema(sens_val)
-                for (i, v) in enumerate(vertex_values)
-                    if !isfinite(v)
-                        # vertex_values_sens[i] = v
-                    end
+            sens_val = sens[sens_key][cell_to_vertex]
+            @. vertex_values_sens = sens_val[cell_to_vertex]
+            @info "???" extrema(sens_val)
+            for (i, v) in enumerate(vertex_values)
+                if !isfinite(v)
+                    vertex_values_sens[i] = v
                 end
-            else
-                @. vertex_values = NaN
             end
-            n = length(vertex_values)
-            vertex_val_buffer_sens[1:n] = vertex_values
+            n = length(vertex_values_sens)
+            vertex_val_buffer_sens[1:n] = vertex_values_sens
         end
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -495,7 +487,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     use_symlog = symlog_toggle.checked
     # cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
-    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_independent, $is_global_limit, $use_symlog)
+    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $sel_sens, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_independent, $is_global_limit, $use_symlog)
     lims = @lift get_limits(static_lims, dynamic_lims, $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit, $use_symlog)
     if use_highclip
         mesh_arg = (highclip = :transparent, )
