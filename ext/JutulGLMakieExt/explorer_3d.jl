@@ -146,6 +146,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         sens = missing,
         sens_normalization = :none,
         sens_colormap = :vik,
+        static_color_range_enabled = true,
+        split_filters_enabled = false,
+        toggle_dynamic_data_enabled = true,
+        sens_enabled = false,
+        mesh_enabled = true,
         kwarg...
     )
     default_colors = preset_colors(preset)
@@ -306,9 +311,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     if HAS_DYNAMIC_DATA
         Nstep = length(dynamic_data)
         dyn_keys = keys(first(dynamic_data))
-        toggle_static_limits = add_toggle!("Static color range", true, type = :toggle)
-        toggle_independent = add_toggle!("Split filters", false, type = :toggle)
-        toggle_dyn = add_toggle!("Toggle dynamic data", true, type = :toggle)
+        toggle_static_limits = add_toggle!("Static color range", static_color_range_enabled, type = :toggle)
+        toggle_independent = add_toggle!("Split filters", split_filters_enabled, type = :toggle)
+        toggle_dyn = add_toggle!("Toggle dynamic data", toggle_dynamic_data_enabled, type = :toggle)
         is_dynamic = toggle_dyn.active
         is_independent = toggle_independent.active
         is_global_limit = toggle_static_limits.active
@@ -421,9 +426,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     # Toggle mesh lines
     toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
-    toggle_mesh = add_toggle!("Mesh cells")
+    toggle_mesh = add_toggle!("Mesh cells", mesh_enabled)
     if has_sens
-        toggle_sens = add_toggle!("Sensitivities", true)
+        toggle_sens = add_toggle!("Sensitivities", sens_enabled)
     end
 
     # Toggle mesh itself
