@@ -141,6 +141,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         show_axis = false,
         aspect = missing,
         step::Int = 1,
+        key = missing,
         plot_pause = 1.0/30.0,
         verbose = false,
         sens = missing,
@@ -182,7 +183,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     sens = normalize_sensitivities(sens, sens_normalization)
     sens_lims = sensitivities_limits(sens)
     HAS_SENS = !ismissing(sens) && length(keys(sens)) > 0
-
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
     nc = number_of_cells(m)
@@ -218,6 +218,40 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if length(keys(dynamic_data[1])) == 0
             HAS_DYNAMIC_DATA = false
             dynamic_data = missing
+        end
+        Nstep = length(dynamic_data)
+        dyn_keys = keys(first(dynamic_data))
+    else
+        Nstep = 1
+        dyn_keys = ["No dynamic data"]
+    end
+
+    function match_key(key; soft = false)
+        if soft
+            pred = startswith(key)
+        else
+            pred = isequal(key)
+        end
+        pos = findfirst(pred, dyn_keys)
+        is_dyn = true
+        if isnothing(pos)
+            pos = findfirst(pred, keys(plot_data))
+            is_dyn = false
+        end
+        return (pos, is_dyn)
+    end
+
+    # Try to softmatch key
+    pos = nothing
+    is_dyn = toggle_dynamic_data_enabled
+    if !ismissing(key)
+        key = string(key)
+        pos, is_dyn = match_key(key)
+        if isnothing(pos)
+            pos, is_dyn = match_key(key, soft = true)
+        end
+        if !isnothing(pos)
+            toggle_dynamic_data_enabled = is_dyn
         end
     end
     background_colormap = to_colormap(background_colormap)
@@ -310,8 +344,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     if HAS_DYNAMIC_DATA
-        Nstep = length(dynamic_data)
-        dyn_keys = keys(first(dynamic_data))
         toggle_static_limits = add_toggle!("Static color range", static_color_range_enabled, type = :toggle)
         toggle_independent = add_toggle!("Split filters", split_filters_enabled, type = :toggle)
         toggle_dyn = add_toggle!("Toggle dynamic data", toggle_dynamic_data_enabled, type = :toggle)
@@ -319,8 +351,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         is_independent = toggle_independent.active
         is_global_limit = toggle_static_limits.active
     else
-        Nstep = 1
-        dyn_keys = ["No dynamic data"]
         is_global_limit = Observable(false)
         is_independent = Observable(false)
     end
