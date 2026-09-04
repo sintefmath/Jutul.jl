@@ -141,6 +141,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         show_axis = false,
         aspect = missing,
         step::Int = 1,
+        key = missing,
         plot_pause = 1.0/30.0,
         verbose = false,
         sens = missing,
@@ -182,12 +183,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     sens = normalize_sensitivities(sens, sens_normalization)
     sens_lims = sensitivities_limits(sens)
     HAS_SENS = !ismissing(sens) && length(keys(sens)) > 0
-
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
     nc = number_of_cells(m)
     plot_data = convert_dict(static, nc)
-    if extra_static || length(keys(plot_data)) == 0
+    plot_keys = collect(keys(plot_data))
+    if extra_static || length(plot_keys) == 0
         if !haskey(plot_data, "X")
             geo = missing
             try
@@ -218,6 +219,46 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if length(keys(dynamic_data[1])) == 0
             HAS_DYNAMIC_DATA = false
             dynamic_data = missing
+        end
+        Nstep = length(dynamic_data)
+        dyn_keys = keys(first(dynamic_data))
+    else
+        Nstep = 1
+        dyn_keys = ["No dynamic data"]
+    end
+
+    function match_key(key; soft = false)
+        if soft
+            pred = startswith(key)
+        else
+            pred = isequal(key)
+        end
+        pos = findfirst(pred, dyn_keys)
+        is_dyn = true
+        if isnothing(pos)
+            pos = findfirst(pred, plot_keys)
+            is_dyn = false
+        end
+        return (pos, is_dyn)
+    end
+
+    # Try to softmatch key
+    pos_dynamic = pos_static = nothing
+    if !ismissing(key)
+        key = string(key)
+        pos, is_dyn = match_key(key)
+        if isnothing(pos)
+            pos, is_dyn = match_key(key, soft = true)
+        end
+        if !isnothing(pos)
+            toggle_dynamic_data_enabled = is_dyn
+        end
+        if is_dyn
+            pos_static = nothing
+            pos_dynamic = pos
+        else
+            pos_dynamic = nothing
+            pos_static = pos
         end
     end
     background_colormap = to_colormap(background_colormap)
@@ -290,7 +331,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         return tog
     end
 
-    function add_menu!(options, title = "")
+    function add_menu!(options, title = "", pos = nothing)
         options = collect(options)
         labels = options
         Label(right_grid_layout[idx_right_gl, 5], title,
@@ -298,6 +339,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             halign = :left,
             color = main_color
         )
+        if !isnothing(pos)
+            idx = [pos; setdiff(eachindex(options), pos)]
+            options = options[idx]
+            labels = labels[idx]
+        end
         new_menu = Menu(right_grid_layout[idx_right_gl, 1:4],
             options = zip(labels, options),
             selection_cell_color_inactive = RGBAf(1, 1, 1, menu_alpha),
@@ -310,8 +356,6 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     if HAS_DYNAMIC_DATA
-        Nstep = length(dynamic_data)
-        dyn_keys = keys(first(dynamic_data))
         toggle_static_limits = add_toggle!("Static color range", static_color_range_enabled, type = :toggle)
         toggle_independent = add_toggle!("Split filters", split_filters_enabled, type = :toggle)
         toggle_dyn = add_toggle!("Toggle dynamic data", toggle_dynamic_data_enabled, type = :toggle)
@@ -319,14 +363,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         is_independent = toggle_independent.active
         is_global_limit = toggle_static_limits.active
     else
-        Nstep = 1
-        dyn_keys = ["No dynamic data"]
         is_global_limit = Observable(false)
         is_independent = Observable(false)
     end
 
     # Label(right_grid_layout[idx_right_gl, 4:5], "static", justification = :right, color = main_color)
-    menu_cell = add_menu!(keys(plot_data), "Static")
+    menu_cell = add_menu!(plot_keys, "Static", pos_static)
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
@@ -335,7 +377,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     if HAS_DYNAMIC_DATA
         # Label(right_grid_layout[idx_right_gl, 1], "dynamic", justification = :right, color = main_color)
-        menu_dyn = add_menu!(dyn_keys, "Dynamic")
+        menu_dyn = add_menu!(dyn_keys, "Dynamic", pos_dynamic)
         sel_dyn = menu_dyn.selection
         slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
         idx_right_gl += 1
