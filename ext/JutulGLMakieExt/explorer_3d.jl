@@ -475,9 +475,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if HAS_SENS
             sens_val = sens[sens_key]
             lo_s, hi_s = sens_lims[sens_key]
-            lo_bnd_s = (1 - 1e-10) * bounds_sens[1]
-            up_bnd_s = (1 + 1e-10) * bounds_sens[2]
-            @. vertex_values_sens = sens_val[cell_to_vertex]
+            lo_bnd_s = F((1 - 1e-10) * bounds_sens[1])
+            up_bnd_s = F((1 + 1e-10) * bounds_sens[2])
+            @. vertex_values_sens = F(sens_val[cell_to_vertex])
             for (i, v_s) in enumerate(vertex_values_sens)
                 v_s_norm = (v_s - lo_s) / (hi_s - lo_s)
                 out_of_bounds = v_s_norm < lo_bnd_s || v_s_norm > up_bnd_s
@@ -530,7 +530,14 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     )
 
     if HAS_SENS
-        slims = @lift sens_lims[$sel_sens]
+        slims = @lift begin
+            ll, ul = sens_lims[$sel_sens]
+            if $use_symlog
+                ll = symlog10(ll)
+                ul = symlog10(ul)
+            end
+            return (ll, ul)
+        end
         mplt_sens = mesh!(lscene, points, ttri;
             colormap = sens_colormap,
             color = vertex_val_buffer_sens,
