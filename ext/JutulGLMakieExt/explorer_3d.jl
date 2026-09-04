@@ -187,7 +187,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     # Data conversion
     nc = number_of_cells(m)
     plot_data = convert_dict(static, nc)
-    if extra_static || length(keys(plot_data)) == 0
+    plot_keys = collect(keys(plot_data))
+    if extra_static || length(plot_keys) == 0
         if !haskey(plot_data, "X")
             geo = missing
             try
@@ -235,7 +236,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         pos = findfirst(pred, dyn_keys)
         is_dyn = true
         if isnothing(pos)
-            pos = findfirst(pred, keys(plot_data))
+            pos = findfirst(pred, plot_keys)
             is_dyn = false
         end
         return (pos, is_dyn)
@@ -367,7 +368,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     # Label(right_grid_layout[idx_right_gl, 4:5], "static", justification = :right, color = main_color)
-    menu_cell = add_menu!(keys(plot_data), "Static", pos_static)
+    menu_cell = add_menu!(plot_keys, "Static", pos_static)
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
