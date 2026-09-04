@@ -242,8 +242,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     # Try to softmatch key
-    pos = nothing
-    is_dyn = toggle_dynamic_data_enabled
+    pos_dynamic = pos_static = nothing
     if !ismissing(key)
         key = string(key)
         pos, is_dyn = match_key(key)
@@ -252,6 +251,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         end
         if !isnothing(pos)
             toggle_dynamic_data_enabled = is_dyn
+        end
+        if is_dyn
+            pos_static = nothing
+            pos_dynamic = pos
+        else
+            pos_dynamic = nothing
+            pos_static = pos
         end
     end
     background_colormap = to_colormap(background_colormap)
@@ -324,7 +330,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         return tog
     end
 
-    function add_menu!(options, title = "")
+    function add_menu!(options, title = "", pos = nothing)
         options = collect(options)
         labels = options
         Label(right_grid_layout[idx_right_gl, 5], title,
@@ -332,6 +338,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             halign = :left,
             color = main_color
         )
+        if !isnothing(pos)
+            idx = [pos; setdiff(eachindex(options), pos)]
+            options = options[idx]
+            labels = labels[idx]
+        end
         new_menu = Menu(right_grid_layout[idx_right_gl, 1:4],
             options = zip(labels, options),
             selection_cell_color_inactive = RGBAf(1, 1, 1, menu_alpha),
@@ -356,7 +367,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
 
     # Label(right_grid_layout[idx_right_gl, 4:5], "static", justification = :right, color = main_color)
-    menu_cell = add_menu!(keys(plot_data), "Static")
+    menu_cell = add_menu!(keys(plot_data), "Static", pos_static)
     slider_static = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
     idx_right_gl += 1
 
@@ -365,7 +376,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     if HAS_DYNAMIC_DATA
         # Label(right_grid_layout[idx_right_gl, 1], "dynamic", justification = :right, color = main_color)
-        menu_dyn = add_menu!(dyn_keys, "Dynamic")
+        menu_dyn = add_menu!(dyn_keys, "Dynamic", pos_dynamic)
         sel_dyn = menu_dyn.selection
         slider_dynamic = IntervalSlider(right_grid_layout[idx_right_gl, 1:5], range = 0:0.01:1, horizontal = true, startvalues = (0.0, 1.0))
         idx_right_gl += 1
