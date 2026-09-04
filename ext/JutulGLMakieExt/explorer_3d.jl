@@ -151,6 +151,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         toggle_dynamic_data_enabled = true,
         sens_enabled = false,
         mesh_enabled = true,
+        sens_kwarg = NamedTuple(),
         kwarg...
     )
     default_colors = preset_colors(preset)
@@ -475,12 +476,15 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if HAS_SENS
             sens_val = sens[sens_key]
             lo_s, hi_s = sens_lims[sens_key]
-            lo_bnd_s = (1 - 1e-10) * bounds_sens[1]
-            up_bnd_s = (1 + 1e-10) * bounds_sens[2]
-            @. vertex_values_sens = sens_val[cell_to_vertex]
+            lo_s = Float32(F(lo_s))
+            hi_s = Float32(F(hi_s))
+            rng = (hi_s - lo_s)
+            unit_lower_bnd, unit_upper_bnd = bounds_sens
+            lower_bnd = Float32(unit_lower_bnd)*rng + lo_s
+            upper_bnd = Float32(unit_upper_bnd)*rng + lo_s
+            @. vertex_values_sens = F(sens_val[cell_to_vertex])
             for (i, v_s) in enumerate(vertex_values_sens)
-                v_s_norm = (v_s - lo_s) / (hi_s - lo_s)
-                out_of_bounds = v_s_norm < lo_bnd_s || v_s_norm > up_bnd_s
+                out_of_bounds = v_s < lower_bnd || v_s > upper_bnd
                 filtered_parent = !isfinite(vertex_values[i])
                 if out_of_bounds || filtered_parent
                     vertex_values_sens[i] = NaN
@@ -530,7 +534,14 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     )
 
     if HAS_SENS
-        slims = @lift sens_lims[$sel_sens]
+        slims = @lift begin
+            ll, ul = sens_lims[$sel_sens]
+            if $use_symlog
+                ll = symlog10(ll)
+                ul = symlog10(ul)
+            end
+            return (ll, ul)
+        end
         mplt_sens = mesh!(lscene, points, ttri;
             colormap = sens_colormap,
             color = vertex_val_buffer_sens,
@@ -538,7 +549,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             colorrange = slims,
             backlight = 1,
             mesh_arg...,
-            kwarg...
+            sens_kwarg...
         )
         Colorbar(hist_grid_layout[3, 1], mplt_sens,
             vertical = false,
