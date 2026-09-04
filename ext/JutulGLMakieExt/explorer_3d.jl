@@ -151,6 +151,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         toggle_dynamic_data_enabled = true,
         sens_enabled = false,
         mesh_enabled = true,
+        sens_kwarg = NamedTuple(),
         kwarg...
     )
     default_colors = preset_colors(preset)
@@ -548,7 +549,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             colorrange = slims,
             backlight = 1,
             mesh_arg...,
-            kwarg...
+            sens_kwarg...
         )
         Colorbar(hist_grid_layout[3, 1], mplt_sens,
             vertical = false,
