@@ -32,7 +32,10 @@ end
 function draw_jutul_graph(nodes, dependencies, colors;
         figure = (;), axis = (;), node_size = 20, edge_width = 3,
         edge_color = :grey60, text_size = 20, labels = string.(nodes),
-        tooltips = nothing, implementations = nothing)
+        tooltips = nothing, implementations = nothing,
+        node_padding = (8, 8, 4, 4), node_corner_radius = 5,
+        text_color = :white, text_glow_color = (:black, 0.8),
+        text_glow_width = 3)
     positions, node_index = variable_graph_layout(nodes, dependencies)
     level_count = isempty(positions) ? 1 : length(unique(first.(positions)))
     rows_per_level = isempty(positions) ? [1] :
@@ -43,7 +46,7 @@ function draw_jutul_graph(nodes, dependencies, colors;
     default_height = clamp(300 + 75maximum(rows_per_level), 600, 1600)
     figure_options = merge((size = (default_width, default_height),), figure)
     fig = Makie.Figure(; figure_options...)
-    ax = Makie.Axis(fig[1, 1]; aspect = Makie.DataAspect(), axis...)
+    ax = Makie.Axis(fig[1, 1]; axis...)
 
     for (target, deps) in enumerate(dependencies), dependency in deps
         source = node_index[dependency]
@@ -60,14 +63,48 @@ function draw_jutul_graph(nodes, dependencies, colors;
             inspectable = false)
     end
 
-    inspector_label = isnothing(tooltips) ? Makie.automatic :
-        ((_, index, _) -> tooltips[index])
-    node_plot = Makie.scatter!(ax, positions; markersize = node_size,
-        color = colors, strokewidth = 1, strokecolor = :black,
-        inspector_label = inspector_label)
-    Makie.text!(ax, labels; position = positions, fontsize = text_size,
-        align = (:center, :bottom), offset = (0, node_size/2 + 5),
-        inspectable = false)
+    # Use a separate TextLabel recipe for each node. This lets both its rounded
+    # background mesh and its text resolve unambiguously to one tooltip/click.
+    plot_to_node = IdDict{Any, Int}()
+    function register_node_plot!(plot, node_index)
+        plot_to_node[plot] = node_index
+        if hasproperty(plot, :plots)
+            for child in plot.plots
+                register_node_plot!(child, node_index)
+            end
+        end
+    end
+    function node_for_plot(plot)
+        while !isnothing(plot)
+            node_index = get(plot_to_node, plot, nothing)
+            !isnothing(node_index) && return node_index
+            plot = plot isa Makie.AbstractPlot ? plot.parent : nothing
+        end
+        return nothing
+    end
+    for i in eachindex(nodes)
+        inspector_label = isnothing(tooltips) ? Makie.automatic :
+            ((_, _, _) -> tooltips[i])
+        inspector_hover = if isnothing(tooltips)
+            Makie.automatic
+        else
+            (inspector, _, _, _...) -> begin
+                mouse_position = Makie.mouseposition_px(inspector.root)
+                Makie.update_tooltip_alignment!(inspector, mouse_position;
+                    text = tooltips[i])
+                return true
+            end
+        end
+        node_plot = Makie.textlabel!(ax, positions[i]; text = labels[i],
+            fontsize = text_size, padding = node_padding,
+            background_color = colors[i], strokecolor = (:black, 0.75),
+            strokewidth = 1.5, cornerradius = node_corner_radius,
+            text_color = text_color, text_glowcolor = text_glow_color,
+            text_glowwidth = text_glow_width,
+            inspector_label = inspector_label,
+            inspector_hover = inspector_hover)
+        register_node_plot!(node_plot, i)
+    end
     Makie.hidespines!(ax)
     Makie.hidedecorations!(ax)
     Makie.autolimits!(ax)
@@ -90,8 +127,9 @@ function draw_jutul_graph(nodes, dependencies, colors;
         Makie.on(Makie.events(fig).mousebutton, priority = 2) do event
             if event.button == Makie.Mouse.left && event.action == Makie.Mouse.press
                 plot, index = Makie.pick(fig)
-                if plot == node_plot && 1 <= index <= length(implementations)
-                    edit_implementation(implementations[index])
+                node_index = node_for_plot(plot)
+                if !isnothing(node_index)
+                    edit_implementation(implementations[node_index])
                     return Makie.Consume(true)
                 end
             end
@@ -154,11 +192,12 @@ function Jutul.plot_variable_graph(model; kwargs...)
     tooltips = ["$(nodes[i])\n$(typeof(implementations[i]))" for i in eachindex(nodes)]
     fig, _ = draw_jutul_graph(nodes, dependencies, colors;
         tooltips = tooltips, implementations = implementations, kwargs...)
-    Makie.Legend(fig[2, 1],
-        [Makie.MarkerElement(color = palette[i], marker = :circle,
-            markersize = 20, strokewidth = 1) for i in 1:3],
+    Makie.Legend(fig[1, 1],
+        [Makie.MarkerElement(color = palette[i], marker = :rect,
+            markersize = Makie.Vec2f(28, 16), strokewidth = 1) for i in 1:3],
         ["Primary variable", "Secondary variable", "Parameter"];
-        orientation = :horizontal)
+        orientation = :horizontal, tellheight = false, tellwidth = false,
+        halign = :center, valign = :bottom, margin = (10, 10, 10, 10))
     return fig
 end
 
