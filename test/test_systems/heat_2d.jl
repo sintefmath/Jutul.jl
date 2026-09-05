@@ -1,4 +1,5 @@
 using Jutul
+using AlgebraicMultigrid
 using Test
 
 function test_heat_2d(nx = 3, ny = nx; kwarg...)
