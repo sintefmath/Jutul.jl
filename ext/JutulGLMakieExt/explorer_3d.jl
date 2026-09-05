@@ -216,12 +216,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     end
     if HAS_DYNAMIC_DATA
         dynamic_data = [convert_dict(d, nc) for d in dynamic_data]
-        if length(keys(dynamic_data[1])) == 0
+        dyn_keys = collect(keys(first(dynamic_data)))
+        if length(dyn_keys) == 0
             HAS_DYNAMIC_DATA = false
             dynamic_data = missing
         end
         Nstep = length(dynamic_data)
-        dyn_keys = keys(first(dynamic_data))
     else
         Nstep = 1
         dyn_keys = ["No dynamic data"]
