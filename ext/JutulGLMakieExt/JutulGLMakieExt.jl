@@ -1,5 +1,5 @@
 module JutulGLMakieExt
-    using Jutul, GLMakie
+    using Jutul, GLMakie, Statistics
     include("variables.jl")
     include("explorer_3d.jl")
 
