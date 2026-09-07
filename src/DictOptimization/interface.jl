@@ -208,22 +208,26 @@ function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
     if !scale
         error("Standard lbfgs optimization without scaling is not supported.")
     end
+    verbose = optimizer_verbose(problem)
     v, x, history = Jutul.LBFGS.box_bfgs(problem;
+        print = Int(verbose),
         kwarg...
     )
     return (x, history)
 end
 
-function optimize_implementation(problem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+function optimize_implementation(problem::JutulOptimizationProblem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+    verbose = optimizer_verbose(problem)
     F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
     _, x, history = Jutul.LBFGS.optimize_bound_constrained(F.x0, F.g_both, F.min, F.max;
+        print = Int(verbose),
         kwarg...
     )
     return (F.descale(x), history)
 end
 
 function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
-    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
+    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb_qp, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
 function setup_optimization_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
@@ -644,4 +648,14 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     lumping = validate_and_normalize_lumping(lumping, initial, name)
     dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial)
     return dprm
+end
+
+function optimizer_verbose(problem::JutulOptimizationProblem)
+    cfg = get(problem.cache, :config, missing)
+    if ismissing(cfg)
+        v = true
+    else
+        v = get(cfg, :info_level, 0) >= 0
+    end
+    return v
 end

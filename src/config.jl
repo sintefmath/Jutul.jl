@@ -43,6 +43,15 @@ function Base.setindex!(opts::JutulConfig, x, name::Symbol)
     return opts
 end
 
+function Base.get(opts::JutulConfig, name::Symbol, default)
+    if haskey(opts.options, name)
+        out = opts[name]
+    else
+        out = default
+    end
+    return out
+end
+
 function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
     _, sz = displaysize(io)
     olim = 25
