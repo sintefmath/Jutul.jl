@@ -518,7 +518,9 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if HAS_SENS
             sens_val = sens[sens_key]
             lo_s, hi_s = sens_lims[sens_key]
-            lo_s = Float32(F(lo_s))
+            # Use absolute value for sensitivities
+            lo_s = 0f0
+            # lo_s = Float32(F(lo_s))
             hi_s = Float32(F(hi_s))
             rng = (hi_s - lo_s)
             unit_lower_bnd, unit_upper_bnd = bounds_sens
@@ -526,7 +528,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             upper_bnd = Float32(unit_upper_bnd)*rng + lo_s
             @. vertex_values_sens = F(sens_val[cell_to_vertex])
             for (i, v_s) in enumerate(vertex_values_sens)
-                out_of_bounds = v_s < lower_bnd || v_s > upper_bnd
+                out_of_bounds = abs(v_s) < lower_bnd || abs(v_s) > upper_bnd
                 filtered_parent = !isfinite(vertex_values[i])
                 if out_of_bounds || filtered_parent
                     vertex_values_sens[i] = NaN
