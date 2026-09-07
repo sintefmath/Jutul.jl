@@ -655,7 +655,7 @@ function optimizer_verbose(problem::JutulOptimizationProblem)
     if ismissing(cfg)
         v = true
     else
-        v = get(cfg, :info_level, 0) >= 0
+        v = get(cfg, :info_level, 0) >= -1
     end
     return v
 end
