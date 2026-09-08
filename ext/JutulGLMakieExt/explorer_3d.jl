@@ -151,6 +151,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         static_color_range_enabled = true,
         split_filters_enabled = false,
         toggle_dynamic_data_enabled = true,
+        title = missing,
         sens_enabled = false,
         mesh_enabled = true,
         sens_kwarg = NamedTuple(),
@@ -295,6 +296,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     mesh_scene = Scene(lscene.scene, scenekw = (clear = false, ))
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
+
+    if !ismissing(title)
+        mid_grid = GridLayout(fig[1:2, :], 1, 1)
+        Label(mid_grid[1, 1], title, color = main_color, fontsize = 28)
+    end
 
     right_grid_layout_outer = GridLayout(fig[2:N-2, N-4:N-1], 3, 1)
     right_grid_layout = GridLayout(right_grid_layout_outer[1:2, 1])
