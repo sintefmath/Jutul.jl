@@ -238,7 +238,7 @@ function convert_state_ad(model, state, tag = nothing)
     # Bookkeeping for debug output
     total_number_of_partials = 0
     total_number_of_groups = 0
-    for (pkey, pvar) in primary
+    for (pkey, pvar) in pairs(primary)
         u = associated_entity(pvar)
         # Number of partials for this entity
         n_partials = degrees_of_freedom_per_entity(model, u)
@@ -264,7 +264,7 @@ function convert_state_ad(model, state, tag = nothing)
     secondary = get_secondary_variables(model)
     # Loop over secondary variables and initialize as AD with zero partials
     outstr *= "Setting up secondary variables...\n"
-    for (skey, svar) in secondary
+    for (skey, svar) in pairs(secondary)
         u = associated_entity(svar)
         outstr *= "\t$skey: Defined on $(typeof(u))\n"
 
@@ -433,6 +433,8 @@ end
 function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where {Tag, T<:(ForwardDiff.Dual{Tag})}
     @. v = next
 end
+
+update_values!(v, next, ::JutulContext) = update_values!(v, next)
 
 """
 Take value of AD.

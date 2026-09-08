@@ -243,7 +243,7 @@ end
 function model_accumulation_internal!(acc, storage, model; offset = 0)
     state = storage.state
     is_cm = is_cell_major(matrix_layout(model.context))
-    for (k, eq) in model.equations
+    for (k, eq) in pairs(model.equations)
         N = Jutul.number_of_equations(model, eq)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
@@ -265,7 +265,7 @@ end
 function setup_helper_equation_storage!(storage, r, model; offset = 0)
     state = storage.state
     is_cm = is_cell_major(matrix_layout(model.context))
-    for (k, eq) in model.equations
+    for (k, eq) in pairs(model.equations)
         N = Jutul.number_of_equations(model, eq)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m

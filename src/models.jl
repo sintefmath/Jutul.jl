@@ -553,7 +553,7 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; extra_sparsit
     end
     counter = 1
     num_equations_total = 0
-    for (sym, eq) in model.equations
+    for (sym, eq) in pairs(model.equations)
         num = number_of_equations_per_entity(model, eq)
         ne = number_of_entities(model, eq)
         n = num*ne
@@ -947,9 +947,15 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel, prima
             end
         end
         report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
-        @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
+        @tic "$pkey" update_primary_variable_context!(
+            primary_storage, p, pkey, model, dxi, relaxation, model.context)
     end
     return report
+end
+
+function update_primary_variable_context!(state, p, state_symbol, model, dx, w,
+        ::JutulContext)
+    return update_primary_variable!(state, p, state_symbol, model, dx, w)
 end
 
 function increment_norm(dX, state, model, X, pvar)
@@ -987,11 +993,11 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     defs = storage.variable_definitions
     pvar = defs.primary_variables
     for k in keys(pvar)
-        report[k] = variable_change_report(state[k], state0[k], pvar[k])
+        report[k] = variable_change_report(state[k], state0[k], pvar[k], model.context)
     end
     svar = defs.secondary_variables
     for k in keys(svar)
-        report[k] = variable_change_report(state[k], state0[k], svar[k])
+        report[k] = variable_change_report(state[k], state0[k], svar[k], model.context)
     end
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_after_step!(storage, model.system, model, dt, forces; kwarg...)
@@ -999,13 +1005,13 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
 
     # Synchronize previous state with new state
     for key in keys(pvar)
-        update_values!(state0[key], state[key])
+        update_values!(state0[key], state[key], model.context)
     end
     for key in keys(svar)
-        update_values!(state0[key], state[key])
+        update_values!(state0[key], state[key], model.context)
     end
     for key in defs.extra_variable_fields
-        update_values!(state0[key], state[key])
+        update_values!(state0[key], state[key], model.context)
     end
     return report
 end
@@ -1041,6 +1047,8 @@ function variable_change_report(X, X0, pvar)
     return nothing
 end
 
+variable_change_report(X, X0, pvar, ::JutulContext) = variable_change_report(X, X0, pvar)
+
 function update_after_step!(storage, ::Any, model, dt, forces; time = NaN)
     # Do nothing
 end
@@ -1057,27 +1065,27 @@ function get_output_state(storage, model)
     return D
 end
 
-function replace_values!(old, updated)
+function replace_values!(old, updated, context = DefaultContext())
     for f in keys(old)
         if haskey(updated, f)
-            update_values!(old[f], updated[f])
+            update_values!(old[f], updated[f], context)
         end
     end
 end
 
 function reset_state_to_previous_state!(storage, model)
     # Replace primary variable values with those from previous state
-    replace_values!(storage.primary_variables, storage.state0)
+    replace_values!(storage.primary_variables, storage.state0, model.context)
     # Update secondary variables to be in sync with current primary values
     update_secondary_variables!(storage, model)
 end
 
 function reset_previous_state!(storage, model, state0)
-    replace_values!(storage.state0, state0)
+    replace_values!(storage.state0, state0, model.context)
 end
 
 function reset_variables!(storage, model, new_vars; type = :state)
-    replace_values!(storage[type], new_vars)
+    replace_values!(storage[type], new_vars, model.context)
 end
 
 function setup_equations_and_primary_variable_views!(storage, model)
@@ -1115,7 +1123,7 @@ function setup_primary_variable_views(storage, model, dx)
             nu = count_active_entities(model.domain, u)
             Dx = get_matrix_view(dx, np, nu, false, offset)
             local_offset = 0
-            for (pkey, p) in primary
+            for (pkey, p) in pairs(primary)
                 # This is a bit inefficient
                 if u != associated_entity(p)
                     continue
@@ -1129,7 +1137,7 @@ function setup_primary_variable_views(storage, model, dx)
         end
     else
         offset = 0
-        for (pkey, p) in primary
+        for (pkey, p) in pairs(primary)
             n = number_of_degrees_of_freedom(model, p)
             m = degrees_of_freedom_per_entity(model, p)
             rng = (offset+1):(n+offset)

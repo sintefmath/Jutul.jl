@@ -4,6 +4,8 @@ module Jutul
     using SparseArrays
     using MappedArrays
     using StaticArrays
+    using KernelAbstractions
+    import Adapt
     # Data structures
     import DataStructures: OrderedDict
     using OrderedCollections
@@ -162,6 +164,10 @@ module Jutul
 
     # Mesh quality control
     include("meshes/MeshQualityControl/MeshQualityControl.jl")
+
+    # KernelAbstractions-backed single-model execution and transfer. This is
+    # loaded after the concrete storage/discretization types it adapts.
+    include("kernel_abstractions.jl")
 
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}

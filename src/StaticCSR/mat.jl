@@ -1,48 +1,62 @@
-struct StaticSparsityMatrixCSR{Tv,Ti<:Integer} <: SparseArrays.AbstractSparseMatrix{Tv,Ti}
-    At::SparseMatrixCSC{Tv, Ti}
+struct StaticSparsityMatrixCSR{Tv,Ti<:Integer,V,I,R,A,B} <: SparseArrays.AbstractSparseMatrix{Tv,Ti}
+    At::A
+    nzval::V
+    colval::I
+    rowptr::R
+    m::Int
+    n::Int
     nthreads::Int
     minbatch::Int
     thread_type::Symbol
+    backend::B
     function StaticSparsityMatrixCSR(A_t::SparseMatrixCSC{Tv, Ti}; nthreads = Threads.nthreads(), minbatch = 1000, thread_type = :batch) where {Tv, Ti}
-        return new{Tv, Ti}(A_t, nthreads, minbatch, thread_type)
+        nzval = nonzeros(A_t)
+        colval = SparseArrays.rowvals(A_t)
+        rowptr = SparseArrays.getcolptr(A_t)
+        m, n = reverse(size(A_t))
+        return new{Tv, Ti, typeof(nzval), typeof(colval), typeof(rowptr), typeof(A_t), Nothing}(
+            A_t, nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, nothing
+        )
+    end
+    function StaticSparsityMatrixCSR(nzval::V, colval::I, rowptr::R, m::Int, n::Int, backend::B;
+            nthreads = 1, minbatch = 1, thread_type = :serial) where {Tv, Ti<:Integer, V<:AbstractVector{Tv}, I<:AbstractVector{Ti}, R<:AbstractVector{Ti}, B}
+        return new{Tv, Ti, V, I, R, Nothing, B}(
+            nothing, nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, backend
+        )
     end
 end
 
-Base.size(S::StaticSparsityMatrixCSR) = reverse(size(S.At))
+Base.size(S::StaticSparsityMatrixCSR) = (S.m, S.n)
 Base.getindex(S::StaticSparsityMatrixCSR, I::Integer, J::Integer) = S.At[J, I]
-SparseArrays.nnz(S::StaticSparsityMatrixCSR) = nnz(S.At)
-SparseArrays.nonzeros(S::StaticSparsityMatrixCSR) = nonzeros(S.At)
+SparseArrays.nnz(S::StaticSparsityMatrixCSR) = length(S.nzval)
+SparseArrays.nonzeros(S::StaticSparsityMatrixCSR) = S.nzval
 Base.isstored(S::StaticSparsityMatrixCSR, I::Integer, J::Integer) = Base.isstored(S.At, J, I)
-SparseArrays.nzrange(S::StaticSparsityMatrixCSR, row::Integer) = SparseArrays.nzrange(S.At, row)
+SparseArrays.nzrange(S::StaticSparsityMatrixCSR, row::Integer) = S.rowptr[row]:(S.rowptr[row+1]-1)
 
 function SparseArrays.findnz(S::StaticSparsityMatrixCSR)
     J, I, V = findnz(S.At)
     return (I, J, V)
 end
 
-colvals(S::StaticSparsityMatrixCSR) = SparseArrays.rowvals(S.At)
+colvals(S::StaticSparsityMatrixCSR) = S.colval
 
 function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::AbstractVector, α::Number, β::Number)
-    At = A.At
     n = size(y, 1)
     size(A, 2) == size(x, 1) || throw(DimensionMismatch())
     size(A, 1) == n || throw(DimensionMismatch())
     mb = max(n ÷ nthreads(A), minbatch(A))
     if β == 0
-        csr_mul_add!(y, At, x, n, mb, α, Val(false))
+        csr_mul_add!(y, A.nzval, A.colval, A.rowptr, x, n, mb, α, Val(false))
     else
         if β != 1
             rmul!(y, β)
         end
-        csr_mul_add!(y, At, x, n, mb, α, Val(true))
+        csr_mul_add!(y, A.nzval, A.colval, A.rowptr, x, n, mb, α, Val(true))
     end
     return y
 end
 
-function csr_mul_add!(y::AbstractVector{Ty}, A, x, n, mb, α, ::Val{do_increment}) where {do_increment, Ty}
-    rowval = A.rowval
-    nzval = A.nzval
-    colptr = A.colptr
+function csr_mul_add!(y::AbstractVector{Ty}, nzval, rowval, colptr, x, n, mb, α, ::Val{do_increment}) where {do_increment, Ty}
     @batch minbatch = mb for row in 1:n
         v = zero(Ty)
         @inbounds start = colptr[row]

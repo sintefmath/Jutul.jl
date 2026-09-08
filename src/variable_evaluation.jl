@@ -273,7 +273,7 @@ function build_variable_graph(model, primary = model.primary_variables, secondar
         push!(nodes, key)
         push!(edges, []) # No dependencies for parameters - they are static.
     end
-    for (key, var) in secondary
+    for (key, var) in pairs(secondary)
         dep = get_dependencies(var, model)
         push!(nodes, key)
         push!(edges, dep)

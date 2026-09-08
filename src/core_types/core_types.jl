@@ -4,7 +4,7 @@ export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
 export ScalarVariable, VectorVariables, FractionVariables
 
-export SingleCUDAContext, DefaultContext
+export SingleCUDAContext, DefaultContext, KernelAbstractionsContext
 export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
 
 export transfer, allocate_array
@@ -217,6 +217,7 @@ include("contexts/interface.jl")
 include("contexts/csr.jl")
 include("contexts/default.jl")
 include("contexts/cuda.jl")
+include("contexts/kernel_abstractions.jl")
 
 # Domains
 include("domains.jl")
@@ -241,19 +242,25 @@ abstract type AbstractSimulationModel <: JutulModel end
 struct SimulationModel{O<:JutulDomain,
                        S<:JutulSystem,
                        F<:JutulFormulation,
-                       C<:JutulContext
+                       C<:JutulContext,
+                       PV,
+                       SV,
+                       P,
+                       E,
+                       OV,
+                       X
                        } <: AbstractSimulationModel
     domain::O
     system::S
     context::C
     formulation::F
     data_domain
-    primary_variables::OrderedDict{Symbol, Any}
-    secondary_variables::OrderedDict{Symbol, Any}
-    parameters::OrderedDict{Symbol, Any}
-    equations::OrderedDict{Symbol, Any}
-    output_variables::Vector{Symbol}
-    extra::OrderedDict{Symbol, Any}
+    primary_variables::PV
+    secondary_variables::SV
+    parameters::P
+    equations::E
+    output_variables::OV
+    extra::X
     optimization_level::Int
 end
 
@@ -315,7 +322,13 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(
+    PV = typeof(primary_variables)
+    SV = typeof(secondary_variables)
+    P = typeof(parameters)
+    E = typeof(equations)
+    OV = typeof(outputs)
+    X = typeof(extra)
+    model = SimulationModel{D,S,F,C,PV,SV,P,E,OV,X}(
         domain,
         system,
         context,
@@ -374,7 +387,13 @@ function SimulationModel{D,S,F,C}(
         extra
     ) where {D,S,F,C}
     # Backward compatibility constructor
-    return SimulationModel{D,S,F,C}(
+    PV = typeof(primary_variables)
+    SV = typeof(secondary_variables)
+    P = typeof(parameters)
+    E = typeof(equations)
+    OV = typeof(outputs)
+    X = typeof(extra)
+    return SimulationModel{D,S,F,C,PV,SV,P,E,OV,X}(
         domain,
         system,
         context,
@@ -407,13 +426,27 @@ function update_model_post_selection!(model)
 end
 
 import Base: copy
-function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
+function Base.copy(m::SimulationModel)
     pvar = copy(m.primary_variables)
     svar = copy(m.secondary_variables)
     outputs = copy(m.output_variables)
     prm = copy(m.parameters)
-    eqs = m.equations
-    return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, m.plot_mesh, pvar, svar, prm, eqs, outputs)
+    eqs = copy(m.equations)
+    extra = isnothing(m.extra) ? nothing : copy(m.extra)
+    return SimulationModel(
+        m.domain,
+        m.system,
+        m.context,
+        m.formulation,
+        m.data_domain,
+        pvar,
+        svar,
+        prm,
+        eqs,
+        outputs,
+        extra,
+        m.optimization_level
+    )
 end
 
 function Base.getindex(model::SimulationModel, s::Symbol)
@@ -752,6 +785,12 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
     equations_per_entity::I
     number_of_entities::I
     npartials::I
+    function CompactAutoDiffCache{I, ∂x}(entries::E, entity, positions::P,
+            equations_per_entity::I, number_of_entities::I, npartials::I
+        ) where {I<:Integer, ∂x<:Real, E, P}
+        return new{I, ∂x, E, P}(entries, entity, positions,
+            equations_per_entity, number_of_entities, npartials)
+    end
     function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
                                                         entity = Cells(),
                                                         context = DefaultContext(),
@@ -794,6 +833,16 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
     number_of_entities_target::Int
     number_of_entities_source::Int
     variable_map::VM
+    function GenericAutoDiffCache{N, E, ∂x}(entries::A, vpos::P,
+            variables::P, jacobian_positions::M, diagonal_positions::D,
+            number_of_entities_target::Int, number_of_entities_source::Int,
+            variable_map::VM
+        ) where {N, E, ∂x<:Real, A, P, M, D, VM}
+        return new{N, E, ∂x, A, P, M, D, VM}(
+            entries, vpos, variables, jacobian_positions, diagonal_positions,
+            number_of_entities_target, number_of_entities_source, variable_map
+        )
+    end
     function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap()) where I
         @assert nt > 0
         @assert ns > 0
