@@ -146,6 +146,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         verbose = false,
         sens = missing,
         sens_normalization = :none,
+        sens_maxscale = 1.0,
         sens_colormap = :balance,
         static_color_range_enabled = true,
         split_filters_enabled = false,
@@ -181,7 +182,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     # Setup for sens
     sens = normalize_sensitivities(sens, sens_normalization)
-    sens_lims = sensitivities_limits(sens)
+    sens_lims = sensitivities_limits(sens, sens_maxscale)
     HAS_SENS = !ismissing(sens) && length(keys(sens)) > 0
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
@@ -986,14 +987,17 @@ function normalize_sensitivities(sens::AbstractDict, snorm)
     return new_sens
 end
 
-function sensitivities_limits(sens)
+function sensitivities_limits(sens, maxscale)
     p = range(0, 1, length=101)
     out = Dict()
     if !ismissing(sens)
         for (k, v) in sens
             minv, maxv = extrema(v)
-            maxv = max(abs(minv), abs(maxv))
+            maxv = maxscale*max(abs(minv), abs(maxv))
             vabs = abs.(v)
+            if maxscale != 1.0
+                @. vabs = min(vabs, maxv)
+            end
             q = quantile(vabs, p; sorted=false)
             out[k] = (extrema = (-maxv, maxv), quantiles = q)
         end
