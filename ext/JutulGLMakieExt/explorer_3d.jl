@@ -146,10 +146,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         verbose = false,
         sens = missing,
         sens_normalization = :none,
-        sens_colormap = :seismic,
+        sens_maxscale = 1.0,
+        sens_colormap = :balance,
         static_color_range_enabled = true,
         split_filters_enabled = false,
         toggle_dynamic_data_enabled = true,
+        title = missing,
         sens_enabled = false,
         mesh_enabled = true,
         sens_kwarg = NamedTuple(),
@@ -181,7 +183,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     # Setup for sens
     sens = normalize_sensitivities(sens, sens_normalization)
-    sens_lims = sensitivities_limits(sens)
+    sens_lims = sensitivities_limits(sens, sens_maxscale)
     HAS_SENS = !ismissing(sens) && length(keys(sens)) > 0
     HAS_DYNAMIC_DATA = !ismissing(dynamic_data)
     # Data conversion
@@ -294,6 +296,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     mesh_scene = Scene(lscene.scene, scenekw = (clear = false, ))
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
+
+    if !ismissing(title)
+        mid_grid = GridLayout(fig[1:2, :], 1, 1)
+        Label(mid_grid[1, 1], title, color = main_color, fontsize = 28)
+    end
 
     right_grid_layout_outer = GridLayout(fig[2:N-2, N-4:N-1], 3, 1)
     right_grid_layout = GridLayout(right_grid_layout_outer[1:2, 1])
@@ -517,19 +524,51 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_values, cell_val_buffer_trunc, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F, verbose)
         if HAS_SENS
             sens_val = sens[sens_key]
-            lo_s, hi_s = sens_lims[sens_key]
-            lo_s = Float32(F(lo_s))
-            hi_s = Float32(F(hi_s))
-            rng = (hi_s - lo_s)
-            unit_lower_bnd, unit_upper_bnd = bounds_sens
-            lower_bnd = Float32(unit_lower_bnd)*rng + lo_s
-            upper_bnd = Float32(unit_upper_bnd)*rng + lo_s
-            @. vertex_values_sens = F(sens_val[cell_to_vertex])
-            for (i, v_s) in enumerate(vertex_values_sens)
-                out_of_bounds = v_s < lower_bnd || v_s > upper_bnd
-                filtered_parent = !isfinite(vertex_values[i])
-                if out_of_bounds || filtered_parent
-                    vertex_values_sens[i] = NaN
+            lo_s, hi_s = sens_lims[sens_key].extrema
+            if false
+                # Use absolute value for sensitivities
+                lo_s = 0f0
+                # lo_s = Float32(F(lo_s))
+                hi_s = Float32(F(hi_s))
+                rng = (hi_s - lo_s)
+                unit_lower_bnd, unit_upper_bnd = bounds_sens
+                lower_bnd = Float32(unit_lower_bnd)*rng + lo_s
+                upper_bnd = Float32(unit_upper_bnd)*rng + lo_s
+                @. vertex_values_sens = F(sens_val[cell_to_vertex])
+                for (i, v_s) in enumerate(vertex_values_sens)
+                    out_of_bounds = abs(v_s) < lower_bnd || abs(v_s) > upper_bnd
+                    filtered_parent = !isfinite(vertex_values[i])
+                    if out_of_bounds || filtered_parent
+                        vertex_values_sens[i] = NaN
+                    end
+                end
+            else
+                quantiles = sens_lims[sens_key].quantiles
+                nq = length(quantiles)
+                unit_lower_bnd, unit_upper_bnd = bounds_sens
+                low_idx = clamp(floor(Int, unit_lower_bnd*nq), 1, nq)
+                hi_idx = clamp(ceil(Int, unit_upper_bnd*nq), 1, nq)
+                if unit_upper_bnd ≈ 1.0
+                    upper_bnd = Float32(Inf)
+                else
+                    upper_bnd = quantiles[hi_idx]
+                end
+                if unit_lower_bnd ≈ 0.0
+                    lower_bnd = Float32(-Inf)
+                else
+                    lower_bnd = quantiles[low_idx]
+                end
+                @. vertex_values_sens = sens_val[cell_to_vertex]
+                for (i, v_s) in enumerate(vertex_values_sens)
+                    out_of_bounds = abs(v_s) < lower_bnd || abs(v_s) > upper_bnd
+                    filtered_parent = !isfinite(vertex_values[i])
+                    if out_of_bounds || filtered_parent
+                        vertex_values_sens[i] = NaN
+                    end
+                end
+                # Do this afterwards to keep filter constant
+                if to_symlog
+                    @. vertex_values_sens = symlog10(vertex_values_sens)
                 end
             end
             n = length(vertex_values_sens)
@@ -577,7 +616,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     if HAS_SENS
         slims = @lift begin
-            ll, ul = sens_lims[$sel_sens]
+            ll, ul = sens_lims[$sel_sens].extrema
             if $use_symlog
                 ll = symlog10(ll)
                 ul = symlog10(ul)
@@ -962,13 +1001,19 @@ function normalize_sensitivities(sens::AbstractDict, snorm)
     return new_sens
 end
 
-function sensitivities_limits(sens)
+function sensitivities_limits(sens, maxscale)
+    p = range(0, 1, length=101)
     out = Dict()
     if !ismissing(sens)
         for (k, v) in sens
             minv, maxv = extrema(v)
-            maxv = max(abs(minv), abs(maxv))
-            out[k] = (-maxv, maxv)
+            maxv = maxscale*max(abs(minv), abs(maxv))
+            vabs = abs.(v)
+            if maxscale != 1.0
+                @. vabs = min(vabs, maxv)
+            end
+            q = quantile(vabs, p; sorted=false)
+            out[k] = (extrema = (-maxv, maxv), quantiles = q)
         end
     end
     return out

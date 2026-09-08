@@ -56,6 +56,8 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     else
         result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing, output_path = output_path_sim)
     end
+    config = get(adj_cache, :config, missing)
+    info_level = get(adj_cache, :info_level, 0)
     if solve_failure
         if is_first_iteration
             error("First simulation failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate.")
@@ -93,7 +95,9 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             g = similar(x)
             t_reverse = @elapsed try
                 Jutul.AdjointsDI.solve_adjoint_generic!(
-                    g, x, setup_from_vector, S, packed_steps, objective, extra_timing = extra_timing
+                    g, x, setup_from_vector, S, packed_steps, objective,
+                    extra_timing = extra_timing,
+                    info_level = info_level
                 )
             catch excpt
                 adjoint_failure = true
