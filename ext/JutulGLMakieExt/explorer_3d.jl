@@ -543,7 +543,14 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 low_idx = clamp(floor(Int, unit_lower_bnd*nq), 1, nq)
                 hi_idx = clamp(ceil(Int, unit_upper_bnd*nq), 1, nq)
                 lower_bnd = quantiles[low_idx]
-                upper_bnd = quantiles[hi_idx]
+                if unit_upper_bnd ≈ 1.0
+                    upper_bnd = Float32(Inf)
+                else
+                    upper_bnd = quantiles[hi_idx]
+                end
+                if unit_lower_bnd ≈ 0.0
+                    lower_bnd = Float32(-Inf)
+                end
                 @. vertex_values_sens = sens_val[cell_to_vertex]
                 for (i, v_s) in enumerate(vertex_values_sens)
                     out_of_bounds = abs(v_s) < lower_bnd || abs(v_s) > upper_bnd
