@@ -49,6 +49,10 @@ struct LinearizedBlock{R, C, J, B} <: JutulLinearSystem
         jac, jac_buf = build_jacobian(sparse_arg, context, layout_row, layout_col)
         new{typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, rowcol_dim)
     end
+    function LinearizedBlock(jac::J, jac_buffer::B, rowcol_dim,
+            layout_row::R, layout_col::C, ::Val{:assembled}) where {R, C, J, B}
+        new{R, C, J, B}(jac, jac_buffer, rowcol_dim)
+    end
 end
 
 function LinearizedBlock(A, bz::Tuple, row_layout, col_layout)

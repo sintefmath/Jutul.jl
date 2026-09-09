@@ -16,7 +16,7 @@ Total number of degrees of freedom for a model, over all primary variables and a
 """
 function number_of_degrees_of_freedom(model::JutulModel)
     ndof = 0
-    for (pkey, pvar) in get_primary_variables(model)
+    for (pkey, pvar) in pairs(get_primary_variables(model))
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
     return ndof
@@ -24,7 +24,7 @@ end
 
 function number_of_parameters(model::JutulModel)
     ndof = 0
-    for (pkey, pvar) in get_parameters(model)
+    for (pkey, pvar) in pairs(get_parameters(model))
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
     return ndof

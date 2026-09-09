@@ -2,9 +2,12 @@
     KernelAbstractionsContext(backend; float_type=Float64, index_type=Int,
                               matrix_layout=EquationMajorLayout(), workgroupsize=256)
 
-Execution context for a single [`SimulationModel`](@ref) on a
+Execution context for a [`SimulationModel`](@ref) or [`MultiModel`](@ref) on a
 KernelAbstractions backend. Build the model and [`Simulator`](@ref) on the CPU,
-then use [`transfer_to_backend`](@ref) to adapt the completed simulator.
+then use [`transfer_to_backend`](@ref) to adapt the completed simulator. A
+multimodel application can keep selected submodels on the CPU by overloading
+[`model_execution_mode`](@ref); their preallocated backend mirrors are used by
+cross terms and linear-system assembly.
 """
 struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
     backend::B

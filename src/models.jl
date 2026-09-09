@@ -266,10 +266,10 @@ end
 Initialize primary variables and other state fields, given initial values as a Dict
 """
 function setup_state!(state, model::JutulModel, init_values::Union{JutulStorage, AbstractDict} = Dict(); T = float_type(model.context))
-    for (psym, pvar) in get_primary_variables(model)
+    for (psym, pvar) in pairs(get_primary_variables(model))
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true, T = T)
     end
-    for (psym, svar) in get_secondary_variables(model)
+    for (psym, svar) in pairs(get_secondary_variables(model))
         initialize_variable_value!(state, model, svar, psym, init_values, need_value = false, T = T)
     end
     initialize_extra_state_fields!(state, model, T = T)
@@ -293,7 +293,7 @@ function initialize_extra_state_fields!(state, ::Any, model; kwarg...)
 end
 
 function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict(); kwarg...)
-    for (psym, pvar) in get_parameters(model)
+    for (psym, pvar) in pairs(get_parameters(model))
         initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer; kwarg...)
     end
     return prm
@@ -1018,8 +1018,8 @@ end
 
 function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar,
         ::JutulContext = DefaultContext()) where T<:Real
-    dX = value.(X) .- X0
-    return (dx = (sum = sum_absolute_values(dX), max = maximum_absolute_value(dX)),
+    return (dx = (sum = sum_absolute_differences(X, X0),
+                  max = maximum_absolute_difference(X, X0)),
             x = (sum = sum_absolute_values(X), max = maximum_absolute_value(X)),
             n = length(X))
 end
@@ -1031,14 +1031,23 @@ end
 variable_change_report(X, X0, pvar, ::JutulContext) = nothing
 
 @inline absolute_value(x) = abs(value(x))
+@inline absolute_difference(x, x0) = abs(value(x) - x0)
 
 sum_absolute_values(x) = sum(absolute_value, x)
+sum_absolute_differences(x, x0) = mapreduce(absolute_difference, +, x, x0)
 
 function maximum_absolute_value(x)
     if isempty(x)
         return zero(typeof(value(zero(eltype(x)))))
     end
     return maximum(absolute_value, x)
+end
+
+function maximum_absolute_difference(x, x0)
+    if isempty(x)
+        return zero(typeof(value(zero(eltype(x)))))
+    end
+    return mapreduce(absolute_difference, max, x, x0)
 end
 
 function update_after_step!(storage, ::Any, model, dt, forces; time = NaN)

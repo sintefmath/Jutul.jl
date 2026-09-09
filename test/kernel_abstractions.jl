@@ -49,3 +49,36 @@ end
     states, = simulate!(simulator, [0.1]; info_level = -1)
     @test states[end][:T] ≈ reference[end][:T] rtol = 1e-10
 end
+
+@testset "KernelAbstractions grouped multimodel" begin
+    system = ScalarTestSystem()
+    model_a = SimulationModel(ScalarTestDomain(), system)
+    model_b = SimulationModel(ScalarTestDomain(), system)
+    model = MultiModel((A = model_a, B = model_b), groups = [1, 2])
+    add_cross_term!(model, ScalarTestCrossTerm();
+        target = :A, source = :B, equation = :test_equation)
+
+    state_a = setup_state(model_a, Dict(:XVar => 0.0))
+    state_b = setup_state(model_b, Dict(:XVar => 0.0))
+    state0 = setup_state(model; A = state_a, B = state_b)
+    forces = setup_forces(model;
+        A = setup_forces(model_a, sources = ScalarTestForce(1.0)),
+        B = setup_forces(model_b, sources = ScalarTestForce(-1.0)))
+
+    simulator = transfer_to_backend(
+        Simulator(model; state0 = state0), CPU())
+    dt = 1.0
+    Jutul.update_before_step!(simulator, dt, forces; time = 0.0)
+    Jutul.update_state_dependents!(simulator.storage, simulator.model, dt, forces;
+        time = dt)
+    Jutul.update_linearized_system!(simulator.storage, simulator.model)
+
+    linearized_system = simulator.storage.LinearizedSystem
+    @test linearized_system isa Jutul.MultiLinearizedSystem
+    @test all(isfinite, linearized_system.r_buffer)
+    @test all(block -> all(isfinite, nonzeros(block.jac)),
+        linearized_system.subsystems)
+    @test all(cross_term ->
+            cross_term.target_impact_map.entries isa AbstractVector,
+        simulator.storage.cross_terms)
+end

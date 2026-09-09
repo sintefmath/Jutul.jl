@@ -235,9 +235,25 @@ abstract type DiagonalEquation <: JutulEquation end
 
 # Models
 export JutulModel, FullyImplicitFormulation, SimulationModel, JutulEquation, JutulFormulation
+export ModelExecutionMode, BackendModelExecution, HostModelExecution, model_execution_mode
 
 abstract type JutulModel end
 abstract type AbstractSimulationModel <: JutulModel end
+
+"""
+Execution policy for a submodel in a backend-resident [`MultiModel`](@ref).
+
+`BackendModelExecution()` is the default. Applications can overload
+[`model_execution_mode`](@ref) for small models with host-only logic and return
+`HostModelExecution()`. Such a model is evaluated in its original CPU storage;
+its state and equation values are then copied into a preallocated backend
+mirror used by cross terms and linear-system assembly.
+"""
+abstract type ModelExecutionMode end
+struct BackendModelExecution <: ModelExecutionMode end
+struct HostModelExecution <: ModelExecutionMode end
+
+model_execution_mode(::JutulModel) = BackendModelExecution()
 
 struct SimulationModel{O<:JutulDomain,
                        S<:JutulSystem,
