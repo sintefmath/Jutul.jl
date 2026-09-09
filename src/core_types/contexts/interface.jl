@@ -85,6 +85,17 @@ function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads)
     threaded_loop_minbatch(F, N, ctx)
 end
 
+backend_allocate(::JutulContext, T, dims...) = Array{T}(undef, dims...)
+backend_to_host(::JutulContext, x) = x
+
+function context_reduce(f, context::JutulContext, T, n)
+    out = backend_allocate(context, T, n)
+    reduce_entry(i) = f(out, i)
+    threaded_loop(reduce_entry, n, context)
+    synchronize(context)
+    return backend_to_host(context, out)
+end
+
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)
 end

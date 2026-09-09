@@ -119,6 +119,19 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
     var_pairs = pairs(vars)
     M = length(var_pairs)
     if M > 0
+        if ctx isa GPUJutulContext
+            # Backend kernels cannot iterate dynamic property dictionaries. Keep
+            # dependency ordering on the host and parallelize each property over
+            # its entities.
+            for (symbol, var) in var_pairs
+                @tic "$symbol" begin
+                    v = state[symbol]
+                    update(i) = update_secondary_variable!(v, var, model, state, i:i)
+                    threaded_loop(update, number_of_entities(model, var), ctx)
+                end
+            end
+            return state
+        end
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
         K = number_of_entities(model, first_var)
@@ -146,6 +159,7 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
             threaded_loop(batch_update, N_batches, ctx)
         end
     end
+    return state
 end
 
 # Initializers

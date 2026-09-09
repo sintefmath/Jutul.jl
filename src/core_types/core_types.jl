@@ -243,6 +243,7 @@ struct SimulationModel{O<:JutulDomain,
                        S<:JutulSystem,
                        F<:JutulFormulation,
                        C<:JutulContext,
+                       DD,
                        PV,
                        SV,
                        P,
@@ -254,7 +255,7 @@ struct SimulationModel{O<:JutulDomain,
     system::S
     context::C
     formulation::F
-    data_domain
+    data_domain::DD
     primary_variables::PV
     secondary_variables::SV
     parameters::P
@@ -322,13 +323,14 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
+    DD = typeof(data_domain)
     PV = typeof(primary_variables)
     SV = typeof(secondary_variables)
     P = typeof(parameters)
     E = typeof(equations)
     OV = typeof(outputs)
     X = typeof(extra)
-    model = SimulationModel{D,S,F,C,PV,SV,P,E,OV,X}(
+    model = SimulationModel{D,S,F,C,DD,PV,SV,P,E,OV,X}(
         domain,
         system,
         context,
@@ -387,13 +389,14 @@ function SimulationModel{D,S,F,C}(
         extra
     ) where {D,S,F,C}
     # Backward compatibility constructor
+    DD = typeof(data_domain)
     PV = typeof(primary_variables)
     SV = typeof(secondary_variables)
     P = typeof(parameters)
     E = typeof(equations)
     OV = typeof(outputs)
     X = typeof(extra)
-    return SimulationModel{D,S,F,C,PV,SV,P,E,OV,X}(
+    return SimulationModel{D,S,F,C,DD,PV,SV,P,E,OV,X}(
         domain,
         system,
         context,
@@ -778,9 +781,9 @@ abstract type JutulAutoDiffCache end
 """
 Cache that holds an AD vector/matrix together with their positions.
 """
-struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+struct CompactAutoDiffCache{I, ∂x, E, P, ET} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
     entries::E
-    entity
+    entity::ET
     jacobian_positions::P
     equations_per_entity::I
     number_of_entities::I
@@ -788,7 +791,7 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
     function CompactAutoDiffCache{I, ∂x}(entries::E, entity, positions::P,
             equations_per_entity::I, number_of_entities::I, npartials::I
         ) where {I<:Integer, ∂x<:Real, E, P}
-        return new{I, ∂x, E, P}(entries, entity, positions,
+        return new{I, ∂x, E, P, typeof(entity)}(entries, entity, positions,
             equations_per_entity, number_of_entities, npartials)
     end
     function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
@@ -819,7 +822,8 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
         I_t = nzval_index_type(context)
         pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
         pos = transfer(context, pos)
-        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
+        new{I, D, typeof(entries), typeof(pos), typeof(entity)}(
+            entries, entity, pos, equations_per_entity, n_entities, npartials)
     end
 end
 

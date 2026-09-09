@@ -8,7 +8,7 @@ Adapt.adapt_storage(ctx::KernelAbstractionsContext, a::AbstractArray) = Adapt.ad
 Adapt.adapt_storage(::KernelAbstractionsContext, a::AbstractArray{Symbol}) = Tuple(a)
 transfer(ctx::KernelAbstractionsContext, x) = Adapt.adapt(ctx, x)
 backend_allocate(ctx::KernelAbstractionsContext, T, dims...) = KernelAbstractions.allocate(ctx.backend, T, dims...)
-backend_to_host(x) = Adapt.adapt(Array, x)
+backend_to_host(::KernelAbstractionsContext, x) = Adapt.adapt(Array, x)
 
 function Adapt.adapt_structure(to, d::DiscretizedDomain)
     entities = d.entities isa EntityCounter ? d.entities : EntityCounter(d.entities)
@@ -119,17 +119,20 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::Simulation
 end
 
 function Adapt.adapt_structure(to, model::KASimulationModel)
+    # Property and equation definitions are passed to their kernels directly.
+    # Keep the model argument lean so unrelated metadata with abstract/Union
+    # fields cannot make an otherwise compatible kernel argument non-isbits.
     return SimulationModel(
         Adapt.adapt(to, model.domain),
         Adapt.adapt(to, model.system),
         Adapt.adapt(to, model.context),
         Adapt.adapt(to, model.formulation),
         missing,
-        Adapt.adapt(to, model.primary_variables),
-        Adapt.adapt(to, model.secondary_variables),
-        Adapt.adapt(to, model.parameters),
-        Adapt.adapt(to, model.equations),
-        model.output_variables,
+        NamedTuple(),
+        NamedTuple(),
+        NamedTuple(),
+        NamedTuple(),
+        (),
         nothing,
         model.optimization_level
     )
@@ -195,234 +198,6 @@ function transfer_to_backend(sim::Simulator, ctx::KernelAbstractionsContext)
     storage = convert_to_immutable_storage(storage)
     synchronize(ctx)
     return Simulator(sim.executor, model, storage)
-end
-
-# Secondary variables are processed in dependency order on the host. Each
-# property evaluation itself is a backend kernel over its entities.
-function update_secondary_variables_state!(state, model::KASimulationModel,
-        vars = model.secondary_variables)
-    for (symbol, var) in pairs(vars)
-        target = state[symbol]
-        n = number_of_entities(model, var)
-        f(i) = update_secondary_variable!(target, var, model, state, i:i)
-        threaded_loop(f, n, model.context)
-    end
-    return state
-end
-
-# The hard-coded TPFA path normally creates a CPU pointer reinterpretation of
-# its flux matrix. On a backend, write its components explicitly instead.
-function update_half_face_flux!(eq_s::ConservationLawTPFAStorage,
-        law::ConservationLaw, storage, model::KASimulationModel, dt)
-    flow_disc = law.flow_discretization
-    flux = get_entries(eq_s.half_face_flux_cells)
-    state = local_ad(storage.state, 1, eltype(flux))
-    conn_pos = flow_disc.conn_pos
-    conn_data = flow_disc.conn_data
-    gmap = global_map(model.domain)
-    ncomponents = size(flux, 1)
-    nc = length(conn_pos) - 1
-    function f(c)
-        self = full_cell(c, gmap)
-        local_state = new_entity_index(state, self)
-        first = @inbounds conn_pos[c]
-        last = @inbounds conn_pos[c + 1] - 1
-        for i in first:last
-            connection = @inbounds conn_data[i]
-            value_i = face_flux!(
-                zero(flux_vector_type(law, Val(eltype(flux)))),
-                connection.self, connection.other, connection.face,
-                connection.face_sign, law, local_state, model, dt, flow_disc
-            )
-            for component in 1:ncomponents
-                @inbounds flux[component, i] = value_i[component]
-            end
-        end
-    end
-    threaded_loop(f, nc, model.context)
-    isnothing(eq_s.half_face_flux_faces) || throw(ArgumentError(
-        "KernelAbstractions TPFA currently supports cell primary variables only"
-    ))
-    return flux
-end
-
-function update_accumulation!(eq_s::ConservationLawTPFAStorage,
-        law::ConservationLaw, storage, model::KASimulationModel, dt)
-    conserved = eq_s.accumulation_symbol
-    acc = get_entries(eq_s.accumulation)
-    m0, m = state_pair(storage, conserved, model)
-    ncomponents, nc = size(acc)
-    function f(c)
-        for component in 1:ncomponents
-            @inbounds acc[component, c] = (m[component, c] - m0[component, c])/dt
-        end
-    end
-    if m isa AbstractVector
-        f_scalar(c) = (@inbounds acc[1, c] = (m[c] - m0[c])/dt)
-        threaded_loop(f_scalar, nc, model.context)
-    else
-        threaded_loop(f, nc, model.context)
-    end
-    return acc
-end
-
-# Context-aware primary update avoids scalar iteration by host code.
-function update_primary_variable_context!(state, p::JutulVariables, state_symbol,
-        model, dx, w, ctx::KernelAbstractionsContext)
-    active = active_entities(model.domain, associated_entity(p), for_variables = true)
-    values = state[state_symbol]
-    abs_max = absolute_increment_limit(p)
-    rel_max = relative_increment_limit(p)
-    maxval = maximum_value(p)
-    minval = minimum_value(p)
-    scale = variable_scale(p)
-    if values isa AbstractVector
-        update_vector(i) = (@inbounds values[active[i]] = update_value(
-            values[active[i]], w*dx[i], abs_max, rel_max, minval, maxval, scale))
-        threaded_loop(update_vector, length(active), ctx)
-    else
-        nvalues = size(values, 1)
-        function update_matrix(i)
-            a = @inbounds active[i]
-            for component in 1:nvalues
-                @inbounds values[component, a] = update_value(
-                    values[component, a], w*dx[component, i],
-                    abs_max, rel_max, minval, maxval, scale)
-            end
-        end
-        threaded_loop(update_matrix, length(active), ctx)
-    end
-    return values
-end
-
-function update_primary_variable_context!(state, p::FractionVariables, state_symbol,
-        model, dx, w, ctx::KernelAbstractionsContext)
-    fractions = state[state_symbol]
-    nf, nu = value_dim(model, p)
-    abs_max = absolute_increment_limit(p)
-    maxval = maximum_value(p)
-    minval = minimum_value(p)
-    maxval -= nf*minval
-    active = active_entities(model.domain, associated_entity(p), for_variables = true)
-    if nf == 2
-        pair_max = min(1 - minval, maxval)
-        pair_min = max(minval, pair_max - 1)
-        function update_pair(i)
-            @inbounds cell = active[i]
-            @inbounds v = value(fractions[1, cell])
-            @inbounds dv = dx[i]
-            dv = w*choose_increment(v, dv, abs_max, nothing, pair_min, pair_max)
-            @inbounds fractions[1, cell] += dv
-            @inbounds fractions[2, cell] -= dv
-        end
-        threaded_loop(update_pair, length(active), ctx)
-    elseif unit_update_preserve_direction(p)
-        function update_direction(i)
-            @inbounds cell = active[i]
-            unit_update_direction_local!(
-                fractions, i, cell, dx, nf, nu, minval, maxval, abs_max, w)
-        end
-        threaded_loop(update_direction, length(active), ctx)
-    else
-        function update_magnitude(i)
-            @inbounds cell = active[i]
-            unit_update_magnitude_local!(
-                fractions, i, cell, dx, nf, nu, minval, maxval, abs_max)
-        end
-        threaded_loop(update_magnitude, length(active), ctx)
-    end
-    return fractions
-end
-
-@inline _backend_replacement(old::ForwardDiff.Dual, new::Real) = old - value(old) + value(new)
-@inline _backend_replacement(old::AbstractFloat, new::ForwardDiff.Dual) = value(new)
-@inline _backend_replacement(old, new) = new
-
-function update_values!(dest::AbstractArray, src::AbstractArray,
-        ctx::KernelAbstractionsContext)
-    f(i) = (@inbounds dest[i] = _backend_replacement(dest[i], src[i]))
-    threaded_loop(f, length(dest), ctx)
-    return dest
-end
-
-function increment_norm(dX, state, model::KASimulationModel, X, pvar)
-    T = typeof(value(zero(eltype(dX))))
-    out = backend_allocate(model.context, T, 2)
-    function reduce_increment(_)
-        sum_v = zero(T)
-        max_v = zero(T)
-        for i in 1:length(dX)
-            @inbounds dx_abs = abs(value(dX[i]))
-            sum_v += dx_abs
-            max_v = max(max_v, dx_abs)
-        end
-        @inbounds out[1] = sum_v
-        @inbounds out[2] = max_v
-    end
-    threaded_loop(reduce_increment, 1, model.context)
-    host = backend_to_host(out)
-    scale = @something variable_scale(pvar) one(T)
-    return (sum = scale*host[1], max = scale*host[2])
-end
-
-function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar,
-        ctx::KernelAbstractionsContext) where T<:Real
-    out = backend_allocate(ctx, T, 4)
-    function reduce_change(_)
-        max_dv = max_v = sum_dv = sum_v = zero(T)
-        for i in 1:length(X)
-            @inbounds x = value(X[i])::T
-            @inbounds dx = x - value(X0[i])
-            dx_abs = abs(dx)
-            max_dv = max(max_dv, dx_abs)
-            sum_dv += dx_abs
-            x_abs = abs(x)
-            max_v = max(max_v, x_abs)
-            sum_v += x_abs
-        end
-        @inbounds out[1] = sum_dv
-        @inbounds out[2] = max_dv
-        @inbounds out[3] = sum_v
-        @inbounds out[4] = max_v
-    end
-    threaded_loop(reduce_change, 1, ctx)
-    host = backend_to_host(out)
-    return (dx = (sum = host[1], max = host[2]),
-            x = (sum = host[3], max = host[4]), n = length(X))
-end
-
-variable_change_report(X, X0, pvar, ::KernelAbstractionsContext) = nothing
-
-function backend_maximum_value(ctx::KernelAbstractionsContext, x)
-    T = typeof(value(zero(eltype(x))))
-    out = backend_allocate(ctx, T, 1)
-    function reduce_maximum(_)
-        current = value(x[1])
-        for i in 2:length(x)
-            @inbounds current = max(current, value(x[i]))
-        end
-        @inbounds out[1] = current
-    end
-    threaded_loop(reduce_maximum, 1, ctx)
-    return only(backend_to_host(out))
-end
-
-function convergence_criterion(model::KASimulationModel, storage,
-        eq::JutulEquation, eq_s, r; dt = 1.0, update_report = missing)
-    ncomponents = number_of_equations_per_entity(model, eq)
-    nentities = size(r, 2)
-    out = KernelAbstractions.allocate(model.context.backend, eltype(r), ncomponents)
-    function f(component)
-        current = zero(eltype(r))
-        for entity in 1:nentities
-            @inbounds current = max(current, abs(r[component, entity]))
-        end
-        @inbounds out[component] = current
-    end
-    threaded_loop(f, ncomponents, model.context)
-    errors = vec(Adapt.adapt(Array, out))
-    names = ncomponents == 1 ? "R" : map(i -> "R_$i", 1:ncomponents)
-    return (AbsMax = (errors = errors, names = names), )
 end
 
 @kernel function _ka_csr_mul_kernel!(y, nzval, colval, rowptr, x, alpha, beta)

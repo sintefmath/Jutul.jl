@@ -617,7 +617,15 @@ Get the convergence criterion values for a given equation. Can be checked agains
 """
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1.0, update_report = missing)
     n = number_of_equations_per_entity(model, eq)
-    @tic "default" e = vec(maximum(abs, r; dims=2))
+    nentities = size(r, 2)
+    function reduce(out, component)
+        current = zero(eltype(r))
+        for entity in 1:nentities
+            @inbounds current = max(current, abs(r[component, entity]))
+        end
+        @inbounds out[component] = current
+    end
+    @tic "default" e = vec(context_reduce(reduce, model.context, eltype(r), n))
     if n == 1
         names = "R"
     else

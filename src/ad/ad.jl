@@ -434,6 +434,29 @@ function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where {Tag,
     @. v = next
 end
 
+@inline updated_state_value(old, new, ::Val{false}, ::Val{false}) = new
+@inline updated_state_value(old, new, ::Val{true}, ::Val{false}) =
+    old - value(old) + value(new)
+@inline updated_state_value(old, new, ::Val{false}, ::Val{true}) = value(new)
+
+function update_values!(v::AbstractArray{T}, next::AbstractArray{S},
+        context::JutulContext) where {T<:Real, S<:Real}
+    preserve_partials = Val(eltype(v) <: ForwardDiff.Dual &&
+        eltype(next) <: Real && eltype(v) !== eltype(next) &&
+        unpack_tag(v) isa JutulEntity)
+    strip_partials = Val(eltype(v) <: AbstractFloat &&
+        eltype(next) <: ForwardDiff.Dual)
+    strip_partials isa Val{true} && (unpack_tag(next)::JutulEntity)
+    function update(i)
+        @inbounds old = v[i]
+        @inbounds new = next[i]
+        new = updated_state_value(old, new, preserve_partials, strip_partials)
+        @inbounds v[i] = new
+    end
+    threaded_loop_minbatch(update, length(v), context)
+    return v
+end
+
 update_values!(v, next, ::JutulContext) = update_values!(v, next)
 
 """
