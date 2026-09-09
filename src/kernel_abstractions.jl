@@ -462,7 +462,8 @@ residual views and Jacobian buffers are rebuilt against the adapted root
 arrays. Groups marked [`AssembleOnDevice`](@ref) retain their CPU model and
 storage and copy into preallocated backend mirrors after evaluation.
 """
-function transfer_to_backend(sim::Simulator, backend; kwarg...)
+function transfer_to_backend(sim::Simulator, backend;
+        group_execution = missing, kwarg...)
     model = sim.model
     model isa Union{SimulationModel, MultiModel} || throw(ArgumentError(
         "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
@@ -471,10 +472,14 @@ function transfer_to_backend(sim::Simulator, backend; kwarg...)
         index_type = index_type(model.context),
         matrix_layout = matrix_layout(model.context),
         kwarg...)
-    return transfer_to_backend(sim, ctx)
+    return transfer_to_backend(sim, ctx; group_execution = group_execution)
 end
 
-function transfer_to_backend(sim::Simulator, ctx::KernelAbstractionsContext)
+function transfer_to_backend(sim::Simulator, ctx::KernelAbstractionsContext;
+        group_execution = missing)
+    if !ismissing(group_execution)
+        sim = _set_transfer_group_execution(sim, group_execution)
+    end
     model_cpu = sim.model
     model_cpu isa SimulationModel || return _transfer_multimodel_to_backend(sim, ctx)
     storage_cpu = sim.storage
@@ -488,6 +493,55 @@ function transfer_to_backend(sim::Simulator, ctx::KernelAbstractionsContext)
     storage = convert_to_immutable_storage(storage)
     synchronize(ctx)
     return Simulator(sim.executor, model, storage)
+end
+
+function _execution_for_submodel(policy, key, model)
+    mode = if policy isa Function
+        policy(key, model)
+    elseif policy isa AbstractDict || policy isa NamedTuple
+        get(policy, key, get(policy, :default, SolveFullyOnDevice))
+    else
+        throw(ArgumentError("group_execution must be a function or keyed collection"))
+    end
+    mode isa DeviceExecutionMode || throw(ArgumentError(
+        "Execution policy for $key must be a DeviceExecutionMode, got $(typeof(mode))"))
+    return mode
+end
+
+Base.@noinline function _set_transfer_group_execution(sim::Simulator, policy)
+    Base.@nospecialize sim policy
+    model = sim.model
+    model isa MultiModel || throw(ArgumentError(
+        "Per-group execution policies require a MultiModel simulator"))
+    keys_m = collect(submodels_symbols(model))
+    old_groups = isnothing(model.groups) ? ones(Int, length(keys_m)) : model.groups
+    modes_by_key = map(keys_m) do key
+        _execution_for_submodel(policy, key, model[key])
+    end
+
+    # Split existing groups only when their members have different execution
+    # policies. Equal (old group, policy) pairs continue to share one block.
+    pairs = Tuple{Int, DeviceExecutionMode}[]
+    groups = Vector{Int}(undef, length(keys_m))
+    for i in eachindex(keys_m)
+        pair = (old_groups[i], modes_by_key[i])
+        group = findfirst(isequal(pair), pairs)
+        if isnothing(group)
+            push!(pairs, pair)
+            group = length(pairs)
+        end
+        groups[i] = group
+    end
+    modes = last.(pairs)
+    rebuilt = MultiModel(model.models, multimodel_label(model);
+        cross_terms = model.cross_terms,
+        groups = groups,
+        group_execution = modes,
+        context = model.context,
+        reduction = model.reduction,
+        specialize = false,
+        specialize_ad = model.specialize_ad)
+    return Simulator(sim.executor, rebuilt, sim.storage)
 end
 
 function _transfer_multimodel_to_backend(sim::Simulator,

@@ -54,8 +54,7 @@ end
     system = ScalarTestSystem()
     model_a = SimulationModel(ScalarTestDomain(), system)
     model_b = SimulationModel(ScalarTestDomain(), system)
-    model = MultiModel((A = model_a, B = model_b), groups = [1, 2],
-        group_execution = [SolveFullyOnDevice, AssembleOnDevice])
+    model = MultiModel((A = model_a, B = model_b))
     add_cross_term!(model, ScalarTestCrossTerm();
         target = :A, source = :B, equation = :test_equation)
 
@@ -67,7 +66,10 @@ end
         B = setup_forces(model_b, sources = ScalarTestForce(-1.0)))
 
     simulator = transfer_to_backend(
-        Simulator(model; state0 = state0), CPU())
+        Simulator(model; state0 = state0), CPU();
+        group_execution = (key, submodel) -> key == :A ?
+            SolveFullyOnDevice : AssembleOnDevice)
+    @test simulator.model.groups == [1, 2]
     @test collect(simulator.model.group_execution) ==
         [SolveFullyOnDevice, AssembleOnDevice]
     @test simulator.storage.host_evaluation.keys == (:B,)
