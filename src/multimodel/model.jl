@@ -1162,7 +1162,13 @@ end
 
 function reset_variables!(storage, model::MultiModel, state; kwarg...)
     for (k, m) in pairs(model.models)
-        reset_variables!(storage[k], m, state[k]; kwarg...)
+        host = host_evaluation_entry(storage, k)
+        if isnothing(host)
+            reset_variables!(storage[k], m, state[k]; kwarg...)
+        else
+            reset_variables!(host.storage, host.model, state[k]; kwarg...)
+            synchronize_host_submodel_to_backend!(storage, model, k)
+        end
     end
 end
 
