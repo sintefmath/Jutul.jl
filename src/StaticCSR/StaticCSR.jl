@@ -1,6 +1,8 @@
 module StaticCSR
     using SparseArrays, StaticArrays, Polyester, LinearAlgebra
 
+    import Jutul: threaded_loop
+
     export StaticSparsityMatrixCSR, colvals, static_sparsity_sparse
     export nthreads, minbatch
 

@@ -100,12 +100,6 @@ This interface is dependent on the model supporting use of
 which should be the case for most Jutul models.
 """
 function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
-        grad_tol = 1e-6,
-        obj_change_tol = 1e-6,
-        max_it = 25,
-        opt_fun = missing,
-        optimizer = :lbfgs,
-        maximize = false,
         backend_arg = missing,
         info_level = 0,
         deps::Symbol = :case,
@@ -115,7 +109,6 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         solution_history = false,
         print_parameters = false,
         allow_errors = false,
-        scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
         output_path = nothing,
         randomized_start = false,
@@ -138,11 +131,28 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         randomized_start = randomized_start,
         output_path = output_path
     )
+    return optimize!(problem; kwarg...)
+end
 
+function optimize!(problem::JutulOptimizationProblem, prm0 = missing;
+        grad_tol = 1e-6,
+        obj_change_tol = 1e-6,
+        max_it = 25,
+        opt_fun = missing,
+        optimizer = :lbfgs,
+        extra_out = false,
+        maximize = false,
+        scale = optimizer != :lbfgsb_qp,
+        kwarg...
+    )
+    if !ismissing(prm0)
+        x0, = optimization_setup(problem, prm0)
+        @. problem.x0 = x0
+    end
+    dopt = problem.dict_parameters
     if dopt.verbose
         jutul_message("Optimization", "Starting calibration of $(length(problem.x0)) parameters.", color = :green)
     end
-
     t_opt = @elapsed if ismissing(opt_fun)
         x, solver_history = optimize_implementation(problem, Val(optimizer); 
             grad_tol = grad_tol,
@@ -173,6 +183,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     history[:solver_history] = solver_history
     dopt.history = NamedTuple(history)
 
+    output_path = problem.output_path
     if !isnothing(output_path)
         to_disk = Dict{String, Any}()
         to_disk["parameters"] = prm_out
@@ -185,29 +196,38 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             save(filename, to_disk)
         end
     end
-    return prm_out
+    if extra_out
+        out = (prm_out, problem)
+    else
+        out = prm_out
+    end
+    return out
 end
 
 function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
     if !scale
         error("Standard lbfgs optimization without scaling is not supported.")
     end
+    verbose = optimizer_verbose(problem)
     v, x, history = Jutul.LBFGS.box_bfgs(problem;
+        print = Int(verbose),
         kwarg...
     )
     return (x, history)
 end
 
-function optimize_implementation(problem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+function optimize_implementation(problem::JutulOptimizationProblem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+    verbose = optimizer_verbose(problem)
     F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
     _, x, history = Jutul.LBFGS.optimize_bound_constrained(F.x0, F.g_both, F.min, F.max;
+        print = Int(verbose),
         kwarg...
     )
     return (F.descale(x), history)
 end
 
 function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
-    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
+    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb_qp, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
 function setup_optimization_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
@@ -628,4 +648,14 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     lumping = validate_and_normalize_lumping(lumping, initial, name)
     dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial)
     return dprm
+end
+
+function optimizer_verbose(problem::JutulOptimizationProblem)
+    cfg = get(problem.cache, :config, missing)
+    if ismissing(cfg)
+        v = true
+    else
+        v = get(cfg, :info_level, 0) >= -1
+    end
+    return v
 end

@@ -225,6 +225,14 @@ function plot_interactive_impl(grid, states;
     if ismissing(key)
         key = datakeys[1]
     elseif key isa Symbol
+        if !(key in datakeys)
+            pos = findfirst(startswith(string(key)), string.(datakeys))
+            if isnothing(pos)
+                error("Key $key not found in datakeys.")
+            end
+            key = datakeys[pos]
+        end
+
         key = "$key"
     end
     state_index = Observable{Int64}(step)

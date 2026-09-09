@@ -8,4 +8,5 @@ module JutulMakieExt
     include("mesh_plots.jl")
     include("interactive_3d.jl")
     include("performance.jl")
+    include("variable_graphs.jl")
 end

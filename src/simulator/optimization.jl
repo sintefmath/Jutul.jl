@@ -26,8 +26,8 @@ end
 
 Set up function handles for optimizing the case defined by the inputs to
 `simulate` together with a per-timestep objective function `G`. The objective
-function should fit the format described in [AbstractGlobalObjective](@ref) or
-[AbstractSumObjective](@ref).
+function should fit the format described in [`AbstractGlobalObjective`](@ref) or
+[`AbstractSumObjective`](@ref).
 
 Generally calling either of the functions will mutate the data Dict. The options are:
 

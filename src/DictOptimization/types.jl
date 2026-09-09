@@ -261,9 +261,7 @@ function setup_optimization_backend_kwarg(;
 end
 
 function evaluate(opt::JutulOptimizationProblem, x::AbstractDict; kwarg...)
-    x_vec, = Jutul.AdjointsDI.vectorize_nested(x,
-        setup = opt.x_setup,
-    )
+    x_vec, = optimization_setup(opt, x)
     return evaluate(opt, x_vec; dict_out = true, kwarg...)
 end
 
@@ -310,7 +308,7 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
         output_path = opt.output_path
     )
     if dict_out
-        grad = Jutul.AdjointsDI.devectorize_nested(dobj_dx, x_setup)
+        grad = optimizer_devectorize(opt, dobj_dx, scale = false)
     else
         grad = dobj_dx
     end
@@ -329,16 +327,36 @@ Take a finite difference approximation of the gradient of the objective function
 at the given index in the optimization parameters. This is useful for testing
 and verifying the correctness of the gradient computed by the adjoint method.
 """
-function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; index = 1, eps = 1e-6)
+function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; lumping = missing, index = 1, eps = 1e-6)
     f0, _ = I(x; gradient = false)
     xd = copy(x)
-    xd[index] += eps
+    if ismissing(lumping)
+        xd[index] += eps
+    else
+        for i in findall(x -> x == lumping[index], lumping)
+            xd[i] += eps
+        end
+    end
     fd, _ = I(xd; gradient = false)
     return (fd - f0)/eps
 end
 
-function optimizer_devectorize(P::JutulOptimizationProblem, x)
+function finite_difference_gradient(I::JutulOptimizationProblem, x = I.x0; eps = 1e-6)
+    n = length(x)
+    f0, _ = I(x; gradient = false)
+    grad_fd = zeros(n)
+    xd = copy(x)
+    for i in 1:n
+        xd .= x
+        xd[i] += eps
+        fd, _ = I(xd; gradient = false)
+        grad_fd[i] = (fd - f0)/eps
+    end
+    return grad_fd
+end
+
+function optimizer_devectorize(P::JutulOptimizationProblem, x; kwarg...)
     prm_out = deepcopy(P.dict_parameters.parameters)
-    optimizer_devectorize!(prm_out, x, P.x_setup, multipliers = P.dict_parameters.multipliers_optimized)
+    optimizer_devectorize!(prm_out, x, P.x_setup; multipliers = P.dict_parameters.multipliers_optimized, kwarg...)
     return prm_out
 end

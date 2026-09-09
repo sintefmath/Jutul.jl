@@ -149,18 +149,22 @@ end
 
 function zero_jacobian_entries!(sys::LinearizedSystem)
     nz = nonzeros(sys.jac)
-    T = eltype(nz)
-    @. nz = zero(T)
+    zero_jacobian_entries!(nz)
     return sys
 end
 
 function zero_jacobian_entries!(sys::MultiLinearizedSystem)
     for subsys in sys.subsystems
         nz = nonzeros(subsys.jac)
-        T = eltype(nz)
-        @. nz = zero(T)
+        zero_jacobian_entries!(nz)
     end
     return sys
+end
+
+function zero_jacobian_entries!(nzval)
+    T = eltype(nzval)
+    @. nzval = zero(T)
+    return nzval
 end
 
 function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row)

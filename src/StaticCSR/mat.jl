@@ -2,8 +2,9 @@ struct StaticSparsityMatrixCSR{Tv,Ti<:Integer} <: SparseArrays.AbstractSparseMat
     At::SparseMatrixCSC{Tv, Ti}
     nthreads::Int
     minbatch::Int
-    function StaticSparsityMatrixCSR(A_t::SparseMatrixCSC{Tv, Ti}; nthreads = Threads.nthreads(), minbatch = 1000) where {Tv, Ti}
-        return new{Tv, Ti}(A_t, nthreads, minbatch)
+    thread_type::Symbol
+    function StaticSparsityMatrixCSR(A_t::SparseMatrixCSC{Tv, Ti}; nthreads = Threads.nthreads(), minbatch = 1000, thread_type = :batch) where {Tv, Ti}
+        return new{Tv, Ti}(A_t, nthreads, minbatch, thread_type)
     end
 end
 

@@ -152,6 +152,15 @@ function setup_multimodel_maps!(storage, model)
     else
         offset_map = map(g -> get_submodel_offsets(model, g), unique(groups))
     end
+    targets_no_symmetry = JutulStorage()
+    targets_with_symmetry = JutulStorage()
+    for k in submodels_symbols(model)
+        targets_no_symmetry[k] = cross_term_target(model, storage, k, false)
+        targets_with_symmetry[k] = cross_term_target(model, storage, k, true)
+    end
+    storage[:cross_term_targets_no_symmetry] = targets_no_symmetry
+    storage[:cross_term_targets_with_symmetry] = targets_with_symmetry
+
     storage[:multi_model_maps] = (offset_map = offset_map, );
     storage[:eq_maps] = MutableWrapper(nothing)
 end
