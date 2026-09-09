@@ -633,15 +633,15 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
     end
 end
 
-function host_execution_entry(storage, key)
-    haskey(storage, :host_execution) || return nothing
-    host = storage.host_execution
+function host_evaluation_entry(storage, key)
+    haskey(storage, :host_evaluation) || return nothing
+    host = storage.host_evaluation
     key in host.keys || return nothing
     return (storage = host.storage[key], model = host.model[key])
 end
 
 function submodel_evaluation_pair(storage, model::MultiModel, key)
-    host = host_execution_entry(storage, key)
+    host = host_evaluation_entry(storage, key)
     if isnothing(host)
         return (storage[key], model[key])
     else
@@ -650,7 +650,7 @@ function submodel_evaluation_pair(storage, model::MultiModel, key)
 end
 
 function synchronize_host_submodel_to_backend!(storage, model::MultiModel, key)
-    host = host_execution_entry(storage, key)
+    host = host_evaluation_entry(storage, key)
     isnothing(host) && return storage
     prepare_backend_transfer!(host.storage, host.model)
     backend_copyto!(storage[key].state, host.storage.state)
@@ -662,7 +662,7 @@ function synchronize_host_submodel_to_backend!(storage, model::MultiModel, key)
 end
 
 function synchronize_backend_increment_to_host!(storage, model::MultiModel, key)
-    host = host_execution_entry(storage, key)
+    host = host_evaluation_entry(storage, key)
     isnothing(host) && return storage
     backend_copyto!(host.storage.views.primary_variables,
         storage[key].views.primary_variables)
@@ -670,7 +670,7 @@ function synchronize_backend_increment_to_host!(storage, model::MultiModel, key)
 end
 
 function synchronize_backend_residual_to_host!(storage, model::MultiModel, key)
-    host = host_execution_entry(storage, key)
+    host = host_evaluation_entry(storage, key)
     isnothing(host) && return storage
     backend_copyto!(host.storage.views.equations, storage[key].views.equations)
     return storage
@@ -678,8 +678,8 @@ end
 
 function synchronize_backend_state_to_host!(storage, model::MultiModel;
         targets = submodels_symbols(model))
-    haskey(storage, :host_execution) || return storage
-    host = storage.host_execution
+    haskey(storage, :host_evaluation) || return storage
+    host = storage.host_evaluation
     for key in targets
         backend_copyto!(host.storage[key].state, storage[key].state)
         backend_copyto!(host.storage[key].state0, storage[key].state0)
@@ -1067,21 +1067,31 @@ function update_after_step!(storage, model::MultiModel, dt, forces; targets = su
 end
 
 function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
+    if haskey(storage, :host_evaluation)
+        synchronize_backend_state_to_host!(storage, model)
+    end
     for key in targets
-        host = host_execution_entry(storage, key)
+        host = host_evaluation_entry(storage, key)
         if isnothing(host)
             outer_storage = storage
             outer_model = model
         else
-            synchronize_backend_state_to_host!(storage, model)
-            outer_storage = storage.host_execution.storage
-            outer_model = storage.host_execution.model
+            outer_storage = storage.host_evaluation.storage
+            outer_model = storage.host_evaluation.model
         end
         s, m = submodel_evaluation_pair(storage, model, key)
         update_before_step_multimodel!(outer_storage, outer_model, m, dt, forces, key; kwarg...)
         f = forces[key]
         update_before_step!(s, m, dt, f; kwarg...)
         synchronize_host_submodel_to_backend!(storage, model, key)
+    end
+    # A multimodel hook can update another host-evaluated submodel (facility
+    # controls update wells, for example), so refresh every device mirror once
+    # after all hooks have completed.
+    if haskey(storage, :host_evaluation)
+        for key in storage.host_evaluation.keys
+            synchronize_host_submodel_to_backend!(storage, model, key)
+        end
     end
 end
 

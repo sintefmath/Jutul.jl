@@ -235,25 +235,11 @@ abstract type DiagonalEquation <: JutulEquation end
 
 # Models
 export JutulModel, FullyImplicitFormulation, SimulationModel, JutulEquation, JutulFormulation
-export ModelExecutionMode, BackendModelExecution, HostModelExecution, model_execution_mode
+export DeviceExecutionMode, SolveFullyOnDevice, AssembleOnDevice, NothingOnDevice
+export group_execution_mode
 
 abstract type JutulModel end
 abstract type AbstractSimulationModel <: JutulModel end
-
-"""
-Execution policy for a submodel in a backend-resident [`MultiModel`](@ref).
-
-`BackendModelExecution()` is the default. Applications can overload
-[`model_execution_mode`](@ref) for small models with host-only logic and return
-`HostModelExecution()`. Such a model is evaluated in its original CPU storage;
-its state and equation values are then copied into a preallocated backend
-mirror used by cross terms and linear-system assembly.
-"""
-abstract type ModelExecutionMode end
-struct BackendModelExecution <: ModelExecutionMode end
-struct HostModelExecution <: ModelExecutionMode end
-
-model_execution_mode(::JutulModel) = BackendModelExecution()
 
 struct SimulationModel{O<:JutulDomain,
                        S<:JutulSystem,
@@ -1157,14 +1143,35 @@ abstract type AbstractMultiModel{label} <: JutulModel end
 multimodel_label(::AbstractMultiModel{L}) where L = L
 
 """
+    DeviceExecutionMode
+
+Execution policy for a linear-system group in a backend-resident
+[`MultiModel`](@ref).
+
+- [`SolveFullyOnDevice`](@ref): variables, equations, assembly and the linear
+  system reside on the device.
+- [`AssembleOnDevice`](@ref): variables and equations are evaluated on the
+  host, then synchronized to preallocated device storage for cross terms and
+  linear-system assembly.
+- [`NothingOnDevice`](@ref): variables, equations, assembly and the linear
+  system remain on the host.
+"""
+@enum DeviceExecutionMode::UInt8 begin
+    NothingOnDevice = 0
+    AssembleOnDevice = 1
+    SolveFullyOnDevice = 2
+end
+
+"""
     MultiModel(models)
     MultiModel(models, :SomeLabel)
 
-A model variant that is made up of many named submodels, each a fully realized [`SimulationModel`](@ref).
-
-`models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
+A model variant made up of named, fully realized [`SimulationModel`](@ref)
+instances. `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
+The `group_execution` keyword sets one [`DeviceExecutionMode`](@ref) per
+linear-system group.
 """
-struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
+struct MultiModel{label, T, CT, G, C, GL, GE} <: AbstractMultiModel{label}
     models::T
     cross_terms::CT
     groups::G
@@ -1172,6 +1179,7 @@ struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
     group_lookup::GL
+    group_execution::GE
 end
 
 function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
@@ -1180,7 +1188,8 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
         context = nothing,
         reduction = missing,
         specialize = false,
-        specialize_ad = false
+        specialize_ad = false,
+        group_execution = SolveFullyOnDevice
     )
     if isnothing(context)
         context = models[first(keys(models))].context
@@ -1238,6 +1247,13 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
             reduction = nothing
         end
     end
+    if group_execution isa DeviceExecutionMode
+        group_execution = fill(group_execution, num_groups)
+    else
+        group_execution = collect(DeviceExecutionMode, group_execution)
+        length(group_execution) == num_groups || throw(ArgumentError(
+            "Expected one device execution mode per group ($num_groups), got $(length(group_execution))"))
+    end
     if isnothing(groups) && !isnothing(context)
         for (i, m) in enumerate(models)
             if matrix_layout(m.context) != matrix_layout(context)
@@ -1253,7 +1269,10 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
     G = typeof(groups)
     C = typeof(context)
     GL = typeof(group_lookup)
-    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    GE = typeof(group_execution)
+    return MultiModel{label, T, CT, G, C, GL, GE}(models, cross_terms,
+        groups, context, reduction, specialize_ad, group_lookup,
+        group_execution)
 end
 
 function MultiModel(models, ::Val{label}; kwarg...) where label
@@ -1262,18 +1281,28 @@ function MultiModel(models, ::Val{label}; kwarg...) where label
 end
 
 function convert_to_immutable_storage(model::MultiModel)
-    (; models, cross_terms, groups, context, reduction, specialize_ad, group_lookup) = model
+    (; models, cross_terms, groups, context, reduction, specialize_ad,
+        group_lookup, group_execution) = model
     models = convert_to_immutable_storage(models)
     cross_terms = Tuple(cross_terms)
     group_lookup = convert_to_immutable_storage(group_lookup)
+    group_execution = Tuple(group_execution)
     label = multimodel_label(model)
     T = typeof(models)
     CT = typeof(cross_terms)
     G = typeof(groups)
     C = typeof(context)
     GL = typeof(group_lookup)
-    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    GE = typeof(group_execution)
+    return MultiModel{label, T, CT, G, C, GL, GE}(models, cross_terms,
+        groups, context, reduction, specialize_ad, group_lookup,
+        group_execution)
 end
+
+group_execution_mode(model::MultiModel, group::Integer) =
+    model.group_execution[group]
+group_execution_mode(model::MultiModel, key::Symbol) =
+    group_execution_mode(model, model.group_lookup[key])
 
 """
 IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V

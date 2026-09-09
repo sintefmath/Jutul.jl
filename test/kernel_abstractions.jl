@@ -54,7 +54,8 @@ end
     system = ScalarTestSystem()
     model_a = SimulationModel(ScalarTestDomain(), system)
     model_b = SimulationModel(ScalarTestDomain(), system)
-    model = MultiModel((A = model_a, B = model_b), groups = [1, 2])
+    model = MultiModel((A = model_a, B = model_b), groups = [1, 2],
+        group_execution = [SolveFullyOnDevice, AssembleOnDevice])
     add_cross_term!(model, ScalarTestCrossTerm();
         target = :A, source = :B, equation = :test_equation)
 
@@ -67,6 +68,9 @@ end
 
     simulator = transfer_to_backend(
         Simulator(model; state0 = state0), CPU())
+    @test collect(simulator.model.group_execution) ==
+        [SolveFullyOnDevice, AssembleOnDevice]
+    @test simulator.storage.host_evaluation.keys == (:B,)
     dt = 1.0
     Jutul.update_before_step!(simulator, dt, forces; time = 0.0)
     Jutul.update_state_dependents!(simulator.storage, simulator.model, dt, forces;
@@ -81,4 +85,9 @@ end
     @test all(cross_term ->
             cross_term.target_impact_map.entries isa AbstractVector,
         simulator.storage.cross_terms)
+
+    cpu_only = MultiModel((A = model_a, B = model_b), groups = [1, 2],
+        group_execution = NothingOnDevice)
+    cpu_only_simulator = Simulator(cpu_only; state0 = state0)
+    @test transfer_to_backend(cpu_only_simulator, CPU()) === cpu_only_simulator
 end

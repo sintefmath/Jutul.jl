@@ -23,7 +23,9 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
     else
         new_context = adjoint(context)
     end
-    return MultiModel(new_models, context = new_context, groups = g, cross_terms = ctp, reduction = r)
+    return MultiModel(new_models, context = new_context, groups = g,
+        group_execution = model.group_execution, cross_terms = ctp,
+        reduction = r)
 end
 
 function convert_state_ad(model::MultiModel, state, tag = nothing)

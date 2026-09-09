@@ -117,6 +117,8 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             push!(groups, groups_0[i])
         end
     end
+    execution = has_groups ? model.group_execution[unique(groups)] :
+        only(model.group_execution)
     if !has_groups || length(groups) == 1
         groups = nothing
         reduction = nothing
@@ -129,7 +131,8 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     # Cross terms...
     mk = keys(new_submodels)
     sm = convert_to_immutable_storage(new_submodels)
-    new_model = MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
+    new_model = MultiModel(sm, groups = groups, group_execution = execution,
+        reduction = reduction, context = ctx)
 
     for ctp in model.cross_terms
         (; target, source) = ctp

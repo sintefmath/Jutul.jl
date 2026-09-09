@@ -301,6 +301,7 @@ function _cpu_csr_model(model::MultiModel)
     return MultiModel(models, multimodel_label(model);
         cross_terms = model.cross_terms,
         groups = isnothing(model.groups) ? nothing : copy(model.groups),
+        group_execution = model.group_execution,
         context = outer,
         reduction = model.reduction,
         specialize = true,
@@ -317,6 +318,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
     return MultiModel(models, label;
         cross_terms = cross_terms,
         groups = groups,
+        group_execution = model.group_execution,
         context = ctx,
         reduction = model.reduction,
         specialize = true,
@@ -324,7 +326,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
     )
 end
 
-struct HostExecutionStorage{M, S, K}
+struct HostEvaluationStorage{M, S, K}
     model::M
     storage::S
     keys::K
@@ -457,8 +459,8 @@ Adapt a fully initialized CPU simulator to a KernelAbstractions backend.
 discovery and Jacobian/cross-term alignment finish on the CPU before the CSR
 arrays are moved. Array aliases used by primary variables, parameters,
 residual views and Jacobian buffers are rebuilt against the adapted root
-arrays. Submodels marked with [`HostModelExecution`](@ref) retain their CPU
-model/storage and copy into preallocated backend mirrors after evaluation.
+arrays. Groups marked [`AssembleOnDevice`](@ref) retain their CPU model and
+storage and copy into preallocated backend mirrors after evaluation.
 """
 function transfer_to_backend(sim::Simulator, backend; kwarg...)
     model = sim.model
@@ -495,8 +497,12 @@ function _transfer_multimodel_to_backend(sim::Simulator,
         "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
     storage_cpu = sim.storage
 
+    modes = model_cpu.group_execution
+    all(==(NothingOnDevice), modes) && return sim
+    any(==(NothingOnDevice), modes) && throw(ArgumentError(
+        "Mixed NothingOnDevice groups are not supported by backend transfer"))
     host_keys = tuple((key for key in submodels_symbols(model_cpu)
-        if model_execution_mode(model_cpu[key]) isa HostModelExecution)...)
+        if group_execution_mode(model_cpu, key) == AssembleOnDevice)...)
     for key in host_keys
         prepare_backend_transfer!(storage_cpu[key], model_cpu[key])
     end
@@ -546,7 +552,7 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     converted[:cross_terms] = tuple((_adapt_backend_value(ctx, ct_s)
         for ct_s in storage_setup.cross_terms)...)
     if !isempty(host_keys)
-        converted[:host_execution] = HostExecutionStorage(
+        converted[:host_evaluation] = HostEvaluationStorage(
             model_cpu, storage_cpu, host_keys)
     end
 
