@@ -629,7 +629,7 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray, eq,
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
     map = global_map(model.domain)
-    T = flux_storage_scalar_type(hf_cells)
+    scalar_type = Val(flux_storage_scalar_type(hf_cells))
     nc = length(conn_pos) - 1
     function update(c)
         self = full_cell(c, map)
@@ -639,7 +639,7 @@ function update_half_face_flux_tpfa!(hf_cells::AbstractArray, eq,
         for i in first:last
             (; self, other, face, face_sign) = @inbounds conn_data[i]
             entry = face_flux!(
-                zero(flux_vector_type(eq, Val(T))), self, other, face,
+                zero(flux_vector_type(eq, scalar_type)), self, other, face,
                 face_sign, eq, state_c, model, dt, flow_disc)
             store_flux_entry!(hf_cells, i, entry)
         end
@@ -652,13 +652,13 @@ function update_half_face_flux_tpfa!(hf_faces::AbstractArray, eq, state,
         model, dt, flow_disc, ::Faces)
     nf = number_of_faces(model.domain)
     neighbors = get_neighborship(physical_representation(model.domain))
-    T = flux_storage_scalar_type(hf_faces)
+    scalar_type = Val(flux_storage_scalar_type(hf_faces))
     function update(f)
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
         entry = face_flux!(
-            zero(flux_vector_type(eq, Val(T))), left, right, f, 1,
+            zero(flux_vector_type(eq, scalar_type)), left, right, f, 1,
             eq, state_f, model, dt, flow_disc)
         store_flux_entry!(hf_faces, f, entry)
     end
