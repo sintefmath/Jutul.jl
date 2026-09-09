@@ -6,8 +6,19 @@ const KASimulationModel = SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstracti
 # their own backend converts an Array, while Jutul supplies the structural rules.
 Adapt.adapt_storage(ctx::KernelAbstractionsContext, a::AbstractArray) = Adapt.adapt(ctx.backend, a)
 Adapt.adapt_storage(::KernelAbstractionsContext, a::AbstractArray{Symbol}) = Tuple(a)
-transfer(ctx::KernelAbstractionsContext, x) = Adapt.adapt(ctx, x)
+transfer(ctx::KernelAbstractionsContext, x::AbstractArray) = Adapt.adapt(ctx, x)
 backend_to_host(::KernelAbstractionsContext, x) = Adapt.adapt(Array, x)
+
+function Adapt.adapt_structure(to, g::CartesianMesh)
+    # Tags are setup-time metadata backed by dictionaries. Numerical kernels
+    # only need the dimensions, cell sizes and origin.
+    return CartesianMesh(
+        g.dims,
+        Adapt.adapt(to, g.deltas),
+        Adapt.adapt(to, g.origin),
+        nothing
+    )
+end
 
 function Adapt.adapt_structure(to, d::DiscretizedDomain)
     entities = d.entities isa EntityCounter ? d.entities : EntityCounter(d.entities)
@@ -228,7 +239,9 @@ function linear_solve!(sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR},
     cols = Adapt.adapt(Array, colvals(A))
     rows = Adapt.adapt(Array, A.rowptr)
     At = SparseMatrixCSC(size(A, 2), size(A, 1), rows, cols, nz)
-    host_dx = -(At' \ Adapt.adapt(Array, r))
+    # Sparse solves can return a SparseVector for small systems. Normalize the
+    # result before copying to a device array so copyto! uses bulk transfer.
+    host_dx = collect(-(At' \ Adapt.adapt(Array, r)))
     copyto!(dx, host_dx)
     synchronize(ctx)
     return linear_solve_return()

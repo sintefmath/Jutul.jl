@@ -109,7 +109,8 @@ parameter_is_differentiable(::JutulVariables, model) = true
 
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
-    active = active_entities(model.domain, entity, for_variables = true)
+    active = transfer(model.context,
+        active_entities(model.domain, entity, for_variables = true))
     v = state[state_symbol]
     update_jutul_variable_internal!(v, active, p, dx, w, model.context)
 end
@@ -402,8 +403,9 @@ function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     maxval = maximum_value(p)
     minval = minimum_value(p)
     maxval = maxval - nf*minval
-    active_cells = active_entities(model.domain, entity, for_variables = true)
     context = model.context
+    active_cells = transfer(context,
+        active_entities(model.domain, entity, for_variables = true))
     if nf == 2
         unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w, context)
     else
