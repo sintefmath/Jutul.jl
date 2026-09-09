@@ -955,18 +955,9 @@ end
 function increment_norm(dX, state, model, X, pvar)
     T = typeof(value(zero(eltype(dX))))
     scale = @something variable_scale(pvar) one(T)
-    function reduce(out, _)
-        max_v = sum_v = zero(value(zero(eltype(dX))))
-        for i in 1:length(dX)
-            @inbounds dx_abs = abs(value(dX[i]))
-            max_v = max(max_v, dx_abs)
-            sum_v += dx_abs
-        end
-        @inbounds out[1] = sum_v
-        @inbounds out[2] = max_v
-    end
-    reduced = context_reduce(reduce, model.context, T, 2)
-    return (sum = scale*reduced[1], max = scale*reduced[2])
+    sum_v = sum_absolute_values(dX)
+    max_v = maximum_absolute_value(dX)
+    return (sum = scale*sum_v, max = scale*max_v)
 end
 
 """
@@ -1026,27 +1017,11 @@ function update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
 end
 
 function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar,
-        context::JutulContext = DefaultContext()) where T<:Real
-    function reduce(out, _)
-        max_dv = max_v = sum_dv = sum_v = zero(T)
-        for i in 1:length(X)
-            @inbounds x = value(X[i])::T
-            @inbounds dx = x - value(X0[i])
-            dx_abs = abs(dx)
-            max_dv = max(max_dv, dx_abs)
-            sum_dv += dx_abs
-            x_abs = abs(x)
-            max_v = max(max_v, x_abs)
-            sum_v += x_abs
-        end
-        @inbounds out[1] = sum_dv
-        @inbounds out[2] = max_dv
-        @inbounds out[3] = sum_v
-        @inbounds out[4] = max_v
-    end
-    reduced = context_reduce(reduce, context, T, 4)
-    return (dx = (sum = reduced[1], max = reduced[2]),
-            x = (sum = reduced[3], max = reduced[4]), n = length(X))
+        ::JutulContext = DefaultContext()) where T<:Real
+    dX = value.(X) .- X0
+    return (dx = (sum = sum_absolute_values(dX), max = maximum_absolute_value(dX)),
+            x = (sum = sum_absolute_values(X), max = maximum_absolute_value(X)),
+            n = length(X))
 end
 
 function variable_change_report(X, X0, pvar)
@@ -1055,17 +1030,15 @@ end
 
 variable_change_report(X, X0, pvar, ::JutulContext) = nothing
 
-function context_maximum_value(context::JutulContext, x)
-    isempty(x) && throw(ArgumentError("cannot reduce an empty array"))
-    T = typeof(value(zero(eltype(x))))
-    function reduce(out, _)
-        current = value(x[1])
-        for i in 2:length(x)
-            @inbounds current = max(current, value(x[i]))
-        end
-        @inbounds out[1] = current
+@inline absolute_value(x) = abs(value(x))
+
+sum_absolute_values(x) = sum(absolute_value, x)
+
+function maximum_absolute_value(x)
+    if isempty(x)
+        return zero(typeof(value(zero(eltype(x)))))
     end
-    return only(context_reduce(reduce, context, T, 1))
+    return maximum(absolute_value, x)
 end
 
 function update_after_step!(storage, ::Any, model, dt, forces; time = NaN)

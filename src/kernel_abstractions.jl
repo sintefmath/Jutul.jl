@@ -7,7 +7,6 @@ const KASimulationModel = SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstracti
 Adapt.adapt_storage(ctx::KernelAbstractionsContext, a::AbstractArray) = Adapt.adapt(ctx.backend, a)
 Adapt.adapt_storage(::KernelAbstractionsContext, a::AbstractArray{Symbol}) = Tuple(a)
 transfer(ctx::KernelAbstractionsContext, x) = Adapt.adapt(ctx, x)
-backend_allocate(ctx::KernelAbstractionsContext, T, dims...) = KernelAbstractions.allocate(ctx.backend, T, dims...)
 backend_to_host(::KernelAbstractionsContext, x) = Adapt.adapt(Array, x)
 
 function Adapt.adapt_structure(to, d::DiscretizedDomain)
