@@ -316,8 +316,8 @@ function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, minlims, maxli
         N = offsets[i+1]-offsets[i]
         ind = pos+1:pos+N
         lim_bnds = group_limits(minlims, maxlims, ind)
-        for (i, ix) in enumerate(ind)
-            lim_val = scaler_limits(minlims, maxlims, i)
+        for ix in ind
+            lim_val = scaler_limits(minlims, maxlims, ix)
             bnds = LimitBounds(lim_val, lim_bnds)
             push!(X_new, undo_scaler(X[ix], bnds, stats, scaler))
         end
