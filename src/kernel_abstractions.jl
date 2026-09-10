@@ -555,6 +555,7 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     all(==(NothingOnDevice), modes) && return sim
     any(==(NothingOnDevice), modes) && throw(ArgumentError(
         "Mixed NothingOnDevice groups are not supported by backend transfer"))
+    storage_cpu = prepare_backend_transfer!(storage_cpu, model_cpu)
     host_keys = tuple((key for key in submodels_symbols(model_cpu)
         if group_execution_mode(model_cpu, key) == AssembleOnDevice)...)
     for key in host_keys
