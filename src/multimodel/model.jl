@@ -710,19 +710,49 @@ end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
     models = model.models
-    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+    for index in eachindex(model.cross_terms)
+        ctp = model.cross_terms[index]
+        ct_s = storage.cross_terms[index]
         target = ctp.target::Symbol
         source = ctp.source::Symbol
         ct = ctp.cross_term
         is_match = target in targets && source in sources
         is_match = is_match || (has_symmetry(ct) && (target in sources && source in targets))
         if is_match
-            model_t = models[target]
+            host = host_cross_term_evaluation(storage, target, source, index)
+            if isnothing(host)
+                storage_t = storage[target]
+                storage_s = storage[source]
+                model_t = models[target]
+                model_s = models[source]
+                cross_term = ct
+                cross_term_storage = ct_s
+            else
+                storage_t = host.storage[target]
+                storage_s = host.storage[source]
+                model_t = host.model[target]
+                model_s = host.model[source]
+                cross_term = host.model.cross_terms[index].cross_term
+                cross_term_storage = host.storage.cross_terms[index]
+            end
             eq = ct_equation(model_t, ctp.target_equation)
             ct_bare_type = Base.typename(typeof(ct)).name
-            @tic "$ct_bare_type" update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
+            @tic "$ct_bare_type" update_cross_term!(cross_term_storage,
+                cross_term, eq, storage_t, storage_s, model_t, model_s, dt)
+            if !isnothing(host)
+                backend_copyto!(ct_s.target, cross_term_storage.target)
+                backend_copyto!(ct_s.source, cross_term_storage.source)
+            end
         end
     end
+end
+
+function host_cross_term_evaluation(storage, target, source, index)
+    haskey(storage, :host_evaluation) || return nothing
+    host = storage.host_evaluation
+    target in host.keys || return nothing
+    source in host.keys || return nothing
+    return host
 end
 
 function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)

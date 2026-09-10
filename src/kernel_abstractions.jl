@@ -475,8 +475,10 @@ function transfer_to_backend(sim::Simulator, backend;
     return transfer_to_backend(sim, ctx; group_execution = group_execution)
 end
 
-function transfer_to_backend(sim::Simulator, ctx::KernelAbstractionsContext;
+Base.@noinline function transfer_to_backend(sim::Simulator,
+        ctx::KernelAbstractionsContext;
         group_execution = missing)
+    Base.@nospecialize sim
     if !ismissing(group_execution)
         sim = _set_transfer_group_execution(sim, group_execution)
     end

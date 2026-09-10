@@ -101,8 +101,13 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     out[:target_entities] = target_entities
     out[:target_impact_map] = setup_cross_term_impact_map(target_entities)
     out[:offdiagonal_alignment] = offdiagonal_alignment
+    setup_cross_term_storage_extra!(out, ct, model_t, model_s)
     return out
 end
+
+"""Application hook for preallocating cross-term-specific storage."""
+setup_cross_term_storage_extra!(storage, cross_term, target_model,
+    source_model) = storage
 
 function setup_cross_term_impact_map(impact)
     # Cross terms can contain several connections that contribute to the same
@@ -658,13 +663,35 @@ end
 can_impact_cross_term(force_t, cross_term) = false
 
 function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
-    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+    for index in eachindex(model.cross_terms)
+        ctp = model.cross_terms[index]
+        ct_s = storage.cross_terms[index]
         (; cross_term, target, source) = ctp
+        host = host_cross_term_evaluation(storage, target, source, index)
+        if isnothing(host)
+            evaluation_storage = storage
+            evaluation_model = model
+            evaluation_cross_term = cross_term
+            evaluation_cross_term_storage = ct_s
+        else
+            evaluation_storage = host.storage
+            evaluation_model = host.model
+            evaluation_cross_term = host.model.cross_terms[index].cross_term
+            evaluation_cross_term_storage = host.storage.cross_terms[index]
+        end
         force_t = forces[target]
-        apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, force_t, time = time)
+        apply_forces_to_cross_term!(evaluation_cross_term_storage,
+            evaluation_model, evaluation_storage, evaluation_cross_term,
+            target, source, targets, dt, force_t, time = time)
         if has_symmetry(cross_term)
             force_s = forces[source]
-            apply_forces_to_cross_term!(ct_s, model, storage, cross_term, source, target, sources, dt, force_s, time = time)
+            apply_forces_to_cross_term!(evaluation_cross_term_storage,
+                evaluation_model, evaluation_storage, evaluation_cross_term,
+                source, target, sources, dt, force_s, time = time)
+        end
+        if !isnothing(host)
+            backend_copyto!(ct_s.target, evaluation_cross_term_storage.target)
+            backend_copyto!(ct_s.source, evaluation_cross_term_storage.source)
         end
     end
 end
