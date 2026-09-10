@@ -73,8 +73,12 @@ end
 function specialize_simulator_storage(storage::JutulStorage, model_or_nothing, specialize)
     if specialize
         out = convert_to_immutable_storage(storage)
+    elseif !(data(storage) isa AbstractDict)
+        # This storage is already specialized. This occurs for the individual
+        # submodel and cross-term caches inside an unspecialized MultiModel.
+        out = storage
     else
-        for (k, v) in data(storage)
+        for (k, v) in pairs(data(storage))
             storage[k] = convert_to_immutable_storage(v)
         end
         out = storage

@@ -312,7 +312,7 @@ end
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel)
     models = (; (key => Adapt.adapt(_backend_subcontext(ctx, submodel), submodel)
         for (key, submodel) in pairs(model.models))...)
-    cross_terms = tuple((Adapt.adapt(ctx, ct) for ct in model.cross_terms)...)
+    cross_terms = [Adapt.adapt(ctx, ct) for ct in model.cross_terms]
     groups = isnothing(model.groups) ? nothing : copy(model.groups)
     label = multimodel_label(model)
     return MultiModel(models, label;
