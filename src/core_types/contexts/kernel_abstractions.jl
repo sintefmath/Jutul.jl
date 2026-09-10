@@ -49,20 +49,23 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         float_type = float_type(ctx),
         index_type = index_type(ctx),
         matrix_layout = adjoint(matrix_layout(ctx)),
-        workgroupsize = ctx.workgroupsize)
+        workgroupsize = ctx.workgroupsize
+    )
 end
 
-@kernel function _jutul_backend_loop_kernel(f)
-    i = @index(Global)
-    f(i)
-end
 
 function threaded_loop(f, n, ctx::KernelAbstractionsContext)
     n <= 0 && return nothing
-    kernel! = _jutul_backend_loop_kernel(ctx.backend, ctx.workgroupsize)
+    @kernel function loop_kernel(F)
+        i = @index(Global)
+        F(i)
+    end
+    kernel! = loop_kernel(ctx.backend, ctx.workgroupsize)
     event = kernel!(f; ndrange = n)
     isnothing(event) || wait(event)
     return nothing
 end
 
-threaded_loop_minbatch(f, n, ctx::KernelAbstractionsContext, minbatch::Int = 1) = threaded_loop(f, n, ctx)
+function threaded_loop_minbatch(f, n, ctx::KernelAbstractionsContext, minbatch::Int = 1)
+    return threaded_loop(f, n, ctx)
+end
