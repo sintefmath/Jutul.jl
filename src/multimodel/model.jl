@@ -1096,8 +1096,12 @@ end
 function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     report = JUTUL_OUTPUT_TYPE()
     for key in targets
+        host = host_evaluation_entry(storage, key)
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
-        report[key] = update_after_step!(substorage, submodel, dt, forces[key]; kwarg...)
+        local_forces = isnothing(host) ?
+            forces_for_backend(forces) : forces_for_host(forces)
+        report[key] = update_after_step!(
+            substorage, submodel, dt, local_forces[key]; kwarg...)
         synchronize_host_submodel_to_backend!(storage, model, key)
     end
     return report
@@ -1116,9 +1120,12 @@ function update_before_step!(storage, model::MultiModel, dt, forces; targets = s
             outer_storage = storage.host_evaluation.storage
             outer_model = storage.host_evaluation.model
         end
+        local_forces = isnothing(host) ?
+            forces_for_backend(forces) : forces_for_host(forces)
         s, m = submodel_evaluation_pair(storage, model, key)
-        update_before_step_multimodel!(outer_storage, outer_model, m, dt, forces, key; kwarg...)
-        f = forces[key]
+        update_before_step_multimodel!(
+            outer_storage, outer_model, m, dt, local_forces, key; kwarg...)
+        f = local_forces[key]
         update_before_step!(s, m, dt, f; kwarg...)
         synchronize_host_submodel_to_backend!(storage, model, key)
     end
@@ -1138,7 +1145,10 @@ end
 
 function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
     for key in targets
-        subforce = forces[key]
+        host = host_evaluation_entry(storage, key)
+        local_forces = isnothing(host) ?
+            forces_for_backend(forces) : forces_for_host(forces)
+        subforce = local_forces[key]
         if !isnothing(subforce)
             substorage, submodel = submodel_evaluation_pair(storage, model, key)
             apply_forces!(substorage, submodel, dt, subforce; time = time)
@@ -1147,6 +1157,9 @@ function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targe
         end
     end
 end
+
+forces_for_host(forces) = forces
+forces_for_backend(forces) = forces
 
 function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
     for key in targets

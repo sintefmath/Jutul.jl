@@ -743,8 +743,17 @@ function update_after_step!(sim, dt, forces; kwarg...)
 end
 
 function preprocess_forces(sim, forces)
-    return (forces = forces, forces_per_step = forces isa Vector)
+    forces_per_step = forces isa Vector
+    context = get_simulator_model(sim).context
+    if forces_per_step
+        forces = map(force -> preprocess_forces(sim, context, force), forces)
+    else
+        forces = preprocess_forces(sim, context, forces)
+    end
+    return (forces = forces, forces_per_step = forces_per_step)
 end
+
+preprocess_forces(sim, ::JutulContext, forces) = forces
 
 # Forces - one for the entire sim
 function check_forces(sim, forces, timesteps; per_step = false)

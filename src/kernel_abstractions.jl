@@ -223,6 +223,62 @@ _adapt_backend_value(ctx, x::AbstractVector{<:JutulStorage}) =
     tuple((_adapt_backend_value(ctx, v) for v in x)...)
 _adapt_backend_value(ctx, x) = Adapt.adapt(ctx, x)
 
+# Forces are created together with the CPU simulator. Move only force values
+# through this recursive interface: schedule and model containers stay on the
+# host, while arrays of actual force objects are transferred in one operation.
+struct BackendForces{H, D}
+    host::H
+    device::D
+end
+
+forces_for_host(forces::BackendForces) = forces.host
+forces_for_backend(forces::BackendForces) = forces.device
+
+function preprocess_forces(sim, ctx::KernelAbstractionsContext, forces)
+    device_forces = transfer_forces_to_backend(ctx, forces)
+    storage = get_simulator_storage(sim)
+    if get_simulator_model(sim) isa MultiModel && haskey(storage, :host_evaluation)
+        return BackendForces(forces, device_forces)
+    else
+        return device_forces
+    end
+end
+
+function forces_for_timestep(sim, forces::BackendForces, timesteps,
+        step_index; per_step = false)
+    return forces
+end
+
+Base.getindex(forces::BackendForces, key) = forces.device[key]
+Base.getproperty(forces::BackendForces, name::Symbol) =
+    name === :host || name === :device ? getfield(forces, name) :
+        getproperty(getfield(forces, :device), name)
+Base.keys(forces::BackendForces) = keys(forces.device)
+Base.values(forces::BackendForces) = values(forces.device)
+Base.pairs(forces::BackendForces) = pairs(forces.device)
+Base.haskey(forces::BackendForces, key) = haskey(forces.device, key)
+Base.length(forces::BackendForces) = length(forces.device)
+Base.iterate(forces::BackendForces, state...) = iterate(forces.device, state...)
+
+transfer_forces_to_backend(ctx::KernelAbstractionsContext, ::Nothing) = nothing
+transfer_forces_to_backend(ctx::KernelAbstractionsContext, force::JutulForce) =
+    Adapt.adapt(ctx, force)
+transfer_forces_to_backend(ctx::KernelAbstractionsContext,
+    forces::AbstractVector{<:JutulForce}) = Adapt.adapt(ctx, forces)
+transfer_forces_to_backend(ctx::KernelAbstractionsContext, forces::NamedTuple) =
+    map(force -> transfer_forces_to_backend(ctx, force), forces)
+transfer_forces_to_backend(ctx::KernelAbstractionsContext, forces::Tuple) =
+    map(force -> transfer_forces_to_backend(ctx, force), forces)
+function transfer_forces_to_backend(ctx::KernelAbstractionsContext,
+        forces::AbstractDict)
+    out = copy(forces)
+    for (key, force) in pairs(forces)
+        out[key] = transfer_forces_to_backend(ctx, force)
+    end
+    return out
+end
+transfer_forces_to_backend(::KernelAbstractionsContext, force) = force
+
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::SimulationModel)
     primary = _adapt_backend_value(ctx, model.primary_variables)
     secondary = _adapt_backend_value(ctx, model.secondary_variables)

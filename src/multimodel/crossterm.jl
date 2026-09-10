@@ -683,12 +683,14 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
             evaluation_cross_term = host.model.cross_terms[index].cross_term
             evaluation_cross_term_storage = host.storage.cross_terms[index]
         end
-        force_t = forces[target]
+        local_forces = isnothing(host) ?
+            forces_for_backend(forces) : forces_for_host(forces)
+        force_t = local_forces[target]
         apply_forces_to_cross_term!(evaluation_cross_term_storage,
             evaluation_model, evaluation_storage, evaluation_cross_term,
             target, source, targets, dt, force_t, time = time)
         if has_symmetry(cross_term)
-            force_s = forces[source]
+            force_s = local_forces[source]
             apply_forces_to_cross_term!(evaluation_cross_term_storage,
                 evaluation_model, evaluation_storage, evaluation_cross_term,
                 source, target, sources, dt, force_s, time = time)
