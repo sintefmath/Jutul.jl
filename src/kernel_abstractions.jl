@@ -304,7 +304,7 @@ function _cpu_csr_model(model::MultiModel)
         group_execution = model.group_execution,
         context = outer,
         reduction = model.reduction,
-        specialize = true,
+        specialize = false,
         specialize_ad = model.specialize_ad
     )
 end
@@ -321,7 +321,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
         group_execution = model.group_execution,
         context = ctx,
         reduction = model.reduction,
-        specialize = true,
+        specialize = false,
         specialize_ad = model.specialize_ad
     )
 end
@@ -341,8 +341,21 @@ replaces host-only control or metadata objects in device kernels.
 """
 prepare_backend_transfer!(storage, model) = storage
 
-backend_copyto!(destination::AbstractArray, source::AbstractArray) =
-    copyto!(destination, source)
+function backend_copyto!(destination::AbstractArray, source::AbstractArray)
+    length(destination) == length(source) || throw(DimensionMismatch(
+        "backend copy requires equal lengths, got $(length(destination)) and $(length(source))"))
+    isempty(destination) && return destination
+    backend = KernelAbstractions.get_backend(destination)
+    if applicable(KernelAbstractions.copyto!, backend, destination, source)
+        # Host-evaluated submodels own their source buffers for the duration of
+        # the simulation. Queue their copies on the backend so a structured
+        # state transfer requires one synchronization instead of one per field.
+        KernelAbstractions.copyto!(backend, destination, source)
+    else
+        copyto!(destination, source)
+    end
+    return destination
+end
 
 # Equation-major views are represented as adjoints of reshaped slices. Peel
 # identical structural wrappers before copying so CPU/backend transfers use a
@@ -606,8 +619,8 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     converted[:state] = state
     converted[:state0] = state0
     converted[:LinearizedSystem] = lsys
-    converted[:cross_terms] = tuple((_adapt_backend_value(ctx, ct_s)
-        for ct_s in storage_setup.cross_terms)...)
+    converted[:cross_terms] = [_adapt_backend_value(ctx, ct_s)
+        for ct_s in storage_setup.cross_terms]
     if !isempty(host_keys)
         converted[:host_evaluation] = HostEvaluationStorage(
             model_cpu, storage_cpu, host_keys)
@@ -616,7 +629,11 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     storage = JutulStorage(converted)
     setup_multimodel_maps!(storage, model)
     setup_equations_and_primary_variable_views!(storage, model, lsys)
-    storage = convert_to_immutable_storage(storage)
+    # Keep the outer multimodel storage dynamic: specializing it would encode
+    # every submodel name and every well/cross-term storage type in one giant
+    # compiler type. Individual submodel fields remain immutable and concrete
+    # when dispatched to their kernels.
+    storage = specialize_simulator_storage(storage, model, false)
     synchronize(ctx)
     return Simulator(sim.executor, model, storage)
 end

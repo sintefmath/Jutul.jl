@@ -649,14 +649,15 @@ function submodel_evaluation_pair(storage, model::MultiModel, key)
     end
 end
 
-function synchronize_host_submodel_to_backend!(storage, model::MultiModel, key)
+function synchronize_host_submodel_to_backend!(storage, model::MultiModel, key;
+        state = true, state0 = true, parameters = true, equations = true)
     host = host_evaluation_entry(storage, key)
     isnothing(host) && return storage
     prepare_backend_transfer!(host.storage, host.model)
-    backend_copyto!(storage[key].state, host.storage.state)
-    backend_copyto!(storage[key].state0, host.storage.state0)
-    backend_copyto!(storage[key].parameters, host.storage.parameters)
-    backend_copyto!(storage[key].equations, host.storage.equations)
+    state && backend_copyto!(storage[key].state, host.storage.state)
+    state0 && backend_copyto!(storage[key].state0, host.storage.state0)
+    parameters && backend_copyto!(storage[key].parameters, host.storage.parameters)
+    equations && backend_copyto!(storage[key].equations, host.storage.equations)
     synchronize(model[key].context)
     return storage
 end
@@ -691,7 +692,8 @@ function update_equations!(storage, model::MultiModel, dt; targets = submodels_s
     @tic "model equations" for k in targets
         substorage, submodel = submodel_evaluation_pair(storage, model, k)
         update_equations!(substorage, submodel, dt)
-        synchronize_host_submodel_to_backend!(storage, model, k)
+        synchronize_host_submodel_to_backend!(storage, model, k;
+            state = false, state0 = false, parameters = false)
     end
 end
 
@@ -976,7 +978,9 @@ function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool
     for key in targets
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
         update_secondary_variables!(substorage, submodel, is_state0)
-        synchronize_host_submodel_to_backend!(storage, model, key)
+        synchronize_host_submodel_to_backend!(storage, model, key;
+            state = !is_state0, state0 = is_state0,
+            parameters = false, equations = false)
     end
 end
 
@@ -984,7 +988,8 @@ function update_secondary_variables!(storage, model::MultiModel; targets = submo
     for key in targets
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
         update_secondary_variables!(substorage, submodel)
-        synchronize_host_submodel_to_backend!(storage, model, key)
+        synchronize_host_submodel_to_backend!(storage, model, key;
+            state0 = false, parameters = false, equations = false)
     end
 end
 
@@ -1056,7 +1061,8 @@ function update_primary_variables!(storage, model::MultiModel; targets = submode
         dx_v = s.views.primary_variables
         pdef = s.variable_definitions.primary_variables
         report[key] = update_primary_variables!(s.state, dx_v, m, pdef; state = s.state, kwarg...)
-        synchronize_host_submodel_to_backend!(storage, model, key)
+        synchronize_host_submodel_to_backend!(storage, model, key;
+            state0 = false, parameters = false, equations = false)
     end
     return report
 end
@@ -1065,7 +1071,8 @@ function update_extra_state_fields!(storage, model::MultiModel, dt, time)
     for key in submodels_symbols(model)
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
         update_extra_state_fields!(substorage, submodel, dt, time)
-        synchronize_host_submodel_to_backend!(storage, model, key)
+        synchronize_host_submodel_to_backend!(storage, model, key;
+            state0 = false, parameters = false, equations = false)
     end
     return storage
 end
@@ -1135,7 +1142,8 @@ function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targe
         if !isnothing(subforce)
             substorage, submodel = submodel_evaluation_pair(storage, model, key)
             apply_forces!(substorage, submodel, dt, subforce; time = time)
-            synchronize_host_submodel_to_backend!(storage, model, key)
+            synchronize_host_submodel_to_backend!(storage, model, key;
+                state = false, state0 = false, parameters = false)
         end
     end
 end
@@ -1144,7 +1152,8 @@ function apply_boundary_conditions!(storage, model::MultiModel; targets = submod
     for key in targets
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
         apply_boundary_conditions!(substorage, substorage.parameters, submodel)
-        synchronize_host_submodel_to_backend!(storage, model, key)
+        synchronize_host_submodel_to_backend!(storage, model, key;
+            state = false, state0 = false, parameters = false)
     end
 end
 
