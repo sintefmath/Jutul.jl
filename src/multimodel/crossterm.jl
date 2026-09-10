@@ -262,7 +262,9 @@ function increment_equation_entries!(r, model, values, impact_map, sgn)
     ne = size(values, 1)
     function increment(group)
         @inbounds entity = impact_map.entities[group]
-        @inbounds for position in impact_map.positions[group]:(impact_map.positions[group + 1] - 1)
+        @inbounds start = impact_map.positions[group]
+        @inbounds stop = impact_map.positions[group + 1]-1
+        @inbounds for position in start:stop
             ui = impact_map.entries[position]
             for equation in 1:ne
                 r[equation, entity] += sgn*values[equation, ui]
@@ -277,7 +279,9 @@ function increment_equation_entries!(nz, r, model, cache, impact_map, sgn)
     entries = cache.entries
     function increment(group)
         @inbounds entity = impact_map.entities[group]
-        @inbounds for position in impact_map.positions[group]:(impact_map.positions[group + 1] - 1)
+        @inbounds start = impact_map.positions[group]
+        @inbounds stop = impact_map.positions[group + 1]-1
+        @inbounds for position in start:stop
             ui = impact_map.entries[position]
             for (jno, j) in enumerate(vrange(cache, ui))
                 for equation in 1:ne
