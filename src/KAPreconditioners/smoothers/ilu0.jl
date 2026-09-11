@@ -1,0 +1,362 @@
+@inline function device_find_column(rowptr, colval, row, column)
+    lo = rowptr[row]
+    hi = rowptr[row + 1] - one(eltype(rowptr))
+    while lo <= hi
+        mid = (lo + hi) >>> 1
+        value = colval[mid]
+        if value == column
+            return mid
+        elseif value < column
+            lo = mid + one(eltype(rowptr))
+        else
+            hi = mid - one(eltype(rowptr))
+        end
+    end
+    zero(eltype(rowptr))
+end
+
+function diagonal_positions(rowptr::Vector{Ti}, colval::Vector{Ti}, n::Int) where Ti
+    positions = Vector{Ti}(undef, n)
+    @inbounds for i in 1:n
+        position = device_find_column(rowptr, colval, Ti(i), Ti(i))
+        iszero(position) && throw(ArgumentError("ILU0 requires a stored diagonal in row $i"))
+        positions[i] = position
+    end
+    positions
+end
+
+function transpose_positions(rowptr::Vector{Ti}, colval::Vector{Ti}, n::Int) where Ti
+    positions = zeros(Ti, length(colval))
+    @inbounds for i in 1:n
+        for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
+            j = colval[k]
+            if j != i
+                positions[k] = device_find_column(rowptr, colval, j, Ti(i))
+            end
+        end
+    end
+    positions
+end
+
+function level_schedule(rowptr::Vector{Ti}, colval::Vector{Ti}, n::Int;
+                         upper::Bool=false) where Ti
+    levels = zeros(Int, n)
+    indices = if upper
+        n:-1:1
+    else
+        1:n
+    end
+    @inbounds for i in indices
+        level = 1
+        for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
+            j = Int(colval[k])
+            dependency = if upper
+                j > i
+            else
+                j < i
+            end
+            if dependency
+                level = max(level, levels[j] + 1)
+            end
+        end
+        levels[i] = level
+    end
+    number_of_levels = maximum(levels; init=0)
+    counts = zeros(Int, number_of_levels)
+    @inbounds for level in levels
+        counts[level] += 1
+    end
+    offsets = Vector{Int}(undef, number_of_levels + 1)
+    offsets[1] = 1
+    @inbounds for level in 1:number_of_levels
+        offsets[level + 1] = offsets[level] + counts[level]
+    end
+    cursor = copy(offsets)
+    rows = Vector{Ti}(undef, n)
+    @inbounds for i in 1:n
+        level = levels[i]
+        rows[cursor[level]] = Ti(i)
+        cursor[level] += 1
+    end
+    offsets, rows
+end
+
+function ilu_symbolic(A::StaticSparsityMatrixCSR{Tv,Ti}) where {Tv,Ti}
+    rowptr = host_prefix(A.rowptr, matrix_nrows(A) + 1)
+    colval = host_prefix(A.colval, matrix_nonzeros(A))
+    @inbounds for i in 1:matrix_nrows(A)
+        issorted(view(colval, rowptr[i]:(rowptr[i + 1] - one(Ti)))) ||
+            throw(ArgumentError("ILU0 requires sorted CSR columns"))
+    end
+    diagonal = diagonal_positions(rowptr, colval, matrix_nrows(A))
+    transpose = transpose_positions(rowptr, colval, matrix_nrows(A))
+    factor_offsets, factor_rows = level_schedule(rowptr, colval, matrix_nrows(A))
+    upper_offsets, upper_rows = level_schedule(rowptr, colval, matrix_nrows(A); upper=true)
+    (; rowptr, colval, diagonal, transpose, factor_offsets, factor_rows,
+       upper_offsets, upper_rows)
+end
+
+@kernel function ilu0_factor_level_kernel!(factors, inverse_diagonal,
+                                            @Const(rowptr), @Const(colval),
+                                            @Const(diagonal_positions),
+                                            @Const(rows), first, count)
+    q = @index(Global)
+    if q <= count
+        i = rows[first + q - 1]
+        row_end = rowptr[i + 1] - one(eltype(rowptr))
+        @inbounds for k in rowptr[i]:row_end
+            j = colval[k]
+            if j < i
+                multiplier = factors[k] * inverse_diagonal[j]
+                factors[k] = multiplier
+                for p in rowptr[j]:(rowptr[j + 1] - one(eltype(rowptr)))
+                    column = colval[p]
+                    if column > j
+                        target = device_find_column(rowptr, colval, i, column)
+                        if !iszero(target)
+                            factors[target] -= multiplier * factors[p]
+                        end
+                    end
+                end
+            end
+        end
+        inverse_diagonal[i] = inv(factors[diagonal_positions[i]])
+    end
+end
+
+@kernel function dilu_factor_level_kernel!(inverse_diagonal, @Const(values),
+                                            @Const(rowptr), @Const(colval),
+                                            @Const(diagonal_positions),
+                                            @Const(transpose_positions),
+                                            @Const(rows), first, count)
+    q = @index(Global)
+    if q <= count
+        i = rows[first + q - 1]
+        diagonal = values[diagonal_positions[i]]
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+            j = colval[k]
+            opposite = transpose_positions[k]
+            if j < i && !iszero(opposite)
+                diagonal -= values[k] * inverse_diagonal[j] * values[opposite]
+            end
+        end
+        inverse_diagonal[i] = inv(diagonal)
+    end
+end
+
+@kernel function ilu0_lower_level_kernel!(work, @Const(rhs), @Const(factors),
+                                           @Const(rowptr), @Const(colval),
+                                           @Const(rows), first, count)
+    q = @index(Global)
+    if q <= count
+        i = rows[first + q - 1]
+        value = rhs[i]
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+            j = colval[k]
+            j < i && (value -= factors[k] * work[j])
+        end
+        @inbounds work[i] = value
+    end
+end
+
+@kernel function ilu0_upper_level_kernel!(x, @Const(work), @Const(factors),
+                                           @Const(inverse_diagonal),
+                                           @Const(rowptr), @Const(colval),
+                                           damping, @Const(rows), first, count)
+    q = @index(Global)
+    if q <= count
+        i = rows[first + q - 1]
+        value = work[i]
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+            j = colval[k]
+            j > i && (value -= factors[k] * x[j])
+        end
+        @inbounds x[i] = damping * (inverse_diagonal[i] * value)
+    end
+end
+
+@kernel function dilu_lower_level_kernel!(work, @Const(rhs), @Const(values),
+                                           @Const(inverse_diagonal),
+                                           @Const(rowptr), @Const(colval),
+                                           @Const(rows), first, count)
+    q = @index(Global)
+    if q <= count
+        i = rows[first + q - 1]
+        value = rhs[i]
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+            j = colval[k]
+            j < i && (value -= values[k] * work[j])
+        end
+        @inbounds work[i] = inverse_diagonal[i] * value
+    end
+end
+
+@kernel function dilu_upper_level_kernel!(x, @Const(work), @Const(values),
+                                           @Const(inverse_diagonal),
+                                           @Const(rowptr), @Const(colval),
+                                           damping, @Const(rows), first, count)
+    q = @index(Global)
+    if q <= count
+        i = rows[first + q - 1]
+        correction = zero(eltype(x))
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+            j = colval[k]
+            j > i && (correction += values[k] * x[j])
+        end
+        @inbounds x[i] = damping * (work[i] - inverse_diagonal[i] * correction)
+    end
+end
+
+function launch_levels!(kernel!, offsets, rows, arguments...)
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        kernel!(arguments..., rows, first, count; ndrange=count)
+    end
+    nothing
+end
+
+function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}) where Tv
+    factors = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nonzeros(A))
+    inverse_diagonal = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nrows(A))
+    factors, inverse_diagonal
+end
+
+function setup_smoother(A::StaticSparsityMatrixCSR, config::ILU0; reuse=nothing)
+    matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("ILU0 requires a square matrix"))
+    if reuse isa ILU0State && same_smoother_pattern(reuse, A)
+        reuse.config = config
+        return update_smoother!(reuse, A)
+    end
+    symbolic = ilu_symbolic(A)
+    factors, inverse_diagonal = allocate_factor_storage(A)
+    state = ILU0State(factors, inverse_diagonal, nothing, nothing,
+                      A.rowptr, A.colval,
+                      backend_copy(matrix_backend(A), symbolic.diagonal),
+                      symbolic.factor_offsets,
+                      backend_copy(matrix_backend(A), symbolic.factor_rows),
+                      symbolic.upper_offsets,
+                      backend_copy(matrix_backend(A), symbolic.upper_rows),
+                      symbolic.rowptr, symbolic.colval, config,
+                      matrix_backend(A), matrix_block_size(A), matrix_nrows(A))
+    update_smoother!(state, A)
+end
+
+function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU; reuse=nothing)
+    matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("DILU requires a square matrix"))
+    if reuse isa DILUState && same_smoother_pattern(reuse, A)
+        reuse.config = config
+        return update_smoother!(reuse, A)
+    end
+    symbolic = ilu_symbolic(A)
+    values, inverse_diagonal = allocate_factor_storage(A)
+    state = DILUState(inverse_diagonal, nothing, nothing, values,
+                      A.rowptr, A.colval,
+                      backend_copy(matrix_backend(A), symbolic.diagonal),
+                      backend_copy(matrix_backend(A), symbolic.transpose),
+                      symbolic.factor_offsets,
+                      backend_copy(matrix_backend(A), symbolic.factor_rows),
+                      symbolic.upper_offsets,
+                      backend_copy(matrix_backend(A), symbolic.upper_rows),
+                      symbolic.rowptr, symbolic.colval, config,
+                      matrix_backend(A), matrix_block_size(A), matrix_nrows(A))
+    update_smoother!(state, A)
+end
+
+setup_smoother(A::SparseMatrixCSC, config::Union{ILU0,DILU}; reuse=nothing) =
+    setup_smoother(csr_matrix(A), config; reuse=reuse)
+
+function update_smoother!(state::ILU0State, A::StaticSparsityMatrixCSR)
+    require_same_smoother_pattern(state, A)
+    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
+    kernel! = ilu0_factor_level_kernel!(state.backend, state.block_size)
+    launch_levels!(kernel!, state.factor_offsets, state.factor_rows,
+                    state.factors, state.inverse_diagonal, state.rowptr,
+                    state.colval, state.diagonal_positions)
+    state
+end
+
+function update_smoother!(state::DILUState, A::StaticSparsityMatrixCSR)
+    require_same_smoother_pattern(state, A)
+    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
+    kernel! = dilu_factor_level_kernel!(state.backend, state.block_size)
+    launch_levels!(kernel!, state.factor_offsets, state.factor_rows,
+                    state.inverse_diagonal, state.values, state.rowptr,
+                    state.colval, state.diagonal_positions,
+                    state.transpose_positions)
+    state
+end
+
+function ilu_solve!(x, state::ILU0State, b)
+    ensure_smoother_work!(state, b)
+    lower! = ilu0_lower_level_kernel!(state.backend, state.block_size)
+    upper! = ilu0_upper_level_kernel!(state.backend, state.block_size)
+    launch_levels!(lower!, state.factor_offsets, state.factor_rows,
+                    state.work, b, state.factors, state.rowptr, state.colval)
+    launch_levels!(upper!, state.upper_offsets, state.upper_rows,
+                    x, state.work, state.factors, state.inverse_diagonal,
+                    state.rowptr, state.colval, state.config.damping)
+    x
+end
+
+function ilu_solve!(x, state::DILUState, b)
+    ensure_smoother_work!(state, b)
+    lower! = dilu_lower_level_kernel!(state.backend, state.block_size)
+    upper! = dilu_upper_level_kernel!(state.backend, state.block_size)
+    launch_levels!(lower!, state.factor_offsets, state.factor_rows,
+                    state.work, b, state.values, state.inverse_diagonal,
+                    state.rowptr, state.colval)
+    launch_levels!(upper!, state.upper_offsets, state.upper_rows,
+                    x, state.work, state.values, state.inverse_diagonal,
+                    state.rowptr, state.colval, state.config.damping)
+    x
+end
+
+function apply!(x::AbstractVector, state::Union{ILU0State,DILUState},
+                b::AbstractVector)
+    length(x) == state.n || throw(DimensionMismatch())
+    length(b) == state.n || throw(DimensionMismatch())
+    KernelAbstractions.get_backend(x) === state.backend ||
+        throw(ArgumentError("output and smoother must use the same backend"))
+    ilu_solve!(x, state, b)
+end
+
+function apply_correction!(x, state::Union{ILU0State,DILUState}, residual)
+    ilu_solve!(state.residual, state, residual)
+    axpy!(x, state.residual, one(state.config.damping), state.backend,
+           state.block_size)
+    x
+end
+
+function smooth_level!(x, A::StaticSparsityMatrixCSR, b, state::Union{ILU0State,DILUState},
+                  steps::Int; residual=nothing, zero_initial::Bool=false)
+    start = 1
+    if !isnothing(residual)
+        if zero_initial
+            apply!(x, state, residual)
+        else
+            apply_correction!(x, state, residual)
+        end
+        start = 2
+    elseif zero_initial
+        fill_backend!(x, zero(eltype(x)), state.backend, state.block_size)
+    end
+    if start <= steps
+        smooth!(x, state, A, b; steps=steps - start + 1)
+    end
+    x
+end
+
+function smooth_result!(x, A::StaticSparsityMatrixCSR, b,
+                         state::Union{ILU0State,DILUState}, steps::Int;
+                         residual=nothing, zero_initial::Bool=false)
+    smooth_level!(x, A, b, state, steps;
+             residual=residual, zero_initial=zero_initial)
+end
+
+function update_level_smoother!(state::Union{ILU0State,DILUState}, A::StaticSparsityMatrixCSR,
+                           options::AMGOptions)
+    state.config = options.smoother
+    update_smoother!(state, A)
+end
+

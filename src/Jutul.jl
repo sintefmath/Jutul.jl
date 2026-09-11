@@ -19,7 +19,6 @@ module Jutul
     using ILUZero
     using LinearOperators
     using Krylov
-    using AlgebraicMultigrid
 
     # Misc. utils
     using ExprTools
@@ -63,6 +62,12 @@ module Jutul
 
     # Main types
     include("core_types/core_types.jl")
+
+    # Interfaces implemented by the KernelAbstractions preconditioner module.
+    include("KAPreconditioners/interface.jl")
+
+    # Backend-portable algebraic multigrid and smoothers.
+    include("KAPreconditioners/KAPreconditioners.jl")
 
     # Interfaces implemented by optional execution modules and applications.
     include("KernelExecution/interface.jl")
