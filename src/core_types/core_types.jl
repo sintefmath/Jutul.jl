@@ -1167,7 +1167,7 @@ end
 
 A model variant made up of named, fully realized [`SimulationModel`](@ref)
 instances. `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
-The `group_execution` keyword sets one [`DeviceExecutionMode`](@ref) per
+The `group_execution` keyword sets one [`Jutul.DeviceExecutionMode`](@ref) per
 linear-system group.
 """
 struct MultiModel{label, T, CT, G, C, GL, GE} <: AbstractMultiModel{label}

@@ -7,7 +7,7 @@ KernelAbstractions backend. Build the model and [`Simulator`](@ref) on the CPU,
 then use [`transfer_to_backend`](@ref) to adapt the completed simulator. A
 multimodel application can select host evaluation, device assembly, or fully
 host-side execution per linear-system group through
-[`DeviceExecutionMode`](@ref).
+[`Jutul.DeviceExecutionMode`](@ref).
 """
 struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
     backend::B
