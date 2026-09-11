@@ -4,6 +4,7 @@ version = "0.4.31"
 authors = ["Olav Møyner <olav.moyner@gmail.com>"]
 
 [deps]
+Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -15,6 +16,7 @@ Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 ILUZero = "88f59080-6952-5380-9ea5-54057fb9a43f"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 Krylov = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearOperators = "5c8ed15e-5a4c-59e4-a42b-c7e8811fb125"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -61,6 +63,7 @@ JutulWriteVTKExt = "WriteVTK"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 
 [compat]
+Adapt = "4"
 AMGCLWrap = "=0.3.2"
 AlgebraicMultigrid = "0.5.1"
 Crayons = "4.1.1"
@@ -74,6 +77,7 @@ ILUZero = "0.2.0"
 JLD2 = "0.4, 0.5, 0.6"
 KaHyPar = "0.3.0"
 Krylov = "0.9.1"
+KernelAbstractions = "0.9"
 LBFGSB = "0.4.1"
 LinearOperators = "2.3.2"
 MAT = "0.10.3, 0.11, 0.12"

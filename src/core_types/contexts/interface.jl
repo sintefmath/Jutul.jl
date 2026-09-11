@@ -85,6 +85,8 @@ function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads)
     threaded_loop_minbatch(F, N, ctx)
 end
 
+backend_to_host(::JutulContext, x) = x
+
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)
 end

@@ -86,7 +86,9 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     if is_symm
         other_align_s = create_extra_alignment(caches_t)
         active_source = cross_term_entities_source(ct, eq_s, model_s)
-        out[:source_entities] = remap_impact(active_source, model_s, e_s)# active_source
+        source_entities = remap_impact(active_source, model_s, e_s)
+        out[:source_entities] = source_entities
+        out[:source_impact_map] = setup_cross_term_impact_map(source_entities)
         offdiagonal_alignment = (from_target = other_align_s, from_source = other_align_t)
     else
         offdiagonal_alignment = (from_source = other_align_t, )
@@ -95,9 +97,37 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     out[:helper_mode] = false
     out[:target] = caches_t
     out[:source] = caches_s
-    out[:target_entities] = remap_impact(active, model_t, e_t)
+    target_entities = remap_impact(active, model_t, e_t)
+    out[:target_entities] = target_entities
+    out[:target_impact_map] = setup_cross_term_impact_map(target_entities)
     out[:offdiagonal_alignment] = offdiagonal_alignment
+    setup_cross_term_storage_extra!(out, ct, model_t, model_s)
     return out
+end
+
+"""Application hook for preallocating cross-term-specific storage."""
+setup_cross_term_storage_extra!(storage, cross_term, target_model,
+    source_model) = storage
+
+function setup_cross_term_impact_map(impact)
+    # Cross terms can contain several connections that contribute to the same
+    # equation row. Group them once during storage setup so that one backend
+    # thread owns each row and can accumulate without atomics.
+    values = vec(collect(impact))
+    order = sortperm(values)
+    entities = eltype(values)[]
+    positions = Int[]
+    entries = Int[]
+    for ui in order
+        entity = values[ui]
+        if isempty(entities) || entity != entities[end]
+            push!(entities, entity)
+            push!(positions, length(entries) + 1)
+        end
+        push!(entries, ui)
+    end
+    push!(positions, length(entries) + 1)
+    return (entities = entities, positions = positions, entries = entries)
 end
 
 function remap_impact(active, model, entity)
@@ -166,7 +196,7 @@ function source_impact_for_pair(ctp, ct_s, label)
     sgn = 1
     if ctp.target != label
         # We are dealing with the transposed part, reverse the connection
-        impact = ct_s.source_entities
+        impact_map = ct_s.source_impact_map
         caches_s = ct_s.target
         caches_t = ct_s.source
         eq_label = ctp.source_equation
@@ -175,13 +205,13 @@ function source_impact_for_pair(ctp, ct_s, label)
             sgn = -1
         end
     else
-        impact = ct_s.target_entities
+        impact_map = ct_s.target_impact_map
         caches_s = ct_s.source
         caches_t = ct_s.target
         eq_label = ctp.target_equation
         pos = ct_s.offdiagonal_alignment.from_source
     end
-    return (eq_label, impact, caches_s, caches_t, pos, sgn)
+    return (eq_label, impact_map, caches_s, caches_t, pos, sgn)
 end
 
 function update_linearized_system_cross_terms!(lsys, eq_views, crossterms, crossterm_storage, model, label;
@@ -191,69 +221,84 @@ function update_linearized_system_cross_terms!(lsys, eq_views, crossterms, cross
     )
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
-        eq_label, impact, _, caches, _, sgn = source_impact_for_pair(ctp, ct_s, label)
-        eq = ct_equation(model, eq_label)
-        @assert !isnothing(impact)
-        nu = number_of_entities(model, eq)
+        eq_label, impact_map, _, caches, _, sgn =
+            source_impact_for_pair(ctp, ct_s, label)
         r_ct = eq_views[eq_label]
-        update_linearized_system_cross_term!(nzval, r_ct, model, ct, caches, impact, nu, sgn)
+        update_linearized_system_cross_term!(
+            nzval, r_ct, model, ct, caches, impact_map, sgn)
     end
 end
 
 function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
-    _, _, caches, _, pos, sgn = source_impact_for_pair(ctp, ct_s, label)
+    _, impact_map, caches, _, pos, sgn =
+        source_impact_for_pair(ctp, ct_s, label)
     @assert !isnothing(pos)
     for u in keys(caches)
         if u == :numeric
             continue
         end
-        fill_crossterm_entries!(nz, model, caches[u], pos[u], sgn)
+        fill_crossterm_entries!(
+            nz, model, caches[u], pos[u], impact_map, sgn)
     end
 end
 
-function update_linearized_system_cross_term!(nz, r, model, ct::AdditiveCrossTerm, caches, impact, nu, sgn)
+function update_linearized_system_cross_term!(nz, r, model,
+        ct::AdditiveCrossTerm, caches, impact_map, sgn)
     for k in keys(caches)
         if k == :numeric
             continue
         end
-        increment_equation_entries!(nz, r, model, caches[k], impact, nu, sgn)
+        increment_equation_entries!(
+            nz, r, model, caches[k], impact_map, sgn)
     end
 end
 
-function update_linearized_system_cross_term!(nz::Missing, r::AbstractArray, model, ct::AdditiveCrossTerm, caches::AbstractArray, impact, nu, sgn)
-    increment_equation_entries!(r, model, caches, impact, nu, sgn)
+function update_linearized_system_cross_term!(nz::Missing, r::AbstractArray,
+        model, ct::AdditiveCrossTerm, caches::AbstractArray, impact_map, sgn)
+    increment_equation_entries!(r, model, caches, impact_map, sgn)
 end
 
-function increment_equation_entries!(r, model, entries, impact, nu, sgn)
-    ne, nu = size(entries)
-    for ui in 1:nu
-        i = impact[ui]
-        for e in 1:ne
-            r[e, i] += sgn*entries[e, ui]
+function increment_equation_entries!(r, model, values, impact_map, sgn)
+    ne = size(values, 1)
+    function increment(group)
+        @inbounds entity = impact_map.entities[group]
+        @inbounds start = impact_map.positions[group]
+        @inbounds stop = impact_map.positions[group + 1]-1
+        @inbounds for position in start:stop
+            ui = impact_map.entries[position]
+            for equation in 1:ne
+                r[equation, entity] += sgn*values[equation, ui]
+            end
         end
     end
+    threaded_loop_minbatch(increment, length(impact_map.entities), model.context)
 end
 
-function increment_equation_entries!(nz, r, model, cache, impact, nu, sgn)
-    nu_local, ne, np = ad_dims(cache)
+function increment_equation_entries!(nz, r, model, cache, impact_map, sgn)
+    _, ne, np = ad_dims(cache)
     entries = cache.entries
-    # tb = minbatch(model.context)
-    # @batch minbatch = tb for i in 1:nu
-    for ui in 1:nu_local
-        @inbounds i = impact[ui]
-        for (jno, j) in enumerate(vrange(cache, ui))
-            @inbounds for e in 1:ne
-                a = sgn*entries[e, j]
-                if jno == 1
-                    @inbounds r[e, i] += a.value
-                end
-                @inbounds for d = 1:np
-                    ix = get_jacobian_pos(cache, j, e, d)
-                    nz[ix] += a.partials[d]
+    function increment(group)
+        @inbounds entity = impact_map.entities[group]
+        @inbounds start = impact_map.positions[group]
+        @inbounds stop = impact_map.positions[group + 1]-1
+        @inbounds for position in start:stop
+            ui = impact_map.entries[position]
+            for (jno, j) in enumerate(vrange(cache, ui))
+                for equation in 1:ne
+                    a = sgn*entries[equation, j]
+                    if jno == 1
+                        r[equation, entity] += a.value
+                    end
+                    for derivative in 1:np
+                        ix = get_jacobian_pos(
+                            cache, j, equation, derivative)
+                        nz[ix] += a.partials[derivative]
+                    end
                 end
             end
         end
     end
+    threaded_loop_minbatch(increment, length(impact_map.entities), model.context)
 end
 
 function update_offdiagonal_blocks!(storage, model, targets, sources;
@@ -286,21 +331,26 @@ function update_offdiagonal_block_pair!(linearized_system, ctp, ct_s, storage, m
     end
 end
 
-function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache, positions, sgn)
-    nu, ne, np = ad_dims(cache)
+function fill_crossterm_entries!(nz, model, cache::GenericAutoDiffCache,
+        positions, impact_map, sgn)
+    _, ne, np = ad_dims(cache)
     entries = cache.entries
-    function F(i)
-        for j in vrange(cache, i)
-            @inbounds for e in 1:ne
-                a = sgn*entries[e, j]
-                @inbounds for d = 1:np
-                    pos = get_jacobian_pos(cache, j, e, d, positions)
-                    nz[pos] += a.partials[d]
+    function fill(group)
+        @inbounds for impact_position in impact_map.positions[group]:(impact_map.positions[group + 1] - 1)
+            ui = impact_map.entries[impact_position]
+            for j in vrange(cache, ui)
+                for equation in 1:ne
+                    a = sgn*entries[equation, j]
+                    for derivative in 1:np
+                        position = get_jacobian_pos(
+                            cache, j, equation, derivative, positions)
+                        nz[position] += a.partials[derivative]
+                    end
                 end
             end
         end
     end
-    threaded_loop_minbatch(F, nu, model.context)
+    threaded_loop_minbatch(fill, length(impact_map.entities), model.context)
 end
 
 sub_number_of_equations(model::MultiModel) = map(number_of_equations, model.models)
@@ -617,13 +667,36 @@ end
 can_impact_cross_term(force_t, cross_term) = false
 
 function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model), sources = targets)
-    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+    for index in eachindex(model.cross_terms)
+        ctp = model.cross_terms[index]
+        ct_s = storage.cross_terms[index]
         (; cross_term, target, source) = ctp
-        force_t = forces[target]
-        apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, force_t, time = time)
+        host = host_cross_term_evaluation(storage, target, source, index)
+        if isnothing(host)
+            evaluation_storage = storage
+            evaluation_model = model
+            evaluation_cross_term = cross_term
+            evaluation_cross_term_storage = ct_s
+        else
+            evaluation_storage = host.storage
+            evaluation_model = host.model
+            evaluation_cross_term = host.model.cross_terms[index].cross_term
+            evaluation_cross_term_storage = host.storage.cross_terms[index]
+        end
+        local_forces = forces_for_evaluation(forces, host)
+        force_t = local_forces[target]
+        apply_forces_to_cross_term!(evaluation_cross_term_storage,
+            evaluation_model, evaluation_storage, evaluation_cross_term,
+            target, source, targets, dt, force_t, time = time)
         if has_symmetry(cross_term)
-            force_s = forces[source]
-            apply_forces_to_cross_term!(ct_s, model, storage, cross_term, source, target, sources, dt, force_s, time = time)
+            force_s = local_forces[source]
+            apply_forces_to_cross_term!(evaluation_cross_term_storage,
+                evaluation_model, evaluation_storage, evaluation_cross_term,
+                source, target, sources, dt, force_s, time = time)
+        end
+        if !isnothing(host)
+            backend_copyto!(ct_s.target, evaluation_cross_term_storage.target)
+            backend_copyto!(ct_s.source, evaluation_cross_term_storage.source)
         end
     end
 end

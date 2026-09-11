@@ -86,7 +86,9 @@ end
 
 function update_secondary_variables!(storage, model)
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(storage.state, model, vars)
+    plan = get(data(storage.variable_definitions),
+        :secondary_variable_evaluation_plan, missing)
+    update_secondary_variables_state!(storage.state, model, vars, plan)
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
@@ -96,7 +98,9 @@ function update_secondary_variables!(storage, model, is_state0::Bool)
         s = storage.state
     end
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(s, model, vars)
+    plan = get(data(storage.variable_definitions),
+        :secondary_variable_evaluation_plan, missing)
+    update_secondary_variables_state!(s, model, vars, plan)
 end
 
 
@@ -115,10 +119,25 @@ function evaluate_all_secondary_variables(x::SimulationModel, state, parameters 
 end
 
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
+    return update_secondary_variables_state!(state, model, vars, missing)
+end
+
+function update_secondary_variables_state!(state, model, vars, ::Missing)
     ctx = model.context
     var_pairs = pairs(vars)
     M = length(var_pairs)
     if M > 0
+        if ctx isa GPUJutulContext
+            for (symbol, var) in var_pairs
+                @tic "$symbol" begin
+                    v = state[symbol]
+                    update(i) = update_secondary_variable!(
+                        v, var, model, state, i:i)
+                    threaded_loop(update, number_of_entities(model, var), ctx)
+                end
+            end
+            return state
+        end
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
         K = number_of_entities(model, first_var)
@@ -146,6 +165,7 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
             threaded_loop(batch_update, N_batches, ctx)
         end
     end
+    return state
 end
 
 # Initializers
@@ -273,7 +293,7 @@ function build_variable_graph(model, primary = model.primary_variables, secondar
         push!(nodes, key)
         push!(edges, []) # No dependencies for parameters - they are static.
     end
-    for (key, var) in secondary
+    for (key, var) in pairs(secondary)
         dep = get_dependencies(var, model)
         push!(nodes, key)
         push!(edges, dep)

@@ -4,6 +4,7 @@ module Jutul
     using SparseArrays
     using MappedArrays
     using StaticArrays
+    import Adapt
     # Data structures
     import DataStructures: OrderedDict
     using OrderedCollections
@@ -62,6 +63,9 @@ module Jutul
 
     # Main types
     include("core_types/core_types.jl")
+
+    # Interfaces implemented by optional execution modules and applications.
+    include("KernelExecution/interface.jl")
 
     # Models 
     include("models.jl")
@@ -162,6 +166,11 @@ module Jutul
 
     # Mesh quality control
     include("meshes/MeshQualityControl/MeshQualityControl.jl")
+
+    # KernelAbstractions execution is loaded after the concrete simulation,
+    # storage and discretization types extended by the module.
+    include("KernelExecution/KernelExecution.jl")
+    using .KernelExecution
 
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}

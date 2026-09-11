@@ -12,6 +12,30 @@ usually some kind of mesh or domain that represents a physical domain.
 """
 physical_representation(x) = x
 
+"Immutable entity-count lookup used by backend-adapted domains."
+struct EntityCounter{E, N}
+    entities::E
+    counts::NTuple{N, Int}
+end
+
+function EntityCounter(d::AbstractDict)
+    entities = Tuple(keys(d))
+    counts = Tuple(values(d))
+    return EntityCounter{typeof(entities), length(counts)}(entities, counts)
+end
+
+function Base.getindex(ec::EntityCounter, entity)
+    i = findfirst(==(entity), ec.entities)
+    isnothing(i) && throw(KeyError(entity))
+    return ec.counts[i]
+end
+Base.haskey(ec::EntityCounter, entity) = !isnothing(findfirst(==(entity), ec.entities))
+Base.keys(ec::EntityCounter) = ec.entities
+Base.values(ec::EntityCounter) = ec.counts
+Base.length(ec::EntityCounter) = length(ec.entities)
+Base.pairs(ec::EntityCounter) = zip(ec.entities, ec.counts)
+Base.iterate(ec::EntityCounter, state = 1) = state > length(ec) ? nothing : ((ec.entities[state] => ec.counts[state]), state + 1)
+
 export DiscretizedDomain
 struct DiscretizedDomain{G, D, E, M} <: JutulDomain
     representation::G

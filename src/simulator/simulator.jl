@@ -73,8 +73,12 @@ end
 function specialize_simulator_storage(storage::JutulStorage, model_or_nothing, specialize)
     if specialize
         out = convert_to_immutable_storage(storage)
+    elseif !(data(storage) isa AbstractDict)
+        # This storage is already specialized. This occurs for the individual
+        # submodel and cross-term caches inside an unspecialized MultiModel.
+        out = storage
     else
-        for (k, v) in data(storage)
+        for (k, v) in pairs(data(storage))
             storage[k] = convert_to_immutable_storage(v)
         end
         out = storage
@@ -739,8 +743,17 @@ function update_after_step!(sim, dt, forces; kwarg...)
 end
 
 function preprocess_forces(sim, forces)
-    return (forces = forces, forces_per_step = forces isa Vector)
+    forces_per_step = forces isa Vector
+    context = get_simulator_model(sim).context
+    if forces_per_step
+        forces = map(force -> preprocess_forces(sim, context, force), forces)
+    else
+        forces = preprocess_forces(sim, context, forces)
+    end
+    return (forces = forces, forces_per_step = forces_per_step)
 end
+
+preprocess_forces(sim, ::JutulContext, forces) = forces
 
 # Forces - one for the entire sim
 function check_forces(sim, forces, timesteps; per_step = false)

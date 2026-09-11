@@ -87,7 +87,10 @@ function metis_integer_weights(x::AbstractVector{<:AbstractFloat})
     return x
 end
 
-generate_metis_graph(A::StaticSparsityMatrixCSR) = generate_metis_graph(A.At)
+function generate_metis_graph(A::StaticSparsityMatrixCSR)
+    stored_transpose = SparseMatrixCSC(A.n, A.m, A.rowptr, A.colval, A.nzval)
+    return generate_metis_graph(stored_transpose)
+end
 
 function compress_partition(p::AbstractVector)
     up = sort!(unique(p))

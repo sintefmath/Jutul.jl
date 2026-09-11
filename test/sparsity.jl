@@ -1,4 +1,16 @@
 using Jutul, Test
+using SparseArrays, LinearAlgebra
+
+@testset "StaticSparsityMatrixCSR storage" begin
+    matrix = sparse([1, 1, 2, 3], [1, 3, 2, 1], [2.0, -1.0, 4.0, 3.0], 3, 3)
+    csr = Jutul.StaticSparsityMatrixCSR(copy(matrix'))
+
+    @test !hasfield(typeof(csr), :At)
+    @test Matrix(csr) == Matrix(matrix)
+    rows, columns, values = findnz(csr)
+    @test sparse(rows, columns, values, size(csr)...) == matrix
+    @test csr*[1.0, 2.0, 3.0] == matrix*[1.0, 2.0, 3.0]
+end
 
 @testset "SparsityTracingWrapper" begin
     n = 10

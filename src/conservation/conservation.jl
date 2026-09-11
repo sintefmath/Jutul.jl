@@ -560,10 +560,18 @@ function update_accumulation!(eq_s, law, storage, model, dt)
     conserved = eq_s.accumulation_symbol
     acc = get_entries(eq_s.accumulation)
     m0, m = state_pair(storage, conserved, model)
+    ncomponents, nc = size(acc)
     if m isa AbstractVector
-        @. acc[1,:] = (m - m0)/dt
+        update_scalar(c) = (@inbounds acc[1, c] = (m[c] - m0[c])/dt)
+        threaded_loop_minbatch(update_scalar, nc, model.context)
     else
-        @. acc = (m - m0)/dt
+        function update_components(c)
+            for component in 1:ncomponents
+                @inbounds acc[component, c] =
+                    (m[component, c] - m0[component, c])/dt
+            end
+        end
+        threaded_loop_minbatch(update_components, nc, model.context)
     end
     return acc
 end
@@ -587,57 +595,75 @@ end
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, state, model, dt, flow_disc)
     flux_c = get_entries(eq_s.half_face_flux_cells)
 
-    N, M = size(flux_c)
+    N, _ = size(flux_c)
     T = eltype(flux_c)
-    # flux_static = reinterpret(SVector{N, T}, flux_c)
-    flux_static = unsafe_reinterpret(SVector{N, T}, flux_c, M)
     state_c = local_ad(state, 1, T)
-    update_half_face_flux_tpfa!(flux_static, law, state_c, model, dt, flow_disc, Cells())
+    update_half_face_flux_tpfa!(flux_c, law, state_c, model, dt, flow_disc, Cells())
 
     hf_face = eq_s.half_face_flux_faces
     if !isnothing(hf_face)
         flux_v = get_entries(hf_face)
         F = eltype(flux_v)
-        face_flux_static = reinterpret(SVector{N, F}, flux_v)
         state_f = local_ad(state, 1, F)
-        update_half_face_flux_tpfa!(face_flux_static, law, state_f, model, dt, flow_disc, Faces())
+        update_half_face_flux_tpfa!(flux_v, law, state_f, model, dt, flow_disc, Faces())
     end
 end
 
-function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}}, AbstractVector{T}}, eq, state::S, model, dt, flow_disc, ::Cells) where {T, N, S<:LocalStateAD}
+@inline flux_storage_scalar_type(::AbstractArray{T}) where {T<:Real} = T
+@inline flux_storage_scalar_type(
+    ::AbstractArray{<:SVector{N, T}}) where {N, T} = T
+
+@inline function store_flux_entry!(storage::AbstractMatrix, index, entry)
+    for component in axes(storage, 1)
+        @inbounds storage[component, index] = entry[component]
+    end
+end
+
+@inline store_flux_entry!(storage::AbstractArray{<:SVector}, index, entry) =
+    (@inbounds storage[index] = entry)
+@inline store_flux_entry!(storage::AbstractVector{<:Real}, index, entry) =
+    (@inbounds storage[index] = entry[1])
+
+function update_half_face_flux_tpfa!(hf_cells::AbstractArray, eq,
+        state::S, model, dt, flow_disc, ::Cells) where S<:LocalStateAD
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
-    M = global_map(model.domain)
-    nc = length(conn_pos)-1
-    function F(c)
-        self = full_cell(c, M)
+    map = global_map(model.domain)
+    scalar_type = Val(flux_storage_scalar_type(hf_cells))
+    nc = length(conn_pos) - 1
+    function update(c)
+        self = full_cell(c, map)
         state_c = new_entity_index(state, self)
-        update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
+        first = @inbounds conn_pos[c]
+        last = @inbounds conn_pos[c + 1] - 1
+        for i in first:last
+            (; self, other, face, face_sign) = @inbounds conn_data[i]
+            entry = face_flux!(
+                zero(flux_vector_type(eq, scalar_type)), self, other, face,
+                face_sign, eq, state_c, model, dt, flow_disc)
+            store_flux_entry!(hf_cells, i, entry)
+        end
     end
-    @tic "flux (cells)" threaded_loop_minbatch(F, nc, model.context)
+    @tic "flux (cells)" threaded_loop_minbatch(update, nc, model.context)
     return hf_cells
 end
 
-function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
-    start = @inbounds conn_pos[c]
-    stop = @inbounds conn_pos[c+1]-1
-    for i in start:stop
-        (; self, other, face, face_sign) = @inbounds conn_data[i]
-        @inbounds hf_cells[i] = face_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
-    end
-end
-
-function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
+function update_half_face_flux_tpfa!(hf_faces::AbstractArray, eq, state,
+        model, dt, flow_disc, ::Faces)
     nf = number_of_faces(model.domain)
-    pr = physical_representation(model.domain)
-    neighbors = get_neighborship(pr)
-    function F(f)
+    neighbors = get_neighborship(physical_representation(model.domain))
+    scalar_type = Val(flux_storage_scalar_type(hf_faces))
+    function update(f)
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
-        @inbounds hf_faces[f] = face_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
+        entry = face_flux!(
+            zero(flux_vector_type(eq, scalar_type)), left, right, f, 1,
+            eq, state_f, model, dt, flow_disc)
+        store_flux_entry!(hf_faces, f, entry)
     end
-    @tic "flux (faces)" threaded_loop_minbatch(F, nf, model.context)
+    @tic "flux (faces)" threaded_loop_minbatch(update, nf, model.context)
+    return hf_faces
 end
 
 function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, disc)
