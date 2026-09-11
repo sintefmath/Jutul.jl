@@ -54,14 +54,19 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
 end
 
 
-function threaded_loop(f, n, ctx::KernelAbstractionsContext)
+@kernel function threaded_loop_kernel(f)
+    index = @index(Global)
+    f(index)
+end
+
+function launch_threaded_loop(f, n, ctx::KernelAbstractionsContext)
     n <= 0 && return nothing
-    @kernel function loop_kernel(F)
-        i = @index(Global)
-        F(i)
-    end
-    kernel! = loop_kernel(ctx.backend, ctx.workgroupsize)
-    event = kernel!(f; ndrange = n)
+    kernel! = threaded_loop_kernel(ctx.backend, ctx.workgroupsize)
+    return kernel!(f; ndrange = n)
+end
+
+function threaded_loop(f, n, ctx::KernelAbstractionsContext)
+    event = launch_threaded_loop(f, n, ctx)
     isnothing(event) || wait(event)
     return nothing
 end

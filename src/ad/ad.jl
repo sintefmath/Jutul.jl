@@ -457,28 +457,6 @@ function update_values!(v::AbstractArray{T}, next::AbstractArray{S},
     return v
 end
 
-function update_values!(v::AbstractArray{T}, next::AbstractArray{S},
-        context::KernelAbstractionsContext) where {T<:Real, S<:Real}
-    # Inputs supplied to reset_variables! commonly live in CPU memory. Move
-    # them to the execution backend before launching the value-preserving
-    # update kernel; GPU kernels cannot index the host array directly.
-    next_backend = Adapt.adapt(context, next)
-    preserve_partials = Val(eltype(v) <: ForwardDiff.Dual &&
-        eltype(next_backend) <: Real && eltype(v) !== eltype(next_backend) &&
-        unpack_tag(v) isa JutulEntity)
-    strip_partials = Val(eltype(v) <: AbstractFloat &&
-        eltype(next_backend) <: ForwardDiff.Dual)
-    strip_partials isa Val{true} && (unpack_tag(next_backend)::JutulEntity)
-    function update(i)
-        @inbounds old = v[i]
-        @inbounds new = next_backend[i]
-        new = updated_state_value(old, new, preserve_partials, strip_partials)
-        @inbounds v[i] = new
-    end
-    threaded_loop_minbatch(update, length(v), context)
-    return v
-end
-
 update_values!(v, next, ::JutulContext) = update_values!(v, next)
 
 """

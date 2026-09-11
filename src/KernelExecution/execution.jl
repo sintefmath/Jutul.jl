@@ -1,6 +1,35 @@
-export transfer_to_backend, backend_copyto!, prepare_backend_transfer!
-
 const KASimulationModel = SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext}
+
+function update_values!(v::AbstractArray{T}, next::AbstractArray{S},
+        context::KernelAbstractionsContext) where {T<:Real, S<:Real}
+    # Inputs supplied to reset_variables! commonly live in CPU memory. Move
+    # them to the execution backend before launching the value-preserving
+    # update kernel; GPU kernels cannot index the host array directly.
+    next_backend = Adapt.adapt(context, next)
+    preserve_partials = Val(eltype(v) <: ForwardDiff.Dual &&
+        eltype(next_backend) <: Real && eltype(v) !== eltype(next_backend) &&
+        unpack_tag(v) isa JutulEntity)
+    strip_partials = Val(eltype(v) <: AbstractFloat &&
+        eltype(next_backend) <: ForwardDiff.Dual)
+    strip_partials isa Val{true} && (unpack_tag(next_backend)::JutulEntity)
+    function update(i)
+        @inbounds old = v[i]
+        @inbounds new = next_backend[i]
+        new = updated_state_value(old, new, preserve_partials, strip_partials)
+        @inbounds v[i] = new
+    end
+    threaded_loop_minbatch(update, length(v), context)
+    return v
+end
+
+function replace_values!(old, updated, context::KernelAbstractionsContext)
+    for field in keys(old)
+        if haskey(updated, field)
+            next = Adapt.adapt(context, updated[field])
+            update_values!(old[field], next, context)
+        end
+    end
+end
 
 # Adapt uses the context as the adaptation target. Backend packages define how
 # their own backend converts an Array, while Jutul supplies the structural rules.
@@ -223,11 +252,24 @@ adapt_backend_value(ctx, x::AbstractVector{<:JutulStorage}) =
     tuple((adapt_backend_value(ctx, v) for v in x)...)
 adapt_backend_value(ctx, x) = Adapt.adapt(ctx, x)
 
+"""
+    secondary_variable_evaluation_plan(model, secondary)
+
+Build a CPU-side execution schedule for secondary variables. Each vector in
+the returned vector is one dependency level and contains
+`symbol => entity_count` entries. Variables in one level are independent and
+may be launched without an intermediate synchronization; the next level starts
+only after the backend has finished the preceding level.
+
+Symbols are stored as values in ordinary vectors rather than tuple parameters,
+so the plan type does not specialize on the model's property names. The plan is
+created while simulator storage is transferred and remains on the CPU.
+"""
 function secondary_variable_evaluation_plan(
         model, secondary = model.secondary_variables)
-    all_secondary = model.secondary_variables
     nodes, dependencies = build_variable_graph(
-        model, model.primary_variables, all_secondary, model.parameters)
+        model, model.primary_variables, model.secondary_variables,
+        model.parameters)
     order = sort_symbols(nodes, dependencies)
     positions = Dict(symbol => index for (index, symbol) in enumerate(nodes))
     number_of_roots = length(model.primary_variables) + length(model.parameters)
@@ -244,56 +286,37 @@ function secondary_variable_evaluation_plan(
         nodes[index] => node_levels[index]
         for index in (number_of_roots + 1):length(nodes))
 
-    number_of_levels = isempty(secondary) ? 0 :
-        maximum(levels_by_symbol[symbol] for symbol in keys(secondary))
-    level_symbols = [Symbol[] for _ in 1:number_of_levels]
-    level_batches = [Int[] for _ in 1:number_of_levels]
-    for (symbol, variable) in pairs(secondary)
-        level = levels_by_symbol[symbol]
-        push!(level_symbols[level], symbol)
-        push!(level_batches[level], number_of_entities(model, variable))
+    symbols = collect(keys(secondary))
+    isempty(symbols) && return Vector{Vector{Pair{Symbol, Int}}}()
+    levels = map(symbol -> levels_by_symbol[symbol], symbols)
+    active_levels = sort!(unique(levels))
+    return map(active_levels) do level
+        entries = Pair{Symbol, Int}[]
+        for symbol in symbols
+            if levels_by_symbol[symbol] == level
+                variable = secondary[symbol]
+                push!(entries, symbol => number_of_entities(model, variable))
+            end
+        end
+        entries
     end
-    keep = [index for index in eachindex(level_symbols)
-        if !isempty(level_symbols[index])]
-    return (
-        levels = Tuple(Tuple(level_symbols[i]) for i in keep),
-        batches = Tuple(Tuple(level_batches[i]) for i in keep)
-    )
 end
 
-@inline function update_secondary_variable_level!(
-        ::Tuple{}, model, state, batch)
-    return nothing
-end
-
-@inline function update_secondary_variable_level!(
-        entries::Tuple, model, state, batch)
-    target, variable, number_of_batches = first(entries)
-    if batch <= number_of_batches
-        ix = entity_eachindex(target, batch, number_of_batches)
-        update_secondary_variable!(target, variable, model, state, ix)
-    end
-    update_secondary_variable_level!(Base.tail(entries), model, state, batch)
-    return nothing
-end
-
-function update_secondary_variable_level!(state, model, vars, symbols, batches)
-    entries = map(symbols, batches) do symbol, number_of_batches
-        (state[symbol], vars[symbol], number_of_batches)
-    end
-    number_of_batches = maximum(batches)
-    update(batch) = update_secondary_variable_level!(
-        entries, model, state, batch)
-    threaded_loop(update, number_of_batches, model.context)
-    return nothing
-end
-
-function update_secondary_variables_state!(state, model, vars, plan)
-    # A kernel boundary separates dependency levels. Independent variables in
-    # one level share an entity-batched kernel, avoiding per-variable launches.
-    for (symbols, batches) in zip(plan.levels, plan.batches)
-        update_secondary_variable_level!(
-            state, model, vars, symbols, batches)
+function update_secondary_variables_state!(state, model, vars,
+        plan::AbstractVector)
+    context = model.context
+    for level in plan
+        for (symbol, batch_count) in level
+            target = state[symbol]
+            variable = vars[symbol]
+            function update(batch)
+                indices = entity_eachindex(target, batch, batch_count)
+                update_secondary_variable!(
+                    target, variable, model, state, indices)
+            end
+            launch_threaded_loop(update, batch_count, context)
+        end
+        synchronize(context)
     end
     return state
 end
@@ -469,8 +492,6 @@ Application hook invoked immediately before a host-evaluated submodel is
 copied into its backend mirror. It can refresh preallocated numeric state that
 replaces host-only control or metadata objects in device kernels.
 """
-prepare_backend_transfer!(storage, model) = storage
-
 function backend_copyto!(destination::AbstractArray, source::AbstractArray)
     length(destination) == length(source) || throw(DimensionMismatch(
         "backend copy requires equal lengths, got $(length(destination)) and $(length(source))"))
@@ -558,8 +579,6 @@ function backend_copyto!(destination::ConservationLawTPFAStorage,
     end
     return destination
 end
-
-backend_copyto!(destination, source) = destination
 
 function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
         model, lsys = nothing)
@@ -797,7 +816,7 @@ end
 end
 
 function LinearAlgebra.mul!(y::AbstractVector,
-        A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, Nothing, B},
+        A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, B},
         x::AbstractVector, alpha::Number, beta::Number) where {Tv, Ti, V, I, R, B<:KernelAbstractions.Backend}
     kernel! = ka_csr_mul_kernel!(A.backend)
     event = kernel!(y, A.nzval, A.colval, A.rowptr, x, alpha, beta; ndrange = size(A, 1))

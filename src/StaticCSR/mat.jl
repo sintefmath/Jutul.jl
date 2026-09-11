@@ -1,5 +1,4 @@
-struct StaticSparsityMatrixCSR{Tv,Ti<:Integer,V,I,R,A,B} <: SparseArrays.AbstractSparseMatrix{Tv,Ti}
-    At::A
+struct StaticSparsityMatrixCSR{Tv,Ti<:Integer,V,I,R,B} <: SparseArrays.AbstractSparseMatrix{Tv,Ti}
     nzval::V
     colval::I
     rowptr::R
@@ -9,32 +8,60 @@ struct StaticSparsityMatrixCSR{Tv,Ti<:Integer,V,I,R,A,B} <: SparseArrays.Abstrac
     minbatch::Int
     thread_type::Symbol
     backend::B
-    function StaticSparsityMatrixCSR(A_t::SparseMatrixCSC{Tv, Ti}; nthreads = Threads.nthreads(), minbatch = 1000, thread_type = :batch) where {Tv, Ti}
-        nzval = nonzeros(A_t)
-        colval = SparseArrays.rowvals(A_t)
-        rowptr = SparseArrays.getcolptr(A_t)
-        m, n = reverse(size(A_t))
-        return new{Tv, Ti, typeof(nzval), typeof(colval), typeof(rowptr), typeof(A_t), Nothing}(
-            A_t, nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, nothing
+    function StaticSparsityMatrixCSR(
+            stored_transpose::SparseMatrixCSC{Tv, Ti};
+            nthreads = Threads.nthreads(),
+            minbatch = 1000,
+            thread_type = :batch
+        ) where {Tv, Ti}
+        nzval = nonzeros(stored_transpose)
+        colval = SparseArrays.rowvals(stored_transpose)
+        rowptr = SparseArrays.getcolptr(stored_transpose)
+        m, n = reverse(size(stored_transpose))
+        return new{Tv, Ti, typeof(nzval), typeof(colval), typeof(rowptr), Nothing}(
+            nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, nothing
         )
     end
-    function StaticSparsityMatrixCSR(nzval::V, colval::I, rowptr::R, m::Int, n::Int, backend::B;
-            nthreads = 1, minbatch = 1, thread_type = :serial) where {Tv, Ti<:Integer, V<:AbstractVector{Tv}, I<:AbstractVector{Ti}, R<:AbstractVector{Ti}, B}
-        return new{Tv, Ti, V, I, R, Nothing, B}(
-            nothing, nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, backend
+    function StaticSparsityMatrixCSR(
+            nzval::V, colval::I, rowptr::R, m::Int, n::Int, backend::B;
+            nthreads = 1,
+            minbatch = 1,
+            thread_type = :serial
+        ) where {Tv, Ti<:Integer, V<:AbstractVector{Tv},
+            I<:AbstractVector{Ti}, R<:AbstractVector{Ti}, B}
+        return new{Tv, Ti, V, I, R, B}(
+            nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, backend
         )
     end
 end
 
 Base.size(S::StaticSparsityMatrixCSR) = (S.m, S.n)
-Base.getindex(S::StaticSparsityMatrixCSR, I::Integer, J::Integer) = S.At[J, I]
+function Base.getindex(S::StaticSparsityMatrixCSR, row::Integer, column::Integer)
+    checkbounds(S, row, column)
+    for position in SparseArrays.nzrange(S, row)
+        stored_column = @inbounds S.colval[position]
+        stored_column == column && return @inbounds S.nzval[position]
+        stored_column > column && break
+    end
+    return zero(eltype(S))
+end
 SparseArrays.nnz(S::StaticSparsityMatrixCSR) = length(S.nzval)
 SparseArrays.nonzeros(S::StaticSparsityMatrixCSR) = S.nzval
-Base.isstored(S::StaticSparsityMatrixCSR, I::Integer, J::Integer) = Base.isstored(S.At, J, I)
-SparseArrays.nzrange(S::StaticSparsityMatrixCSR, row::Integer) = S.rowptr[row]:(S.rowptr[row+1]-1)
+function Base.isstored(S::StaticSparsityMatrixCSR, row::Integer, column::Integer)
+    checkbounds(S, row, column)
+    for position in SparseArrays.nzrange(S, row)
+        stored_column = @inbounds S.colval[position]
+        stored_column == column && return true
+        stored_column > column && break
+    end
+    return false
+end
+SparseArrays.nzrange(S::StaticSparsityMatrixCSR, row::Integer) =
+    S.rowptr[row]:(S.rowptr[row + 1] - 1)
 
 function SparseArrays.findnz(S::StaticSparsityMatrixCSR)
-    J, I, V = findnz(S.At)
+    stored_transpose = SparseMatrixCSC(S.n, S.m, S.rowptr, S.colval, S.nzval)
+    J, I, V = findnz(stored_transpose)
     return (I, J, V)
 end
 
@@ -93,8 +120,8 @@ end
 
 function StaticSparsityMatrixCSR(m, n, rowptr, cols, nzval; kwarg...)
     # @info "Setting up" m n rowptr cols nzval
-    At = SparseMatrixCSC(n, m, rowptr, cols, nzval)
-    return StaticSparsityMatrixCSR(At; kwarg...)
+    stored_transpose = SparseMatrixCSC(n, m, rowptr, cols, nzval)
+    return StaticSparsityMatrixCSR(stored_transpose; kwarg...)
 end
 
 

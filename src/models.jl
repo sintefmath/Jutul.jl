@@ -1074,15 +1074,6 @@ function replace_values!(old, updated, context = DefaultContext())
     end
 end
 
-function replace_values!(old, updated, context::KernelAbstractionsContext)
-    for f in keys(old)
-        if haskey(updated, f)
-            next = Adapt.adapt(context, updated[f])
-            update_values!(old[f], next, context)
-        end
-    end
-end
-
 function reset_state_to_previous_state!(storage, model)
     # Replace primary variable values with those from previous state
     replace_values!(storage.primary_variables, storage.state0, model.context)

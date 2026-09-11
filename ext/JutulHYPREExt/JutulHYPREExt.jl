@@ -93,7 +93,8 @@ module JutulHYPREExt
     function transfer_matrix_to_hypre(J::Jutul.StaticSparsityMatrixCSR, D, executor)
         n, m = size(J)
         @assert n == m
-        J_h = HYPRE.HYPREMatrix(J.At)
+        stored_transpose = SparseMatrixCSC(m, n, J.rowptr, J.colval, J.nzval)
+        J_h = HYPRE.HYPREMatrix(stored_transpose)
         reassemble_matrix!(J_h, D, J, executor)
         return J_h
     end

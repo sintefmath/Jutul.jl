@@ -2,7 +2,7 @@ using Test
 using Jutul
 using KernelAbstractions
 using SparseArrays
-import Jutul: secondary_variable_evaluation_plan
+import Jutul.KernelExecution: secondary_variable_evaluation_plan
 
 @test :secondary_variable_evaluation_plan ∉ names(Jutul)
 
@@ -62,8 +62,14 @@ end
         KernelAbstractionsContext(CPU(); workgroupsize = 4),
         (X = nothing,), variables, NamedTuple())
     plan = secondary_variable_evaluation_plan(model)
-    @test plan.levels == ((:A, :C), (:B,), (:D,))
-    @test plan.batches == ((7, 3), (7,), (3,))
+    @test plan isa Vector{Vector{Pair{Symbol, Int}}}
+    @test plan == [[:A => 7, :C => 3], [:B => 7], [:D => 3]]
+
+    empty_model = SecondaryPlanTestModel(
+        model.context, model.primary_variables, NamedTuple(), NamedTuple())
+    empty_plan = secondary_variable_evaluation_plan(empty_model)
+    @test empty_plan isa Vector{Vector{Pair{Symbol, Int}}}
+    @test isempty(empty_plan)
 
     state = (
         X = collect(1.0:7.0),

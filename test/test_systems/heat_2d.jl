@@ -1,13 +1,14 @@
 using Jutul
 using Test
 
-function test_heat_2d(nx = 3, ny = nx; kwarg...)
+function test_heat_2d(nx = 3, ny = nx;
+        context = DefaultContext(), kwarg...)
     sys = SimpleHeatSystem()
     # Unit square
     g = CartesianMesh((nx, ny), (1.0, 1.0))
     # Set up a model with the grid and system
     D = DiscretizedDomain(g)
-    model = SimulationModel(D, sys)
+    model = SimulationModel(D, sys, context = context)
     # Initial condition is random values
     nc = number_of_cells(g)
     T0 = rand(nc)
@@ -32,5 +33,14 @@ using HYPRE
 
     lsolve = GenericKrylov(:bicgstab, preconditioner = Jutul.BoomerAMGPreconditioner())
     states = test_heat_2d(4, 4, linear_solver = lsolve)
+    @test length(states) == 1
+
+    # HYPRE retains its StaticCSR pathway. The CSC transpose needed by HYPRE
+    # is reconstructed on demand now that StaticSparsityMatrixCSR no longer
+    # stores one.
+    csr_lsolve = GenericKrylov(:bicgstab,
+        preconditioner = Jutul.BoomerAMGPreconditioner())
+    states = test_heat_2d(4, 4,
+        context = ParallelCSRContext(1), linear_solver = csr_lsolve)
     @test length(states) == 1
 end

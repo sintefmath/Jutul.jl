@@ -27,6 +27,10 @@ import Jutul: process_partition
         test_basic_partition_features(p, np)
     end
 
+    A_csr = Jutul.StaticSparsityMatrixCSR(copy(A'))
+    p = Jutul.partition(MetisPartitioner(), A_csr, 5)
+    test_basic_partition_features(p, 5)
+
     l = 1:49
     r = 2:50
     N = vcat(l', r')

@@ -4,7 +4,7 @@ export setup_parameters, JutulForce
 export Cells, Nodes, Faces, declare_entities
 export ScalarVariable, VectorVariables, FractionVariables
 
-export SingleCUDAContext, DefaultContext, KernelAbstractionsContext
+export SingleCUDAContext, DefaultContext
 export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
 
 export transfer, allocate_array
@@ -217,7 +217,6 @@ include("contexts/interface.jl")
 include("contexts/csr.jl")
 include("contexts/default.jl")
 include("contexts/cuda.jl")
-include("contexts/kernel_abstractions.jl")
 
 # Domains
 include("domains.jl")
