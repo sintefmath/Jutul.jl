@@ -28,18 +28,15 @@ function Base.show(io::IO, t::MIME"text/plain", ilu::ParallelILUFactorCSR)
 end
 
 function ParallelILUFactorCSR(A::StaticSparsityMatrixCSR{Tv, Ti}, active::Tuple) where {Tv, Ti}
-    M = StaticSparsityMatrixCSR{Tv, Ti}
     N = length(active)
     VT = Vector{Ti}
-    AT = eltype(active)
-    if N == 1
-        Mt = Vector{Tv}
-    else
-        Mt = SparseVector{Tv, Ti}
-    end
-    T = ILUFactorCSR{M, Mt, VT, AT}
+    first_factor = ilu0_csr(A, active = active[1])
+    T = typeof(first_factor)
     factors = Vector{T}(undef, N)
-    ilu_initial_setup_par!(factors, A, active, N)
+    factors[1] = first_factor
+    if N > 1
+        ilu_initial_setup_par!(factors, A, active, 2:N)
+    end
     F = tuple(factors...)
     F::NTuple{N, T}
     return ParallelILUFactorCSR{N, T, VT}(F, active, A.thread_type)
@@ -56,13 +53,14 @@ function ilu0_csr(A::StaticSparsityMatrixCSR, partition::V) where {V<:AbstractVe
 end
 
 
-function ilu_initial_setup_par!(factors, A, active, N)
-    function F(i)
+function ilu_initial_setup_par!(factors, A, active, indices)
+    function F(local_index)
+        i = indices[local_index]
         f = ilu0_csr(A, active = active[i])
         f::eltype(factors)
         factors[i] = f
     end
-    threaded_loop(F, N, A.thread_type)
+    threaded_loop(F, length(indices), A.thread_type)
     return factors
 end
 
