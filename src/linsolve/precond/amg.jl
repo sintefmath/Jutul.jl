@@ -64,7 +64,7 @@ end
 function update_preconditioner!(amg::AMGPreconditioner, A, b, context, executor)
     if isnothing(amg.factor)
         amg.factor = setup_ka_amg(A, amg.options)
-        amg.dim = size(A)
+        amg.dim = (length(b), length(b))
     else
         update_ka_amg!(amg.factor, A, amg.reuse)
     end
@@ -117,7 +117,7 @@ function update_preconditioner!(smoother::KASmootherPreconditioner,
         A, b, context, executor)
     if isnothing(smoother.factor)
         smoother.factor = setup_ka_smoother(A, smoother.config)
-        smoother.dim = size(A)
+        smoother.dim = (length(b), length(b))
     else
         update_ka_smoother!(smoother.factor, A)
     end
@@ -131,14 +131,31 @@ end
 
 operator_nrows(smoother::KASmootherPreconditioner) = smoother.dim[1]
 
+function ka_smoother_vectors(smoother, x, y)
+    factor_type = eltype(smoother.factor)
+    if factor_type <: StaticMatrix && eltype(x) <: Real
+        block_size = size(factor_type, 1)
+        length(x) % block_size == 0 || throw(DimensionMismatch(
+            "output length is not divisible by the smoother block size"))
+        length(y) == length(x) || throw(DimensionMismatch(
+            "right-hand side and output must have equal lengths"))
+        scalar_type = eltype(factor_type)
+        vector_type = SVector{block_size, scalar_type}
+        x = unsafe_reinterpret(vector_type, x, length(x) ÷ block_size)
+        y = unsafe_reinterpret(vector_type, y, length(y) ÷ block_size)
+    end
+    return x, y
+end
+
 function apply!(x, smoother::KASmootherPreconditioner,
         y, alpha = 1.0, beta = 0.0)
+    smoother_x, smoother_y = ka_smoother_vectors(smoother, x, y)
     if iszero(beta)
-        apply_ka_smoother!(x, smoother.factor, y)
+        apply_ka_smoother!(smoother_x, smoother.factor, smoother_y)
         isone(alpha) || lmul!(alpha, x)
     else
         previous = copy(x)
-        apply_ka_smoother!(x, smoother.factor, y)
+        apply_ka_smoother!(smoother_x, smoother.factor, smoother_y)
         @. x = alpha*x + beta*previous
     end
     return x

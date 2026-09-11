@@ -507,6 +507,7 @@ end
         serial_result = similar(b)
         ldiv!(serial_result, serial_factor, b)
         @test ka_result ≈ serial_result rtol = 1e-12 atol = 1e-12
+        return serial_result
     end
 
     scalar_matrix = poisson_2d(5)
@@ -522,5 +523,25 @@ end
     values = vcat(fill(diagonal, n), fill(off_diagonal, 2*n-2))
     block_matrix = sparse(rows, columns, values, n, n)
     rhs = [BlockVector(1.0 + 0.1*i, -0.5 + 0.05*i) for i in 1:n]
-    compare_ilu(block_matrix, rhs)
+    block_reference = compare_ilu(block_matrix, rhs)
+
+    flat_rhs = reinterpret(Float64, rhs)
+    wrapped_smoother = KASmootherPreconditioner(:ilu0)
+    Jutul.update_preconditioner!(
+        wrapped_smoother, csr_matrix(block_matrix; index_type = Int),
+        flat_rhs, DefaultContext(), nothing)
+    flat_result = similar(flat_rhs)
+    Jutul.apply!(flat_result, wrapped_smoother, flat_rhs)
+    @test isapprox(reinterpret(BlockVector, flat_result), block_reference;
+        rtol = 1e-12, atol = 1e-12)
+
+    device_matrix = csr_matrix(block_matrix; backend = JLBackend())
+    device_rhs = JLArray(flat_rhs)
+    device_result = similar(device_rhs)
+    device_smoother = KASmootherPreconditioner(:ilu0)
+    Jutul.update_preconditioner!(device_smoother, device_matrix,
+        device_rhs, KernelAbstractionsContext(JLBackend()), nothing)
+    Jutul.apply!(device_result, device_smoother, device_rhs)
+    @test isapprox(reinterpret(BlockVector, Array(device_result)),
+        block_reference; rtol = 1e-12, atol = 1e-12)
 end

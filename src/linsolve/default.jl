@@ -11,19 +11,19 @@ end
 
 function update_preconditioner!(f::FactorStore, g, g!, A, executor)
     if isnothing(f.factor)
-        f.factor = g(A)
+        f.factor = factorize_linear_system(g, A)
     else
-        g!(f.factor, A)
+        refactorize_linear_system!(g!, f.factor, A)
     end
     return f.factor
 end
 
 function update_preconditioner!(f::FactorStore, g, g!, A::AbstractArray, executor)
     if isnothing(f.factor)
-        f.factor = map(g, A)
+        f.factor = map(A_i -> factorize_linear_system(g, A_i), A)
     else
         for (F, A_i) in zip(f.factor, A)
-            g!(F, A_i)
+            refactorize_linear_system!(g!, F, A_i)
         end
     end
     return f.factor
