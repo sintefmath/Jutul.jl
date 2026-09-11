@@ -1,5 +1,6 @@
 using Jutul, Test
 using SparseArrays, LinearAlgebra
+using StaticArrays
 
 @testset "StaticSparsityMatrixCSR storage" begin
     matrix = sparse([1, 1, 2, 3], [1, 3, 2, 1], [2.0, -1.0, 4.0, 3.0], 3, 3)
@@ -10,6 +11,32 @@ using SparseArrays, LinearAlgebra
     rows, columns, values = findnz(csr)
     @test sparse(rows, columns, values, size(csr)...) == matrix
     @test csr*[1.0, 2.0, 3.0] == matrix*[1.0, 2.0, 3.0]
+end
+
+@testset "Parallel ILU CSR storage type" begin
+    n = 6
+    diagonal = @SMatrix [4.0 0.2; 0.1 3.0]
+    off_diagonal = @SMatrix [-1.0 0.0; 0.0 -1.0]
+    rows = vcat(1:n, 1:(n-1), 2:n)
+    columns = vcat(1:n, 2:n, 1:(n-1))
+    values = vcat(fill(diagonal, n), fill(off_diagonal, 2*n-2))
+    matrix = sparse(rows, columns, values, n, n)
+    csr = Jutul.StaticSparsityMatrixCSR(
+        copy(matrix');
+        nthreads = 2,
+        minbatch = 1,
+        thread_type = :batch
+    )
+
+    factor = Jutul.ilu0_csr(csr, [1, 1, 1, 2, 2, 2])
+    factor_type = typeof(first(factor.factors))
+    @test all(f -> typeof(f) === factor_type, factor.factors)
+
+    Jutul.ilu0_csr!(factor, csr)
+    right_hand_side = fill(@SVector([1.0, 2.0]), n)
+    solution = similar(right_hand_side)
+    ldiv!(solution, factor, right_hand_side)
+    @test all(x -> all(isfinite, x), solution)
 end
 
 @testset "SparsityTracingWrapper" begin
