@@ -80,6 +80,7 @@ function optimize_bound_constrained(
         obj_change_tol = -Inf,
         obj_change_tol_rel = 1.0e-7,
         max_it = 25,
+        print = 1,
         use_new_line_search = true,
         ls_max_it = 5,
         ls_wolfe1 = 1.0e-4,
@@ -87,7 +88,7 @@ function optimize_bound_constrained(
         ls_max_step_increase = 10.0,
         ls_step_diff_tol = 1.0e-4,
         ls_reduction_factor_failure = 0.3,
-        ls_verbosity = 1,
+        ls_verbosity = print,
         ls_safeguard_fac = 1.0e-5,
         max_it_qp = 250,
         active_chunk_tol = sqrt(eps()),
@@ -103,7 +104,6 @@ function optimize_bound_constrained(
         output_hessian = false,
         history = nothing
     )
-
     # Negate f if we are maximizing
     obj_sign = 1
     if maximize
@@ -169,8 +169,9 @@ function optimize_bound_constrained(
     end
     # Print info for iteration 0
     info = update_info!(nothing; obj_info = (v = obj_sign * v0, pg = norm(g0, Inf), n_active = 0))
-    print_info_step(info)
-
+    if print > 0
+        print_info_step(info)
+    end
     v, u, g = v0, copy(u0), copy(g0)
     n_active = 0
     success = false
@@ -256,7 +257,7 @@ function optimize_bound_constrained(
                 dg[.!isfinite.(dg)] .= 0
                 H_prev = deepcopy(H)
                 H = update!(H, du, dg)
-            else
+            elseif print > 0
                 @printf("Hessian not updated during iteration %d.\n", it)
             end
             # update projected gradient
@@ -280,14 +281,17 @@ function optimize_bound_constrained(
         stop_flags[:ls_fail] = !ls_success
         # Reset for next iteration
         v0, u0, g0 = v, copy(u), copy(g)
-
-        print_info_step(info)
+        if print > 0
+            print_info_step(info)
+        end
     end
 
     if scale
         u = u .* (ub .- lb) .+ lb
     end
-    print_end_message(stop_flags, stop_tols, info)
+    if print > 0
+        print_end_message(stop_flags, stop_tols, info)
+    end
     return (v, u, info)
 end
 
