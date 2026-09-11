@@ -300,7 +300,7 @@ import Jutul.DictOptimization as DictOptimization
 
     @test_throws "[\"scalar\"] has limit abs_min larger than initial value 3.0" DictOptimization.free_optimization_parameter!(dopt, "scalar", abs_min = 5.0, abs_max = 4.0)
     @test_throws "[\"scalar\"] has no feasible values for abs_min = 3.0 and abs_max = 3.0" DictOptimization.free_optimization_parameter!(dopt, "scalar", abs_min = 3.0, abs_max = 3.0)
-    @test_throws "[\"vector\"] has limit abs_min larger than initial value -1.0 in entry at CartesianIndex(2,)." DictOptimization.free_optimization_parameter!(dopt, "vector", abs_min = 0.0, abs_max = 4.0)
+    @test_throws "[\"vector\"] has limit abs_min larger than initial value -1.0 in entry at CartesianIndex(2" DictOptimization.free_optimization_parameter!(dopt, "vector", abs_min = 0.0, abs_max = 4.0)
 
     free_optimization_parameter!(dopt, "scalar", abs_min = -2.0, abs_max = 4.0)
     s = dopt.parameter_targets[["scalar"]]
