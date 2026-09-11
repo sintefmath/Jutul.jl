@@ -131,21 +131,21 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::LinearizedS
     dx_buffer = Adapt.adapt(ctx, lsys.dx_buffer)
     r = lsys.r === lsys.r_buffer ? r_buffer : Adapt.adapt(ctx, lsys.r)
     dx = lsys.dx === lsys.dx_buffer ? dx_buffer : Adapt.adapt(ctx, lsys.dx)
-    jac_buffer = _backend_jacobian_buffer(lsys.jac_buffer, jac)
-    return LinearizedSystem(jac, r, dx, jac_buffer, r_buffer, dx_buffer, lsys.matrix_layout)
-end
-
-function _backend_jacobian_buffer(original_buffer, jac)
-    nz = nonzeros(jac)
-    if eltype(original_buffer) == eltype(nz)
-        if size(original_buffer) == size(nz)
-            return nz
-        else
-            return reshape(nz, size(original_buffer))
+    function backend_jacobian_buffer()
+        nz = nonzeros(jac)
+        original_buffer = lsys.jac_buffer
+        if eltype(original_buffer) == eltype(nz)
+            if size(original_buffer) == size(nz)
+                return nz
+            else
+                return reshape(nz, size(original_buffer))
+            end
         end
+        buffer = reinterpret(reshape, eltype(original_buffer), nz)
+        return reshape(buffer, size(original_buffer))
     end
-    buffer = reinterpret(reshape, eltype(original_buffer), nz)
-    return reshape(buffer, size(original_buffer))
+    jac_buffer = backend_jacobian_buffer()
+    return LinearizedSystem(jac, r, dx, jac_buffer, r_buffer, dx_buffer, lsys.matrix_layout)
 end
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
@@ -162,20 +162,20 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
         jac, jac_buffer, block.rowcol_block_size, R(), C(), Val(:assembled))
 end
 
-function _backend_vector_alias(original, original_buffer, adapted_buffer)
-    buffer = reshape(adapted_buffer, size(original_buffer))
-    if eltype(original) == eltype(original_buffer)
-        return reshape(buffer, size(original))
-    else
-        return reinterpret(reshape, eltype(original), buffer)
-    end
-end
-
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::MultiLinearizedSystem)
+    function backend_vector_alias(original, original_buffer, adapted_buffer)
+        buffer = reshape(adapted_buffer, size(original_buffer))
+        if eltype(original) == eltype(original_buffer)
+            return reshape(buffer, size(original))
+        else
+            return reinterpret(reshape, eltype(original), buffer)
+        end
+    end
+
     r_buffer = Adapt.adapt(ctx, lsys.r_buffer)
     dx_buffer = Adapt.adapt(ctx, lsys.dx_buffer)
-    r = _backend_vector_alias(lsys.r, lsys.r_buffer, r_buffer)
-    dx = _backend_vector_alias(lsys.dx, lsys.dx_buffer, dx_buffer)
+    r = backend_vector_alias(lsys.r, lsys.r_buffer, r_buffer)
+    dx = backend_vector_alias(lsys.dx, lsys.dx_buffer, dx_buffer)
 
     nsystems = size(lsys.subsystems)
     subsystems = Matrix{LinearizedType}(undef, nsystems)
@@ -189,8 +189,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::MultiLinear
             dx_range = (dx_offset + 1):(dx_offset + ndx)
             r_i_buffer = reshape(view(vec(r_buffer), r_range), size(old.r_buffer))
             dx_i_buffer = reshape(view(vec(dx_buffer), dx_range), size(old.dx_buffer))
-            r_i = _backend_vector_alias(old.r, old.r_buffer, r_i_buffer)
-            dx_i = _backend_vector_alias(old.dx, old.dx_buffer, dx_i_buffer)
+            r_i = backend_vector_alias(old.r, old.r_buffer, r_i_buffer)
+            dx_i = backend_vector_alias(old.dx, old.dx_buffer, dx_i_buffer)
             adapted_old = Adapt.adapt(ctx, old)
             jac = adapted_old.jac
             jac_buffer = adapted_old.jac_buffer
@@ -206,22 +206,97 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::MultiLinear
     end
     @assert r_offset == length(r_buffer)
     @assert dx_offset == length(dx_buffer)
-    schur_buffer = _adapt_backend_value(ctx, lsys.schur_buffer)
+    schur_buffer = adapt_backend_value(ctx, lsys.schur_buffer)
     return MultiLinearizedSystem{typeof(lsys.matrix_layout)}(
         subsystems, r, dx, r_buffer, dx_buffer, lsys.reduction,
         FactorStore(), lsys.matrix_layout, schur_buffer
     )
 end
 
-_adapt_backend_value(ctx, x::NamedTuple) = map(v -> _adapt_backend_value(ctx, v), x)
-_adapt_backend_value(ctx, x::Tuple) = map(v -> _adapt_backend_value(ctx, v), x)
-function _adapt_backend_value(ctx, x::AbstractDict)
-    return (; (Symbol(k) => _adapt_backend_value(ctx, v) for (k, v) in pairs(x))...)
+adapt_backend_value(ctx, x::NamedTuple) = map(v -> adapt_backend_value(ctx, v), x)
+adapt_backend_value(ctx, x::Tuple) = map(v -> adapt_backend_value(ctx, v), x)
+function adapt_backend_value(ctx, x::AbstractDict)
+    return (; (Symbol(k) => adapt_backend_value(ctx, v) for (k, v) in pairs(x))...)
 end
-_adapt_backend_value(ctx, x::JutulStorage) = JutulStorage(_adapt_backend_value(ctx, data(x)))
-_adapt_backend_value(ctx, x::AbstractVector{<:JutulStorage}) =
-    tuple((_adapt_backend_value(ctx, v) for v in x)...)
-_adapt_backend_value(ctx, x) = Adapt.adapt(ctx, x)
+adapt_backend_value(ctx, x::JutulStorage) = JutulStorage(adapt_backend_value(ctx, data(x)))
+adapt_backend_value(ctx, x::AbstractVector{<:JutulStorage}) =
+    tuple((adapt_backend_value(ctx, v) for v in x)...)
+adapt_backend_value(ctx, x) = Adapt.adapt(ctx, x)
+
+function secondary_variable_evaluation_plan(
+        model, secondary = model.secondary_variables)
+    all_secondary = model.secondary_variables
+    nodes, dependencies = build_variable_graph(
+        model, model.primary_variables, all_secondary, model.parameters)
+    order = sort_symbols(nodes, dependencies)
+    positions = Dict(symbol => index for (index, symbol) in enumerate(nodes))
+    number_of_roots = length(model.primary_variables) + length(model.parameters)
+    node_levels = zeros(Int, length(nodes))
+    for index in order
+        index <= number_of_roots && continue
+        level = 1
+        for dependency in dependencies[index]
+            level = max(level, node_levels[positions[dependency]] + 1)
+        end
+        node_levels[index] = level
+    end
+    levels_by_symbol = Dict(
+        nodes[index] => node_levels[index]
+        for index in (number_of_roots + 1):length(nodes))
+
+    number_of_levels = isempty(secondary) ? 0 :
+        maximum(levels_by_symbol[symbol] for symbol in keys(secondary))
+    level_symbols = [Symbol[] for _ in 1:number_of_levels]
+    level_batches = [Int[] for _ in 1:number_of_levels]
+    for (symbol, variable) in pairs(secondary)
+        level = levels_by_symbol[symbol]
+        push!(level_symbols[level], symbol)
+        push!(level_batches[level], number_of_entities(model, variable))
+    end
+    keep = [index for index in eachindex(level_symbols)
+        if !isempty(level_symbols[index])]
+    return (
+        levels = Tuple(Tuple(level_symbols[i]) for i in keep),
+        batches = Tuple(Tuple(level_batches[i]) for i in keep)
+    )
+end
+
+@inline function update_secondary_variable_level!(
+        ::Tuple{}, model, state, batch)
+    return nothing
+end
+
+@inline function update_secondary_variable_level!(
+        entries::Tuple, model, state, batch)
+    target, variable, number_of_batches = first(entries)
+    if batch <= number_of_batches
+        ix = entity_eachindex(target, batch, number_of_batches)
+        update_secondary_variable!(target, variable, model, state, ix)
+    end
+    update_secondary_variable_level!(Base.tail(entries), model, state, batch)
+    return nothing
+end
+
+function update_secondary_variable_level!(state, model, vars, symbols, batches)
+    entries = map(symbols, batches) do symbol, number_of_batches
+        (state[symbol], vars[symbol], number_of_batches)
+    end
+    number_of_batches = maximum(batches)
+    update(batch) = update_secondary_variable_level!(
+        entries, model, state, batch)
+    threaded_loop(update, number_of_batches, model.context)
+    return nothing
+end
+
+function update_secondary_variables_state!(state, model, vars, plan)
+    # A kernel boundary separates dependency levels. Independent variables in
+    # one level share an entity-batched kernel, avoiding per-variable launches.
+    for (symbols, batches) in zip(plan.levels, plan.batches)
+        update_secondary_variable_level!(
+            state, model, vars, symbols, batches)
+    end
+    return state
+end
 
 # Forces are created together with the CPU simulator. Move only force values
 # through this recursive interface: schedule and model containers stay on the
@@ -280,10 +355,10 @@ end
 transfer_forces_to_backend(::KernelAbstractionsContext, force) = force
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::SimulationModel)
-    primary = _adapt_backend_value(ctx, model.primary_variables)
-    secondary = _adapt_backend_value(ctx, model.secondary_variables)
-    parameters = _adapt_backend_value(ctx, model.parameters)
-    equations = _adapt_backend_value(ctx, model.equations)
+    primary = adapt_backend_value(ctx, model.primary_variables)
+    secondary = adapt_backend_value(ctx, model.secondary_variables)
+    parameters = adapt_backend_value(ctx, model.parameters)
+    equations = adapt_backend_value(ctx, model.equations)
     return SimulationModel(
         Adapt.adapt(ctx, model.domain),
         Adapt.adapt(ctx, model.system),
@@ -327,17 +402,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, ctp::CrossTermPai
     )
 end
 
-function _backend_subcontext(ctx::KernelAbstractionsContext, model::SimulationModel)
-    source = model.context
-    return KernelAbstractionsContext(ctx.backend;
-        float_type = float_type(source),
-        index_type = index_type(source),
-        matrix_layout = matrix_layout(source),
-        workgroupsize = ctx.workgroupsize
-    )
-end
-
-function _cpu_csr_model(model::SimulationModel)
+function cpu_csr_model(model::SimulationModel)
     source = model.context
     context = ParallelCSRContext(1;
         matrix_layout = matrix_layout(source), thread_type = :serial)
@@ -349,8 +414,8 @@ function _cpu_csr_model(model::SimulationModel)
     )
 end
 
-function _cpu_csr_model(model::MultiModel)
-    models = (; (key => _cpu_csr_model(submodel)
+function cpu_csr_model(model::MultiModel)
+    models = (; (key => cpu_csr_model(submodel)
         for (key, submodel) in pairs(model.models))...)
     outer = ParallelCSRContext(1;
         matrix_layout = matrix_layout(model.context), thread_type = :serial)
@@ -366,7 +431,16 @@ function _cpu_csr_model(model::MultiModel)
 end
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel)
-    models = (; (key => Adapt.adapt(_backend_subcontext(ctx, submodel), submodel)
+    function backend_subcontext(submodel)
+        source = submodel.context
+        return KernelAbstractionsContext(ctx.backend;
+            float_type = float_type(source),
+            index_type = index_type(source),
+            matrix_layout = matrix_layout(source),
+            workgroupsize = ctx.workgroupsize
+        )
+    end
+    models = (; (key => Adapt.adapt(backend_subcontext(submodel), submodel)
         for (key, submodel) in pairs(model.models))...)
     cross_terms = [Adapt.adapt(ctx, ct) for ct in model.cross_terms]
     groups = isnothing(model.groups) ? nothing : copy(model.groups)
@@ -487,16 +561,32 @@ end
 
 backend_copyto!(destination, source) = destination
 
-function _state_references(state, definitions)
-    return (; (k => state[k] for k in keys(definitions))...)
-end
-
-function _adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
+function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
         model, lsys = nothing)
-    state = _adapt_backend_value(ctx, storage_cpu.state)
-    state0 = _adapt_backend_value(ctx, storage_cpu.state0)
-    equations = _adapt_backend_value(ctx, storage_cpu.equations)
-    variable_definitions = _adapt_backend_value(ctx, storage_cpu.variable_definitions)
+    function adapt_variable_definitions(definitions)
+        adapted = adapt_backend_value(ctx, definitions)
+        plan = secondary_variable_evaluation_plan(
+            model, adapted.secondary_variables)
+        contents = data(adapted)
+        if contents isa NamedTuple
+            contents = merge(contents,
+                (secondary_variable_evaluation_plan = plan,))
+        else
+            contents = copy(contents)
+            contents[:secondary_variable_evaluation_plan] = plan
+        end
+        return JutulStorage(contents)
+    end
+
+    function state_references(state, definitions)
+        return (; (key => state[key] for key in keys(definitions))...)
+    end
+
+    state = adapt_backend_value(ctx, storage_cpu.state)
+    state0 = adapt_backend_value(ctx, storage_cpu.state0)
+    equations = adapt_backend_value(ctx, storage_cpu.equations)
+    variable_definitions = adapt_variable_definitions(
+        storage_cpu.variable_definitions)
 
     converted = OrderedDict{Symbol, Any}()
     for (key, value) in pairs(data(storage_cpu))
@@ -504,15 +594,16 @@ function _adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
                    :variable_definitions, :primary_variables, :parameters, :views)
             continue
         end
-        converted[key] = _adapt_backend_value(ctx, value)
+        converted[key] = adapt_backend_value(ctx, value)
     end
     converted[:state] = state
     converted[:state0] = state0
     converted[:equations] = equations
     converted[:variable_definitions] = variable_definitions
-    converted[:primary_variables] = _state_references(
+    converted[:primary_variables] = state_references(
         state, variable_definitions.primary_variables)
-    converted[:parameters] = _state_references(state, variable_definitions.parameters)
+    converted[:parameters] = state_references(
+        state, variable_definitions.parameters)
     if !isnothing(lsys)
         converted[:LinearizedSystem] = lsys
     end
@@ -549,15 +640,15 @@ Base.@noinline function transfer_to_backend(sim::Simulator,
         group_execution = missing)
     Base.@nospecialize sim
     if !ismissing(group_execution)
-        sim = _set_transfer_group_execution(sim, group_execution)
+        sim = set_transfer_group_execution(sim, group_execution)
     end
     model_cpu = sim.model
-    model_cpu isa SimulationModel || return _transfer_multimodel_to_backend(sim, ctx)
+    model_cpu isa SimulationModel || return transfer_multimodel_to_backend(sim, ctx)
     storage_cpu = sim.storage
     model = Adapt.adapt(ctx, model_cpu)
 
     lsys = Adapt.adapt(ctx, storage_cpu.LinearizedSystem)
-    storage = _adapt_simulation_storage(ctx, storage_cpu, model, lsys)
+    storage = adapt_simulation_storage(ctx, storage_cpu, model, lsys)
     data(storage)[:views] = setup_equations_and_primary_variable_views(
         storage, model, lsys.r_buffer, lsys.dx_buffer
     )
@@ -566,28 +657,30 @@ Base.@noinline function transfer_to_backend(sim::Simulator,
     return Simulator(sim.executor, model, storage)
 end
 
-function _execution_for_submodel(policy, key, model)
-    mode = if policy isa Function
-        policy(key, model)
-    elseif policy isa AbstractDict || policy isa NamedTuple
-        get(policy, key, get(policy, :default, SolveFullyOnDevice))
-    else
-        throw(ArgumentError("group_execution must be a function or keyed collection"))
-    end
-    mode isa DeviceExecutionMode || throw(ArgumentError(
-        "Execution policy for $key must be a DeviceExecutionMode, got $(typeof(mode))"))
-    return mode
-end
-
-Base.@noinline function _set_transfer_group_execution(sim::Simulator, policy)
+Base.@noinline function set_transfer_group_execution(sim::Simulator, policy)
     Base.@nospecialize sim policy
+    function execution_for_submodel(key, submodel)
+        mode = if policy isa Function
+            policy(key, submodel)
+        elseif policy isa AbstractDict || policy isa NamedTuple
+            get(policy, key, get(policy, :default, SolveFullyOnDevice))
+        else
+            throw(ArgumentError(
+                "group_execution must be a function or keyed collection"))
+        end
+        mode isa DeviceExecutionMode || throw(ArgumentError(
+            "Execution policy for $key must be a DeviceExecutionMode, " *
+            "got $(typeof(mode))"))
+        return mode
+    end
+
     model = sim.model
     model isa MultiModel || throw(ArgumentError(
         "Per-group execution policies require a MultiModel simulator"))
     keys_m = collect(submodels_symbols(model))
     old_groups = isnothing(model.groups) ? ones(Int, length(keys_m)) : model.groups
     modes_by_key = map(keys_m) do key
-        _execution_for_submodel(policy, key, model[key])
+        execution_for_submodel(key, model[key])
     end
 
     # Split existing groups only when their members have different execution
@@ -615,7 +708,7 @@ Base.@noinline function _set_transfer_group_execution(sim::Simulator, policy)
     return Simulator(sim.executor, rebuilt, sim.storage)
 end
 
-function _transfer_multimodel_to_backend(sim::Simulator,
+function transfer_multimodel_to_backend(sim::Simulator,
         ctx::KernelAbstractionsContext)
     model_cpu = sim.model
     model_cpu isa MultiModel || throw(ArgumentError(
@@ -637,7 +730,7 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     # groups even when the reservoir already uses CSR. Rebuild only the
     # sparsity/alignment copy on the CPU so every backend block has static CSR
     # ordering before any arrays are transferred.
-    model_setup = _cpu_csr_model(model_cpu)
+    model_setup = cpu_csr_model(model_cpu)
     setup_data = OrderedDict{Symbol, Any}(pairs(data(deepcopy(storage_cpu))))
     storage_setup = JutulStorage(setup_data)
     setup_linearized_system!(storage_setup, model_setup)
@@ -658,7 +751,7 @@ function _transfer_multimodel_to_backend(sim::Simulator,
         if key in model_keys || key in ignored
             continue
         end
-        converted[key] = _adapt_backend_value(ctx, value)
+        converted[key] = adapt_backend_value(ctx, value)
     end
 
     state = JutulStorage()
@@ -666,7 +759,7 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     for key in model_keys
         submodel = model[key]
         subcontext = submodel.context
-        substorage = _adapt_simulation_storage(
+        substorage = adapt_simulation_storage(
             subcontext, storage_setup[key], submodel)
         converted[key] = substorage
         state[key] = substorage.state
@@ -675,7 +768,7 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     converted[:state] = state
     converted[:state0] = state0
     converted[:LinearizedSystem] = lsys
-    converted[:cross_terms] = [_adapt_backend_value(ctx, ct_s)
+    converted[:cross_terms] = [adapt_backend_value(ctx, ct_s)
         for ct_s in storage_setup.cross_terms]
     if !isempty(host_keys)
         converted[:host_evaluation] = HostEvaluationStorage(
@@ -694,7 +787,7 @@ function _transfer_multimodel_to_backend(sim::Simulator,
     return Simulator(sim.executor, model, storage)
 end
 
-@kernel function _ka_csr_mul_kernel!(y, nzval, colval, rowptr, x, alpha, beta)
+@kernel function ka_csr_mul_kernel!(y, nzval, colval, rowptr, x, alpha, beta)
     row = @index(Global)
     value_row = zero(eltype(y))
     @inbounds for pos in rowptr[row]:(rowptr[row + 1] - 1)
@@ -706,7 +799,7 @@ end
 function LinearAlgebra.mul!(y::AbstractVector,
         A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, Nothing, B},
         x::AbstractVector, alpha::Number, beta::Number) where {Tv, Ti, V, I, R, B<:KernelAbstractions.Backend}
-    kernel! = _ka_csr_mul_kernel!(A.backend)
+    kernel! = ka_csr_mul_kernel!(A.backend)
     event = kernel!(y, A.nzval, A.colval, A.rowptr, x, alpha, beta; ndrange = size(A, 1))
     isnothing(event) || wait(event)
     return y

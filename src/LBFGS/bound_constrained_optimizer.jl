@@ -103,7 +103,7 @@ function optimize_bound_constrained(
         output_hessian = false,
         history = nothing
     )
-    
+
     # Negate f if we are maximizing
     obj_sign = 1
     if maximize
@@ -170,7 +170,7 @@ function optimize_bound_constrained(
     # Print info for iteration 0
     info = update_info!(nothing; obj_info = (v = obj_sign * v0, pg = norm(g0, Inf), n_active = 0))
     print_info_step(info)
-    
+
     v, u, g = v0, copy(u0), copy(g0)
     n_active = 0
     success = false
@@ -250,7 +250,7 @@ function optimize_bound_constrained(
             if lbfgs_require_wolfe
                 do_update = do_update && lsinfo.flag > 0
             end
-            
+
             if do_update
                 # If any of the gradient entries are not defined, set difference to zero
                 dg[.!isfinite.(dg)] .= 0
@@ -271,7 +271,7 @@ function optimize_bound_constrained(
         end
         obj_info = (v = obj_sign * v, pg = norm(pg, Inf), n_active = n_active)
         info = update_info!(info; obj_info = obj_info, qp_info = qpinfo, ls_info = lsinfo, tr_info = tr_info)
-        
+
         # Check stopping criteria
         stop_flags[:grad] = norm(pg, Inf) < stop_tols.grad
         stop_flags[:obj] = abs(v) < stop_tols.obj
@@ -280,10 +280,10 @@ function optimize_bound_constrained(
         stop_flags[:ls_fail] = !ls_success
         # Reset for next iteration
         v0, u0, g0 = v, copy(u), copy(g)
-        
+
         print_info_step(info)
     end
-    
+
     if scale
         u = u .* (ub .- lb) .+ lb
     end

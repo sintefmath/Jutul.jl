@@ -683,8 +683,7 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
             evaluation_cross_term = host.model.cross_terms[index].cross_term
             evaluation_cross_term_storage = host.storage.cross_terms[index]
         end
-        local_forces = isnothing(host) ?
-            forces_for_backend(forces) : forces_for_host(forces)
+        local_forces = forces_for_evaluation(forces, host)
         force_t = local_forces[target]
         apply_forces_to_cross_term!(evaluation_cross_term_storage,
             evaluation_model, evaluation_storage, evaluation_cross_term,

@@ -2,6 +2,83 @@ using Test
 using Jutul
 using KernelAbstractions
 using SparseArrays
+import Jutul: secondary_variable_evaluation_plan
+
+@test :secondary_variable_evaluation_plan ∉ names(Jutul)
+
+struct SecondaryPlanA end
+struct SecondaryPlanB end
+struct SecondaryPlanC end
+struct SecondaryPlanD end
+
+struct SecondaryPlanTestModel{C, P, S, R}
+    context::C
+    primary_variables::P
+    secondary_variables::S
+    parameters::R
+end
+
+Jutul.get_dependencies(::SecondaryPlanA, model::SecondaryPlanTestModel) = (:X,)
+Jutul.get_dependencies(::SecondaryPlanB, model::SecondaryPlanTestModel) = (:A,)
+Jutul.get_dependencies(::SecondaryPlanC, model::SecondaryPlanTestModel) = (:X,)
+Jutul.get_dependencies(::SecondaryPlanD, model::SecondaryPlanTestModel) = (:B, :C)
+Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanA) = 7
+Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanB) = 7
+Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanC) = 3
+Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanD) = 3
+
+function Jutul.update_secondary_variable!(target, ::SecondaryPlanA,
+        model::SecondaryPlanTestModel, state, ix)
+    for i in ix
+        target[i] = state.X[i] + 1
+    end
+end
+
+function Jutul.update_secondary_variable!(target, ::SecondaryPlanB,
+        model::SecondaryPlanTestModel, state, ix)
+    for i in ix
+        target[i] = 2*state.A[i]
+    end
+end
+
+function Jutul.update_secondary_variable!(target, ::SecondaryPlanC,
+        model::SecondaryPlanTestModel, state, ix)
+    for i in ix
+        target[i] = state.X[i] - 1
+    end
+end
+
+function Jutul.update_secondary_variable!(target, ::SecondaryPlanD,
+        model::SecondaryPlanTestModel, state, ix)
+    for i in ix
+        target[i] = state.B[i] + state.C[i]
+    end
+end
+
+@testset "Secondary variable dependency levels" begin
+    variables = (B = SecondaryPlanB(), A = SecondaryPlanA(),
+        D = SecondaryPlanD(), C = SecondaryPlanC())
+    model = SecondaryPlanTestModel(
+        KernelAbstractionsContext(CPU(); workgroupsize = 4),
+        (X = nothing,), variables, NamedTuple())
+    plan = secondary_variable_evaluation_plan(model)
+    @test plan.levels == ((:A, :C), (:B,), (:D,))
+    @test plan.batches == ((7, 3), (7,), (3,))
+
+    state = (
+        X = collect(1.0:7.0),
+        A = zeros(7),
+        B = zeros(7),
+        C = zeros(3),
+        D = zeros(3)
+    )
+    Jutul.update_secondary_variables_state!(
+        state, model, variables, plan)
+    @test state.A == state.X .+ 1
+    @test state.B == 2 .* state.A
+    @test state.C == state.X[1:3] .- 1
+    @test state.D == state.B[1:3] .+ state.C
+end
 
 @testset "KernelAbstractions context" begin
     for use_manual in (true, false)
@@ -12,9 +89,13 @@ using SparseArrays
         )
         state0 = setup_state(model, Dict(:XVar => 0.0))
         cpu_simulator = Simulator(model, state0 = state0)
+        @test !haskey(cpu_simulator.storage.variable_definitions,
+            :secondary_variable_evaluation_plan)
         simulator = transfer_to_backend(cpu_simulator, CPU())
 
         @test simulator.model.context isa KernelAbstractionsContext
+        @test haskey(simulator.storage.variable_definitions,
+            :secondary_variable_evaluation_plan)
         @test simulator.model.primary_variables isa NamedTuple
         @test simulator.storage.primary_variables.XVar === simulator.storage.state.XVar
         @test simulator.storage.LinearizedSystem.jac_buffer ===

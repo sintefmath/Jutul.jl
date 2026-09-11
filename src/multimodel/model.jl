@@ -1098,8 +1098,7 @@ function update_after_step!(storage, model::MultiModel, dt, forces; targets = su
     for key in targets
         host = host_evaluation_entry(storage, key)
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
-        local_forces = isnothing(host) ?
-            forces_for_backend(forces) : forces_for_host(forces)
+        local_forces = forces_for_evaluation(forces, host)
         report[key] = update_after_step!(
             substorage, submodel, dt, local_forces[key]; kwarg...)
         synchronize_host_submodel_to_backend!(storage, model, key)
@@ -1120,8 +1119,7 @@ function update_before_step!(storage, model::MultiModel, dt, forces; targets = s
             outer_storage = storage.host_evaluation.storage
             outer_model = storage.host_evaluation.model
         end
-        local_forces = isnothing(host) ?
-            forces_for_backend(forces) : forces_for_host(forces)
+        local_forces = forces_for_evaluation(forces, host)
         s, m = submodel_evaluation_pair(storage, model, key)
         update_before_step_multimodel!(
             outer_storage, outer_model, m, dt, local_forces, key; kwarg...)
@@ -1146,8 +1144,7 @@ end
 function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
     for key in targets
         host = host_evaluation_entry(storage, key)
-        local_forces = isnothing(host) ?
-            forces_for_backend(forces) : forces_for_host(forces)
+        local_forces = forces_for_evaluation(forces, host)
         subforce = local_forces[key]
         if !isnothing(subforce)
             substorage, submodel = submodel_evaluation_pair(storage, model, key)
@@ -1160,6 +1157,8 @@ end
 
 forces_for_host(forces) = forces
 forces_for_backend(forces) = forces
+forces_for_evaluation(forces, ::Nothing) = forces_for_backend(forces)
+forces_for_evaluation(forces, ::Any) = forces_for_host(forces)
 
 function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
     for key in targets
