@@ -160,6 +160,16 @@ end
     @test collect(simulator.model.group_execution) ==
         [SolveFullyOnDevice, AssembleOnDevice]
     @test simulator.storage.host_evaluation.keys == (:B,)
+
+    adjoint_source = MultiModel((A = model_a, B = model_b), groups = [1, 2],
+        group_execution = [SolveFullyOnDevice, AssembleOnDevice])
+    adjoint_model = Jutul.adjoint_model_copy(
+        adjoint_source;
+        context = DefaultContext()
+    )
+    @test isnothing(adjoint_model.groups)
+    @test only(adjoint_model.group_execution) == SolveFullyOnDevice
+
     dt = 1.0
     Jutul.update_before_step!(simulator, dt, forces; time = 0.0)
     Jutul.update_state_dependents!(simulator.storage, simulator.model, dt, forces;
