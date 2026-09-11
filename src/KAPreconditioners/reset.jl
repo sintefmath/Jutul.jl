@@ -92,7 +92,7 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
 end
 
 function memory_reset!(H::AMGHierarchy{Tv,Ti}, A::StaticSparsityMatrixCSR) where {Tv,Ti}
-    matrix_backend(A) === H.backend ||
+    same_backend(matrix_backend(A), H.backend) ||
         throw(ArgumentError("matrix and hierarchy must use the same backend"))
     size(A) == size(H) || throw(DimensionMismatch("matrix and hierarchy sizes differ"))
     matrix_nonzeros(A) == matrix_nonzeros(H.levels[1].A) ||
@@ -137,7 +137,8 @@ function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol
         throw(ArgumentError("reuse must be :memory, :sparsity, :operators, or :none"))
     if reuse in (:operators, :sparsity)
         same_pattern(H, A) || throw(ArgumentError("reuse=$reuse requires an unchanged CSR pattern"))
-        matrix_backend(A) === H.backend || throw(ArgumentError("matrix and hierarchy must use the same backend"))
+        same_backend(matrix_backend(A), H.backend) ||
+            throw(ArgumentError("matrix and hierarchy must use the same backend"))
         return numeric_reset!(H, A, reuse == :sparsity)
     end
     reuse == :memory && return memory_reset!(H, A)
@@ -176,4 +177,3 @@ function resetup_amg!(H::AMGHierarchy{Tv,Ti}, A::SparseMatrixCSC,
 end
 
 resetup_amg!(H::AMGHierarchy, A; reuse::Symbol=:operators) = resetup_amg!(H, A, reuse)
-

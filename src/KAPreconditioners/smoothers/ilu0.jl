@@ -224,7 +224,8 @@ end
 
 function setup_smoother(A::StaticSparsityMatrixCSR, config::ILU0; reuse=nothing)
     matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("ILU0 requires a square matrix"))
-    if reuse isa ILU0State && same_smoother_pattern(reuse, A)
+    if reuse isa ILU0State && same_backend(reuse.backend, matrix_backend(A)) &&
+       same_smoother_pattern(reuse, A)
         reuse.config = config
         return update_smoother!(reuse, A)
     end
@@ -244,7 +245,8 @@ end
 
 function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU; reuse=nothing)
     matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("DILU requires a square matrix"))
-    if reuse isa DILUState && same_smoother_pattern(reuse, A)
+    if reuse isa DILUState && same_backend(reuse.backend, matrix_backend(A)) &&
+       same_smoother_pattern(reuse, A)
         reuse.config = config
         return update_smoother!(reuse, A)
     end
@@ -316,7 +318,7 @@ function apply!(x::AbstractVector, state::Union{ILU0State,DILUState},
                 b::AbstractVector)
     length(x) == state.n || throw(DimensionMismatch())
     length(b) == state.n || throw(DimensionMismatch())
-    KernelAbstractions.get_backend(x) === state.backend ||
+    same_backend(KernelAbstractions.get_backend(x), state.backend) ||
         throw(ArgumentError("output and smoother must use the same backend"))
     ilu_solve!(x, state, b)
 end
@@ -359,4 +361,3 @@ function update_level_smoother!(state::Union{ILU0State,DILUState}, A::StaticSpar
     state.config = options.smoother
     update_smoother!(state, A)
 end
-

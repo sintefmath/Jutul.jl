@@ -123,6 +123,34 @@ end
     end
 end
 
+@testset "KernelAbstractions CPU backend compatibility" begin
+    # CPU(static=true) controls kernel scheduling, but it uses the same Array
+    # storage as the default CPU(static=false) backend inferred from `zeros`.
+    # Smoother and AMG reuse must therefore accept matrices and vectors from
+    # either CPU variant.
+    A = poisson_2d(4)
+    ordinary = csr_matrix(A)
+    static_backend = KernelAbstractions.CPU(; static = true)
+    static_matrix = csr_matrix(
+        copy(ordinary.rowptr), copy(ordinary.colval), copy(ordinary.nzval),
+        size(ordinary, 1), size(ordinary, 2); backend = static_backend)
+    b = ones(size(A, 1))
+
+    for config in (SPAI0(), ILU0(), DILU())
+        smoother = setup_smoother(static_matrix, config)
+        @test update_smoother!(smoother, ordinary) === smoother
+        x = zeros(size(A, 1))
+        KAPreconditioners.apply!(x, smoother, b)
+        @test all(isfinite, x)
+    end
+
+    hierarchy = setup_amg(static_matrix, AMGOptions(coarse_size = 4))
+    @test resetup_amg!(hierarchy, ordinary) === hierarchy
+    x = zeros(size(A, 1))
+    KAPreconditioners.apply!(x, hierarchy, b)
+    @test norm(b - A*x) < norm(b)
+end
+
 @testset "Jutul simulation with KA AMG" begin
     grid = CartesianMesh((3, 3), (1.0, 1.0))
     model = SimulationModel(DiscretizedDomain(grid), SimpleHeatSystem())

@@ -1018,7 +1018,7 @@ end
 
 @inline function buffer_backend_matches(buffer, backend)
     try
-        typeof(KernelAbstractions.get_backend(buffer)) === typeof(backend)
+        same_backend(KernelAbstractions.get_backend(buffer), backend)
     catch
         false
     end

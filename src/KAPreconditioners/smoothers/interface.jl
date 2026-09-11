@@ -45,7 +45,7 @@ function same_smoother_pattern(state, A::StaticSparsityMatrixCSR)
 end
 
 function require_same_smoother_pattern(state, A::StaticSparsityMatrixCSR)
-    matrix_backend(A) === state.backend ||
+    same_backend(matrix_backend(A), state.backend) ||
         throw(ArgumentError("smoother and matrix must use the same backend"))
     same_storage = A.rowptr === state.rowptr && A.colval === state.colval &&
                    matrix_nonzeros(A) == length(state.host_colval)
@@ -99,7 +99,7 @@ function smooth!(x::AbstractVector, state::AbstractSmootherState,
                  zero_initial::Bool=false)
     steps > 0 || throw(ArgumentError("smoothing steps must be positive"))
     check_smoother_dimensions(x, A, b)
-    matrix_backend(A) === state.backend ||
+    same_backend(matrix_backend(A), state.backend) ||
         throw(ArgumentError("smoother and matrix must use the same backend"))
     if zero_initial
         fill_backend!(x, zero(eltype(x)), matrix_backend(A), matrix_block_size(A))
@@ -130,5 +130,4 @@ function Base.:*(state::AbstractSmootherState, b::AbstractVector)
     x = similar(b)
     apply!(x, state, b)
 end
-
 

@@ -80,7 +80,8 @@ end
 function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0(); reuse=nothing) where Tv
     matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("SPAI0 requires a square matrix"))
     compatible = reuse isa SPAI0State && reuse.n == matrix_nrows(A) &&
-                 reuse.backend === matrix_backend(A) && eltype(reuse.diagonal) === Tv
+                 same_backend(reuse.backend, matrix_backend(A)) &&
+                 eltype(reuse.diagonal) === Tv
     if compatible
         reuse.config = config
         return update_smoother!(reuse, A)
@@ -113,7 +114,7 @@ setup_smoother(A::SparseMatrixCSC, config::SPAI0=SPAI0(); reuse=nothing) =
 function update_smoother!(state::SPAI0State, A::StaticSparsityMatrixCSR)
     length(state.diagonal) == matrix_nrows(A) ||
         throw(ArgumentError("SPAI0 state size does not match the matrix"))
-    matrix_backend(A) === state.backend ||
+    same_backend(matrix_backend(A), state.backend) ||
         throw(ArgumentError("smoother and matrix must use the same backend"))
     kernel! = spai0_setup_kernel!(matrix_backend(A), matrix_block_size(A))
     kernel!(state.diagonal, A.rowptr, A.colval, A.nzval, state.config.damping,
@@ -126,7 +127,7 @@ function apply!(x::AbstractVector, state::SPAI0State, b::AbstractVector)
     length(b) == length(state.diagonal) || throw(DimensionMismatch())
     ensure_smoother_work!(state, b)
     backend = state.backend
-    KernelAbstractions.get_backend(x) === backend ||
+    same_backend(KernelAbstractions.get_backend(x), backend) ||
         throw(ArgumentError("output and smoother must use the same backend"))
     kernel! = spai0_apply_kernel!(backend, state.block_size)
     kernel!(x, b, state.diagonal, length(x); ndrange=length(x))
@@ -195,4 +196,3 @@ function update_level_smoother!(state::SPAI0State, A::StaticSparsityMatrixCSR, o
     state.config = options.smoother
     update_smoother!(state, A)
 end
-
