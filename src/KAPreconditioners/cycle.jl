@@ -94,6 +94,7 @@ function vcycle!(x, b, H::AMGHierarchy, l::Int;
     end
     prolong!(x, level.P, coarse_correction, H.backend, H.block_size)
     if H.options.cycle == :V
+        # ILU-family smoothers fuse residual formation and correction here.
         smooth_result!(x, level.A, b, level.smoother, steps)
     else
         smooth_level!(x, level.A, b, level.smoother, steps)
@@ -165,5 +166,3 @@ end
 
 solve!(x::AbstractVector, H::AMGHierarchy, A, b::AbstractVector; kwargs...) =
     (size(A) == size(H) || throw(DimensionMismatch()); solve!(x, H, b; kwargs...))
-
-

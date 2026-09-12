@@ -529,6 +529,24 @@ end
     end
 end
 
+@testset "fused ILU post-smoothing" begin
+    A = poisson_2d(5)
+    initial = fill(0.25, size(A, 1))
+    rhs = ones(size(A, 1))
+    for backend in (KernelAbstractions.CPU(), JLBackend())
+        C = csr_matrix(A; backend=backend)
+        b = backend isa KernelAbstractions.CPU ? rhs : JLArray(rhs)
+        for config in (ILU0(2), DILU(2))
+            state = setup_smoother(C, config)
+            reference = backend isa KernelAbstractions.CPU ? copy(initial) : JLArray(initial)
+            fused = copy(reference)
+            smooth!(reference, state, C, b; steps=2)
+            KAPreconditioners.smooth_result!(fused, C, b, state, 2)
+            @test Array(fused) ≈ Array(reference)
+        end
+    end
+end
+
 @testset "DILU pivot fallback" begin
     # The second recursive DILU pivot is exactly zero. Falling back to the
     # original diagonal must keep both host and accelerator states finite.
