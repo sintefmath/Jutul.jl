@@ -817,11 +817,71 @@ end
 
 function LinearAlgebra.mul!(y::AbstractVector,
         A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, B},
-        x::AbstractVector, alpha::Number, beta::Number) where {Tv, Ti, V, I, R, B<:KernelAbstractions.Backend}
+        x::AbstractVector, alpha::Number, beta::Number) where {
+            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
     kernel! = ka_csr_mul_kernel!(A.backend)
     event = kernel!(y, A.nzval, A.colval, A.rowptr, x, alpha, beta; ndrange = size(A, 1))
     isnothing(event) || wait(event)
     return y
+end
+
+mutable struct HostBackendFactorization{F, V}
+    factorization::F
+    right_hand_side::V
+    solution::V
+end
+
+function host_backend_factorization(matrix::StaticSparsityMatrixCSR)
+    host_matrix = KAPreconditioners.sparse_matrix(matrix)
+    factorization = lu(host_matrix)
+    scalar_type = eltype(host_matrix)
+    right_hand_side = Vector{scalar_type}(undef, size(host_matrix, 1))
+    solution = similar(right_hand_side)
+    return HostBackendFactorization(
+        factorization, right_hand_side, solution)
+end
+
+function factorize_linear_system(constructor,
+        matrix::StaticSparsityMatrixCSR{
+            Tv, Ti, V, I, R, B}) where {
+            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+    return host_backend_factorization(matrix)
+end
+
+function refactorize_linear_system!(update!,
+        factorization::HostBackendFactorization,
+        matrix::StaticSparsityMatrixCSR{
+            Tv, Ti, V, I, R, B}) where {
+            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+    factorization.factorization = lu(KAPreconditioners.sparse_matrix(matrix))
+    return factorization
+end
+
+function transfer_csr_to_backend(
+        reference::StaticSparsityMatrixCSR{
+            Tv, Ti, V, I, R, B},
+        matrix::StaticSparsityMatrixCSR) where {
+            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+    values = similar(reference.nzval, eltype(matrix.nzval), length(matrix.nzval))
+    columns = similar(reference.colval, eltype(matrix.colval), length(matrix.colval))
+    rows = similar(reference.rowptr, eltype(matrix.rowptr), length(matrix.rowptr))
+    copyto!(values, matrix.nzval)
+    copyto!(columns, matrix.colval)
+    copyto!(rows, matrix.rowptr)
+    return StaticSparsityMatrixCSR(
+        values, columns, rows, size(matrix, 1), size(matrix, 2),
+        reference.backend; nthreads = reference.nthreads,
+        minbatch = reference.minbatch, thread_type = reference.thread_type)
+end
+
+function LinearAlgebra.ldiv!(output::AbstractVector,
+        factorization::HostBackendFactorization,
+        right_hand_side::AbstractVector)
+    copyto!(factorization.right_hand_side, right_hand_side)
+    ldiv!(factorization.solution, factorization.factorization,
+        factorization.right_hand_side)
+    copyto!(output, factorization.solution)
+    return output
 end
 
 # Initial implementation keeps the direct factorization on the CPU. Assembly,

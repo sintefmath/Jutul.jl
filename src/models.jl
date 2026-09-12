@@ -1060,7 +1060,9 @@ function get_output_state(storage, model)
     D = JUTUL_OUTPUT_TYPE()
     for k in model.output_variables
         if haskey(s0, k)
-            D[k] = copy(s0[k])
+            value = s0[k]
+            host_value = backend_to_host(model.context, value)
+            D[k] = host_value === value ? copy(value) : host_value
         end
     end
     return D

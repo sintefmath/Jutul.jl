@@ -122,9 +122,7 @@ function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
         buf_b, = buffers[i+1]
         mul!(buf_b, D[i], Δx)
         # now buf_b = D*Δx
-        @batch minbatch=1000 for j in 1:n
-            @inbounds buf_b[j] -= b_i[j]
-        end
+        buf_b .-= b_i
         y_i = view(y, (offset+1):(offset+n))
         ldiv!(y_i, E[i], buf_b)
         offset += length(b_i)

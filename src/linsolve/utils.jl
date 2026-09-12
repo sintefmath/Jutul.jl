@@ -26,6 +26,15 @@ function IterativeSolverConfig(;
         kwarg...
     )
     @assert precond_side in (:left, :right)
+    if ismissing(absolute_tolerance)
+        absolute_tolerance = nothing
+    end
+    if ismissing(relative_tolerance)
+        relative_tolerance = nothing
+    end
+    if ismissing(relaxed_relative_tolerance)
+        relaxed_relative_tolerance = nothing
+    end
     IterativeSolverConfig(
         relative_tolerance,
         absolute_tolerance,
@@ -97,14 +106,20 @@ block_dims(A::AbstractVector{T}) where T<:StaticVector = length(T)
 
 Unsafely reinterpret v as a n length vector of value type Vt
 """
-function unsafe_reinterpret(Vt, v, n)
+function unsafe_reinterpret(Vt::Type, v::Array, n)
     ptr = Base.unsafe_convert(Ptr{Vt}, v)
     return Base.unsafe_wrap(Array, ptr, n)::Vector{Vt}
 end
 
+function unsafe_reinterpret(Vt::Type, v, n)
+    out = reinterpret(Vt, v)
+    length(out) == n || throw(DimensionMismatch(
+        "reinterpreted array has $(length(out)) entries, expected $n"))
+    return out
+end
+
 function unsafe_reinterpret(::Val{Vt}, v, n) where Vt
-    ptr = Base.unsafe_convert(Ptr{Vt}, v)
-    return Base.unsafe_wrap(Array, ptr, n)::Vector{Vt}
+    return unsafe_reinterpret(Vt, v, n)
 end
 
 function executor_index_to_global(executor, index, row_or_column::Symbol)

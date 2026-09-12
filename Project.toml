@@ -5,7 +5,6 @@ authors = ["Olav Møyner <olav.moyner@gmail.com>"]
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -40,7 +39,9 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [weakdeps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 AMGCLWrap = "4f76b812-4ba5-496d-b042-d70715554288"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 Gmsh = "705231aa-382f-11e9-3f0c-b7cb4346fdeb"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
@@ -48,25 +49,30 @@ KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LBFGSB = "5be7bae1-8223-5378-bac3-9e7378a2f6e6"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [extensions]
+JutulKAPreconditionersAMDGPUExt = "AMDGPU"
 JutulAMGCLWrapExt = "AMGCLWrap"
+JutulKAPreconditionersCUDAExt = "CUDA"
 JutulGLMakieExt = "GLMakie"
 JutulGmshExt = "Gmsh"
 JutulHYPREExt = "HYPRE"
 JutulKaHyParExt = "KaHyPar"
 JutulLBFGSBExt = "LBFGSB"
 JutulMakieExt = "Makie"
+JutulKAPreconditionersMetalExt = "Metal"
 JutulWriteVTKExt = "WriteVTK"
 JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 
 [compat]
+AMDGPU = "1, 2"
 Adapt = "4"
 AMGCLWrap = "=0.3.2"
-AlgebraicMultigrid = "0.5.1"
 Crayons = "4.1.1"
+CUDA = "5"
 DataStructures = "0.18.13"
 DifferentiationInterface = "0.7.0"
 ExprTools = "0.1.8"
@@ -84,6 +90,7 @@ MAT = "0.10.3, 0.11, 0.12"
 Makie = "0.24.14"
 MappedArrays = "0.4.1"
 Metis = "1.1.0"
+Metal = "1"
 OrderedCollections = "1.4.1"
 Polyester = "0.6.11, 0.7.3"
 Polynomials = "3 - 4"
@@ -104,6 +111,7 @@ CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 Gmsh = "705231aa-382f-11e9-3f0c-b7cb4346fdeb"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
+JLArrays = "27aeb0d3-9eb9-45fb-866b-73c2ecf80fcb"
 KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LBFGSB = "5be7bae1-8223-5378-bac3-9e7378a2f6e6"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
@@ -111,4 +119,4 @@ Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [targets]
-test = ["KaHyPar", "HYPRE", "LBFGSB"]
+test = ["KaHyPar", "HYPRE", "JLArrays", "LBFGSB"]
