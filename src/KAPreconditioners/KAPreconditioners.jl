@@ -8,6 +8,8 @@ using ..Jutul: StaticSparsityMatrixCSR, colvals, minbatch
 import ..Jutul: apply_ka_amg!, apply_ka_smoother!, setup_ka_amg,
     setup_ka_smoother, update_ka_amg!, update_ka_smoother!
 
+const CAN_RESIZE_SHARED_ARRAY = VERSION >= v"1.11"
+
 include("smoothers/types.jl")
 include("types.jl")
 include("csr.jl")

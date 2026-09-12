@@ -81,6 +81,50 @@ function level_schedule(rowptr::Vector{Ti}, colval::Vector{Ti}, n::Int;
     offsets, rows
 end
 
+function grouped_schedule(groups::Vector{Int}, n::Int; reverse::Bool=false)
+    number_of_groups = maximum(groups; init=0)
+    counts = zeros(Int, number_of_groups)
+    @inbounds for group in groups
+        counts[group] += 1
+    end
+    ordered_counts = reverse ? Base.reverse(counts) : counts
+    offsets = Vector{Int}(undef, number_of_groups + 1)
+    offsets[1] = 1
+    @inbounds for group in 1:number_of_groups
+        offsets[group + 1] = offsets[group] + ordered_counts[group]
+    end
+    cursor = copy(offsets)
+    rows = Vector{eltype(groups)}(undef, n)
+    @inbounds for i in 1:n
+        group = reverse ? number_of_groups + 1 - groups[i] : groups[i]
+        rows[cursor[group]] = i
+        cursor[group] += 1
+    end
+    offsets, rows
+end
+
+function greedy_row_coloring(rowptr::Vector{Ti}, colval::Vector{Ti}, n::Int) where Ti
+    colors = zeros(Int, n)
+    marks = zeros(Int, n + 1)
+    @inbounds for i in 1:n
+        for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
+            j = Int(colval[k])
+            if j != i && 1 <= j <= n
+                color = colors[j]
+                !iszero(color) && (marks[color] = i)
+            end
+        end
+        color = 1
+        while marks[color] == i
+            color += 1
+        end
+        colors[i] = color
+    end
+    lower_offsets, lower_rows = grouped_schedule(colors, n)
+    upper_offsets, upper_rows = grouped_schedule(colors, n; reverse=true)
+    colors, lower_offsets, lower_rows, upper_offsets, upper_rows
+end
+
 function ilu_symbolic(A::StaticSparsityMatrixCSR{Tv,Ti}) where {Tv,Ti}
     rowptr = host_prefix(A.rowptr, matrix_nrows(A) + 1)
     colval = host_prefix(A.colval, matrix_nonzeros(A))
@@ -128,20 +172,57 @@ end
                                             @Const(rowptr), @Const(colval),
                                             @Const(diagonal_positions),
                                             @Const(transpose_positions),
+                                            @Const(ordering),
                                             @Const(rows), first, count)
     q = @index(Global)
     if q <= count
         i = rows[first + q - 1]
-        diagonal = values[diagonal_positions[i]]
+        original_diagonal = values[diagonal_positions[i]]
+        diagonal = original_diagonal
         @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
             j = colval[k]
             opposite = transpose_positions[k]
-            if j < i && !iszero(opposite)
+            if ordering[j] < ordering[i] && !iszero(opposite)
                 diagonal -= values[k] * inverse_diagonal[j] * values[opposite]
             end
         end
-        inverse_diagonal[i] = inv(diagonal)
+        inverse_diagonal[i] = robust_inverse(diagonal, original_diagonal)
     end
+end
+
+@inline function robust_inverse(diagonal::Number, original::Number)
+    T = typeof(real(original))
+    scale = max(abs(original), one(T))
+    tolerance = sqrt(eps(T))*scale
+    pivot = if isfinite(diagonal) && abs(diagonal) > tolerance
+        diagonal
+    elseif isfinite(original) && abs(original) > tolerance
+        original
+    else
+        tolerance
+    end
+    inv(pivot)
+end
+
+@inline function finite_entries(value)
+    finite = true
+    @inbounds for entry in value
+        finite &= isfinite(entry)
+    end
+    finite
+end
+
+@inline function robust_inverse(diagonal, original)
+    candidate = inv(diagonal)
+    finite_entries(candidate) && return candidate
+    candidate = inv(original)
+    finite_entries(candidate) && return candidate
+    T = eltype(original)
+    scale = one(T)
+    @inbounds for entry in original
+        scale = max(scale, abs(entry))
+    end
+    inv(original + sqrt(eps(T))*scale*one(original))
 end
 
 @kernel function ilu0_lower_level_kernel!(work, @Const(rhs), @Const(factors),
@@ -178,6 +259,7 @@ end
 @kernel function dilu_lower_level_kernel!(work, @Const(rhs), @Const(values),
                                            @Const(inverse_diagonal),
                                            @Const(rowptr), @Const(colval),
+                                           @Const(ordering),
                                            @Const(rows), first, count)
     q = @index(Global)
     if q <= count
@@ -185,7 +267,7 @@ end
         value = rhs[i]
         @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
             j = colval[k]
-            j < i && (value -= values[k] * work[j])
+            ordering[j] < ordering[i] && (value -= values[k] * work[j])
         end
         @inbounds work[i] = inverse_diagonal[i] * value
     end
@@ -194,14 +276,15 @@ end
 @kernel function dilu_upper_level_kernel!(x, @Const(work), @Const(values),
                                            @Const(inverse_diagonal),
                                            @Const(rowptr), @Const(colval),
-                                           damping, @Const(rows), first, count)
+                                           @Const(ordering), damping,
+                                           @Const(rows), first, count)
     q = @index(Global)
     if q <= count
         i = rows[first + q - 1]
         correction = zero(eltype(x))
         @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
             j = colval[k]
-            j > i && (correction += values[k] * x[j])
+            ordering[j] > ordering[i] && (correction += values[k] * x[j])
         end
         @inbounds x[i] = damping * (work[i] - inverse_diagonal[i] * correction)
     end
@@ -251,17 +334,30 @@ function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU; reuse=nothing)
         return update_smoother!(reuse, A)
     end
     symbolic = ilu_symbolic(A)
+    backend = matrix_backend(A)
+    if backend isa KernelAbstractions.CPU
+        ordering = collect(1:matrix_nrows(A))
+        factor_offsets = symbolic.factor_offsets
+        factor_rows = symbolic.factor_rows
+        upper_offsets = symbolic.upper_offsets
+        upper_rows = symbolic.upper_rows
+    else
+        ordering, factor_offsets, factor_rows, upper_offsets, upper_rows =
+            greedy_row_coloring(symbolic.rowptr, symbolic.colval,
+                                matrix_nrows(A))
+    end
     values, inverse_diagonal = allocate_factor_storage(A)
     state = DILUState(inverse_diagonal, nothing, nothing, values,
                       A.rowptr, A.colval,
-                      backend_copy(matrix_backend(A), symbolic.diagonal),
-                      backend_copy(matrix_backend(A), symbolic.transpose),
-                      symbolic.factor_offsets,
-                      backend_copy(matrix_backend(A), symbolic.factor_rows),
-                      symbolic.upper_offsets,
-                      backend_copy(matrix_backend(A), symbolic.upper_rows),
+                      backend_copy(backend, symbolic.diagonal),
+                      backend_copy(backend, symbolic.transpose),
+                      backend_copy(backend, ordering),
+                      factor_offsets,
+                      backend_copy(backend, factor_rows),
+                      upper_offsets,
+                      backend_copy(backend, upper_rows),
                       symbolic.rowptr, symbolic.colval, config,
-                      matrix_backend(A), matrix_block_size(A), matrix_nrows(A))
+                      backend, matrix_block_size(A), matrix_nrows(A))
     update_smoother!(state, A)
 end
 
@@ -285,7 +381,7 @@ function update_smoother!(state::DILUState, A::StaticSparsityMatrixCSR)
     launch_levels!(kernel!, state.factor_offsets, state.factor_rows,
                     state.inverse_diagonal, state.values, state.rowptr,
                     state.colval, state.diagonal_positions,
-                    state.transpose_positions)
+                    state.transpose_positions, state.ordering)
     state
 end
 
@@ -338,11 +434,12 @@ function ilu_solve!(x, state::DILUState, b)
     lower! = dilu_lower_level_kernel!(state.backend, state.block_size)
     upper! = dilu_upper_level_kernel!(state.backend, state.block_size)
     launch_levels!(lower!, state.factor_offsets, state.factor_rows,
-                    state.work, b, state.values, state.inverse_diagonal,
-                    state.rowptr, state.colval)
+                   state.work, b, state.values, state.inverse_diagonal,
+                   state.rowptr, state.colval, state.ordering)
     launch_levels!(upper!, state.upper_offsets, state.upper_rows,
-                    x, state.work, state.values, state.inverse_diagonal,
-                    state.rowptr, state.colval, state.config.damping)
+                   x, state.work, state.values, state.inverse_diagonal,
+                   state.rowptr, state.colval, state.ordering,
+                   state.config.damping)
     x
 end
 

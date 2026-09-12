@@ -819,12 +819,18 @@ function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{T
     else
         1
     end
+    marker_count = nc * nscratch
     marker_storage = if isnothing(workspace)
-        Vector{Ti}(undef, nc * nscratch)
-    else
+        Vector{Ti}(undef, marker_count)
+    elseif CAN_RESIZE_SHARED_ARRAY
+        resize!(workspace.markers, marker_count)
+    elseif length(workspace.markers) == marker_count
         workspace.markers
+    else
+        # On Julia 1.10, reshape marks the backing Array as shared and it
+        # cannot subsequently be resized. Replace it when the size changes.
+        workspace.markers = Vector{Ti}(undef, marker_count)
     end
-    resize!(marker_storage, nc * nscratch)
     fill!(marker_storage, zero(Ti))
     markers = reshape(marker_storage, nc, nscratch)
     scratch = if isnothing(workspace)

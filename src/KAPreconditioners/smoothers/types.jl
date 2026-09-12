@@ -31,9 +31,10 @@ end
 """
     DILU(steps=1, damping=1.0)
 
-Diagonal ILU(0), implemented with level-scheduled factorization and triangular
-sweeps following Andersen et al. It stores inverse diagonal blocks instead of
-the complete ILU factors and is therefore the lower-memory ILU variant.
+Diagonal ILU(0), implemented with scheduled factorization and triangular
+sweeps following Andersen et al. Accelerator arrays use a graph-colored row
+ordering so that each color is processed in parallel with a bounded number of
+kernel launches. Host arrays retain the natural row ordering.
 """
 struct DILU <: AbstractSmoother
     steps::Int
@@ -75,7 +76,7 @@ mutable struct ILU0State{F,D,RP,CV,DP,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmoother
     n::Int
 end
 
-mutable struct DILUState{D,AV,RP,CV,DP,TP,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmootherState
+mutable struct DILUState{D,AV,RP,CV,DP,TP,O,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmootherState
     inverse_diagonal::D
     work::Any
     residual::Any
@@ -84,6 +85,7 @@ mutable struct DILUState{D,AV,RP,CV,DP,TP,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmoo
     colval::CV
     diagonal_positions::DP
     transpose_positions::TP
+    ordering::O
     factor_offsets::FO
     factor_rows::FF
     upper_offsets::UO
@@ -95,4 +97,3 @@ mutable struct DILUState{D,AV,RP,CV,DP,TP,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmoo
     block_size::Int
     n::Int
 end
-

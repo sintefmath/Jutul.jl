@@ -130,4 +130,3 @@ function Base.:*(state::AbstractSmootherState, b::AbstractVector)
     x = similar(b)
     apply!(x, state, b)
 end
-

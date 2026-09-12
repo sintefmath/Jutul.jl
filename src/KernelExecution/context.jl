@@ -43,6 +43,8 @@ function synchronize(ctx::KernelAbstractionsContext)
 end
 
 KernelAbstractions.get_backend(ctx::KernelAbstractionsContext) = ctx.backend
+is_cpu_backend(ctx::KernelAbstractionsContext) =
+    ctx.backend isa KernelAbstractions.CPU
 
 function Base.adjoint(ctx::KernelAbstractionsContext)
     return KernelAbstractionsContext(ctx.backend;

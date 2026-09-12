@@ -47,16 +47,20 @@ module JutulHYPREExt
     end
 
     function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
-        update_boomeramg!(preconditioner, J, r, ctx, executor, do_setup = true)
+        rebuild_boomeramg!(preconditioner, J, r, ctx, executor)
         return preconditioner
     end
 
     function Jutul.partial_update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
-        update_boomeramg!(preconditioner, J, r, ctx, executor, do_setup = false)
+        # BoomerAMG does not expose an operator-only refresh that leaves its
+        # coarse hierarchy consistent. Reassembling the fine matrix without a
+        # setup produces a stale preconditioner and substantially increases
+        # CPR iterations.
+        rebuild_boomeramg!(preconditioner, J, r, ctx, executor)
         return preconditioner
     end
 
-    function update_boomeramg!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor; do_setup = true)
+    function rebuild_boomeramg!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
         D = preconditioner.data
         if !haskey(D, :assembly_helper)
             D[:assembly_helper] = Jutul.generate_hypre_assembly_helper(J, executor)
@@ -75,9 +79,7 @@ module JutulHYPREExt
             J_h = transfer_matrix_to_hypre(J, D, executor)
         end
         D[:hypre_system] = (J_h, r_h, x_h)
-        if do_setup
-            HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
-        end
+        HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
     end
 
     function transfer_vector_to_hypre(r, D, executor)

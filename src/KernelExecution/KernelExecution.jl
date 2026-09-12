@@ -39,5 +39,5 @@ module KernelExecution
     include("context.jl")
     include("execution.jl")
 
-    export KernelAbstractionsContext
+    export KernelAbstractionsContext, is_cpu_backend
 end

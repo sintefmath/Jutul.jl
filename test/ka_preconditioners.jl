@@ -125,6 +125,37 @@ end
     end
 end
 
+@testset "AMG wrapper reuse modes refresh smoothers" begin
+    A = poisson_2d(12)
+    b = ones(size(A, 1))
+    context = DefaultContext()
+    preconditioner = AMGPreconditioner(:ruge_stuben;
+        coarse_size = 10,
+        reuse = :none,
+        reuse_partial = :operators)
+    Jutul.update_preconditioner!(preconditioner, A, b, context, nothing)
+
+    hierarchy = preconditioner.factor
+    old_levels = copy(hierarchy.levels)
+    old_smoother_values = [copy(level.smoother.factors) for level in old_levels]
+    B = copy(A)
+    nonzeros(B) .*= 1.1
+    Jutul.partial_update_preconditioner!(
+        preconditioner, B, b, context, nothing)
+
+    @test preconditioner.factor === hierarchy
+    @test all(hierarchy.levels[i].smoother === old_levels[i].smoother
+              for i in eachindex(old_levels))
+    @test all(old_smoother_values[i] != hierarchy.levels[i].smoother.factors
+              for i in eachindex(old_levels))
+
+    partial_levels = copy(hierarchy.levels)
+    Jutul.update_preconditioner!(preconditioner, A, b, context, nothing)
+    @test preconditioner.factor === hierarchy
+    @test all(hierarchy.levels[i].smoother !== partial_levels[i].smoother
+              for i in eachindex(partial_levels))
+end
+
 @testset "KernelAbstractions CPU backend compatibility" begin
     # CPU(static=true) controls kernel scheduling, but it uses the same Array
     # storage as the default CPU(static=false) backend inferred from `zeros`.
@@ -484,12 +515,32 @@ end
         host_state = setup_smoother(csr_matrix(A), config)
         host_x = zeros(size(A, 1))
         KAPreconditioners.apply!(host_x, host_state, ones(size(A, 1)))
-        @test Array(x) ≈ host_x
+        if config isa ILU0
+            @test Array(x) ≈ host_x
+        else
+            @test all(isfinite, Array(x))
+            @test norm(ones(size(A, 1)) - A*Array(x)) < norm(ones(size(A, 1)))
+        end
 
         fill!(x, 0.25)
         initial_residual = norm(ones(size(A, 1)) - A*Array(x))
         smooth!(x, state, C, b; steps=2)
         @test norm(ones(size(A, 1)) - A*Array(x)) < initial_residual
+    end
+end
+
+@testset "DILU pivot fallback" begin
+    # The second recursive DILU pivot is exactly zero. Falling back to the
+    # original diagonal must keep both host and accelerator states finite.
+    A = sparse([1, 1, 2, 2], [1, 2, 1, 2], ones(4), 2, 2)
+    for backend in (KernelAbstractions.CPU(), JLBackend())
+        C = csr_matrix(A; backend=backend)
+        state = setup_smoother(C, DILU())
+        @test all(isfinite, Array(state.inverse_diagonal))
+        rhs = backend isa KernelAbstractions.CPU ? ones(2) : JLArray(ones(2))
+        x = similar(rhs)
+        KAPreconditioners.apply!(x, state, rhs)
+        @test all(isfinite, Array(x))
     end
 end
 
@@ -531,8 +582,17 @@ end
         host_state = setup_smoother(C, config)
         host_x = fill(zero(BlockVector), n)
         KAPreconditioners.apply!(host_x, host_state, b)
-        @test Array(x) ≈ host_x
+        if config isa ILU0
+            @test Array(x) ≈ host_x
+        else
+            @test all(v -> all(isfinite, v), Array(x))
+        end
     end
+
+    singular = sparse([1, 1, 2, 2], [1, 2, 1, 2],
+        fill(Block(1.0I), 4), 2, 2)
+    state = setup_smoother(csr_matrix(singular; backend=JLBackend()), DILU())
+    @test all(v -> all(isfinite, v), Array(state.inverse_diagonal))
 end
 
 

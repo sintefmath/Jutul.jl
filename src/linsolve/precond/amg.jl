@@ -11,6 +11,7 @@ mutable struct AMGPreconditioner{O} <: JutulPreconditioner
     factor
     dim
     reuse::Symbol
+    reuse_partial::Symbol
 end
 
 function amg_coarsening(method::Symbol, theta)
@@ -47,7 +48,8 @@ function AMGPreconditioner(method = :hmis;
         theta_agg = 0.25,
         max_coarse = 50,
         coarse_size = max_coarse,
-        reuse::Symbol = :operators,
+        reuse::Symbol = :memory,
+        reuse_partial::Symbol = :operators,
         damping = 1.0,
         kwarg...)
     npre == npost || throw(ArgumentError(
@@ -72,7 +74,7 @@ function AMGPreconditioner(method = :hmis;
         cycle = cycle,
         kwarg...
     )
-    return AMGPreconditioner(options, nothing, nothing, reuse)
+    return AMGPreconditioner(options, nothing, nothing, reuse, reuse_partial)
 end
 
 function update_preconditioner!(amg::AMGPreconditioner, A, b, context, executor)
@@ -89,7 +91,7 @@ function partial_update_preconditioner!(amg::AMGPreconditioner,
         A, b, context, executor)
     isnothing(amg.factor) &&
         return update_preconditioner!(amg, A, b, context, executor)
-    update_ka_amg!(amg.factor, A, amg.reuse)
+    update_ka_amg!(amg.factor, A, amg.reuse_partial)
     return amg
 end
 
