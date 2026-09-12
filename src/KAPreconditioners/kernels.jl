@@ -134,8 +134,10 @@ end
     end
 end
 
-@kernel function update_p_kernel!(pv, @Const(prp), @Const(pcv), @Const(arp), @Const(acv),
-                                   @Const(av), @Const(cf), @Const(cmap), @Const(strong), n)
+@kernel function update_extended_i_p_kernel!(pv, @Const(prp), @Const(pcv),
+                                   @Const(arp), @Const(acv), @Const(av),
+                                   @Const(cf), @Const(cmap), @Const(strong),
+                                   rescale, n)
     i = @index(Global)
     if i <= n
         firstp, lastp = prp[i], prp[i+1] - 1
@@ -175,15 +177,106 @@ end
                         pv[pidx] = w
                         rowsum += w
                     end
-                    if !iszero(rowsum)
+                    if rescale && !iszero(rowsum)
                         for pidx in firstp:lastp
                             pv[pidx] /= rowsum
                         end
-                    else
+                    elseif iszero(rowsum)
                         v = one(eltype(pv)) / (lastp-firstp+1)
                         for pidx in firstp:lastp
                             pv[pidx] = v
                         end
+                    end
+                end
+            end
+        end
+    end
+end
+
+@kernel function update_classical_p_kernel!(pv, @Const(prp), @Const(pcv),
+                                   @Const(arp), @Const(acv), @Const(av),
+                                   @Const(cf), @Const(cmap), @Const(strong),
+                                   rescale, n)
+    i = @index(Global)
+    if i <= n
+        firstp, lastp = prp[i], prp[i+1] - 1
+        if firstp <= lastp
+            if cf[i] == 1
+                @inbounds pv[firstp] = one(eltype(pv))
+            else
+                effective_diagonal = zero(eltype(pv))
+                @inbounds for aidx in arp[i]:(arp[i+1]-1)
+                    j = acv[aidx]
+                    if j == i || !strong[aidx]
+                        effective_diagonal += av[aidx]
+                    elseif cf[j] == -1
+                        denominator = zero(eltype(pv))
+                        for aj in arp[j]:(arp[j+1]-1)
+                            q = acv[aj]
+                            if cf[q] == 1
+                                target = cmap[q]
+                                included = false
+                                for candidate in firstp:lastp
+                                    if pcv[candidate] == target
+                                        included = true
+                                        break
+                                    end
+                                end
+                                included && (denominator += av[aj])
+                            end
+                        end
+                        iszero(denominator) && (effective_diagonal += av[aidx])
+                    end
+                end
+                rowsum = zero(eltype(pv))
+                for pidx in firstp:lastp
+                    J = pcv[pidx]
+                    numerator = zero(eltype(pv))
+                    @inbounds for aidx in arp[i]:(arp[i+1]-1)
+                        j = acv[aidx]
+                        if strong[aidx] && cf[j] == 1 && cmap[j] == J
+                            numerator += av[aidx]
+                        elseif strong[aidx] && cf[j] == -1
+                            denominator = zero(eltype(pv))
+                            coupling = zero(eltype(pv))
+                            for aj in arp[j]:(arp[j+1]-1)
+                                q = acv[aj]
+                                if cf[q] == 1
+                                    target = cmap[q]
+                                    included = false
+                                    for candidate in firstp:lastp
+                                        if pcv[candidate] == target
+                                            included = true
+                                            break
+                                        end
+                                    end
+                                    if included
+                                        denominator += av[aj]
+                                        target == J && (coupling += av[aj])
+                                    end
+                                end
+                            end
+                            if !iszero(denominator)
+                                numerator += av[aidx] * coupling / denominator
+                            end
+                        end
+                    end
+                    weight = if iszero(effective_diagonal)
+                        zero(eltype(pv))
+                    else
+                        -numerator / effective_diagonal
+                    end
+                    @inbounds pv[pidx] = weight
+                    rowsum += weight
+                end
+                if rescale && !iszero(rowsum)
+                    @inbounds for pidx in firstp:lastp
+                        pv[pidx] /= rowsum
+                    end
+                elseif iszero(rowsum)
+                    value = one(eltype(pv)) / (lastp-firstp+1)
+                    @inbounds for pidx in firstp:lastp
+                        pv[pidx] = value
                     end
                 end
             end
@@ -320,5 +413,3 @@ function residual!(r::Vector, A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector
     end
     r
 end
-
-

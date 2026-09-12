@@ -27,7 +27,7 @@ end
 
 using HYPRE
 @testset "Algebraic multigrid heat" begin
-    lsolve = GenericKrylov(:bicgstab, preconditioner = Jutul.AMGPreconditioner(:smoothed_aggregation))
+    lsolve = GenericKrylov(:bicgstab, preconditioner = Jutul.AMGPreconditioner(:aggregation))
     states = test_heat_2d(4, 4, linear_solver = lsolve)
     @test length(states) == 1
 

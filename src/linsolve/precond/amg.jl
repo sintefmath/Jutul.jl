@@ -2,9 +2,16 @@
     AMGPreconditioner(method = :hmis; kwargs...)
 
 Jutul preconditioner wrapper for the backend-portable algebraic multigrid
-implementation in [`KAPreconditioners`](@ref). The default uses HMIS
-coarsening with an ILU(0) smoother. The supported compatibility methods are
-`:hmis`, `:smoothed_aggregation`, `:aggregation`, and `:ruge_stuben`.
+implementation in the internal `KAPreconditioners` module. The default uses HMIS
+coarsening with an SPAI(0) smoother. The supported compatibility methods are
+`:hmis`, `:aggregation`, and `:ruge_stuben`. They default to Extended+i,
+piecewise-constant, and classical interpolation, respectively.
+
+The other options of the AMG preconditioner correspond to the fields of
+`AMGOptions` and control various aspects of the multigrid hierarchy, such as the
+coarsening strategy, interpolation method, smoother configuration, and cycle
+type. These are not a public API and are subject to change without notice or
+major version bump.
 """
 mutable struct AMGPreconditioner{O} <: JutulPreconditioner
     options::O
@@ -17,7 +24,7 @@ end
 function amg_coarsening(method::Symbol, theta)
     if method == :ruge_stuben
         return KAPreconditioners.RugeStuben(theta)
-    elseif method == :smoothed_aggregation || method == :aggregation
+    elseif method == :aggregation
         return KAPreconditioners.Aggregation(theta)
     elseif method == :hmis
         return KAPreconditioners.HMIS(theta)
@@ -61,7 +68,7 @@ function AMGPreconditioner(method = :hmis;
     if method isa Jutul.KAPreconditioners.AbstractCoarsening
         coarsening = method
     else
-        if method == :aggregation || method == :smoothed_aggregation
+        if method == :aggregation
             coarsening = amg_coarsening(method, theta_agg)
         else
             coarsening = amg_coarsening(method, theta)

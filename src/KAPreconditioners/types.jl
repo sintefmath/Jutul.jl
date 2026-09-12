@@ -1,4 +1,5 @@
 abstract type AbstractCoarsening end
+abstract type AbstractInterpolation end
 
 """Unsmoothed, strength-based aggregation."""
 struct Aggregation <: AbstractCoarsening
@@ -12,18 +13,41 @@ struct RugeStuben <: AbstractCoarsening
 end
 RugeStuben(theta::Real=0.25) = RugeStuben(Float64(theta))
 
+"""Piecewise-constant interpolation for unsmoothed aggregation."""
+struct ConstantInterpolation <: AbstractInterpolation end
+
 """
-    ExtendedIInterpolation(truncation=0.0, max_elements=4, norm_p=2, rescale=false)
+    ClassicalInterpolation(truncation=0.0, max_elements=0, norm_p=2, rescale=false)
+
+Classical interpolation through strong coarse neighbors. A zero
+`max_elements` retains every candidate.
+"""
+struct ClassicalInterpolation <: AbstractInterpolation
+    truncation::Float64
+    max_elements::Int
+    norm_p::Int
+    rescale::Bool
+    function ClassicalInterpolation(truncation::Real=0.0, max_elements::Integer=0,
+                                    norm_p::Integer=2, rescale::Bool=false)
+        truncation >= 0 || throw(ArgumentError("truncation must be non-negative"))
+        max_elements >= 0 || throw(ArgumentError("max_elements must be non-negative"))
+        norm_p > 0 || throw(ArgumentError("norm_p must be positive"))
+        new(Float64(truncation), Int(max_elements), Int(norm_p), rescale)
+    end
+end
+
+"""
+    ExtendedIInterpolation(truncation=0.0, max_elements=4, norm_p=2, rescale=true)
 
 Configuration for distance-two Extended+i interpolation.
 """
-struct ExtendedIInterpolation
+struct ExtendedIInterpolation <: AbstractInterpolation
     truncation::Float64
     max_elements::Int
     norm_p::Int
     rescale::Bool
     function ExtendedIInterpolation(truncation::Real=0.0, max_elements::Integer=4,
-                                    norm_p::Integer=2, rescale::Bool=false)
+                                    norm_p::Integer=2, rescale::Bool=true)
         truncation >= 0 || throw(ArgumentError("truncation must be non-negative"))
         max_elements > 0 || throw(ArgumentError("max_elements must be positive"))
         norm_p > 0 || throw(ArgumentError("norm_p must be positive"))
@@ -31,26 +55,52 @@ struct ExtendedIInterpolation
     end
 end
 
-"""Hybrid modified independent-set coarsening with Extended+i interpolation."""
+"""Hybrid modified independent-set coarsening."""
 struct HMIS <: AbstractCoarsening
     theta::Float64
-    interpolation::ExtendedIInterpolation
 end
 
-HMIS(theta::Real=0.5) = HMIS(Float64(theta), ExtendedIInterpolation(0.0, 4, 2, true))
-HMIS(theta::Real, interpolation::ExtendedIInterpolation) = HMIS(Float64(theta), interpolation)
+HMIS(theta::Real=0.5) = HMIS(Float64(theta))
 
-Base.@kwdef struct AMGOptions
-    coarsening::AbstractCoarsening = HMIS(0.5)
-    interpolation::ExtendedIInterpolation = ExtendedIInterpolation(0.0, 4, 2, true)
-    smoother::AbstractSmoother = SPAI0(1, 1.0)
-    max_levels::Int = 20
-    coarse_size::Int = 50
-    coarse_solver::Symbol = :lu
-    coarse_steps::Int = 8
-    max_row_sum::Float64 = 1.0
-    block_size::Int = 128
-    cycle::Symbol = :V
+default_interpolation(::Aggregation) = ConstantInterpolation()
+default_interpolation(::RugeStuben) = ClassicalInterpolation()
+default_interpolation(::HMIS) = ExtendedIInterpolation()
+
+"""
+    AMGOptions(; coarsening=HMIS(), interpolation=default_interpolation(coarsening), ...)
+
+Configuration for the backend-portable AMG hierarchy. Interpolation is an
+independent hierarchy option whose default follows the coarsening method:
+piecewise constant for aggregation, classical for Ruge-Stuben, and Extended+i
+for HMIS.
+"""
+struct AMGOptions
+    coarsening::AbstractCoarsening
+    interpolation::AbstractInterpolation
+    smoother::AbstractSmoother
+    max_levels::Int
+    coarse_size::Int
+    coarse_solver::Symbol
+    coarse_steps::Int
+    max_row_sum::Float64
+    block_size::Int
+    cycle::Symbol
+end
+
+function AMGOptions(;
+        coarsening::AbstractCoarsening=HMIS(),
+        interpolation::AbstractInterpolation=default_interpolation(coarsening),
+        smoother::AbstractSmoother=SPAI0(1, 1.0),
+        max_levels::Integer=20,
+        coarse_size::Integer=50,
+        coarse_solver::Symbol=:lu,
+        coarse_steps::Integer=8,
+        max_row_sum::Real=1.0,
+        block_size::Integer=128,
+        cycle::Symbol=:V)
+    AMGOptions(coarsening, interpolation, smoother, Int(max_levels),
+               Int(coarse_size), coarse_solver, Int(coarse_steps),
+               Float64(max_row_sum), Int(block_size), cycle)
 end
 
 struct Prolongation{Tv,Ti,RP,CV,NZ}

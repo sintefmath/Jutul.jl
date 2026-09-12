@@ -104,6 +104,9 @@ end
     context = DefaultContext()
 
     @test AMGPreconditioner().options.smoother isa ILU0
+    @test AMGPreconditioner().options.interpolation isa ExtendedIInterpolation
+    @test AMGPreconditioner(:aggregation).options.interpolation isa ConstantInterpolation
+    @test AMGPreconditioner(:ruge_stuben).options.interpolation isa ClassicalInterpolation
 
     for preconditioner in (
             AMGPreconditioner(:ruge_stuben; coarse_size = 10),
@@ -190,7 +193,7 @@ end
     initial_state = setup_state(model, Dict(:T => collect(range(0.0, 1.0; length = 9))))
     simulator = Simulator(model; state0 = initial_state)
     linear_solver = GenericKrylov(:bicgstab;
-        preconditioner = AMGPreconditioner(:smoothed_aggregation;
+        preconditioner = AMGPreconditioner(:aggregation;
             coarse_size = 4))
     states, = simulate(simulator, [1.0]; linear_solver, info_level = -1)
     @test length(states) == 1
@@ -199,9 +202,18 @@ end
 @testset "coarsening and pure cycles" begin
     A = poisson_2d(14)
     b = ones(size(A, 1))
-    for algorithm in (Aggregation(0.25), RugeStuben(0.25),
-                      HMIS(0.5, ExtendedIInterpolation(0.0, 4, 2, false)))
-        H = setup_amg(A, AMGOptions(coarsening=algorithm, coarse_size=12))
+    configurations = (
+        AMGOptions(coarsening=Aggregation(0.25), coarse_size=12),
+        AMGOptions(coarsening=RugeStuben(0.25), coarse_size=12),
+        AMGOptions(coarsening=HMIS(0.5),
+                   interpolation=ExtendedIInterpolation(0.0, 4, 2, false),
+                   coarse_size=12),
+    )
+    @test configurations[1].interpolation isa ConstantInterpolation
+    @test configurations[2].interpolation isa ClassicalInterpolation
+    @test configurations[3].interpolation isa ExtendedIInterpolation
+    for options in configurations
+        H = setup_amg(A, options)
         @test length(H.levels) >= 2
         @test H.levels[end].coarse_solver isa KAPreconditioners.CoarseLUState
         x = zeros(size(A, 1))
@@ -251,10 +263,17 @@ end
     A = poisson_2d(12)
     H = setup_amg(A, AMGOptions(coarsening=HMIS(0.5), coarse_size=10))
     array_ids = [(objectid(level.A.nzval), object_id_or_zero(level.P)) for level in H.levels]
+    # Make preservation observable even if the replacement matrix is a scaled
+    # version of the original one.
+    H.levels[1].P.nzval[2] *= 0.9
+    interpolation_values = [isnothing(level.P) ? nothing : copy(level.P.nzval)
+                            for level in H.levels]
     B = copy(A)
     nonzeros(B) .*= 1.7
     resetup_amg!(H, B, :operators)
     @test array_ids == [(objectid(level.A.nzval), object_id_or_zero(level.P)) for level in H.levels]
+    @test interpolation_values == [isnothing(level.P) ? nothing : level.P.nzval
+                                   for level in H.levels]
     @test Array(H.levels[1].A.nzval) ≈ nonzeros(csr_matrix(B))
     test_galerkin(H)
     xb = zeros(size(B, 1))
@@ -263,6 +282,7 @@ end
           Array(H.levels[end-1].rhs) rtol=1e-12 atol=1e-12
     resetup_amg!(H, A, :sparsity)
     @test array_ids == [(objectid(level.A.nzval), object_id_or_zero(level.P)) for level in H.levels]
+    @test H.levels[1].P.nzval != interpolation_values[1]
     test_galerkin(H)
     @test_throws ArgumentError resetup_amg!(H, spdiagm(0 => ones(size(A, 1))), :operators)
 
@@ -348,6 +368,10 @@ end
     @test_throws ArgumentError resetup_amg!(H, A, :invalid)
     @test_throws DimensionMismatch setup_amg(sparse(ones(3, 2)))
     @test_throws ArgumentError setup_amg(A, AMGOptions(max_row_sum=-0.1))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(
+        coarsening=Aggregation(), interpolation=ClassicalInterpolation()))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(
+        coarsening=RugeStuben(), interpolation=ConstantInterpolation()))
 end
 
 @testset "max row sum" begin
@@ -441,6 +465,17 @@ end
                          objectid(H.levels[1].A.nzval))
     resetup_amg!(H, D, :memory)
     test_galerkin(H)
+
+    # Exercise every method-specific interpolation reset on device arrays.
+    for coarsening in (RugeStuben(), Aggregation())
+        method_options = AMGOptions(coarsening=coarsening, coarse_size=10)
+        method_hierarchy = setup_amg(D, method_options)
+        resetup_amg!(method_hierarchy, D2, :sparsity)
+        method_x = JLArray(zeros(size(A, 1)))
+        cycle!(method_x, method_hierarchy, b)
+        @test all(isfinite, Array(method_x))
+        test_galerkin(method_hierarchy)
+    end
 end
 
 @testset "standalone ILU smoothers" begin

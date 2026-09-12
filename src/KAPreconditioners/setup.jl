@@ -471,7 +471,7 @@ end
 
 function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
                              A::StaticSparsityMatrixCSR{Tv,Ti}, i, cf, cmap, strong,
-                             diagonal) where {Tv,Ti}
+                             diagonal, ::ExtendedIInterpolation) where {Tv,Ti}
     empty!(cols)
     empty!(vals)
     # Build HYPRE's C-hat set: strong direct C neighbors and C points reached
@@ -576,6 +576,69 @@ function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
     nothing
 end
 
+function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
+                             A::StaticSparsityMatrixCSR{Tv,Ti}, i, cf, cmap, strong,
+                             diagonal, ::ClassicalInterpolation) where {Tv,Ti}
+    empty!(cols)
+    empty!(vals)
+    effective_diagonal = diagonal[i]
+
+    # Classical interpolation starts from direct strong C-neighbors. Weak
+    # connections are lumped into the diagonal.
+    @inbounds for k in nzrange(A, i)
+        j = A.colval[k]
+        j == i && continue
+        if strong[k] && cf[j] == 1
+            accumulate_candidate!(cols, vals, cmap[j], A.nzval[k])
+        elseif !strong[k]
+            effective_diagonal += A.nzval[k]
+        end
+    end
+    isempty(cols) && return nothing
+
+    # Distribute each strong F-neighbor through the direct coarse set C_i.
+    @inbounds for k in nzrange(A, i)
+        j = A.colval[k]
+        strong[k] && cf[j] == -1 || continue
+        denominator = zero(Tv)
+        for q in nzrange(A, j)
+            l = A.colval[q]
+            cf[l] == 1 || continue
+            target = cmap[l]
+            for p in eachindex(cols)
+                if cols[p] == target
+                    denominator += A.nzval[q]
+                    break
+                end
+            end
+        end
+        if abs(denominator) > eps(real(Tv))
+            distribute = A.nzval[k] / denominator
+            for q in nzrange(A, j)
+                l = A.colval[q]
+                cf[l] == 1 || continue
+                target = cmap[l]
+                for p in eachindex(cols)
+                    if cols[p] == target
+                        vals[p] += distribute * A.nzval[q]
+                        break
+                    end
+                end
+            end
+        else
+            effective_diagonal += A.nzval[k]
+        end
+    end
+
+    if abs(effective_diagonal) > eps(real(Tv))
+        scale = -inv(effective_diagonal)
+        @inbounds for q in eachindex(vals)
+            vals[q] *= scale
+        end
+    end
+    nothing
+end
+
 @inline function candidate_score(value, p::Int)
     if p == 2
         abs2(value)
@@ -617,7 +680,11 @@ end
 
 @inline function candidate_count(vals, interpolation)
     isempty(vals) && return 0
-    count = min(length(vals), interpolation.max_elements)
+    count = if iszero(interpolation.max_elements)
+        length(vals)
+    else
+        min(length(vals), interpolation.max_elements)
+    end
     if interpolation.truncation > 0
         cutoff = interpolation.truncation *
                  candidate_score(vals[1], interpolation.norm_p)
@@ -665,7 +732,7 @@ function same_csr_pattern(a::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:V
 end
 
 function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, strong,
-                             interpolation::ExtendedIInterpolation,
+                             interpolation::AbstractInterpolation,
                              reuse=nothing, workspace=nothing) where {Tv,Ti}
     n = matrix_nrows(A)
     diagonal = host_buffer(workspace_buffer(workspace, :values),
@@ -696,7 +763,7 @@ function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, str
         else
             candidate_cols, candidate_vals = scratch_cols[tid], scratch_vals[tid]
             candidate_weights!(candidate_cols, candidate_vals, A, i, cf, cmap,
-                                strong, diagonal)
+                                strong, diagonal, interpolation)
             sort_candidates!(candidate_cols, candidate_vals, interpolation.norm_p)
             selected = candidate_count(candidate_vals, interpolation)
             @inbounds counts[i] = Ti(selected)
@@ -722,7 +789,7 @@ function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, str
         else
             candidate_cols, candidate_vals = scratch_cols[tid], scratch_vals[tid]
             candidate_weights!(candidate_cols, candidate_vals, A, i, cf, cmap,
-                                strong, diagonal)
+                                strong, diagonal, interpolation)
             sort_candidates!(candidate_cols, candidate_vals, interpolation.norm_p)
             count = candidate_count(candidate_vals, interpolation)
             if count > 0
@@ -760,6 +827,12 @@ function build_aggregation_prolongation(::Type{Tv}, ::Type{Ti}, cmap, n, nc,
     pv = host_buffer(old_pv, Tv, n)
     fill!(pv, one(Tv))
     Prolongation{Tv,Ti,typeof(rp),typeof(cv),typeof(pv)}(rp, cv, pv, n, nc)
+end
+
+function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, strong,
+                             ::ConstantInterpolation,
+                             reuse=nothing, workspace=nothing) where {Tv,Ti}
+    build_aggregation_prolongation(Tv, Ti, cmap, matrix_nrows(A), nc, reuse)
 end
 
 function transpose_map(P::Prolongation{Tv,Ti}, reuse=nothing,
@@ -1222,6 +1295,10 @@ function validate_setup_options(options::AMGOptions)
     options.max_row_sum >= 0 || throw(ArgumentError("max_row_sum must be non-negative"))
     options.coarse_solver in (:lu, :spai0) ||
         throw(ArgumentError("coarse_solver must be :lu or :spai0"))
+    aggregation = options.coarsening isa Aggregation
+    constant = options.interpolation isa ConstantInterpolation
+    aggregation == constant || throw(ArgumentError(
+        "ConstantInterpolation must be used with Aggregation, and Aggregation requires it"))
     nothing
 end
 
@@ -1328,18 +1405,8 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
         else
             workspace.stage_prolongation
         end
-        if options.coarsening isa Aggregation
-            P = build_aggregation_prolongation(Tv, Ti, cmap, matrix_nrows(current), nc,
-                                                old_P)
-        else
-            interpolation = if options.coarsening isa HMIS
-                options.coarsening.interpolation
-            else
-                options.interpolation
-            end
-            P = build_prolongation(current, cf, cmap, nc, strong, interpolation,
-                                    old_P, workspace)
-        end
+        P = build_prolongation(current, cf, cmap, nc, strong,
+                                options.interpolation, old_P, workspace)
         if !cpu_backend
             workspace.stage_cf = cf
             workspace.stage_coarse_map = cmap

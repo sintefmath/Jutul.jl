@@ -44,7 +44,8 @@ end
 apply_ka_smoother!(x, state, b) = apply!(x, state, b)
 
 export AbstractCoarsening, Aggregation, RugeStuben, HMIS
-export ExtendedIInterpolation, AMGOptions, AMGHierarchy
+export AbstractInterpolation, ConstantInterpolation, ClassicalInterpolation,
+    ExtendedIInterpolation, AMGOptions, AMGHierarchy
 export AbstractSmoother, AbstractSmootherState, SPAI0, ILU0, DILU
 export csr_matrix
 export setup_smoother, update_smoother!, smooth!
