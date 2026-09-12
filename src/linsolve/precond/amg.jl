@@ -17,6 +17,8 @@ function amg_coarsening(method::Symbol, theta)
         return KAPreconditioners.RugeStuben(theta)
     elseif method == :smoothed_aggregation || method == :aggregation
         return KAPreconditioners.Aggregation(theta)
+    elseif method == :hmis
+        return KAPreconditioners.HMIS(theta)
     else
         throw(ArgumentError("Unsupported AMG method: $method"))
     end
@@ -34,13 +36,14 @@ function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
     end
 end
 
-function AMGPreconditioner(method::Symbol = :smoothed_aggregation;
+function AMGPreconditioner(method = :hmis;
         smoother_type::Symbol = :default,
         smoother = nothing,
         cycle = :V,
         npre::Int = 1,
         npost::Int = npre,
-        theta = 0.25,
+        theta = 0.5,
+        theta_agg = 0.25,
         max_coarse = 50,
         coarse_size = max_coarse,
         reuse::Symbol = :operators,
@@ -48,11 +51,21 @@ function AMGPreconditioner(method::Symbol = :smoothed_aggregation;
         kwarg...)
     npre == npost || throw(ArgumentError(
         "KAPreconditioners currently requires equal pre- and post-smoothing steps"))
-    isnothing(smoother) &&
-        (smoother = ka_smoother(smoother_type; steps = npre, damping = damping))
-    cycle isa Symbol || throw(ArgumentError("cycle must be :V or :W"))
+    if isnothing(smoother)
+        smoother = ka_smoother(smoother_type; steps = npre, damping = damping)
+    end
+    cycle in (:V, :W) || throw(ArgumentError("cycle must be :V or :W"))
+    if method isa Jutul.AbstractCoarsening
+        coarsening = method
+    else
+        if method == :aggregation || coarsening == :smoothed_aggregation
+            coarsening = amg_coarsening(method, theta_agg)
+        else
+            coarsening = amg_coarsening(method, theta)
+        end
+    end
     options = KAPreconditioners.AMGOptions(;
-        coarsening = amg_coarsening(method, theta),
+        coarsening = coarsening,
         smoother = smoother,
         coarse_size = coarse_size,
         cycle = cycle,
