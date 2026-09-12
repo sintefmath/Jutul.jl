@@ -638,7 +638,7 @@ Adapt a fully initialized CPU simulator to a KernelAbstractions backend.
 discovery and Jacobian/cross-term alignment finish on the CPU before the CSR
 arrays are moved. Array aliases used by primary variables, parameters,
 residual views and Jacobian buffers are rebuilt against the adapted root
-arrays. Groups marked [`AssembleOnDevice`](@ref) retain their CPU model and
+arrays. Submodels marked [`AssembleOnDevice`](@ref) retain their CPU model and
 storage and copy into preallocated backend mirrors after evaluation.
 """
 function transfer_to_backend(sim::Simulator, backend;
@@ -695,31 +695,15 @@ Base.@noinline function set_transfer_group_execution(sim::Simulator, policy)
 
     model = sim.model
     model isa MultiModel || throw(ArgumentError(
-        "Per-group execution policies require a MultiModel simulator"))
+        "Per-model execution policies require a MultiModel simulator"))
     keys_m = collect(submodels_symbols(model))
-    old_groups = isnothing(model.groups) ? ones(Int, length(keys_m)) : model.groups
     modes_by_key = map(keys_m) do key
         execution_for_submodel(key, model[key])
     end
-
-    # Split existing groups only when their members have different execution
-    # policies. Equal (old group, policy) pairs continue to share one block.
-    pairs = Tuple{Int, DeviceExecutionMode}[]
-    groups = Vector{Int}(undef, length(keys_m))
-    for i in eachindex(keys_m)
-        pair = (old_groups[i], modes_by_key[i])
-        group = findfirst(isequal(pair), pairs)
-        if isnothing(group)
-            push!(pairs, pair)
-            group = length(pairs)
-        end
-        groups[i] = group
-    end
-    modes = last.(pairs)
     rebuilt = MultiModel(model.models, multimodel_label(model);
         cross_terms = model.cross_terms,
-        groups = groups,
-        group_execution = modes,
+        groups = isnothing(model.groups) ? nothing : copy(model.groups),
+        group_execution = modes_by_key,
         context = model.context,
         reduction = model.reduction,
         specialize = false,
@@ -737,7 +721,7 @@ function transfer_multimodel_to_backend(sim::Simulator,
     modes = model_cpu.group_execution
     all(==(NothingOnDevice), modes) && return sim
     any(==(NothingOnDevice), modes) && throw(ArgumentError(
-        "Mixed NothingOnDevice groups are not supported by backend transfer"))
+        "Backend transfer cannot combine all-NothingOnDevice groups with device-resident groups"))
     storage_cpu = prepare_backend_transfer!(storage_cpu, model_cpu)
     host_keys = tuple((key for key in submodels_symbols(model_cpu)
         if group_execution_mode(model_cpu, key) == AssembleOnDevice)...)
@@ -804,6 +788,54 @@ function transfer_multimodel_to_backend(sim::Simulator,
     storage = specialize_simulator_storage(storage, model, false)
     synchronize(ctx)
     return Simulator(sim.executor, model, storage)
+end
+
+function transfer_adjoint_simulator(simulator,
+        execution_model::KASimulationModel)
+    return transfer_to_backend(simulator, adjoint(execution_model.context))
+end
+
+function transfer_adjoint_simulator(simulator, execution_model::MultiModel)
+    context = execution_model.context
+    context isa KernelAbstractionsContext || return simulator
+    policy = Dict{Symbol, DeviceExecutionMode}()
+    for key in submodels_symbols(execution_model)
+        policy[key] = group_execution_mode(execution_model, key)
+    end
+    return transfer_to_backend(simulator, adjoint(context);
+        group_execution = policy)
+end
+
+@kernel function adjoint_block_order_kernel!(destination, source, n, bz,
+        to_canonical)
+    index = @index(Global)
+    if index <= n*bz
+        block = (index - 1) ÷ n + 1
+        entity = (index - 1) % n + 1
+        block_major = (entity - 1)*bz + block
+        if to_canonical
+            @inbounds destination[index] = source[block_major]
+        else
+            @inbounds destination[block_major] = source[index]
+        end
+    end
+end
+
+function adjoint_transfer_canonical_order_inner!(destination::AbstractArray,
+        source::AbstractArray, model::KASimulationModel, ::BlockMajorLayout,
+        to_canonical)
+    bz = 0
+    for entity in get_primary_variable_ordered_entities(model)
+        bz == 0 || error("Assumed that block major has a single entity group")
+        bz = degrees_of_freedom_per_entity(model, entity)::Int
+    end
+    n = length(source) ÷ bz
+    context = model.context
+    kernel! = adjoint_block_order_kernel!(context.backend)
+    event = kernel!(destination, source, n, bz, to_canonical;
+        ndrange = length(source))
+    isnothing(event) || wait(event)
+    return destination
 end
 
 @kernel function ka_csr_mul_kernel!(y, nzval, colval, rowptr, x, alpha, beta)

@@ -156,7 +156,7 @@ end
         Simulator(model; state0 = state0), CPU();
         group_execution = (key, submodel) -> key == :A ?
             SolveFullyOnDevice : AssembleOnDevice)
-    @test simulator.model.groups == [1, 2]
+    @test isnothing(simulator.model.groups)
     @test collect(simulator.model.group_execution) ==
         [SolveFullyOnDevice, AssembleOnDevice]
     @test simulator.storage.host_evaluation.keys == (:B,)
@@ -168,7 +168,13 @@ end
         context = DefaultContext()
     )
     @test isnothing(adjoint_model.groups)
-    @test only(adjoint_model.group_execution) == SolveFullyOnDevice
+    @test all(==(SolveFullyOnDevice), adjoint_model.group_execution)
+
+    @test_throws ArgumentError MultiModel((A = model_a, B = model_b),
+        group_execution = [NothingOnDevice, SolveFullyOnDevice])
+    mixed_groups = MultiModel((A = model_a, B = model_b), groups = [1, 2],
+        group_execution = [NothingOnDevice, SolveFullyOnDevice])
+    @test mixed_groups.groups == [1, 2]
 
     dt = 1.0
     Jutul.update_before_step!(simulator, dt, forces; time = 0.0)
@@ -177,10 +183,9 @@ end
     Jutul.update_linearized_system!(simulator.storage, simulator.model)
 
     linearized_system = simulator.storage.LinearizedSystem
-    @test linearized_system isa Jutul.MultiLinearizedSystem
+    @test linearized_system isa Jutul.LinearizedSystem
     @test all(isfinite, linearized_system.r_buffer)
-    @test all(block -> all(isfinite, nonzeros(block.jac)),
-        linearized_system.subsystems)
+    @test all(isfinite, nonzeros(linearized_system.jac))
     @test all(cross_term ->
             cross_term.target_impact_map.entries isa AbstractVector,
         simulator.storage.cross_terms)

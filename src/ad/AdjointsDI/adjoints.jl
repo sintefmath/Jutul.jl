@@ -159,21 +159,18 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         info_level = 0,
         single_step_sparsity = true,
         sparsity_step_type::Symbol = :all,
-        use_sparsity = true
+        use_sparsity = true,
+        simulator = missing
     )
     case = setup_case(X, F, packed_steps, state0, :all)
     G = Jutul.adjoint_wrap_objective(G, case.model)
     packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
-    adj_kwarg = (
-        use_sparsity = use_sparsity,
-        linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
-        n_objective = nothing,
-        info_level = info_level
-    )
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
     model = case.model
+    execution_model = ismissing(simulator) ? model :
+        Jutul.get_simulator_model(simulator)
     if isnothing(deps_targets)
         deps_targets = Jutul.parameter_targets(model)
     end
@@ -187,9 +184,11 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     prep_static = nothing
     adj_kwarg = (
         use_sparsity = use_sparsity,
-        linear_solver = Jutul.select_linear_solver(case.model, mode = :adjoint, rtol = 1e-6),
+        linear_solver = Jutul.select_linear_solver(
+            execution_model, mode = :adjoint, rtol = 1e-6),
         n_objective = nothing,
         info_level = info_level,
+        execution_model = execution_model,
     )
     use_di = deps_ad == :di
     fully_dynamic = deps == :case

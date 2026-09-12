@@ -1144,7 +1144,7 @@ multimodel_label(::AbstractMultiModel{L}) where L = L
 """
     DeviceExecutionMode
 
-Execution policy for a linear-system group in a backend-resident
+Execution policy for a submodel in a backend-resident
 [`MultiModel`](@ref).
 
 - [`SolveFullyOnDevice`](@ref): variables, equations, assembly and the linear
@@ -1167,8 +1167,10 @@ end
 
 A model variant made up of named, fully realized [`SimulationModel`](@ref)
 instances. `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`. The
-`group_execution` keyword sets one `DeviceExecutionMode` per linear-system
-group.
+`group_execution` keyword sets one `DeviceExecutionMode` per submodel, in the
+same order as `models` and `groups`. Within each linear-system group, all
+submodels must either use `NothingOnDevice`, or use any combination of
+`AssembleOnDevice` and `SolveFullyOnDevice`.
 """
 struct MultiModel{label, T, CT, G, C, GL, GE} <: AbstractMultiModel{label}
     models::T
@@ -1194,6 +1196,14 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
         context = models[first(keys(models))].context
     end
     group_lookup = Dict{Symbol, Int}()
+    number_of_models = length(models)
+    if group_execution isa DeviceExecutionMode
+        group_execution = fill(group_execution, number_of_models)
+    else
+        group_execution = collect(DeviceExecutionMode, group_execution)
+        length(group_execution) == number_of_models || throw(ArgumentError(
+            "Expected one device execution mode per model ($number_of_models), got $(length(group_execution))"))
+    end
     if isnothing(groups)
         num_groups = 1
         for k in keys(models)
@@ -1225,6 +1235,7 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
             end
             models = new_models
             groups = groups[ix]
+            group_execution = group_execution[ix]
         end
         for (k, g) in zip(keys(models), groups)
             group_lookup[k] = g
@@ -1246,12 +1257,15 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
             reduction = nothing
         end
     end
-    if group_execution isa DeviceExecutionMode
-        group_execution = fill(group_execution, num_groups)
-    else
-        group_execution = collect(DeviceExecutionMode, group_execution)
-        length(group_execution) == num_groups || throw(ArgumentError(
-            "Expected one device execution mode per group ($num_groups), got $(length(group_execution))"))
+    effective_groups = isnothing(groups) ? ones(Int, number_of_models) : groups
+    for group in 1:num_groups
+        modes = group_execution[effective_groups .== group]
+        has_nothing = any(==(NothingOnDevice), modes)
+        if has_nothing && !all(==(NothingOnDevice), modes)
+            throw(ArgumentError(
+                "Linear-system group $group mixes NothingOnDevice with device execution modes. " *
+                "A group must be entirely NothingOnDevice, or contain only AssembleOnDevice and SolveFullyOnDevice."))
+        end
     end
     if isnothing(groups) && !isnothing(context)
         for (i, m) in enumerate(models)
@@ -1298,10 +1312,14 @@ function convert_to_immutable_storage(model::MultiModel)
         group_execution)
 end
 
-group_execution_mode(model::MultiModel, group::Integer) =
-    model.group_execution[group]
-group_execution_mode(model::MultiModel, key::Symbol) =
-    group_execution_mode(model, model.group_lookup[key])
+group_execution_mode(model::MultiModel, model_index::Integer) =
+    model.group_execution[model_index]
+function group_execution_mode(model::MultiModel, key::Symbol)
+    for (index, candidate) in enumerate(keys(model.models))
+        candidate == key && return group_execution_mode(model, index)
+    end
+    throw(KeyError(key))
+end
 
 """
 IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V

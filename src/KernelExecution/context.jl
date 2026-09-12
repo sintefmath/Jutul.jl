@@ -6,7 +6,7 @@ Execution context for a [`SimulationModel`](@ref) or [`MultiModel`](@ref) on a
 KernelAbstractions backend. Build the model and [`Simulator`](@ref) on the CPU,
 then use [`transfer_to_backend`](@ref) to adapt the completed simulator. A
 multimodel application can select host evaluation, device assembly, or fully
-host-side execution per linear-system group through
+host-side execution per submodel through
 `DeviceExecutionMode`.
 """
 struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext

@@ -117,8 +117,10 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             push!(groups, groups_0[i])
         end
     end
-    execution = has_groups ? model.group_execution[unique(groups)] :
-        only(model.group_execution)
+    execution = DeviceExecutionMode[]
+    for key in keys(new_submodels)
+        push!(execution, group_execution_mode(model, key))
+    end
     if !has_groups || length(groups) == 1
         groups = nothing
         reduction = nothing
