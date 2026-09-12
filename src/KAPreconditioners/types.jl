@@ -37,12 +37,12 @@ struct HMIS <: AbstractCoarsening
     interpolation::ExtendedIInterpolation
 end
 
-HMIS(theta::Real=0.5) = HMIS(Float64(theta), ExtendedIInterpolation(0.0, 4, 2, false))
+HMIS(theta::Real=0.5) = HMIS(Float64(theta), ExtendedIInterpolation(0.0, 4, 2, true))
 HMIS(theta::Real, interpolation::ExtendedIInterpolation) = HMIS(Float64(theta), interpolation)
 
 Base.@kwdef struct AMGOptions
     coarsening::AbstractCoarsening = HMIS(0.5)
-    interpolation::ExtendedIInterpolation = ExtendedIInterpolation(0.0, 4, 2, false)
+    interpolation::ExtendedIInterpolation = ExtendedIInterpolation(0.0, 4, 2, true)
     smoother::AbstractSmoother = SPAI0(1, 1.0)
     max_levels::Int = 20
     coarse_size::Int = 50
