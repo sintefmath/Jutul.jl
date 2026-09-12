@@ -1,9 +1,10 @@
 """
-    AMGPreconditioner(method = :smoothed_aggregation; kwargs...)
+    AMGPreconditioner(method = :hmis; kwargs...)
 
 Jutul preconditioner wrapper for the backend-portable algebraic multigrid
-implementation in [`KAPreconditioners`](@ref). The supported compatibility
-methods are `:smoothed_aggregation`, `:aggregation`, and `:ruge_stuben`.
+implementation in [`KAPreconditioners`](@ref). The default uses HMIS
+coarsening with an ILU(0) smoother. The supported compatibility methods are
+`:hmis`, `:smoothed_aggregation`, `:aggregation`, and `:ruge_stuben`.
 """
 mutable struct AMGPreconditioner{O} <: JutulPreconditioner
     options::O
@@ -37,7 +38,7 @@ function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
 end
 
 function AMGPreconditioner(method = :hmis;
-        smoother_type::Symbol = :default,
+        smoother_type::Symbol = :ilu0,
         smoother = nothing,
         cycle = :V,
         npre::Int = 1,
@@ -130,7 +131,10 @@ function update_preconditioner!(smoother::KASmootherPreconditioner,
         A, b, context, executor)
     if isnothing(smoother.factor)
         smoother.factor = setup_ka_smoother(A, smoother.config)
-        smoother.dim = (length(b), length(b))
+        factor_type = eltype(smoother.factor)
+        degrees_per_row = factor_type <: StaticMatrix ? size(factor_type, 1) : 1
+        n = degrees_per_row*size(A, 1)
+        smoother.dim = (n, n)
     else
         update_ka_smoother!(smoother.factor, A)
     end

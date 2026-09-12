@@ -103,6 +103,8 @@ end
     b = ones(size(A, 1))
     context = DefaultContext()
 
+    @test AMGPreconditioner().options.smoother isa ILU0
+
     for preconditioner in (
             AMGPreconditioner(:ruge_stuben; coarse_size = 10),
             KASmootherPreconditioner(:spai0),
@@ -479,6 +481,11 @@ end
         KAPreconditioners.apply!(x, state, b)
         @test norm(ones(size(A, 1)) - A*Array(x)) < norm(ones(size(A, 1)))
 
+        host_state = setup_smoother(csr_matrix(A), config)
+        host_x = zeros(size(A, 1))
+        KAPreconditioners.apply!(host_x, host_state, ones(size(A, 1)))
+        @test Array(x) ≈ host_x
+
         fill!(x, 0.25)
         initial_residual = norm(ones(size(A, 1)) - A*Array(x))
         smooth!(x, state, C, b; steps=2)
@@ -520,6 +527,11 @@ end
         x = JLArray(fill(zero(BlockVector), n))
         KAPreconditioners.apply!(x, state, device_b)
         @test norm(b - A*Array(x)) < norm(b)
+
+        host_state = setup_smoother(C, config)
+        host_x = fill(zero(BlockVector), n)
+        KAPreconditioners.apply!(host_x, host_state, b)
+        @test Array(x) ≈ host_x
     end
 end
 
@@ -558,6 +570,7 @@ end
     Jutul.update_preconditioner!(
         wrapped_smoother, csr_matrix(block_matrix; index_type = Int),
         flat_rhs, DefaultContext(), nothing)
+    @test Jutul.operator_nrows(wrapped_smoother) == length(flat_rhs)
     flat_result = similar(flat_rhs)
     Jutul.apply!(flat_result, wrapped_smoother, flat_rhs)
     @test isapprox(reinterpret(BlockVector, flat_result), block_reference;

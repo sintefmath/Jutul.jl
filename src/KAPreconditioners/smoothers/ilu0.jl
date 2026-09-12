@@ -301,6 +301,38 @@ function ilu_solve!(x, state::ILU0State, b)
     x
 end
 
+function ilu_solve!(x::AbstractVector,
+                    state::ILU0State{F,D,RP,CV},
+                    b::AbstractVector) where {F,D,RP<:Vector,CV}
+    ensure_smoother_work!(state, b)
+    ilu_solve_cpu!(x, state, b, state.work)
+end
+
+function ilu_solve_cpu!(x, state::ILU0State, b, work)
+    factors = state.factors
+    inverse_diagonal = state.inverse_diagonal
+    rowptr = state.rowptr
+    colval = state.colval
+    @inbounds for i in 1:state.n
+        value = b[i]
+        for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            j < i && (value -= factors[k] * work[j])
+        end
+        work[i] = value
+    end
+    damping = state.config.damping
+    @inbounds for i in state.n:-1:1
+        value = work[i]
+        for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            j > i && (value -= factors[k] * x[j])
+        end
+        x[i] = damping * (inverse_diagonal[i] * value)
+    end
+    x
+end
+
 function ilu_solve!(x, state::DILUState, b)
     ensure_smoother_work!(state, b)
     lower! = dilu_lower_level_kernel!(state.backend, state.block_size)
@@ -311,6 +343,38 @@ function ilu_solve!(x, state::DILUState, b)
     launch_levels!(upper!, state.upper_offsets, state.upper_rows,
                     x, state.work, state.values, state.inverse_diagonal,
                     state.rowptr, state.colval, state.config.damping)
+    x
+end
+
+function ilu_solve!(x::AbstractVector,
+                    state::DILUState{D,AV,RP,CV},
+                    b::AbstractVector) where {D,AV,RP<:Vector,CV}
+    ensure_smoother_work!(state, b)
+    ilu_solve_cpu!(x, state, b, state.work)
+end
+
+function ilu_solve_cpu!(x, state::DILUState, b, work)
+    values = state.values
+    inverse_diagonal = state.inverse_diagonal
+    rowptr = state.rowptr
+    colval = state.colval
+    @inbounds for i in 1:state.n
+        value = b[i]
+        for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            j < i && (value -= values[k] * work[j])
+        end
+        work[i] = inverse_diagonal[i] * value
+    end
+    damping = state.config.damping
+    @inbounds for i in state.n:-1:1
+        correction = zero(eltype(x))
+        for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            j > i && (correction += values[k] * x[j])
+        end
+        x[i] = damping * (work[i] - inverse_diagonal[i] * correction)
+    end
     x
 end
 
