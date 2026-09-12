@@ -26,6 +26,15 @@ function IterativeSolverConfig(;
         kwarg...
     )
     @assert precond_side in (:left, :right)
+    if ismissing(absolute_tolerance)
+        absolute_tolerance = nothing
+    end
+    if ismissing(relative_tolerance)
+        relative_tolerance = nothing
+    end
+    if ismissing(relaxed_relative_tolerance)
+        relaxed_relative_tolerance = nothing
+    end
     IterativeSolverConfig(
         relative_tolerance,
         absolute_tolerance,

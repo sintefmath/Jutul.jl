@@ -55,10 +55,10 @@ function AMGPreconditioner(method = :hmis;
         smoother = ka_smoother(smoother_type; steps = npre, damping = damping)
     end
     cycle in (:V, :W) || throw(ArgumentError("cycle must be :V or :W"))
-    if method isa Jutul.AbstractCoarsening
+    if method isa Jutul.KAPreconditioners.AbstractCoarsening
         coarsening = method
     else
-        if method == :aggregation || coarsening == :smoothed_aggregation
+        if method == :aggregation || method == :smoothed_aggregation
             coarsening = amg_coarsening(method, theta_agg)
         else
             coarsening = amg_coarsening(method, theta)
