@@ -125,24 +125,23 @@ function Adapt.adapt_structure(to, eq::ConservationLaw{C, T, FT, N}) where {C, T
         flux = Adapt.adapt(to, eq.flux_type))
 end
 
-function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
-        c::CompactAutoDiffCache)
-    entries = Adapt.adapt(ctx, c.entries)
-    positions = Adapt.adapt(ctx, c.jacobian_positions)
+function Adapt.adapt_structure(to, c::CompactAutoDiffCache)
+    entries = Adapt.adapt(to, c.entries)
+    positions = Adapt.adapt(to, c.jacobian_positions)
     return CompactAutoDiffCache{typeof(c.equations_per_entity), eltype(entries)}(
         entries, c.entity, positions,
         c.equations_per_entity, c.number_of_entities, c.npartials
     )
 end
 
-function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
+function Adapt.adapt_structure(to,
         c::GenericAutoDiffCache{N, E, T}) where {N, E, T}
-    entries = Adapt.adapt(ctx, c.entries)
-    vpos = Adapt.adapt(ctx, c.vpos)
-    variables = Adapt.adapt(ctx, c.variables)
-    positions = Adapt.adapt(ctx, c.jacobian_positions)
-    diagonal = Adapt.adapt(ctx, c.diagonal_positions)
-    variable_map = Adapt.adapt(ctx, c.variable_map)
+    entries = Adapt.adapt(to, c.entries)
+    vpos = Adapt.adapt(to, c.vpos)
+    variables = Adapt.adapt(to, c.variables)
+    positions = Adapt.adapt(to, c.jacobian_positions)
+    diagonal = Adapt.adapt(to, c.diagonal_positions)
+    variable_map = Adapt.adapt(to, c.variable_map)
     return GenericAutoDiffCache{N, E, eltype(entries)}(
         entries, vpos, variables, positions, diagonal,
       c.number_of_entities_target, c.number_of_entities_source, variable_map)

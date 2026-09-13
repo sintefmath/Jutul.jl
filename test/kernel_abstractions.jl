@@ -2,7 +2,16 @@ using Test
 using Jutul
 using KernelAbstractions
 using SparseArrays
+import Adapt
 import Jutul.KernelExecution: secondary_variable_evaluation_plan
+
+struct KernelArgumentTestAdaptor end
+struct KernelArgumentArray{T}
+    length::Int
+end
+Base.eltype(::KernelArgumentArray{T}) where T = T
+Adapt.adapt_storage(::KernelArgumentTestAdaptor, array::AbstractArray) =
+    KernelArgumentArray{eltype(array)}(length(array))
 
 struct SecondaryPlanA end
 struct SecondaryPlanB end
@@ -119,6 +128,14 @@ end
         @test simulator.storage.LinearizedSystem.jac_buffer ===
             nonzeros(simulator.storage.LinearizedSystem.jac)
         @test cpu_simulator.storage.state.XVar isa Vector
+        if use_manual
+            cache = simulator.storage.equations.test_equation
+            @test cache isa Jutul.CompactAutoDiffCache
+            kernel_cache = Adapt.adapt(KernelArgumentTestAdaptor(), cache)
+            @test kernel_cache.entries isa KernelArgumentArray
+            @test kernel_cache.jacobian_positions isa KernelArgumentArray
+            @test isbitstype(typeof(kernel_cache))
+        end
 
         forces = setup_forces(model, sources = ScalarTestForce(1.0))
         states, = simulate!(simulator, [1.0], forces = forces, info_level = -1)
@@ -143,6 +160,12 @@ end
     simulator = transfer_to_backend(cpu_simulator, CPU())
     cache = simulator.storage.equations.heat_equation.Cells
     @test cache isa Jutul.GenericAutoDiffCache
+    kernel_cache = Adapt.adapt(KernelArgumentTestAdaptor(), cache)
+    @test kernel_cache.entries isa KernelArgumentArray
+    @test kernel_cache.vpos isa KernelArgumentArray
+    @test kernel_cache.variables isa KernelArgumentArray
+    @test kernel_cache.jacobian_positions isa KernelArgumentArray
+    @test isbitstype(typeof(kernel_cache))
     # Make sure tags do not survive...
     @test isnothing(simulator.model.domain.representation.tags)
 
