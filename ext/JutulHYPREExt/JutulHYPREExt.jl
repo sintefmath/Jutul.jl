@@ -37,13 +37,86 @@ module JutulHYPREExt
                 V[i] = zeros(Float64, 1, i)
             end
         end
+        csr = nothing
+        if !column_major
+            nnz_J = nnz(J)
+            ncols = Vector{HYPRE.HYPRE_Int}(undef, n)
+            rows = Vector{HYPRE.HYPRE_BigInt}(undef, n)
+            cols = Vector{HYPRE.HYPRE_BigInt}(undef, nnz_J)
+            values = Vector{HYPRE.HYPRE_Complex}(undef, nnz_J)
+            diag_sizes = zeros(HYPRE.HYPRE_Int, n)
+            offdiag_sizes = zeros(HYPRE.HYPRE_Int, n)
+            J_cols = Jutul.colvals(J)
+            @inbounds for row in 1:n
+                positions = nzrange(J, row)
+                ncols[row] = length(positions)
+                rows[row] = Jutul.executor_index_to_global(
+                    executor, row, :row)
+                for position in positions
+                    global_col = Jutul.executor_index_to_global(
+                        executor, J_cols[position], :column)
+                    cols[position] = global_col
+                    if ilower <= global_col <= iupper
+                        diag_sizes[row] += 1
+                    else
+                        offdiag_sizes[row] += 1
+                    end
+                end
+            end
+            csr = (
+                nrows = HYPRE.HYPRE_Int(n),
+                ncols = ncols,
+                rows = rows,
+                cols = cols,
+                values = values,
+                diag_sizes = diag_sizes,
+                offdiag_sizes = offdiag_sizes,
+                preallocated = Ref(false),
+            )
+        end
         return (
             I = zeros(Int, 1),
             J = zeros(Int, max_width),
             V = V, indices = HYPRE.HYPRE_BigInt.(ilower:iupper),
             native_zeroed_buffer = zeros(n),
-            n = n
+            n = n,
+            csr = csr,
             )
+    end
+
+    function preallocate_hypre_matrix!(A, helper)
+        helper.preallocated[] && return A
+        HYPRE.@check HYPRE.HYPRE_IJMatrixSetDiagOffdSizes(
+            A, helper.diag_sizes, helper.offdiag_sizes)
+        if Threads.nthreads() > 1 && Int(helper.nrows) >= 1000
+            HYPRE.@check HYPRE.HYPRE_IJMatrixSetOMPFlag(A, 1)
+        end
+        helper.preallocated[] = true
+        return A
+    end
+
+    function Jutul.hypre_matrix_with_preallocation(
+            comm, ilower, iupper, helper)
+        lower = HYPRE.HYPRE_BigInt(ilower)
+        upper = HYPRE.HYPRE_BigInt(iupper)
+        A = HYPRE.HYPREMatrix(
+            comm, lower, upper, lower, upper, C_NULL, C_NULL)
+        ijmatrix = Ref{HYPRE.HYPRE_IJMatrix}(C_NULL)
+        HYPRE.@check HYPRE.HYPRE_IJMatrixCreate(
+            comm, lower, upper, lower, upper, ijmatrix)
+        A.ijmatrix = ijmatrix[]
+        finalizer(A) do matrix
+            if matrix.ijmatrix != C_NULL
+                HYPRE.HYPRE_IJMatrixDestroy(matrix)
+                matrix.ijmatrix = matrix.parmatrix = C_NULL
+            end
+        end
+        push!(HYPRE.Internals.HYPRE_OBJECTS, A => nothing)
+        HYPRE.@check HYPRE.HYPRE_IJMatrixSetObjectType(
+            A, HYPRE.HYPRE_PARCSR)
+        preallocate_hypre_matrix!(A, helper)
+        HYPRE.@check HYPRE.HYPRE_IJMatrixInitialize(A)
+        return A
     end
 
     function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
@@ -95,8 +168,9 @@ module JutulHYPREExt
     function transfer_matrix_to_hypre(J::Jutul.StaticSparsityMatrixCSR, D, executor)
         n, m = size(J)
         @assert n == m
-        stored_transpose = SparseMatrixCSC(m, n, J.rowptr, J.colval, J.nzval)
-        J_h = HYPRE.HYPREMatrix(stored_transpose)
+        helper = D[:assembly_helper]
+        J_h = Jutul.hypre_matrix_with_preallocation(
+            HYPRE.MPI.COMM_SELF, 1, n, helper.csr)
         reassemble_matrix!(J_h, D, J, executor)
         return J_h
     end
@@ -113,6 +187,12 @@ module JutulHYPREExt
     function reassemble_matrix!(J_h, D, J, executor)
         I_buf, J_buf, V_buffers = D[:assembly_helper]
         reassemble_internal_boomeramg!(I_buf, J_buf, V_buffers, J, J_h, executor)
+    end
+
+    function reassemble_matrix!(J_h, D,
+            J::Jutul.StaticSparsityMatrixCSR, executor)
+        reassemble_internal_boomeramg!(
+            D[:assembly_helper].csr, J, J_h)
     end
 
     function Jutul.operator_nrows(p::BoomerAMGPreconditioner)
@@ -192,30 +272,20 @@ module JutulHYPREExt
         HYPRE.finish_assemble!(assembler)
     end
 
-    function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::Jutul.StaticSparsityMatrixCSR, J_h, executor)
-        nzval = nonzeros(Jac)
-        cols = Jutul.colvals(Jac)
-
+    function reassemble_internal_boomeramg!(helper,
+            Jac::Jutul.StaticSparsityMatrixCSR, J_h)
         n = size(Jac, 1)
-        @assert length(single_buf) == 1
         (; iupper, ilower) = J_h
         @assert n == iupper - ilower + 1
-        assembler = HYPRE.start_assemble!(J_h)
-        @inbounds for row in 1:n
-            pos_ix = nzrange(Jac, row)
-            k = length(pos_ix)
-            I = single_buf
-            I[1] = Jutul.executor_index_to_global(executor, row, :row)
-            J = longer_buf
-            resize!(J, k)
-            V_buf = V_buffers[k]
-            @inbounds for ki in 1:k
-                ri = pos_ix[ki]
-                V_buf[ki] = nzval[ri]
-                J[ki] = Jutul.executor_index_to_global(executor, cols[ri], :column)
-            end
-            HYPRE.assemble!(assembler, I, J, V_buf)
+        @assert !isnothing(helper)
+        if J_h.parmatrix == C_NULL
+            preallocate_hypre_matrix!(J_h, helper)
         end
-        HYPRE.finish_assemble!(assembler)
+        copyto!(helper.values, nonzeros(Jac))
+        HYPRE.@check HYPRE.HYPRE_IJMatrixInitialize(J_h)
+        HYPRE.@check HYPRE.HYPRE_IJMatrixSetValues(
+            J_h, helper.nrows, helper.ncols, helper.rows,
+            helper.cols, helper.values)
+        HYPRE.Internals.assemble_matrix(J_h)
     end
 end

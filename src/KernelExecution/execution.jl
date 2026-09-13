@@ -33,7 +33,13 @@ end
 
 # Adapt uses the context as the adaptation target. Backend packages define how
 # their own backend converts an Array, while Jutul supplies the structural rules.
-Adapt.adapt_storage(ctx::KernelAbstractionsContext, a::AbstractArray) = Adapt.adapt(ctx.backend, a)
+function Adapt.adapt_storage(ctx::KernelAbstractionsContext,
+        a::AbstractArray{T}) where T
+    # Device arrays cannot safely own elements with references to host-managed
+    # storage. Keep such arrays on the host; AssembleOnDevice submodels use
+    # them only during host evaluation and transfer their numeric products.
+    return isbitstype(T) ? Adapt.adapt(ctx.backend, a) : a
+end
 Adapt.adapt_storage(::KernelAbstractionsContext, a::AbstractArray{Symbol}) = Tuple(a)
 transfer(ctx::KernelAbstractionsContext, x::AbstractArray) = Adapt.adapt(ctx, x)
 backend_to_host(::KernelAbstractionsContext, x) = Adapt.adapt(Array, x)
@@ -495,9 +501,18 @@ replaces host-only control or metadata objects in device kernels.
 function backend_copyto!(destination::AbstractArray, source::AbstractArray)
     length(destination) == length(source) || throw(DimensionMismatch(
         "backend copy requires equal lengths, got $(length(destination)) and $(length(source))"))
+    destination === source && return destination
     isempty(destination) && return destination
     backend = KernelAbstractions.get_backend(destination)
-    if applicable(KernelAbstractions.copyto!, backend, destination, source)
+    source_backend = KernelAbstractions.get_backend(source)
+    if backend isa KernelAbstractions.CPU &&
+            !(source_backend isa KernelAbstractions.CPU)
+        # Base's generic copy between a device view and a host view iterates
+        # with scalar indexing. Materialize the source through its backend's
+        # bulk host-transfer path before copying into the (possibly strided)
+        # destination view.
+        copyto!(destination, Adapt.adapt(Array, source))
+    elseif applicable(KernelAbstractions.copyto!, backend, destination, source)
         # Host-evaluated submodels own their source buffers for the duration of
         # the simulation. Queue their copies on the backend so a structured
         # state transfer requires one synchronization instead of one per field.
@@ -574,8 +589,8 @@ function backend_copyto!(destination::ConservationLawTPFAStorage,
     backend_copyto!(destination.accumulation, source.accumulation)
     backend_copyto!(destination.half_face_flux_cells, source.half_face_flux_cells)
     backend_copyto!(destination.half_face_flux_faces, source.half_face_flux_faces)
-    if !isnothing(destination.source) && !isnothing(source.source)
-        backend_copyto!(destination.source, source.source)
+    if !isnothing(destination.sources) && !isnothing(source.sources)
+        backend_copyto!(destination.sources, source.sources)
     end
     return destination
 end

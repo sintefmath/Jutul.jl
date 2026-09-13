@@ -52,6 +52,10 @@ function generate_hypre_assembly_helper
 
 end
 
+function hypre_matrix_with_preallocation
+
+end
+
 function local_hypre_copy!
 
 end
