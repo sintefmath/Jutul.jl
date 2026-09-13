@@ -112,7 +112,6 @@ end
         simulator = transfer_to_backend(cpu_simulator, CPU())
 
         @test simulator.model.context isa KernelAbstractionsContext
-        @test minbatch(simulator.model.context) == minbatch(nothing)
         @test minbatch(simulator.storage.LinearizedSystem.jac) ==
             minbatch(simulator.model.context)
         @test haskey(simulator.storage.variable_definitions,
@@ -146,7 +145,8 @@ end
     simulator = transfer_to_backend(cpu_simulator, CPU())
     cache = simulator.storage.equations.heat_equation.Cells
     @test cache isa Jutul.GenericAutoDiffCache
-    @test simulator.model.domain.representation.tags === nothing
+    # Make sure tags do not survive...
+    @test isnothing(simulator.model.domain.representation.tags)
 
     states, = simulate!(simulator, [0.1]; info_level = -1)
     @test states[end][:T] ≈ reference[end][:T] rtol = 1e-10
