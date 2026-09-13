@@ -144,7 +144,11 @@ function update_preconditioner!(smoother::KASmootherPreconditioner,
     if isnothing(smoother.factor)
         smoother.factor = setup_ka_smoother(A, smoother.config)
         factor_type = eltype(smoother.factor)
-        degrees_per_row = factor_type <: StaticMatrix ? size(factor_type, 1) : 1
+        if factor_type <: StaticMatrix
+            degrees_per_row = size(factor_type, 1)
+        else
+            degrees_per_row = 1
+        end
         n = degrees_per_row*size(A, 1)
         smoother.dim = (n, n)
     else

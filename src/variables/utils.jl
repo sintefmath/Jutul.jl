@@ -148,13 +148,16 @@ function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w, co
     threaded_loop_minbatch(update, nu, context)
 end
 
-@inline function choose_increment(v::F, dv::F, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing, scale = nothing) where {F<:AbstractFloat}
-    dv = scale_increment(dv, scale)
+@inline function choose_increment(v::F, dv, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing, scale = nothing) where {F<:AbstractFloat}
+    # Nonlinear relaxation and variable limits are commonly configured as
+    # Float64 even when the simulation storage uses a narrower float type.
+    # Keep the update in the state value's precision.
+    dv = scale_increment(convert(F, dv), scale)
     dv = limit_abs(dv, abs_change)
     dv = limit_rel(v, dv, rel_change)
     dv = limit_lower(v, dv, minval)
     dv = limit_upper(v, dv, maxval)
-    return dv
+    return convert(F, dv)
 end
 # Limit absolute
 @inline limit_abs(dv, abs_change) = sign(dv)*min(abs(dv), abs_change)

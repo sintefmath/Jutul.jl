@@ -4,6 +4,8 @@ module KernelExecution
     using KernelAbstractions
     import Adapt
     import ForwardDiff
+    import StaticArrays
+    import StaticArrays: StaticArray
     import DataStructures: OrderedDict
 
     using ..Jutul

@@ -78,6 +78,14 @@ function axpy!(x, y, alpha, backend, block_size)
     x
 end
 
+function axpy!(x::Vector, y::Vector, alpha,
+        ::KernelAbstractions.CPU, min_batch)
+    foreach_cpu_row(length(x), min_batch) do i
+        @inbounds x[i] += alpha*y[i]
+    end
+    x
+end
+
 function ensure_smoother_work!(state, prototype)
     if isnothing(state.work)
         state.work = similar(prototype)

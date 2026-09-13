@@ -186,6 +186,19 @@ end
     x = zeros(size(A, 1))
     KAPreconditioners.apply!(x, hierarchy, b)
     @test norm(b - A*x) < norm(b)
+
+    cpu_minbatch = 7
+    threshold_matrix = csr_matrix(
+        copy(ordinary.rowptr), copy(ordinary.colval), copy(ordinary.nzval),
+        size(ordinary, 1), size(ordinary, 2);
+        backend = KernelAbstractions.CPU(), block_size = cpu_minbatch)
+    threshold_hierarchy = setup_amg(
+        threshold_matrix, AMGOptions(coarse_size = 4))
+    @test threshold_hierarchy.block_size == cpu_minbatch
+    @test all(minbatch(level.A) == cpu_minbatch
+        for level in threshold_hierarchy.levels)
+    @test all(level.smoother.block_size == cpu_minbatch
+        for level in threshold_hierarchy.levels)
 end
 
 @testset "Extended+i truncation preserves row sums" begin
@@ -292,14 +305,25 @@ end
     # Make preservation observable even if the replacement matrix is a scaled
     # version of the original one.
     H.levels[1].P.nzval[2] *= 0.9
-    interpolation_values = [isnothing(level.P) ? nothing : copy(level.P.nzval)
-                            for level in H.levels]
+    interpolation_values = map(H.levels) do level
+        if isnothing(level.P)
+            return nothing
+        else
+            return copy(level.P.nzval)
+        end
+    end
     B = copy(A)
     nonzeros(B) .*= 1.7
     resetup_amg!(H, B, :operators)
     @test array_ids == [(objectid(level.A.nzval), object_id_or_zero(level.P)) for level in H.levels]
-    @test interpolation_values == [isnothing(level.P) ? nothing : level.P.nzval
-                                   for level in H.levels]
+    current_interpolation_values = map(H.levels) do level
+        if isnothing(level.P)
+            return nothing
+        else
+            return level.P.nzval
+        end
+    end
+    @test interpolation_values == current_interpolation_values
     @test Array(H.levels[1].A.nzval) ≈ nonzeros(csr_matrix(B))
     test_galerkin(H)
     xb = zeros(size(B, 1))
@@ -596,10 +620,18 @@ end
     rhs = ones(size(A, 1))
     for backend in (KernelAbstractions.CPU(), JLBackend())
         C = csr_matrix(A; backend=backend)
-        b = backend isa KernelAbstractions.CPU ? rhs : JLArray(rhs)
+        if backend isa KernelAbstractions.CPU
+            b = rhs
+        else
+            b = JLArray(rhs)
+        end
         for config in (ILU0(2), DILU(2))
             state = setup_smoother(C, config)
-            reference = backend isa KernelAbstractions.CPU ? copy(initial) : JLArray(initial)
+            if backend isa KernelAbstractions.CPU
+                reference = copy(initial)
+            else
+                reference = JLArray(initial)
+            end
             fused = copy(reference)
             smooth!(reference, state, C, b; steps=2)
             KAPreconditioners.smooth_result!(fused, C, b, state, 2)
@@ -616,7 +648,11 @@ end
         C = csr_matrix(A; backend=backend)
         state = setup_smoother(C, DILU())
         @test all(isfinite, Array(state.inverse_diagonal))
-        rhs = backend isa KernelAbstractions.CPU ? ones(2) : JLArray(ones(2))
+        if backend isa KernelAbstractions.CPU
+            rhs = ones(2)
+        else
+            rhs = JLArray(ones(2))
+        end
         x = similar(rhs)
         KAPreconditioners.apply!(x, state, rhs)
         @test all(isfinite, Array(x))

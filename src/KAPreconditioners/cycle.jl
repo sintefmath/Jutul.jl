@@ -7,7 +7,7 @@ end
 
 function restrict!(bc::Vector, Pt::TransposeMap, P::Prolongation, r::Vector,
                     ::KernelAbstractions.CPU, block_size)
-    foreach_cpu_row(P.ncol) do I
+    foreach_cpu_row(P.ncol, block_size) do I
         value = zero(eltype(bc))
         @inbounds @simd for k in Pt.offsets[I]:(Pt.offsets[I+1]-1)
             value += conj(P.nzval[Pt.p_indices[k]]) * r[Pt.fine_rows[k]]
@@ -25,7 +25,7 @@ end
 
 function prolong!(x::Vector, P::Prolongation, xc::Vector,
                    ::KernelAbstractions.CPU, block_size)
-    foreach_cpu_row(P.nrow) do i
+    foreach_cpu_row(P.nrow, block_size) do i
         value = zero(eltype(x))
         @inbounds @simd for k in P.rowptr[i]:(P.rowptr[i+1]-1)
             value += P.nzval[k] * xc[P.colval[k]]
@@ -43,7 +43,7 @@ end
 
 function prolong_to!(dst::Vector, src::Vector, P::Prolongation, xc::Vector,
                       ::KernelAbstractions.CPU, block_size)
-    foreach_cpu_row(P.nrow) do i
+    foreach_cpu_row(P.nrow, block_size) do i
         value = zero(eltype(dst))
         @inbounds @simd for k in P.rowptr[i]:(P.rowptr[i+1]-1)
             value += P.nzval[k] * xc[P.colval[k]]

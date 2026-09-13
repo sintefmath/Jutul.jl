@@ -17,7 +17,7 @@ function same_pattern(H::AMGHierarchy, A::StaticSparsityMatrixCSR)
 end
 
 function galerkin!(coarse::StaticSparsityMatrixCSR, fine::StaticSparsityMatrixCSR, P::Prolongation, G::GalerkinMap)
-    k! = galerkin_kernel!(matrix_backend(fine), matrix_block_size(fine))
+    k! = galerkin_kernel!(matrix_backend(fine), matrix_kernel_block_size(fine))
     k!(coarse.nzval, fine.nzval, P.nzval, G.offsets, G.p_left, G.a_index,
        G.p_right, matrix_nonzeros(coarse); ndrange=matrix_nonzeros(coarse))
     coarse
@@ -26,7 +26,7 @@ end
 function galerkin!(coarse::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                     fine::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                     P::Prolongation, G::GalerkinMap) where {Tv,Ti}
-    foreach_cpu_row(matrix_nonzeros(coarse)) do k
+    foreach_cpu_row(matrix_nonzeros(coarse), matrix_block_size(coarse)) do k
         value = zero(Tv)
         @inbounds @simd for t in G.offsets[k]:(G.offsets[k+1]-1)
             value += conj(P.nzval[G.p_left[t]]) * fine.nzval[G.a_index[t]] *
@@ -40,7 +40,8 @@ end
 function update_prolongation!(level::AMGLevel, interpolation::ExtendedIInterpolation)
     A, P = level.A, level.P
     isnothing(P) && return level
-    k! = update_extended_i_p_kernel!(matrix_backend(A), matrix_block_size(A))
+    k! = update_extended_i_p_kernel!(
+        matrix_backend(A), matrix_kernel_block_size(A))
     k!(P.nzval, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval,
        level.cf, level.coarse_map, level.strength, interpolation.rescale,
        matrix_nrows(A); ndrange=matrix_nrows(A))
@@ -50,7 +51,8 @@ end
 function update_prolongation!(level::AMGLevel, interpolation::ClassicalInterpolation)
     A, P = level.A, level.P
     isnothing(P) && return level
-    k! = update_classical_p_kernel!(matrix_backend(A), matrix_block_size(A))
+    k! = update_classical_p_kernel!(
+        matrix_backend(A), matrix_kernel_block_size(A))
     k!(P.nzval, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval,
        level.cf, level.coarse_map, level.strength, interpolation.rescale,
        matrix_nrows(A); ndrange=matrix_nrows(A))
@@ -103,7 +105,7 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
     H.levels = build_hierarchy(finest, H.options; reuse_levels=H.levels,
                                 workspace=H.workspace, host_finest=host_finest,
                                 reuse_finest_structure=true)
-    H.block_size = H.options.block_size
+    H.block_size = matrix_block_size(H.levels[1].A)
     H.last_iterations = 0
     H.last_residual = Inf
     H

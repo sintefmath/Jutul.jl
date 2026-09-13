@@ -87,7 +87,11 @@ function grouped_schedule(groups::Vector{Int}, n::Int; reverse::Bool=false)
     @inbounds for group in groups
         counts[group] += 1
     end
-    ordered_counts = reverse ? Base.reverse(counts) : counts
+    if reverse
+        ordered_counts = Base.reverse(counts)
+    else
+        ordered_counts = counts
+    end
     offsets = Vector{Int}(undef, number_of_groups + 1)
     offsets[1] = 1
     @inbounds for group in 1:number_of_groups
@@ -96,7 +100,11 @@ function grouped_schedule(groups::Vector{Int}, n::Int; reverse::Bool=false)
     cursor = copy(offsets)
     rows = Vector{eltype(groups)}(undef, n)
     @inbounds for i in 1:n
-        group = reverse ? number_of_groups + 1 - groups[i] : groups[i]
+        if reverse
+            group = number_of_groups + 1 - groups[i]
+        else
+            group = groups[i]
+        end
         rows[cursor[group]] = i
         cursor[group] += 1
     end
@@ -463,6 +471,82 @@ function update_smoother!(state::DILUState, A::StaticSparsityMatrixCSR)
                     state.inverse_diagonal, state.values, state.rowptr,
                     state.colval, state.diagonal_positions,
                     state.transpose_positions, state.ordering)
+    state
+end
+
+function update_smoother!(
+        state::ILU0State{<:Vector,<:Vector,<:Vector,<:Vector},
+        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector}
+    ) where {Tv,Ti}
+    require_same_smoother_pattern(state, A)
+    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
+    factors = state.factors
+    inverse_diagonal = state.inverse_diagonal
+    rowptr = state.rowptr
+    colval = state.colval
+    diagonal = state.diagonal_positions
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        foreach_cpu_row(count, state.block_size) do q
+            i = rows[first + q - 1]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
+                j = colval[k]
+                if j < i
+                    multiplier = factors[k]*inverse_diagonal[j]
+                    factors[k] = multiplier
+                    for p in rowptr[j]:(rowptr[j + 1] - one(Ti))
+                        column = colval[p]
+                        if column > j
+                            target = device_find_column(
+                                rowptr, colval, i, column)
+                            !iszero(target) &&
+                                (factors[target] -= multiplier*factors[p])
+                        end
+                    end
+                end
+            end
+            inverse_diagonal[i] = inv(factors[diagonal[i]])
+        end
+    end
+    state
+end
+
+function update_smoother!(
+        state::DILUState{<:Vector,<:Vector,<:Vector,<:Vector},
+        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector}
+    ) where {Tv,Ti}
+    require_same_smoother_pattern(state, A)
+    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
+    values = state.values
+    inverse_diagonal = state.inverse_diagonal
+    rowptr = state.rowptr
+    colval = state.colval
+    diagonal_positions = state.diagonal_positions
+    transpose_positions = state.transpose_positions
+    ordering = state.ordering
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        foreach_cpu_row(count, state.block_size) do q
+            i = rows[first + q - 1]
+            original_diagonal = values[diagonal_positions[i]]
+            diagonal = original_diagonal
+            row_order = ordering[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
+                j = colval[k]
+                opposite = transpose_positions[k]
+                if ordering[j] < row_order && !iszero(opposite)
+                    diagonal -= values[k]*inverse_diagonal[j]*values[opposite]
+                end
+            end
+            inverse_diagonal[i] = robust_inverse(diagonal, original_diagonal)
+        end
+    end
     state
 end
 

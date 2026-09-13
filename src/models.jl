@@ -1062,7 +1062,11 @@ function get_output_state(storage, model)
         if haskey(s0, k)
             value = s0[k]
             host_value = backend_to_host(model.context, value)
-            D[k] = host_value === value ? copy(value) : host_value
+            if host_value === value
+                D[k] = copy(value)
+            else
+                D[k] = host_value
+            end
         end
     end
     return D

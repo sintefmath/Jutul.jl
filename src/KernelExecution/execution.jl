@@ -38,11 +38,37 @@ function Adapt.adapt_storage(ctx::KernelAbstractionsContext,
     # Device arrays cannot safely own elements with references to host-managed
     # storage. Keep such arrays on the host; AssembleOnDevice submodels use
     # them only during host evaluation and transfer their numeric products.
-    return isbitstype(T) ? Adapt.adapt(ctx.backend, a) : a
+    target_type = ka_storage_eltype(ctx, T)
+    converted = if target_type === T
+        a
+    else
+        map(value -> convert(target_type, value), a)
+    end
+    if isbitstype(target_type)
+        return Adapt.adapt(ctx.backend, converted)
+    else
+        return converted
+    end
 end
 Adapt.adapt_storage(::KernelAbstractionsContext, a::AbstractArray{Symbol}) = Tuple(a)
 transfer(ctx::KernelAbstractionsContext, x::AbstractArray) = Adapt.adapt(ctx, x)
 backend_to_host(::KernelAbstractionsContext, x) = Adapt.adapt(Array, x)
+
+ka_storage_eltype(::KernelAbstractionsContext, ::Type{T}) where T = T
+ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{T}) where {T<:AbstractFloat} =
+    float_type(ctx)
+ka_storage_eltype(::KernelAbstractionsContext, ::Type{Bool}) = Bool
+ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{T}) where {T<:Integer} =
+    index_type(ctx)
+ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{Complex{T}}) where T =
+    Complex{ka_storage_eltype(ctx, T)}
+ka_storage_eltype(ctx::KernelAbstractionsContext,
+        ::Type{ForwardDiff.Dual{Tag,T,N}}) where {Tag,T,N} =
+    ForwardDiff.Dual{Tag,ka_storage_eltype(ctx, T),N}
+function ka_storage_eltype(ctx::KernelAbstractionsContext,
+        ::Type{T}) where {T<:StaticArray}
+    return StaticArrays.similar_type(T, ka_storage_eltype(ctx, eltype(T)))
+end
 
 function Adapt.adapt_structure(to, interpolant::LinearInterpolant)
     return LinearInterpolant(
@@ -73,7 +99,11 @@ function Adapt.adapt_structure(to, g::CartesianMesh)
 end
 
 function Adapt.adapt_structure(to, d::DiscretizedDomain)
-    entities = d.entities isa EntityCounter ? d.entities : EntityCounter(d.entities)
+    if d.entities isa EntityCounter
+        entities = d.entities
+    else
+        entities = EntityCounter(d.entities)
+    end
     return DiscretizedDomain(
         Adapt.adapt(to, d.representation),
         Adapt.adapt(to, d.discretizations),
@@ -95,24 +125,25 @@ function Adapt.adapt_structure(to, eq::ConservationLaw{C, T, FT, N}) where {C, T
         flux = Adapt.adapt(to, eq.flux_type))
 end
 
-function Adapt.adapt_structure(to, c::CompactAutoDiffCache)
-    entries = Adapt.adapt(to, c.entries)
-    positions = Adapt.adapt(to, c.jacobian_positions)
+function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
+        c::CompactAutoDiffCache)
+    entries = Adapt.adapt(ctx, c.entries)
+    positions = Adapt.adapt(ctx, c.jacobian_positions)
     return CompactAutoDiffCache{typeof(c.equations_per_entity), eltype(entries)}(
         entries, c.entity, positions,
         c.equations_per_entity, c.number_of_entities, c.npartials
     )
 end
 
-function Adapt.adapt_structure(to,
+function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
         c::GenericAutoDiffCache{N, E, T}) where {N, E, T}
-    entries = Adapt.adapt(to, c.entries)
-    vpos = Adapt.adapt(to, c.vpos)
-    variables = Adapt.adapt(to, c.variables)
-    positions = Adapt.adapt(to, c.jacobian_positions)
-    diagonal = Adapt.adapt(to, c.diagonal_positions)
-    variable_map = Adapt.adapt(to, c.variable_map)
-    return GenericAutoDiffCache{N, E, T}(
+    entries = Adapt.adapt(ctx, c.entries)
+    vpos = Adapt.adapt(ctx, c.vpos)
+    variables = Adapt.adapt(ctx, c.variables)
+    positions = Adapt.adapt(ctx, c.jacobian_positions)
+    diagonal = Adapt.adapt(ctx, c.diagonal_positions)
+    variable_map = Adapt.adapt(ctx, c.variable_map)
+    return GenericAutoDiffCache{N, E, eltype(entries)}(
         entries, vpos, variables, positions, diagonal,
       c.number_of_entities_target, c.number_of_entities_source, variable_map)
 end
@@ -153,8 +184,13 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
     nzval = Adapt.adapt(ctx, nonzeros(A))
     colval = Adapt.adapt(ctx, colvals(A))
     rowptr = Adapt.adapt(ctx, A.rowptr)
+    if is_cpu_backend(ctx)
+        execution_size = minbatch(ctx)
+    else
+        execution_size = ctx.workgroupsize
+    end
     return StaticSparsityMatrixCSR(nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
-        nthreads = 1, minbatch = 1, thread_type = :serial)
+        nthreads = 1, minbatch = execution_size, thread_type = :serial)
 end
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::LinearizedSystem)
@@ -164,19 +200,28 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::LinearizedS
     jac = Adapt.adapt(ctx, lsys.jac)
     r_buffer = Adapt.adapt(ctx, lsys.r_buffer)
     dx_buffer = Adapt.adapt(ctx, lsys.dx_buffer)
-    r = lsys.r === lsys.r_buffer ? r_buffer : Adapt.adapt(ctx, lsys.r)
-    dx = lsys.dx === lsys.dx_buffer ? dx_buffer : Adapt.adapt(ctx, lsys.dx)
+    if lsys.r === lsys.r_buffer
+        r = r_buffer
+    else
+        r = Adapt.adapt(ctx, lsys.r)
+    end
+    if lsys.dx === lsys.dx_buffer
+        dx = dx_buffer
+    else
+        dx = Adapt.adapt(ctx, lsys.dx)
+    end
     function backend_jacobian_buffer()
         nz = nonzeros(jac)
         original_buffer = lsys.jac_buffer
-        if eltype(original_buffer) == eltype(nz)
+        buffer_eltype = ka_storage_eltype(ctx, eltype(original_buffer))
+        if buffer_eltype == eltype(nz)
             if size(original_buffer) == size(nz)
                 return nz
             else
                 return reshape(nz, size(original_buffer))
             end
         end
-        buffer = reinterpret(reshape, eltype(original_buffer), nz)
+        buffer = reinterpret(reshape, buffer_eltype, nz)
         return reshape(buffer, size(original_buffer))
     end
     jac_buffer = backend_jacobian_buffer()
@@ -187,7 +232,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
         block::LinearizedBlock{R, C}) where {R, C}
     jac = Adapt.adapt(ctx, block.jac)
     nz = nonzeros(jac)
-    if eltype(nz) == eltype(block.jac_buffer) && length(nz) == length(block.jac_buffer)
+    buffer_eltype = ka_storage_eltype(ctx, eltype(block.jac_buffer))
+    if eltype(nz) == buffer_eltype && length(nz) == length(block.jac_buffer)
         jac_buffer = nz
     else
         throw(ArgumentError(
@@ -200,10 +246,12 @@ end
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::MultiLinearizedSystem)
     function backend_vector_alias(original, original_buffer, adapted_buffer)
         buffer = reshape(adapted_buffer, size(original_buffer))
-        if eltype(original) == eltype(original_buffer)
+        original_eltype = ka_storage_eltype(ctx, eltype(original))
+        buffer_eltype = ka_storage_eltype(ctx, eltype(original_buffer))
+        if original_eltype == buffer_eltype
             return reshape(buffer, size(original))
         else
-            return reinterpret(reshape, eltype(original), buffer)
+            return reinterpret(reshape, original_eltype, buffer)
         end
     end
 
@@ -354,9 +402,13 @@ function forces_for_timestep(sim, forces::BackendForces, timesteps,
 end
 
 Base.getindex(forces::BackendForces, key) = forces.device[key]
-Base.getproperty(forces::BackendForces, name::Symbol) =
-    name === :host || name === :device ? getfield(forces, name) :
-        getproperty(getfield(forces, :device), name)
+function Base.getproperty(forces::BackendForces, name::Symbol)
+    if name === :host || name === :device
+        return getfield(forces, name)
+    else
+        return getproperty(getfield(forces, :device), name)
+    end
+end
 Base.keys(forces::BackendForces) = keys(forces.device)
 Base.values(forces::BackendForces) = values(forces.device)
 Base.pairs(forces::BackendForces) = pairs(forces.device)
@@ -448,9 +500,14 @@ function cpu_csr_model(model::MultiModel)
         for (key, submodel) in pairs(model.models))...)
     outer = ParallelCSRContext(1;
         matrix_layout = matrix_layout(model.context), thread_type = :serial)
+    if isnothing(model.groups)
+        groups = nothing
+    else
+        groups = copy(model.groups)
+    end
     return MultiModel(models, multimodel_label(model);
         cross_terms = model.cross_terms,
-        groups = isnothing(model.groups) ? nothing : copy(model.groups),
+        groups = groups,
         group_execution = model.group_execution,
         context = outer,
         reduction = model.reduction,
@@ -463,16 +520,21 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
     function backend_subcontext(submodel)
         source = submodel.context
         return KernelAbstractionsContext(ctx.backend;
-            float_type = float_type(source),
-            index_type = index_type(source),
+            float_type = float_type(ctx),
+            index_type = index_type(ctx),
             matrix_layout = matrix_layout(source),
-            workgroupsize = ctx.workgroupsize
+            workgroupsize = ctx.workgroupsize,
+            minbatch = minbatch(ctx)
         )
     end
     models = (; (key => Adapt.adapt(backend_subcontext(submodel), submodel)
         for (key, submodel) in pairs(model.models))...)
     cross_terms = [Adapt.adapt(ctx, ct) for ct in model.cross_terms]
-    groups = isnothing(model.groups) ? nothing : copy(model.groups)
+    if isnothing(model.groups)
+        groups = nothing
+    else
+        groups = copy(model.groups)
+    end
     label = multimodel_label(model)
     return MultiModel(models, label;
         cross_terms = cross_terms,
@@ -715,9 +777,14 @@ Base.@noinline function set_transfer_group_execution(sim::Simulator, policy)
     modes_by_key = map(keys_m) do key
         execution_for_submodel(key, model[key])
     end
+    if isnothing(model.groups)
+        groups = nothing
+    else
+        groups = copy(model.groups)
+    end
     rebuilt = MultiModel(model.models, multimodel_label(model);
         cross_terms = model.cross_terms,
-        groups = isnothing(model.groups) ? nothing : copy(model.groups),
+        groups = groups,
         group_execution = modes_by_key,
         context = model.context,
         reduction = model.reduction,
@@ -881,7 +948,10 @@ end
 function host_backend_factorization(matrix::StaticSparsityMatrixCSR)
     host_matrix = KAPreconditioners.sparse_matrix(matrix)
     factorization = lu(host_matrix)
-    scalar_type = eltype(host_matrix)
+    # UMFPACK promotes Float32 input to Float64. Its ldiv! requires work
+    # vectors matching the factorization, so use the resulting scalar type
+    # and convert only at the backend boundary.
+    scalar_type = eltype(factorization)
     right_hand_side = Vector{scalar_type}(undef, size(host_matrix, 1))
     solution = similar(right_hand_side)
     return HostBackendFactorization(

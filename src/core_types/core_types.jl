@@ -436,7 +436,11 @@ function Base.copy(m::SimulationModel)
     outputs = copy(m.output_variables)
     prm = copy(m.parameters)
     eqs = copy(m.equations)
-    extra = isnothing(m.extra) ? nothing : copy(m.extra)
+    if isnothing(m.extra)
+        extra = nothing
+    else
+        extra = copy(m.extra)
+    end
     return SimulationModel(
         m.domain,
         m.system,
@@ -1257,7 +1261,11 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
             reduction = nothing
         end
     end
-    effective_groups = isnothing(groups) ? ones(Int, number_of_models) : groups
+    if isnothing(groups)
+        effective_groups = ones(Int, number_of_models)
+    else
+        effective_groups = groups
+    end
     for group in 1:num_groups
         modes = group_execution[effective_groups .== group]
         has_nothing = any(==(NothingOnDevice), modes)

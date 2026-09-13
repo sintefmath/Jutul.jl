@@ -72,9 +72,11 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
         n = size(first(C), 1)
-        T = eltype(sys[1, 1].r)
-        apply! = get_schur_apply(sys.schur_buffer, Val(T), B, C, D, E)
-        op = LinearOperator(Float64, n, n, false, false, apply!)
+        residual_type = eltype(sys[1, 1].r)
+        scalar_type = eltype(sys.r_buffer)
+        apply! = get_schur_apply(
+            sys.schur_buffer, Val(residual_type), B, C, D, E)
+        op = LinearOperator(scalar_type, n, n, false, false, apply!)
     else
         S = sys.subsystems
         if true

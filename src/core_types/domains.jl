@@ -34,7 +34,13 @@ Base.keys(ec::EntityCounter) = ec.entities
 Base.values(ec::EntityCounter) = ec.counts
 Base.length(ec::EntityCounter) = length(ec.entities)
 Base.pairs(ec::EntityCounter) = zip(ec.entities, ec.counts)
-Base.iterate(ec::EntityCounter, state = 1) = state > length(ec) ? nothing : ((ec.entities[state] => ec.counts[state]), state + 1)
+function Base.iterate(ec::EntityCounter, state = 1)
+    if state > length(ec)
+        return nothing
+    else
+        return ((ec.entities[state] => ec.counts[state]), state + 1)
+    end
+end
 
 export DiscretizedDomain
 struct DiscretizedDomain{G, D, E, M} <: JutulDomain

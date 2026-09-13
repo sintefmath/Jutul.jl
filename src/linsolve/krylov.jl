@@ -135,12 +135,16 @@ function linear_solve!(sys::LSystem,
         preconditioner_arg = (M = prec_op, )
     end
     solve_f, F = krylov_jl_solve_function(krylov, op, r)
+    # Krylov workspaces use the context's floating-point type and require
+    # tolerances of that type as well (notably for Float32 KA contexts).
+    solver_rtol = convert(Ft, rtol)
+    solver_atol = convert(Ft, atol)
     @tic "solve" solve_f(F, op, r;
         preconditioner_arg...,
         itmax = max_it,
         verbose = v,
-        rtol = rtol,
-        atol = atol,
+        rtol = solver_rtol,
+        atol = solver_atol,
         history = true,
         callback = callback,
         cfg.arguments...

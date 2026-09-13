@@ -19,7 +19,21 @@ end
 
 function matrix_block_size(A::StaticSparsityMatrixCSR)
     minbatch = A.minbatch
-    return minbatch > 1 ? minbatch : 128
+    if matrix_backend(A) isa KernelAbstractions.CPU
+        return Int(minbatch)
+    elseif minbatch > 1
+        return Int(minbatch)
+    else
+        return 128
+    end
+end
+
+function matrix_kernel_block_size(A::StaticSparsityMatrixCSR)
+    if matrix_backend(A) isa KernelAbstractions.CPU
+        return 128
+    else
+        return matrix_block_size(A)
+    end
 end
 
 function synchronize_backend(backend)
@@ -84,7 +98,11 @@ function host_csr_from_csc(A::SparseMatrixCSC{Tv}, ::Type{Ti};
         rowptr[row] += one(Ti)
     end
 
-    cursor = cursor_reuse isa Vector{Ti} ? cursor_reuse : Vector{Ti}(undef, nrow)
+    if cursor_reuse isa Vector{Ti}
+        cursor = cursor_reuse
+    else
+        cursor = Vector{Ti}(undef, nrow)
+    end
     resize!(cursor, nrow)
     copyto!(cursor, 1, rowptr, 1, nrow)
     source_values = nonzeros(A)
@@ -127,7 +145,11 @@ function csr_matrix(A::SparseMatrixCSC{Tv}; backend = nothing,
         block_size::Integer = 128,
         index_type::Type{Ti} = Int32) where {Tv, Ti<:Integer}
     host = host_csr_from_csc(A, Ti; block_size = block_size)
-    selected_backend = isnothing(backend) ? matrix_backend(host) : backend
+    if isnothing(backend)
+        selected_backend = matrix_backend(host)
+    else
+        selected_backend = backend
+    end
     if selected_backend isa KernelAbstractions.CPU
         return host
     end

@@ -169,8 +169,11 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
     model = case.model
-    execution_model = ismissing(simulator) ? model :
-        Jutul.get_simulator_model(simulator)
+    if ismissing(simulator)
+        execution_model = model
+    else
+        execution_model = Jutul.get_simulator_model(simulator)
+    end
     if isnothing(deps_targets)
         deps_targets = Jutul.parameter_targets(model)
     end

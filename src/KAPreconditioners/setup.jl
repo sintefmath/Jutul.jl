@@ -47,7 +47,7 @@ function strength(A::StaticSparsityMatrixCSR{Tv,Ti}, theta::Real, max_row_sum::R
     else
         strong = backend_zeros(matrix_backend(A), Bool, matrix_nonzeros(A))
     end
-    k! = strength_kernel!(matrix_backend(A), matrix_block_size(A))
+    k! = strength_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(strong, A.rowptr, A.colval, A.nzval, theta, max_row_sum, matrix_nrows(A);
        ndrange=matrix_nrows(A))
     synchronize_backend(matrix_backend(A))
@@ -1487,7 +1487,8 @@ function setup_amg(A::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOptions=AMGOpt
     size(A, 1) == size(A, 2) || throw(DimensionMismatch("AMG requires a square matrix"))
     workspace = SetupWorkspace(Tv, Ti)
     levels = build_hierarchy(A, options; workspace=workspace)
-    AMGHierarchy{Tv,Ti}(levels, workspace, options, matrix_backend(A), options.block_size,
+    AMGHierarchy{Tv,Ti}(levels, workspace, options, matrix_backend(A),
+                        matrix_block_size(levels[1].A),
                         host_prefix(A.rowptr, matrix_nrows(A) + 1),
                         host_prefix(A.colval, matrix_nonzeros(A)), 0, Inf)
 end

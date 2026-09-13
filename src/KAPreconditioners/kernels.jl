@@ -287,17 +287,23 @@ end
 function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::AbstractVector)
     length(y) == matrix_nrows(A) || throw(DimensionMismatch())
     length(x) == matrix_ncols(A) || throw(DimensionMismatch())
-    k! = spmv_kernel!(matrix_backend(A), matrix_block_size(A))
+    k! = spmv_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(y, A.rowptr, A.colval, A.nzval, x, matrix_nrows(A); ndrange=matrix_nrows(A))
     y
 end
 
 const CPU_THREAD_THRESHOLD = 8_192
 
-@inline function foreach_cpu_row(f, n::Int)
-    if Threads.nthreads() > 1 && n >= CPU_THREAD_THRESHOLD
-        Threads.@threads :dynamic for i in 1:n
-            f(i)
+@inline function foreach_cpu_row(f, n::Int,
+        min_batch::Int=CPU_THREAD_THRESHOLD)
+    number_of_batches = clamp(n ÷ min_batch, 1, Threads.nthreads())
+    if number_of_batches > 1
+        Threads.@threads :dynamic for batch in 1:number_of_batches
+            first_row = fld((batch - 1)*n, number_of_batches) + 1
+            last_row = fld(batch*n, number_of_batches)
+            @inbounds for i in first_row:last_row
+                f(i)
+            end
         end
     else
         @inbounds for i in 1:n
@@ -311,7 +317,7 @@ function LinearAlgebra.mul!(y::Vector, A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector
                             x::Vector) where {Tv,Ti}
     length(y) == matrix_nrows(A) || throw(DimensionMismatch())
     length(x) == matrix_ncols(A) || throw(DimensionMismatch())
-    foreach_cpu_row(matrix_nrows(A)) do i
+    foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
         value = zero(eltype(y))
         @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i+1]-1)
             value += A.nzval[k] * x[A.colval[k]]
@@ -323,7 +329,7 @@ end
 
 function copy_matrix_values!(dst::StaticSparsityMatrixCSR, src::StaticSparsityMatrixCSR)
     matrix_nonzeros(dst) == matrix_nonzeros(src) || throw(ArgumentError("matrix patterns differ"))
-    k! = copy_kernel!(matrix_backend(dst), matrix_block_size(dst))
+    k! = copy_kernel!(matrix_backend(dst), matrix_kernel_block_size(dst))
     k!(dst.nzval, src.nzval, matrix_nonzeros(dst); ndrange=matrix_nonzeros(dst))
     dst
 end
@@ -341,7 +347,7 @@ function fill_backend!(x, value, backend, block_size)
     x
 end
 
-fill_backend!(x::Vector, value, ::KernelAbstractions.CPU, block_size) = fill!(x, value)
+fill_backend!(x::Array, value, ::KernelAbstractions.CPU, block_size) = fill!(x, value)
 
 function update_coarse_solver!(S::CoarseLUState, A::StaticSparsityMatrixCSR)
     @inbounds for k in 1:matrix_nonzeros(A)
@@ -352,8 +358,9 @@ function update_coarse_solver!(S::CoarseLUState, A::StaticSparsityMatrixCSR)
 end
 
 function copy_csr_to_dense!(dense, A::StaticSparsityMatrixCSR)
-    fill_backend!(dense, zero(eltype(dense)), matrix_backend(A), matrix_block_size(A))
-    k! = csr_to_dense_kernel!(matrix_backend(A), matrix_block_size(A))
+    fill_backend!(dense, zero(eltype(dense)), matrix_backend(A),
+                  matrix_kernel_block_size(A))
+    k! = csr_to_dense_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(dense, A.rowptr, A.colval, A.nzval, matrix_nrows(A); ndrange=matrix_nrows(A))
     # Generic `lu!` implementations may access the array from the host, while
     # accelerator implementations enqueue work on their own library stream.
@@ -396,7 +403,7 @@ function coarse_solve!(x, b, S::HostLUState, backend, block_size)
 end
 
 function residual!(r, A::StaticSparsityMatrixCSR, x, b)
-    k! = residual_kernel!(matrix_backend(A), matrix_block_size(A))
+    k! = residual_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(r, b, x, A.rowptr, A.colval, A.nzval, matrix_nrows(A); ndrange=matrix_nrows(A))
     r
 end
@@ -404,7 +411,7 @@ end
 
 function residual!(r::Vector, A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                     x::Vector, b::Vector) where {Tv,Ti}
-    foreach_cpu_row(matrix_nrows(A)) do i
+    foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
         value = zero(eltype(r))
         @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i+1]-1)
             value += A.nzval[k] * x[A.colval[k]]

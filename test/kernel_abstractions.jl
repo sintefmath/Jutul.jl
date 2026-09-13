@@ -87,6 +87,18 @@ end
 end
 
 @testset "KernelAbstractions context" begin
+    threshold_context = KernelAbstractionsContext(CPU();
+        minbatch = 4, workgroupsize = 2)
+    @test minbatch(threshold_context) == 4
+    @test minbatch(adjoint(threshold_context)) == 4
+    @test_throws ArgumentError KernelAbstractionsContext(CPU(); minbatch = 0)
+
+    small_result = zeros(Int, 4)
+    small_event = Jutul.KernelExecution.launch_threaded_loop(
+        i -> (small_result[i] = i), length(small_result), threshold_context)
+    @test isnothing(small_event)
+    @test small_result == 1:4
+
     for use_manual in (true, false)
         model = SimulationModel(
             ScalarTestDomain(use_manual = use_manual),
@@ -100,6 +112,9 @@ end
         simulator = transfer_to_backend(cpu_simulator, CPU())
 
         @test simulator.model.context isa KernelAbstractionsContext
+        @test minbatch(simulator.model.context) == minbatch(nothing)
+        @test minbatch(simulator.storage.LinearizedSystem.jac) ==
+            minbatch(simulator.model.context)
         @test haskey(simulator.storage.variable_definitions,
             :secondary_variable_evaluation_plan)
         @test simulator.model.primary_variables isa NamedTuple
@@ -152,10 +167,16 @@ end
         A = setup_forces(model_a, sources = ScalarTestForce(1.0)),
         B = setup_forces(model_b, sources = ScalarTestForce(-1.0)))
 
+    function group_execution(key, submodel)
+        if key == :A
+            return SolveFullyOnDevice
+        else
+            return AssembleOnDevice
+        end
+    end
     simulator = transfer_to_backend(
         Simulator(model; state0 = state0), CPU();
-        group_execution = (key, submodel) -> key == :A ?
-            SolveFullyOnDevice : AssembleOnDevice)
+        group_execution = group_execution)
     @test isnothing(simulator.model.groups)
     @test collect(simulator.model.group_execution) ==
         [SolveFullyOnDevice, AssembleOnDevice]

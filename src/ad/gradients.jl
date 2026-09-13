@@ -366,7 +366,11 @@ function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResul
     else
         sparsity = obj_sparsity[k]
         if isnothing(sparsity)
-            sim = k == :forward ? storage.objective : storage[k]
+            if k == :forward
+                sim = storage.objective
+            else
+                sim = storage[k]
+            end
             # Note: Variables here may be parameters or variables depending in the "outer" context
             obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps, :variables, steps)
         end

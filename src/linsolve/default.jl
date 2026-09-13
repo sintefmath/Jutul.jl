@@ -247,7 +247,7 @@ function linear_operator(sys::LinearizedSystem; skip_red = false)
     else
         apply! = get_mul!(sys)
         n = length(sys.r_buffer)
-        op = LinearOperator(Float64, n, n, false, false, apply!)
+        op = LinearOperator(eltype(sys.r_buffer), n, n, false, false, apply!)
     end
     return op
 end
