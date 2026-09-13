@@ -35,9 +35,8 @@ using HYPRE
     states = test_heat_2d(4, 4, linear_solver = lsolve)
     @test length(states) == 1
 
-    # HYPRE retains its StaticCSR pathway. The CSC transpose needed by HYPRE
-    # is reconstructed on demand now that StaticSparsityMatrixCSR no longer
-    # stores one.
+    # Exercise the bulk StaticCSR assembly path through HYPRE.jl's public
+    # matrix and assembly lifecycle.
     csr_lsolve = GenericKrylov(:bicgstab,
         preconditioner = Jutul.BoomerAMGPreconditioner())
     states = test_heat_2d(4, 4,

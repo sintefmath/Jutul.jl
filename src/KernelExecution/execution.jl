@@ -1001,9 +1001,6 @@ function LinearAlgebra.ldiv!(output::AbstractVector,
     return output
 end
 
-# Initial implementation keeps the direct factorization on the CPU. Assembly,
-# linearization, convergence and variable/property loops stay on the selected
-# backend; only the solve vectors and CSR values cross the boundary.
 function linear_solve!(sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR},
         ::Nothing, ctx::KernelAbstractionsContext, arg...;
         dx = sys.dx, r = sys.r_buffer, kwarg...)
