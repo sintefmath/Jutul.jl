@@ -26,7 +26,7 @@ function KernelAbstractionsContext(backend;
         index_type::Type{I} = Int,
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
-        minbatch = minbatch(nothing)
+        minbatch = 1000
     ) where {F, I}
     backend isa KernelAbstractions.Backend || throw(ArgumentError("backend must be a KernelAbstractions.Backend"))
     F <: AbstractFloat || throw(ArgumentError("float_type must be an AbstractFloat type"))
