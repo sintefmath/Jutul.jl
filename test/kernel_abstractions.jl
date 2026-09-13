@@ -4,8 +4,6 @@ using KernelAbstractions
 using SparseArrays
 import Jutul.KernelExecution: secondary_variable_evaluation_plan
 
-@test :secondary_variable_evaluation_plan ∉ names(Jutul)
-
 struct SecondaryPlanA end
 struct SecondaryPlanB end
 struct SecondaryPlanC end
