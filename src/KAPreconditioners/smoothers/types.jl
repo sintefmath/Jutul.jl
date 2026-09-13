@@ -13,6 +13,23 @@ struct SPAI0 <: AbstractSmoother
 end
 
 """
+    GaussSeidel(steps=1, damping=1.0)
+
+Forward Gauss-Seidel on the down cycle and backward Gauss-Seidel on the up
+cycle. This CPU smoother mirrors BoomerAMG's default serial relaxation.
+"""
+struct GaussSeidel <: AbstractSmoother
+    steps::Int
+    damping::Float64
+    function GaussSeidel(steps::Integer=1, damping::Real=1.0)
+        steps > 0 || throw(ArgumentError("Gauss-Seidel steps must be positive"))
+        0 < damping <= 1 || throw(ArgumentError(
+            "Gauss-Seidel damping must be in (0, 1]"))
+        new(Int(steps), Float64(damping))
+    end
+end
+
+"""
     ILU0(steps=1, damping=1.0)
 
 Level-scheduled incomplete LU factorization with zero fill. The symbolic level
@@ -52,6 +69,20 @@ mutable struct SPAI0State{D,C} <: AbstractSmootherState
     residual::Any
     config::C
     backend::Any
+    block_size::Int
+    n::Int
+end
+
+mutable struct GaussSeidelState{D,C,B} <: AbstractSmootherState
+    # AMG resetup may replace a host matrix wrapper while retaining its CSR
+    # arrays. Keeping the wrapper type-erased avoids making reuse depend on
+    # incidental type parameters such as the optional backend field.
+    matrix::Any
+    inverse_diagonal::D
+    correction::D
+    residual::D
+    config::C
+    backend::B
     block_size::Int
     n::Int
 end

@@ -794,12 +794,20 @@ function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, str
             count = candidate_count(candidate_vals, interpolation)
             if count > 0
                 scale = one(Tv)
-                if interpolation.rescale
+                if interpolation.rescale && count < length(candidate_vals)
+                    original_sum = zero(Tv)
                     kept_sum = zero(Tv)
-                    @inbounds for q in 1:count
-                        kept_sum += candidate_vals[q]
+                    @inbounds for q in eachindex(candidate_vals)
+                        value = candidate_vals[q]
+                        original_sum += value
+                        q <= count && (kept_sum += value)
                     end
-                    abs(kept_sum) > eps(real(Tv)) && (scale = inv(kept_sum))
+                    # Match HYPRE's interpolation truncation: retain the
+                    # action of the untruncated row on a constant vector.
+                    # Normalizing every row to one changes valid Ext+i
+                    # weights even when no coefficient was discarded.
+                    abs(kept_sum) > eps(real(Tv)) &&
+                        (scale = original_sum / kept_sum)
                 end
                 sort_selected_columns!(candidate_cols, candidate_vals, count)
                 @inbounds for q in 1:count

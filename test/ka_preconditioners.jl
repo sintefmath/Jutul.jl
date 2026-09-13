@@ -111,6 +111,7 @@ end
     for preconditioner in (
             AMGPreconditioner(:ruge_stuben; coarse_size = 10),
             KASmootherPreconditioner(:spai0),
+            KASmootherPreconditioner(:gauss_seidel),
             KASmootherPreconditioner(:ilu0),
             KASmootherPreconditioner(:dilu))
         Jutul.update_preconditioner!(preconditioner, A, b, context, nothing)
@@ -172,7 +173,7 @@ end
         size(ordinary, 1), size(ordinary, 2); backend = static_backend)
     b = ones(size(A, 1))
 
-    for config in (SPAI0(), ILU0(), DILU())
+    for config in (SPAI0(), GaussSeidel(), ILU0(), DILU())
         smoother = setup_smoother(static_matrix, config)
         @test update_smoother!(smoother, ordinary) === smoother
         x = zeros(size(A, 1))
@@ -185,6 +186,31 @@ end
     x = zeros(size(A, 1))
     KAPreconditioners.apply!(x, hierarchy, b)
     @test norm(b - A*x) < norm(b)
+end
+
+@testset "Extended+i truncation preserves row sums" begin
+    A = sparse(
+        [1, 1, 1, 1, 1, 2, 3, 4, 5],
+        [1, 2, 3, 4, 5, 2, 3, 4, 5],
+        [20.0, -1.0, -2.0, -3.0, -4.0, 1.0, 1.0, 1.0, 1.0],
+        5, 5)
+    C = csr_matrix(A)
+    cf = Int8[-1, 1, 1, 1, 1]
+    cmap = Int32[0, 1, 2, 3, 4]
+    strong = falses(length(C.nzval))
+    for k in nzrange(C, 1)
+        strong[k] = C.colval[k] != 1
+    end
+    full = KAPreconditioners.build_prolongation(
+        C, cf, cmap, 4, strong, ExtendedIInterpolation(0.0, 4, 2, false))
+    truncated = KAPreconditioners.build_prolongation(
+        C, cf, cmap, 4, strong, ExtendedIInterpolation(0.0, 2, 2, true))
+    full_row = full.nzval[full.rowptr[1]:(full.rowptr[2]-1)]
+    truncated_row = truncated.nzval[
+        truncated.rowptr[1]:(truncated.rowptr[2]-1)]
+    @test length(truncated_row) == 2
+    @test sum(full_row) ≈ 0.5
+    @test sum(truncated_row) ≈ sum(full_row)
 end
 
 @testset "Jutul simulation with KA AMG" begin

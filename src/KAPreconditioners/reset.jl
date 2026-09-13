@@ -176,7 +176,7 @@ function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol
     else
         replace_hierarchy!(H, setup_amg(A, H.options))
     end
-    H
+    return H
 end
 
 function resetup_amg!(H::AMGHierarchy{Tv,Ti}, A::SparseMatrixCSC,
@@ -210,7 +210,7 @@ function resetup_amg!(H::AMGHierarchy{Tv,Ti}, A::SparseMatrixCSC,
         C = csr_matrix(A; backend=H.backend, block_size=H.block_size, index_type=Ti)
         resetup_amg!(H, C, reuse)
     end
-    H
+    return H
 end
 
 resetup_amg!(H::AMGHierarchy, A; reuse::Symbol=:operators) = resetup_amg!(H, A, reuse)

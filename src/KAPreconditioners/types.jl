@@ -39,7 +39,8 @@ end
 """
     ExtendedIInterpolation(truncation=0.0, max_elements=4, norm_p=2, rescale=true)
 
-Configuration for distance-two Extended+i interpolation.
+Configuration for distance-two Extended+i interpolation. When `rescale` is
+enabled, truncation preserves the untruncated interpolation-row sum.
 """
 struct ExtendedIInterpolation <: AbstractInterpolation
     truncation::Float64
@@ -95,7 +96,7 @@ function AMGOptions(;
         coarse_size::Integer=50,
         coarse_solver::Symbol=:lu,
         coarse_steps::Integer=8,
-        max_row_sum::Real=1.0,
+        max_row_sum::Real=0.9,
         block_size::Integer=128,
         cycle::Symbol=:V)
     AMGOptions(coarsening, interpolation, smoother, Int(max_levels),

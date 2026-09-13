@@ -16,6 +16,7 @@ function smooth! end
 smoother_steps(config::AbstractSmoother) = config.steps
 
 Base.size(state::SPAI0State) = (length(state.diagonal), length(state.diagonal))
+Base.size(state::GaussSeidelState) = (state.n, state.n)
 Base.size(state::Union{ILU0State,DILUState}) = (state.n, state.n)
 function Base.size(state::AbstractSmootherState, dimension::Integer)
     if dimension == 1 || dimension == 2
@@ -25,6 +26,7 @@ function Base.size(state::AbstractSmootherState, dimension::Integer)
     end
 end
 Base.eltype(state::SPAI0State) = eltype(state.diagonal)
+Base.eltype(state::GaussSeidelState) = eltype(state.inverse_diagonal)
 Base.eltype(state::ILU0State) = eltype(state.factors)
 Base.eltype(state::DILUState) = eltype(state.values)
 
@@ -39,6 +41,9 @@ function same_smoother_pattern(state, A::StaticSparsityMatrixCSR)
     matrix_nrows(A) == state.n || return false
     matrix_ncols(A) == state.n || return false
     matrix_nonzeros(A) == length(state.host_colval) || return false
+    if A.rowptr === state.rowptr && A.colval === state.colval
+        return true
+    end
     rowptr = host_prefix(A.rowptr, matrix_nrows(A) + 1)
     colval = host_prefix(A.colval, matrix_nonzeros(A))
     rowptr == state.host_rowptr && colval == state.host_colval

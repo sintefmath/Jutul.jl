@@ -122,6 +122,46 @@ function update_smoother!(state::SPAI0State, A::StaticSparsityMatrixCSR)
     state
 end
 
+function update_smoother!(state::SPAI0State{D},
+        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector}) where {D<:Vector,Tv,Ti}
+    length(state.diagonal) == matrix_nrows(A) ||
+        throw(ArgumentError("SPAI0 state size does not match the matrix"))
+    same_backend(matrix_backend(A), state.backend) ||
+        throw(ArgumentError("smoother and matrix must use the same backend"))
+    diagonal = state.diagonal
+    damping = state.config.damping
+    foreach_cpu_row(matrix_nrows(A)) do i
+        aii = zero(eltype(diagonal))
+        scale = zero(damping)
+        @inbounds for k in A.rowptr[i]:(A.rowptr[i+1]-1)
+            value = A.nzval[k]
+            scale += spai0_scale(value, damping)
+            A.colval[k] == i && (aii += value)
+        end
+        @inbounds diagonal[i] = spai0_inverse(aii, scale, damping)
+    end
+    state
+end
+
+function apply!(x::Vector, state::SPAI0State{D}, b::Vector) where {D<:Vector}
+    length(x) == length(state.diagonal) || throw(DimensionMismatch())
+    length(b) == length(state.diagonal) || throw(DimensionMismatch())
+    diagonal = state.diagonal
+    foreach_cpu_row(length(x)) do i
+        @inbounds x[i] = diagonal[i] * b[i]
+    end
+    x
+end
+
+function apply_correction!(x::Vector, state::SPAI0State{D},
+        residual::Vector) where {D<:Vector}
+    diagonal = state.diagonal
+    foreach_cpu_row(length(x)) do i
+        @inbounds x[i] += diagonal[i] * residual[i]
+    end
+    x
+end
+
 function apply!(x::AbstractVector, state::SPAI0State, b::AbstractVector)
     length(x) == length(state.diagonal) || throw(DimensionMismatch())
     length(b) == length(state.diagonal) || throw(DimensionMismatch())
@@ -169,6 +209,44 @@ function smooth_result!(x, A::StaticSparsityMatrixCSR, b, state::SPAI0State, ste
     src
 end
 
+function spai0_step_cpu!(dst, src, A, b, diagonal)
+    foreach_cpu_row(matrix_nrows(A)) do i
+        value = b[i]
+        @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i+1]-1)
+            value -= A.nzval[k] * src[A.colval[k]]
+        end
+        @inbounds dst[i] = src[i] + diagonal[i] * value
+    end
+    dst
+end
+
+function smooth_result!(x::Vector,
+        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
+        b::Vector, state::SPAI0State{D}, steps::Int;
+        residual=nothing, zero_initial::Bool=false) where {Tv,Ti,D<:Vector}
+    start = 1
+    diagonal = state.diagonal
+    if !isnothing(residual)
+        if zero_initial
+            foreach_cpu_row(matrix_nrows(A)) do i
+                @inbounds x[i] = diagonal[i] * residual[i]
+            end
+        else
+            foreach_cpu_row(matrix_nrows(A)) do i
+                @inbounds x[i] += diagonal[i] * residual[i]
+            end
+        end
+        steps == 1 && return x
+        start = 2
+    end
+    src, dst = x, state.temporary
+    for _ in start:steps
+        spai0_step_cpu!(dst, src, A, b, diagonal)
+        src, dst = dst, src
+    end
+    src
+end
+
 function smooth_level!(x, A::StaticSparsityMatrixCSR, b, state::SPAI0State, steps::Int;
                   residual=nothing, zero_initial::Bool=false)
     result = smooth_result!(x, A, b, state, steps;
@@ -184,11 +262,36 @@ function smooth_once_to!(dst, src, A::StaticSparsityMatrixCSR, b, state::SPAI0St
     dst
 end
 
+function smooth_once_to!(dst::Vector, src::Vector,
+        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
+        b::Vector, state::SPAI0State{D}) where {Tv,Ti,D<:Vector}
+    spai0_step_cpu!(dst, src, A, b, state.diagonal)
+end
+
 function zero_smooth_residual!(x, residual, A::StaticSparsityMatrixCSR, b,
                                 state::SPAI0State)
     kernel! = zero_spai0_residual_kernel!(matrix_backend(A), matrix_block_size(A))
     kernel!(x, residual, b, state.diagonal, A.rowptr, A.colval, A.nzval,
             matrix_nrows(A); ndrange=matrix_nrows(A))
+    residual
+end
+
+
+function zero_smooth_residual!(x::Vector, residual::Vector,
+        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
+        b::Vector, state::SPAI0State{D}) where {Tv,Ti,D<:Vector}
+    diagonal = state.diagonal
+    foreach_cpu_row(matrix_nrows(A)) do i
+        ax = zero(eltype(residual))
+        @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i+1]-1)
+            j = A.colval[k]
+            ax += A.nzval[k] * diagonal[j] * b[j]
+        end
+        @inbounds begin
+            x[i] = diagonal[i] * b[i]
+            residual[i] = b[i] - ax
+        end
+    end
     residual
 end
 

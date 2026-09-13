@@ -16,6 +16,7 @@ include("csr.jl")
 include("kernels.jl")
 include("smoothers/interface.jl")
 include("smoothers/spai0.jl")
+include("smoothers/gauss_seidel.jl")
 include("smoothers/ilu0.jl")
 include("setup.jl")
 include("reset.jl")
@@ -31,6 +32,8 @@ update_ka_smoother!(state, A) = update_smoother!(state, A)
 function update_ka_smoother!(state, A::SparseMatrixCSC)
     index_type = if state isa SPAI0State
         Int32
+    elseif state isa GaussSeidelState
+        eltype(state.matrix.colval)
     else
         eltype(state.host_rowptr)
     end
@@ -46,7 +49,7 @@ apply_ka_smoother!(x, state, b) = apply!(x, state, b)
 export AbstractCoarsening, Aggregation, RugeStuben, HMIS
 export AbstractInterpolation, ConstantInterpolation, ClassicalInterpolation,
     ExtendedIInterpolation, AMGOptions, AMGHierarchy
-export AbstractSmoother, AbstractSmootherState, SPAI0, ILU0, DILU
+export AbstractSmoother, AbstractSmootherState, SPAI0, GaussSeidel, ILU0, DILU
 export csr_matrix
 export setup_smoother, update_smoother!, smooth!
 export setup_amg, resetup_amg!, cycle!, solve!

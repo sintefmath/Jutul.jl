@@ -3,7 +3,7 @@
 
 Jutul preconditioner wrapper for the backend-portable algebraic multigrid
 implementation in the internal `KAPreconditioners` module. The default uses HMIS
-coarsening with an SPAI(0) smoother. The supported compatibility methods are
+coarsening with an ILU(0) smoother. The supported compatibility methods are
 `:hmis`, `:aggregation`, and `:ruge_stuben`. They default to Extended+i,
 piecewise-constant, and classical interpolation, respectively.
 
@@ -36,6 +36,8 @@ end
 function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
     if method == :default || method == :spai0
         return KAPreconditioners.SPAI0(steps, damping)
+    elseif method == :gauss_seidel
+        return KAPreconditioners.GaussSeidel(steps, damping)
     elseif method == :ilu0
         return KAPreconditioners.ILU0(steps, damping)
     elseif method == :dilu
@@ -120,7 +122,8 @@ end
     KASmootherPreconditioner(config = KAPreconditioners.SPAI0())
 
 Wrap a backend-portable smoother in Jutul's preconditioner lifecycle. A symbol
-(`:spai0`, `:ilu0`, or `:dilu`) can be supplied instead of a smoother config.
+(`:spai0`, `:gauss_seidel`, `:ilu0`, or `:dilu`) can be supplied instead of a
+smoother config.
 """
 mutable struct KASmootherPreconditioner{C} <: JutulPreconditioner
     config::C
