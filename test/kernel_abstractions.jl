@@ -66,7 +66,7 @@ end
     variables = (B = SecondaryPlanB(), A = SecondaryPlanA(),
         D = SecondaryPlanD(), C = SecondaryPlanC())
     model = SecondaryPlanTestModel(
-        KernelAbstractionsContext(CPU(); workgroupsize = 4),
+        KernelAbstractionsContext(CPU(); secondary_async = true, workgroupsize = 4),
         (X = nothing,), variables, NamedTuple())
     plan = secondary_variable_evaluation_plan(model)
     @test plan isa Vector{Vector{Pair{Symbol, Int}}}
