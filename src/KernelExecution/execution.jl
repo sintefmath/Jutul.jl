@@ -321,8 +321,11 @@ created while simulator storage is transferred and remains on the CPU.
 function secondary_variable_evaluation_plan(
         model, secondary = model.secondary_variables)
     nodes, dependencies = build_variable_graph(
-        model, model.primary_variables, model.secondary_variables,
-        model.parameters)
+        model,
+        model.primary_variables,
+        model.secondary_variables,
+        model.parameters
+    )
     order = sort_symbols(nodes, dependencies)
     positions = Dict(symbol => index for (index, symbol) in enumerate(nodes))
     number_of_roots = length(model.primary_variables) + length(model.parameters)
@@ -660,15 +663,19 @@ function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
         model, lsys = nothing)
     function adapt_variable_definitions(definitions)
         adapted = adapt_backend_value(ctx, definitions)
-        plan = secondary_variable_evaluation_plan(
-            model, adapted.secondary_variables)
         contents = data(adapted)
-        if contents isa NamedTuple
-            contents = merge(contents,
-                (secondary_variable_evaluation_plan = plan,))
-        else
-            contents = copy(contents)
-            contents[:secondary_variable_evaluation_plan] = plan
+        if ctx.secondary_async
+            plan = secondary_variable_evaluation_plan(
+                model,
+                adapted.secondary_variables
+            )
+            if contents isa NamedTuple
+                contents = merge(contents,
+                    (secondary_variable_evaluation_plan = plan,))
+            else
+                contents = copy(contents)
+                contents[:secondary_variable_evaluation_plan] = plan
+            end
         end
         return JutulStorage(contents)
     end

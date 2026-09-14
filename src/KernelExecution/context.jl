@@ -19,11 +19,13 @@ struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
     matrix_layout::L
     workgroupsize::Int
     minbatch::Int
+    secondary_async::Bool
 end
 
 function KernelAbstractionsContext(backend;
         float_type::Type{F} = Float64,
         index_type::Type{I} = Int,
+        secondary_async = !(backend isa KernelAbstractions.CPU),
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
         minbatch = 1000
@@ -34,7 +36,7 @@ function KernelAbstractionsContext(backend;
     workgroupsize > 0 || throw(ArgumentError("workgroupsize must be positive"))
     minbatch > 0 || throw(ArgumentError("minbatch must be positive"))
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout)}(
-        backend, matrix_layout, Int(workgroupsize), Int(minbatch)
+        backend, matrix_layout, Int(workgroupsize), Int(minbatch), secondary_async
     )
 end
 
