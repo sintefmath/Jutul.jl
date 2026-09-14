@@ -4,8 +4,8 @@ using Jutul
 using Jutul.KAPreconditioners
 using Jutul: StaticSparsityMatrixCSR
 using KernelAbstractions
-import AMDGPU
-using AMDGPU: ROCArray, ROCSparseMatrixCSR
+using AMDGPU
+using AMDGPU.rocSPARSE
 
 @static if pkgversion(AMDGPU) >= v"2.6.0"
     KAPreconditioners.native_dense_lu(::ROCArray) =
