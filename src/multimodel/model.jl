@@ -723,6 +723,7 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels
         if is_match
             host = host_cross_term_evaluation(storage, index)
             if isnothing(host)
+                # @info "Device to device $target $source"
                 storage_t = storage[target]
                 storage_s = storage[source]
                 model_t = models[target]
@@ -873,25 +874,32 @@ function update_cross_term_inner_target!(cache::GenericAutoDiffCache{<:Any, <:An
 end
 
 function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
-    v = cache.entries
-    vars = cache.variables
-    function update(i)
-        ldisc = local_discretization(ct, i)
-        @inbounds for j in vrange(cache, i)
-            v_i = @views v[:, j]
-            var = vars[j]
-            state_t_i = new_entity_index(state_t, var)
-            state0_t_i = new_entity_index(state0_t, var)
-            state_s_i = new_entity_index(state_s, var)
-            state0_s_i = new_entity_index(state0_s, var)
-            update_cross_term_in_entity!(v_i, i, state_t_i, state0_t_i,
-                state_s_i, state0_s_i, model_t, model_s, ct, eq, dt, ldisc)
-        end
-        return nothing
-    end
+    states = (state_t, state0_t, state_s, state0_s)
+    models = (model_t, model_s)
+    update(i) = update_cross_term_for_entity_inner!(cache, i, ct, states, models, eq, dt)
     threaded_loop_minbatch(update, number_of_entities(cache), model_t.context)
     return nothing
 end
+
+function update_cross_term_for_entity_inner!(cache, i, ct, states, models, eq, dt)
+    v = cache.entries
+    vars = cache.variables
+    state_t, state0_t, state_s, state0_s = states
+    model_t, model_s = models
+    ldisc = local_discretization(ct, i)
+    @inbounds for j in vrange(cache, i)
+        v_i = @views v[:, j]
+        var = vars[j]
+        state_t_i = new_entity_index(state_t, var)
+        state0_t_i = new_entity_index(state0_t, var)
+        state_s_i = new_entity_index(state_s, var)
+        state0_s_i = new_entity_index(state0_s, var)
+        update_cross_term_in_entity!(v_i, i, state_t_i, state0_t_i,
+            state_s_i, state0_s_i, model_t, model_s, ct, eq, dt, ldisc)
+    end
+    return nothing
+end
+
 
 function update_cross_term_for_entity!(cache::AbstractArray, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
     function update(i)
