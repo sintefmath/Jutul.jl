@@ -600,12 +600,8 @@ end
         host_state = setup_smoother(csr_matrix(A), config)
         host_x = zeros(size(A, 1))
         KAPreconditioners.apply!(host_x, host_state, ones(size(A, 1)))
-        if config isa ILU0
-            @test Array(x) ≈ host_x
-        else
-            @test all(isfinite, Array(x))
-            @test norm(ones(size(A, 1)) - A*Array(x)) < norm(ones(size(A, 1)))
-        end
+        @test Array(state.inverse_diagonal) ≈ host_state.inverse_diagonal
+        @test Array(x) ≈ host_x
 
         fill!(x, 0.25)
         initial_residual = norm(ones(size(A, 1)) - A*Array(x))
@@ -640,23 +636,42 @@ end
     end
 end
 
-@testset "DILU pivot fallback" begin
-    # The second recursive DILU pivot is exactly zero. Falling back to the
-    # original diagonal must keep both host and accelerator states finite.
-    A = sparse([1, 1, 2, 2], [1, 2, 1, 2], ones(4), 2, 2)
+@testset "DILU recurrence and scale invariance" begin
+    A = sparse([4.0 1.0 0.0; 2.0 5.0 3.0; 0.0 4.0 6.0])
+    d1 = inv(A[1, 1])
+    d2 = inv(A[2, 2] - A[2, 1]*d1*A[1, 2])
+    d3 = inv(A[3, 3] - A[3, 2]*d2*A[2, 3])
+    expected_diagonal = [d1, d2, d3]
+    rhs = [1.0, -2.0, 4.0]
+
+    y1 = d1*rhs[1]
+    y2 = d2*(rhs[2] - A[2, 1]*y1)
+    y3 = d3*(rhs[3] - A[3, 2]*y2)
+    z3 = y3
+    z2 = y2 - d2*A[2, 3]*z3
+    z1 = y1 - d1*A[1, 2]*z2
+    expected = [z1, z2, z3]
+
     for backend in (KernelAbstractions.CPU(), JLBackend())
         C = csr_matrix(A; backend=backend)
         state = setup_smoother(C, DILU())
-        @test all(isfinite, Array(state.inverse_diagonal))
-        if backend isa KernelAbstractions.CPU
-            rhs = ones(2)
-        else
-            rhs = JLArray(ones(2))
-        end
-        x = similar(rhs)
-        KAPreconditioners.apply!(x, state, rhs)
-        @test all(isfinite, Array(x))
+        backend_rhs = backend isa KernelAbstractions.CPU ? rhs : JLArray(rhs)
+        result = similar(backend_rhs)
+        KAPreconditioners.apply!(result, state, backend_rhs)
+        @test Array(state.inverse_diagonal) ≈ expected_diagonal
+        @test Array(result) ≈ expected
     end
+
+    # Multiplying A by a scalar must divide both D^-1 and the action of the
+    # preconditioner by that scalar. In particular, small but nonsingular SI
+    # coefficients must not be replaced by an absolute pivot threshold.
+    scale = 1e-12
+    state = setup_smoother(csr_matrix(A), DILU())
+    scaled_state = setup_smoother(csr_matrix(scale*A), DILU())
+    result = state \ rhs
+    scaled_result = scaled_state \ rhs
+    @test scaled_state.inverse_diagonal ≈ state.inverse_diagonal/scale
+    @test scaled_result ≈ result/scale
 end
 
 @testset "static block smoothers" begin
@@ -697,17 +712,9 @@ end
         host_state = setup_smoother(C, config)
         host_x = fill(zero(BlockVector), n)
         KAPreconditioners.apply!(host_x, host_state, b)
-        if config isa ILU0
-            @test Array(x) ≈ host_x
-        else
-            @test all(v -> all(isfinite, v), Array(x))
-        end
+        @test Array(state.inverse_diagonal) ≈ host_state.inverse_diagonal
+        @test Array(x) ≈ host_x
     end
-
-    singular = sparse([1, 1, 2, 2], [1, 2, 1, 2],
-        fill(Block(1.0I), 4), 2, 2)
-    state = setup_smoother(csr_matrix(singular; backend=JLBackend()), DILU())
-    @test all(v -> all(isfinite, v), Array(state.inverse_diagonal))
 end
 
 
