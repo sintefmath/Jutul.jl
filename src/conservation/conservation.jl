@@ -98,12 +98,28 @@ end
     return @inbounds (M[e] - M₀[e])/dt
 end
 
-struct ConservationLawTPFAStorage{A, HC, HF, S}
+"""
+Data retained in place of the cell half-face flux cache when TPFA fluxes are
+evaluated as part of equation assembly.
+"""
+struct FusedEquationAssemblyStorage{T, P, D}
+    jacobian_positions::P
+    timestep::D
+end
+
+function FusedEquationAssemblyStorage{T}(
+        jacobian_positions::P, timestep::D) where {T, P, D}
+    return FusedEquationAssemblyStorage{T, P, D}(
+        jacobian_positions, timestep)
+end
+
+struct ConservationLawTPFAStorage{A, HC, HF, S, F}
     accumulation::A
     accumulation_symbol::Symbol
     half_face_flux_cells::HC
     half_face_flux_faces::HF
     sources::S
+    fused_equation_assembly::F
 end
 
 function ConservationLawTPFAStorage(model, eq::ConservationLaw; ad = true, kwarg...)
@@ -131,7 +147,8 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; ad = true, kwarg
     else
         hf_faces = nothing
     end
-    return ConservationLawTPFAStorage(acc, conserved_symbol(eq), hf_cells, hf_faces, src)
+    return ConservationLawTPFAStorage(
+        acc, conserved_symbol(eq), hf_cells, hf_faces, src, nothing)
 end
 
 function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...)
@@ -310,6 +327,150 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw, 
         conn_data = law.flow_discretization.conn_data
         update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
     end
+end
+
+function update_linearized_system_equation!(nz, r, model,
+        law::ConservationLaw,
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    error("Fused TPFA equation assembly requires the simulator storage")
+end
+
+function update_linearized_system_equation!(nz, r, model,
+        law::ConservationLaw,
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}, ::Missing) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    return update_linearized_system_equation!(nz, r, model, law, eq_s)
+end
+
+function update_linearized_system_equation!(nz, r, model,
+        law::ConservationLaw,
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}, storage) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    acc = eq_s.accumulation
+    update_linearized_system_subset_conservation_fused!(
+        nz, r, model, law, acc, eq_s.fused_equation_assembly,
+        storage.state)
+    if use_sparse_sources(law)
+        update_linearized_system_subset_conservation_sources!(
+            nz, r, model, acc, eq_s.sources)
+    end
+end
+
+function update_linearized_system_subset_conservation_fused!(
+        nz, r, model, law, acc,
+        fused::FusedEquationAssemblyStorage{T}, state) where T
+    flow_disc = law.flow_discretization
+    conn_pos = flow_disc.conn_pos
+    conn_data = flow_disc.conn_data
+    global_cell_map = global_map(model.domain)
+    timestep = fused.timestep
+    positions = fused.jacobian_positions
+    state_cell = local_ad(state, 1, T)
+    nc, ne, np = ad_dims(acc)
+    # Construct specialization arguments before capturing the GPU kernel body.
+    np_val = Val(np)
+    ne_val = Val(ne)
+    scalar_type = Val(T)
+    function assemble(cell)
+        fill_conservation_eq_fused!(
+            nz, r, cell, acc, positions, conn_pos, conn_data,
+            global_cell_map, state_cell, timestep, law, model, flow_disc,
+            np_val, ne_val, scalar_type)
+    end
+    threaded_loop_minbatch(assemble, nc, model.context)
+    return nz
+end
+
+# Match the rounding of the cached path, where each flux is materialized before
+# equation assembly. Inlining this call lets LLVM contract flux evaluation with
+# the residual update and can change nonlinear convergence decisions.
+Base.@noinline function fused_tpfa_half_face_flux(
+        law, local_state, model, dt, flow_disc, scalar_type,
+        self, other, face, face_sign)
+    return face_flux!(
+        zero(flux_vector_type(law, scalar_type)), self, other, face,
+        face_sign, law, local_state, model, dt, flow_disc)
+end
+
+function fill_conservation_eq_fused!(nz, r, cell, acc, positions,
+        conn_pos, conn_data, global_cell_map, state, timestep, law, model,
+        flow_disc, ::Val{Np}, ::Val{Ne}, scalar_type::Val{T}) where {Np, Ne, T}
+    acc_partials = zeros(SMatrix{Ne, Np})
+    acc_r = zeros(SVector{Ne})
+    for equation in 1:Ne
+        acc_r = setindex(acc_r, get_entry_val(acc, cell, equation), equation)
+    end
+    @simd for partial in 1:Np
+        for equation in 1:Ne
+            derivative = get_entry(acc, cell, equation, partial)
+            acc_partials = setindex(
+                acc_partials, derivative, equation, partial)
+        end
+    end
+
+    self = full_cell(cell, global_cell_map)
+    local_state = new_entity_index(state, self)
+    dt = @inbounds timestep[1]
+    first_connection = @inbounds conn_pos[cell]
+    last_connection = @inbounds conn_pos[cell + 1] - 1
+    if Np > 0
+        for connection in first_connection:last_connection
+            connection_data = @inbounds conn_data[connection]
+            (; self, other, face, face_sign) = connection_data
+            flux = fused_tpfa_half_face_flux(
+                law, local_state, model, dt, flow_disc, scalar_type,
+                self, other, face, face_sign)
+            for equation in 1:Ne
+                flux_entry = @inbounds flux[equation]
+                acc_r = setindex(
+                    acc_r, acc_r[equation] + value(flux_entry), equation)
+            end
+            outer_position = get_jacobian_pos(
+                Np, connection, 1, 1, positions)
+            is_inner = outer_position > 0
+            if is_inner
+                @simd for partial in 1:Np
+                    @inbounds for equation in 1:Ne
+                        derivative = get_entry_impl(flux[equation], partial)
+                        acc_partials = setindex(acc_partials,
+                            acc_partials[equation, partial] + derivative,
+                            equation, partial)
+                        if !(nz isa Missing)
+                            position = get_jacobian_pos(
+                                Np, connection, equation, partial, positions)
+                            update_jacobian_inner!(nz, position, -derivative)
+                        end
+                    end
+                end
+            else
+                @simd for partial in 1:Np
+                    @inbounds for equation in 1:Ne
+                        derivative = get_entry_impl(flux[equation], partial)
+                        acc_partials = setindex(acc_partials,
+                            acc_partials[equation, partial] + derivative,
+                            equation, partial)
+                    end
+                end
+            end
+        end
+    end
+    @inbounds for equation in 1:Ne
+        r[equation, cell] = acc_r[equation]
+    end
+    if !(nz isa Missing)
+        @simd for partial in 1:Np
+            for equation in 1:Ne
+                derivative = @inbounds acc_partials[equation, partial]
+                position = get_jacobian_pos(acc, cell, equation, partial)
+                update_jacobian_inner!(nz, position, derivative)
+            end
+        end
+    end
+    return nothing
 end
 
 # function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
@@ -584,6 +745,16 @@ function update_equation!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw
     # Next, update accumulation, "intrinsic" sources and fluxes
     @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
     @tic "fluxes" update_half_face_flux!(eq_s, law, storage, model, dt)
+end
+
+function update_equation!(
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}, law::ConservationLaw,
+        storage, model, dt) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    reset_sources!(eq_s)
+    @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
+    fill!(eq_s.fused_equation_assembly.timestep, dt)
 end
 
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)

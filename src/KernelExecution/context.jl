@@ -1,7 +1,8 @@
 """
     KernelAbstractionsContext(backend; float_type=Float64, index_type=Int,
                               matrix_layout=EquationMajorLayout(),
-                              workgroupsize=256, minbatch=minbatch(nothing))
+                              workgroupsize=256, minbatch=minbatch(nothing),
+                              reduce_memory=true)
 
 Execution context for a [`SimulationModel`](@ref) or [`MultiModel`](@ref) on a
 KernelAbstractions backend. Build the model and [`Simulator`](@ref) on the CPU,
@@ -13,6 +14,10 @@ host-side execution per submodel through
 `minbatch` is the smallest CPU loop that is worth submitting to
 KernelAbstractions. Smaller CPU loops execute directly on the calling thread;
 device backends always launch kernels.
+
+With `reduce_memory=true`, TPFA conservation laws without face-variable fluxes
+use fused equation assembly, computing cell half-face flux values on the
+flyinstead of retaining them in backend storage.
 """
 struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
     backend::B
@@ -20,6 +25,7 @@ struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
     workgroupsize::Int
     minbatch::Int
     secondary_async::Bool
+    reduce_memory::Bool
 end
 
 function KernelAbstractionsContext(backend;
@@ -28,7 +34,8 @@ function KernelAbstractionsContext(backend;
         secondary_async = !(backend isa KernelAbstractions.CPU),
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
-        minbatch = 1000
+        minbatch = 1000,
+        reduce_memory = true
     ) where {F, I}
     backend isa KernelAbstractions.Backend || throw(ArgumentError("backend must be a KernelAbstractions.Backend"))
     F <: AbstractFloat || throw(ArgumentError("float_type must be an AbstractFloat type"))
@@ -36,7 +43,8 @@ function KernelAbstractionsContext(backend;
     workgroupsize > 0 || throw(ArgumentError("workgroupsize must be positive"))
     minbatch > 0 || throw(ArgumentError("minbatch must be positive"))
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout)}(
-        backend, matrix_layout, Int(workgroupsize), Int(minbatch), secondary_async
+        backend, matrix_layout, Int(workgroupsize), Int(minbatch),
+        secondary_async, reduce_memory
     )
 end
 
@@ -64,7 +72,8 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         index_type = index_type(ctx),
         matrix_layout = adjoint(matrix_layout(ctx)),
         workgroupsize = ctx.workgroupsize,
-        minbatch = minbatch(ctx)
+        minbatch = minbatch(ctx),
+        reduce_memory = ctx.reduce_memory
     )
 end
 

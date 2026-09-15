@@ -163,8 +163,52 @@ function Adapt.adapt_structure(to, s::ConservationLawTPFAStorage)
         s.accumulation_symbol,
         Adapt.adapt(to, s.half_face_flux_cells),
         Adapt.adapt(to, s.half_face_flux_faces),
-        nothing
+        nothing,
+        Adapt.adapt(to, s.fused_equation_assembly)
     )
+end
+
+function Adapt.adapt_structure(to,
+        fused::FusedEquationAssemblyStorage{T}) where T
+    return FusedEquationAssemblyStorage{T}(
+        Adapt.adapt(to, fused.jacobian_positions),
+        Adapt.adapt(to, fused.timestep))
+end
+
+function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
+        fused::FusedEquationAssemblyStorage{T}) where T
+    target_type = ka_storage_eltype(ctx, T)
+    return FusedEquationAssemblyStorage{target_type}(
+        Adapt.adapt(ctx, fused.jacobian_positions),
+        Adapt.adapt(ctx, fused.timestep))
+end
+
+function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
+        s::ConservationLawTPFAStorage)
+    accumulation = Adapt.adapt(ctx, s.accumulation)
+    can_fuse = ctx.reduce_memory && isnothing(s.half_face_flux_faces)
+    if can_fuse
+        if ismissing(s.half_face_flux_cells)
+            fused = Adapt.adapt(ctx, s.fused_equation_assembly)
+        else
+            cell_flux = s.half_face_flux_cells
+            entry_type = ka_storage_eltype(ctx, eltype(cell_flux.entries))
+            fused = FusedEquationAssemblyStorage{entry_type}(
+                Adapt.adapt(ctx, cell_flux.jacobian_positions),
+                Adapt.adapt(ctx, [zero(float_type(ctx))]))
+        end
+        cell_flux = missing
+        face_flux = nothing
+    else
+        ismissing(s.half_face_flux_cells) && throw(ArgumentError(
+            "Cannot reconstruct TPFA half-face flux storage from fused assembly storage"))
+        cell_flux = Adapt.adapt(ctx, s.half_face_flux_cells)
+        face_flux = Adapt.adapt(ctx, s.half_face_flux_faces)
+        fused = nothing
+    end
+    return ConservationLawTPFAStorage(
+        accumulation, s.accumulation_symbol, cell_flux, face_flux, nothing,
+        fused)
 end
 
 function Adapt.adapt_structure(to, state::LocalStateAD{T, I, E}) where {T, I, E}
@@ -529,17 +573,20 @@ function cpu_csr_model(model::MultiModel)
 end
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel)
-    function backend_subcontext(submodel)
+    function backend_subcontext(key, submodel)
         source = submodel.context
+        reduce_memory = ctx.reduce_memory &&
+            group_execution_mode(model, key) == SolveFullyOnDevice
         return KernelAbstractionsContext(ctx.backend;
             float_type = float_type(ctx),
             index_type = index_type(ctx),
             matrix_layout = matrix_layout(source),
             workgroupsize = ctx.workgroupsize,
-            minbatch = minbatch(ctx)
+            minbatch = minbatch(ctx),
+            reduce_memory = reduce_memory
         )
     end
-    models = (; (key => Adapt.adapt(backend_subcontext(submodel), submodel)
+    models = (; (key => Adapt.adapt(backend_subcontext(key, submodel), submodel)
         for (key, submodel) in pairs(model.models))...)
     cross_terms = [Adapt.adapt(ctx, ct) for ct in model.cross_terms]
     if isnothing(model.groups)
@@ -661,8 +708,14 @@ end
 function backend_copyto!(destination::ConservationLawTPFAStorage,
         source::ConservationLawTPFAStorage)
     backend_copyto!(destination.accumulation, source.accumulation)
-    backend_copyto!(destination.half_face_flux_cells, source.half_face_flux_cells)
-    backend_copyto!(destination.half_face_flux_faces, source.half_face_flux_faces)
+    if !ismissing(destination.half_face_flux_cells)
+        backend_copyto!(destination.half_face_flux_cells,
+            source.half_face_flux_cells)
+    end
+    if !ismissing(destination.half_face_flux_faces)
+        backend_copyto!(destination.half_face_flux_faces,
+            source.half_face_flux_faces)
+    end
     if !isnothing(destination.sources) && !isnothing(source.sources)
         backend_copyto!(destination.sources, source.sources)
     end

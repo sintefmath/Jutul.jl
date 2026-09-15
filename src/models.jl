@@ -763,7 +763,8 @@ function update_linearized_system!(storage, model::JutulModel, executor = defaul
     eqs = model.equations
     eqs_storage = storage.equations
     eqs_views = storage.views.equations
-    update_linearized_system!(lsys, eqs, eqs_storage, eqs_views, model; kwarg...)
+    update_linearized_system!(lsys, eqs, eqs_storage, eqs_views, model;
+        storage = storage, kwarg...)
     post_update_linearized_system!(lsys, executor, storage, model)
 end
 
@@ -771,13 +772,16 @@ function post_update_linearized_system!(lsys, executor, storage, model)
     # Do nothing.
 end
 
-function update_linearized_system!(lsys, equations, eqs_storage, eqs_views, model::JutulModel; equation_offset = 0, r = lsys.r_buffer, nzval = lsys.jac_buffer)
+function update_linearized_system!(lsys, equations, eqs_storage, eqs_views,
+        model::JutulModel; equation_offset = 0, r = lsys.r_buffer,
+        nzval = lsys.jac_buffer, storage = missing)
     for key in keys(equations)
         @tic "$key" begin
             eq = equations[key]
             eqs_s = eqs_storage[key]
             r_view = eqs_views[key]
-            update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
+            update_linearized_system_equation!(
+                nzval, r_view, model, eq, eqs_s, storage)
         end
     end
 end

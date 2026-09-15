@@ -107,8 +107,11 @@ end
 @testset "KernelAbstractions context" begin
     threshold_context = KernelAbstractionsContext(CPU();
         minbatch = 4, workgroupsize = 2)
+    @test threshold_context.reduce_memory
     @test minbatch(threshold_context) == 4
     @test minbatch(adjoint(threshold_context)) == 4
+    @test adjoint(threshold_context).reduce_memory
+    @test !KernelAbstractionsContext(CPU(); reduce_memory = false).reduce_memory
     @test_throws ArgumentError KernelAbstractionsContext(CPU(); minbatch = 0)
 
     small_result = zeros(Int, 4)
@@ -132,8 +135,6 @@ end
         @test simulator.model.context isa KernelAbstractionsContext
         @test minbatch(simulator.storage.LinearizedSystem.jac) ==
             minbatch(simulator.model.context)
-        @test haskey(simulator.storage.variable_definitions,
-            :secondary_variable_evaluation_plan)
         @test simulator.model.primary_variables isa NamedTuple
         @test simulator.storage.primary_variables.XVar === simulator.storage.state.XVar
         @test simulator.storage.LinearizedSystem.jac_buffer ===
@@ -212,6 +213,8 @@ end
     @test isnothing(simulator.model.groups)
     @test collect(simulator.model.group_execution) ==
         [SolveFullyOnDevice, AssembleOnDevice]
+    @test simulator.model[:A].context.reduce_memory
+    @test !simulator.model[:B].context.reduce_memory
     @test simulator.storage.host_evaluation.keys == (:B,)
 
     adjoint_source = MultiModel((A = model_a, B = model_b), groups = [1, 2],

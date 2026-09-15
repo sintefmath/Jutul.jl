@@ -535,6 +535,11 @@ function update_linearized_system_equation!(nz::Missing, r, model, equation::Jut
     return r
 end
 
+function update_linearized_system_equation!(
+        nz, r, model, equation, cache, storage)
+    return update_linearized_system_equation!(nz, r, model, equation, cache)
+end
+
 """
 Update equation based on currently stored properties
 """

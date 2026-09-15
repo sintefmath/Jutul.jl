@@ -13,6 +13,7 @@ module KernelExecution
         CompactAutoDiffCache, ConservationLaw,
         ConservationLawTPFAStorage, CrossTermPair, DeviceExecutionMode,
         DiscretizedDomain, EntityCounter, EquationMajorLayout, FactorStore,
+        FusedEquationAssemblyStorage,
         GenericAutoDiffCache, GPUJutulContext, JutulEntity, JutulForce,
         JutulStorage,
         KAPreconditioners,
