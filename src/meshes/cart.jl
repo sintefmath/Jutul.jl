@@ -35,7 +35,10 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
     "Coordinate of lower left corner"
     origin::O
     "Tags on cells/faces/nodes"
-    tags::MeshEntityTags{T}
+    tags::T
+    function CartesianMesh(dims::D, deltas::Δ, origin::O, tags::T) where {D, Δ, O, T}
+        return new{D, Δ, O, T}(dims, deltas, origin, tags)
+    end
     function CartesianMesh(dims::Tuple, deltas_or_size::Union{Nothing, Tuple} = nothing; origin = nothing)
         dim = length(dims)
         if isnothing(deltas_or_size)
@@ -63,7 +66,8 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
         @assert length(deltas_or_size) == dim
         deltas = generate_deltas(deltas_or_size)
         tags = MeshEntityTags()
-        g = new{typeof(dims), typeof(deltas), typeof(origin), Int}(dims, deltas, origin, tags)
+        g = new{typeof(dims), typeof(deltas), typeof(origin), typeof(tags)}(
+            dims, deltas, origin, tags)
         initialize_entity_tags!(g)
         return g
     end

@@ -1,5 +1,6 @@
 multi_model_is_specialized(m::MultiModel) = true
-multi_model_is_specialized(m::MultiModel{JutulStorage{Nothing}}) = false
+multi_model_is_specialized(
+    m::MultiModel{L, JutulStorage{Nothing}}) where L = false
 
 function submodel_ad_tag(m::MultiModel, tag)
     if m.specialize_ad

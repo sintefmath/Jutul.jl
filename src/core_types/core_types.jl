@@ -234,6 +234,8 @@ abstract type DiagonalEquation <: JutulEquation end
 
 # Models
 export JutulModel, FullyImplicitFormulation, SimulationModel, JutulEquation, JutulFormulation
+export DeviceExecutionMode, SolveFullyOnDevice, AssembleOnDevice, NothingOnDevice
+export group_execution_mode
 
 abstract type JutulModel end
 abstract type AbstractSimulationModel <: JutulModel end
@@ -241,19 +243,26 @@ abstract type AbstractSimulationModel <: JutulModel end
 struct SimulationModel{O<:JutulDomain,
                        S<:JutulSystem,
                        F<:JutulFormulation,
-                       C<:JutulContext
+                       C<:JutulContext,
+                       DD,
+                       PV,
+                       SV,
+                       P,
+                       E,
+                       OV,
+                       X
                        } <: AbstractSimulationModel
     domain::O
     system::S
     context::C
     formulation::F
-    data_domain
-    primary_variables::OrderedDict{Symbol, Any}
-    secondary_variables::OrderedDict{Symbol, Any}
-    parameters::OrderedDict{Symbol, Any}
-    equations::OrderedDict{Symbol, Any}
-    output_variables::Vector{Symbol}
-    extra::OrderedDict{Symbol, Any}
+    data_domain::DD
+    primary_variables::PV
+    secondary_variables::SV
+    parameters::P
+    equations::E
+    output_variables::OV
+    extra::X
     optimization_level::Int
 end
 
@@ -315,7 +324,14 @@ function SimulationModel(domain, system;
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(
+    DD = typeof(data_domain)
+    PV = typeof(primary_variables)
+    SV = typeof(secondary_variables)
+    P = typeof(parameters)
+    E = typeof(equations)
+    OV = typeof(outputs)
+    X = typeof(extra)
+    model = SimulationModel{D,S,F,C,DD,PV,SV,P,E,OV,X}(
         domain,
         system,
         context,
@@ -374,7 +390,14 @@ function SimulationModel{D,S,F,C}(
         extra
     ) where {D,S,F,C}
     # Backward compatibility constructor
-    return SimulationModel{D,S,F,C}(
+    DD = typeof(data_domain)
+    PV = typeof(primary_variables)
+    SV = typeof(secondary_variables)
+    P = typeof(parameters)
+    E = typeof(equations)
+    OV = typeof(outputs)
+    X = typeof(extra)
+    return SimulationModel{D,S,F,C,DD,PV,SV,P,E,OV,X}(
         domain,
         system,
         context,
@@ -407,13 +430,31 @@ function update_model_post_selection!(model)
 end
 
 import Base: copy
-function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
+function Base.copy(m::SimulationModel)
     pvar = copy(m.primary_variables)
     svar = copy(m.secondary_variables)
     outputs = copy(m.output_variables)
     prm = copy(m.parameters)
-    eqs = m.equations
-    return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, m.plot_mesh, pvar, svar, prm, eqs, outputs)
+    eqs = copy(m.equations)
+    if isnothing(m.extra)
+        extra = nothing
+    else
+        extra = copy(m.extra)
+    end
+    return SimulationModel(
+        m.domain,
+        m.system,
+        m.context,
+        m.formulation,
+        m.data_domain,
+        pvar,
+        svar,
+        prm,
+        eqs,
+        outputs,
+        extra,
+        m.optimization_level
+    )
 end
 
 function Base.getindex(model::SimulationModel, s::Symbol)
@@ -745,13 +786,19 @@ abstract type JutulAutoDiffCache end
 """
 Cache that holds an AD vector/matrix together with their positions.
 """
-struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+struct CompactAutoDiffCache{I, ∂x, E, P, ET} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
     entries::E
-    entity
+    entity::ET
     jacobian_positions::P
     equations_per_entity::I
     number_of_entities::I
     npartials::I
+    function CompactAutoDiffCache{I, ∂x}(entries::E, entity, positions::P,
+            equations_per_entity::I, number_of_entities::I, npartials::I
+        ) where {I<:Integer, ∂x<:Real, E, P}
+        return new{I, ∂x, E, P, typeof(entity)}(entries, entity, positions,
+            equations_per_entity, number_of_entities, npartials)
+    end
     function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
                                                         entity = Cells(),
                                                         context = DefaultContext(),
@@ -780,7 +827,8 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
         I_t = nzval_index_type(context)
         pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
         pos = transfer(context, pos)
-        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
+        new{I, D, typeof(entries), typeof(pos), typeof(entity)}(
+            entries, entity, pos, equations_per_entity, n_entities, npartials)
     end
 end
 
@@ -794,6 +842,16 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
     number_of_entities_target::Int
     number_of_entities_source::Int
     variable_map::VM
+    function GenericAutoDiffCache{N, E, ∂x}(entries::A, vpos::P,
+            variables::P, jacobian_positions::M, diagonal_positions::D,
+            number_of_entities_target::Int, number_of_entities_source::Int,
+            variable_map::VM
+        ) where {N, E, ∂x<:Real, A, P, M, D, VM}
+        return new{N, E, ∂x, A, P, M, D, VM}(
+            entries, vpos, variables, jacobian_positions, diagonal_positions,
+            number_of_entities_target, number_of_entities_source, variable_map
+        )
+    end
     function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap()) where I
         @assert nt > 0
         @assert ns > 0
@@ -1088,14 +1146,40 @@ abstract type AbstractMultiModel{label} <: JutulModel end
 multimodel_label(::AbstractMultiModel{L}) where L = L
 
 """
+    DeviceExecutionMode
+
+Execution policy for a submodel in a backend-resident
+[`MultiModel`](@ref).
+
+- [`SolveFullyOnDevice`](@ref): variables, equations, assembly and the linear
+  system reside on the device.
+- [`AssembleOnDevice`](@ref): variables and equations are evaluated on the
+  host, then synchronized to preallocated device storage for linear-system
+  assembly. Cross terms with another `AssembleOnDevice` model are evaluated
+  on the host and copied to the device. Cross terms with a
+  `SolveFullyOnDevice` model are evaluated on the device after synchronizing
+  the host model's state.
+- [`NothingOnDevice`](@ref): variables, equations, assembly and the linear
+  system remain on the host.
+"""
+@enum DeviceExecutionMode::UInt8 begin
+    NothingOnDevice = 0
+    AssembleOnDevice = 1
+    SolveFullyOnDevice = 2
+end
+
+"""
     MultiModel(models)
     MultiModel(models, :SomeLabel)
 
-A model variant that is made up of many named submodels, each a fully realized [`SimulationModel`](@ref).
-
-`models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
+A model variant made up of named, fully realized [`SimulationModel`](@ref)
+instances. `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`. The
+`group_execution` keyword sets one `DeviceExecutionMode` per submodel, in the
+same order as `models` and `groups`. Within each linear-system group, all
+submodels must either use `NothingOnDevice`, or use any combination of
+`AssembleOnDevice` and `SolveFullyOnDevice`.
 """
-struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
+struct MultiModel{label, T, CT, G, C, GL, GE} <: AbstractMultiModel{label}
     models::T
     cross_terms::CT
     groups::G
@@ -1103,6 +1187,7 @@ struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
     group_lookup::GL
+    group_execution::GE
 end
 
 function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
@@ -1111,12 +1196,21 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
         context = nothing,
         reduction = missing,
         specialize = false,
-        specialize_ad = false
+        specialize_ad = false,
+        group_execution = SolveFullyOnDevice
     )
     if isnothing(context)
         context = models[first(keys(models))].context
     end
     group_lookup = Dict{Symbol, Int}()
+    number_of_models = length(models)
+    if group_execution isa DeviceExecutionMode
+        group_execution = fill(group_execution, number_of_models)
+    else
+        group_execution = collect(DeviceExecutionMode, group_execution)
+        length(group_execution) == number_of_models || throw(ArgumentError(
+            "Expected one device execution mode per model ($number_of_models), got $(length(group_execution))"))
+    end
     if isnothing(groups)
         num_groups = 1
         for k in keys(models)
@@ -1148,6 +1242,7 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
             end
             models = new_models
             groups = groups[ix]
+            group_execution = group_execution[ix]
         end
         for (k, g) in zip(keys(models), groups)
             group_lookup[k] = g
@@ -1169,6 +1264,20 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
             reduction = nothing
         end
     end
+    if isnothing(groups)
+        effective_groups = ones(Int, number_of_models)
+    else
+        effective_groups = groups
+    end
+    for group in 1:num_groups
+        modes = group_execution[effective_groups .== group]
+        has_nothing = any(==(NothingOnDevice), modes)
+        if has_nothing && !all(==(NothingOnDevice), modes)
+            throw(ArgumentError(
+                "Linear-system group $group mixes NothingOnDevice with device execution modes. " *
+                "A group must be entirely NothingOnDevice, or contain only AssembleOnDevice and SolveFullyOnDevice."))
+        end
+    end
     if isnothing(groups) && !isnothing(context)
         for (i, m) in enumerate(models)
             if matrix_layout(m.context) != matrix_layout(context)
@@ -1184,7 +1293,10 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
     G = typeof(groups)
     C = typeof(context)
     GL = typeof(group_lookup)
-    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    GE = typeof(group_execution)
+    return MultiModel{label, T, CT, G, C, GL, GE}(models, cross_terms,
+        groups, context, reduction, specialize_ad, group_lookup,
+        group_execution)
 end
 
 function MultiModel(models, ::Val{label}; kwarg...) where label
@@ -1193,17 +1305,31 @@ function MultiModel(models, ::Val{label}; kwarg...) where label
 end
 
 function convert_to_immutable_storage(model::MultiModel)
-    (; models, cross_terms, groups, context, reduction, specialize_ad, group_lookup) = model
+    (; models, cross_terms, groups, context, reduction, specialize_ad,
+        group_lookup, group_execution) = model
     models = convert_to_immutable_storage(models)
     cross_terms = Tuple(cross_terms)
     group_lookup = convert_to_immutable_storage(group_lookup)
+    group_execution = Tuple(group_execution)
     label = multimodel_label(model)
     T = typeof(models)
     CT = typeof(cross_terms)
     G = typeof(groups)
     C = typeof(context)
     GL = typeof(group_lookup)
-    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    GE = typeof(group_execution)
+    return MultiModel{label, T, CT, G, C, GL, GE}(models, cross_terms,
+        groups, context, reduction, specialize_ad, group_lookup,
+        group_execution)
+end
+
+group_execution_mode(model::MultiModel, model_index::Integer) =
+    model.group_execution[model_index]
+function group_execution_mode(model::MultiModel, key::Symbol)
+    for (index, candidate) in enumerate(keys(model.models))
+        candidate == key && return group_execution_mode(model, index)
+    end
+    throw(KeyError(key))
 end
 
 """

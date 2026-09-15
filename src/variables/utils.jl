@@ -16,7 +16,7 @@ Total number of degrees of freedom for a model, over all primary variables and a
 """
 function number_of_degrees_of_freedom(model::JutulModel)
     ndof = 0
-    for (pkey, pvar) in get_primary_variables(model)
+    for (pkey, pvar) in pairs(get_primary_variables(model))
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
     return ndof
@@ -24,7 +24,7 @@ end
 
 function number_of_parameters(model::JutulModel)
     ndof = 0
-    for (pkey, pvar) in get_parameters(model)
+    for (pkey, pvar) in pairs(get_parameters(model))
         ndof += number_of_degrees_of_freedom(model, pvar)
     end
     return ndof
@@ -109,25 +109,28 @@ parameter_is_differentiable(::JutulVariables, model) = true
 
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
-    active = active_entities(model.domain, entity, for_variables = true)
+    active = transfer(model.context,
+        active_entities(model.domain, entity, for_variables = true))
     v = state[state_symbol]
-    update_jutul_variable_internal!(v, active, p, dx, w)
+    update_jutul_variable_internal!(v, active, p, dx, w, model.context)
 end
 
-function update_jutul_variable_internal!(v::AbstractVector, active, p, dx, w)
+function update_jutul_variable_internal!(v::AbstractVector, active, p, dx, w, context)
     nu = length(active)
     abs_max = absolute_increment_limit(p)
     rel_max = relative_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
     scale = variable_scale(p)
-    @inbounds for i in 1:nu
-        a_i = active[i]
-        v[a_i] = update_value(v[a_i], w*dx[i], abs_max, rel_max, minval, maxval, scale)
+    function update(i)
+        @inbounds a_i = active[i]
+        @inbounds v[a_i] = update_value(
+            v[a_i], w*dx[i], abs_max, rel_max, minval, maxval, scale)
     end
+    threaded_loop_minbatch(update, nu, context)
 end
 
-function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w)
+function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w, context)
     nu = length(active)
     n = size(v, 1)
     abs_max = absolute_increment_limit(p)
@@ -135,21 +138,26 @@ function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w)
     maxval = maximum_value(p)
     minval = minimum_value(p)
     scale = variable_scale(p)
-    @inbounds for i in 1 : nu
-        a_i = active[i]
+    function update(i)
+        @inbounds a_i = active[i]
         for j in 1 : n
-            v[j, a_i] = update_value(v[j, a_i], w*dx[j, i], abs_max, rel_max, minval, maxval, scale)
+            @inbounds v[j, a_i] = update_value(
+                v[j, a_i], w*dx[j, i], abs_max, rel_max, minval, maxval, scale)
         end
     end
+    threaded_loop_minbatch(update, nu, context)
 end
 
-@inline function choose_increment(v::F, dv::F, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing, scale = nothing) where {F<:AbstractFloat}
-    dv = scale_increment(dv, scale)
+@inline function choose_increment(v::F, dv, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing, scale = nothing) where {F<:AbstractFloat}
+    # Nonlinear relaxation and variable limits are commonly configured as
+    # Float64 even when the simulation storage uses a narrower float type.
+    # Keep the update in the state value's precision.
+    dv = scale_increment(convert(F, dv), scale)
     dv = limit_abs(dv, abs_change)
     dv = limit_rel(v, dv, rel_change)
     dv = limit_lower(v, dv, minval)
     dv = limit_upper(v, dv, maxval)
-    return dv
+    return convert(F, dv)
 end
 # Limit absolute
 @inline limit_abs(dv, abs_change) = sign(dv)*min(abs(dv), abs_change)
@@ -398,26 +406,29 @@ function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     maxval = maximum_value(p)
     minval = minimum_value(p)
     maxval = maxval - nf*minval
-    active_cells = active_entities(model.domain, entity, for_variables = true)
+    context = model.context
+    active_cells = transfer(context,
+        active_entities(model.domain, entity, for_variables = true))
     if nf == 2
-        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
+        unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w, context)
     else
         if unit_update_preserve_direction(p)
             # Preserve direction
-            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w)
+            unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w, context)
         else
             # Preserve update magnitude
-            unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
+            unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, context)
         end
     end
 end
 
-function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w)
+function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, w, context)
     nactive = length(active_cells)
-    for active_ix in eachindex(active_cells)
-        full_cell = active_cells[active_ix]
+    function update(active_ix)
+        @inbounds full_cell = active_cells[active_ix]
         unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max, w)
     end
+    threaded_loop_minbatch(update, nactive, context)
 end
 
 function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max, w0)
@@ -468,24 +479,26 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     return s
 end
 
-function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w)
-    F = eltype(dx)
+function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w, context)
     maxval = min(1 - minval, maxval)
     minval = max(minval, maxval - 1)
-    @inbounds for (i, cell) in enumerate(active_cells)
-        v = value(s[1, cell])::F
-        dv = dx[i]
+    function update(i)
+        @inbounds cell = active_cells[i]
+        @inbounds v = value(s[1, cell])
+        @inbounds dv = dx[i]
         dv = w*choose_increment(v, dv, abs_max, nothing, minval, maxval)
-        s[1, cell] += dv
-        s[2, cell] -= dv
+        @inbounds s[1, cell] += dv
+        @inbounds s[2, cell] -= dv
     end
+    threaded_loop_minbatch(update, length(active_cells), context)
 end
 
-function unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max)
-    for active_ix in eachindex(active_cells)
-        cell = active_cells[active_ix]
+function unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, context)
+    function update(active_ix)
+        @inbounds cell = active_cells[active_ix]
         unit_update_magnitude_local!(s, active_ix, cell, dx, nf, nu, minval, maxval, abs_max)
     end
+    threaded_loop_minbatch(update, length(active_cells), context)
 end
 
 function unit_update_magnitude_local!(s, ix, cell, dx, nf, nu, minval, maxval, abs_max)

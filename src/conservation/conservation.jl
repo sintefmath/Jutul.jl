@@ -98,12 +98,28 @@ end
     return @inbounds (M[e] - M₀[e])/dt
 end
 
-struct ConservationLawTPFAStorage{A, HC, HF, S}
+"""
+Data retained in place of the cell half-face flux cache when TPFA fluxes are
+evaluated as part of equation assembly.
+"""
+struct FusedEquationAssemblyStorage{T, P, D}
+    jacobian_positions::P
+    timestep::D
+end
+
+function FusedEquationAssemblyStorage{T}(
+        jacobian_positions::P, timestep::D) where {T, P, D}
+    return FusedEquationAssemblyStorage{T, P, D}(
+        jacobian_positions, timestep)
+end
+
+struct ConservationLawTPFAStorage{A, HC, HF, S, F}
     accumulation::A
     accumulation_symbol::Symbol
     half_face_flux_cells::HC
     half_face_flux_faces::HF
     sources::S
+    fused_equation_assembly::F
 end
 
 function ConservationLawTPFAStorage(model, eq::ConservationLaw; ad = true, kwarg...)
@@ -131,7 +147,8 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; ad = true, kwarg
     else
         hf_faces = nothing
     end
-    return ConservationLawTPFAStorage(acc, conserved_symbol(eq), hf_cells, hf_faces, src)
+    return ConservationLawTPFAStorage(
+        acc, conserved_symbol(eq), hf_cells, hf_faces, src, nothing)
 end
 
 function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...)
@@ -310,6 +327,139 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw, 
         conn_data = law.flow_discretization.conn_data
         update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
     end
+end
+
+function update_linearized_system_equation!(nz, r, model,
+        law::ConservationLaw,
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    error("Fused TPFA equation assembly requires the simulator storage")
+end
+
+function update_linearized_system_equation!(nz, r, model,
+        law::ConservationLaw,
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}, ::Missing) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    return update_linearized_system_equation!(nz, r, model, law, eq_s)
+end
+
+function update_linearized_system_equation!(nz, r, model,
+        law::ConservationLaw,
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}, storage) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    acc = eq_s.accumulation
+    update_linearized_system_subset_conservation_fused!(
+        nz, r, model, law, acc, eq_s.fused_equation_assembly,
+        storage.state)
+    if use_sparse_sources(law)
+        update_linearized_system_subset_conservation_sources!(
+            nz, r, model, acc, eq_s.sources)
+    end
+end
+
+function update_linearized_system_subset_conservation_fused!(
+        nz, r, model, law, acc,
+        fused::FusedEquationAssemblyStorage{T}, state) where T
+    flow_disc = law.flow_discretization
+    conn_pos = flow_disc.conn_pos
+    conn_data = flow_disc.conn_data
+    global_cell_map = global_map(model.domain)
+    timestep = fused.timestep
+    positions = fused.jacobian_positions
+    state_cell = local_ad(state, 1, T)
+    nc, ne, np = ad_dims(acc)
+    # Construct specialization arguments before capturing the GPU kernel body.
+    np_val = Val(np)
+    ne_val = Val(ne)
+    scalar_type = Val(T)
+    function assemble(cell)
+        fill_conservation_eq_fused!(
+            nz, r, cell, acc, positions, conn_pos, conn_data,
+            global_cell_map, state_cell, timestep, law, model, flow_disc,
+            np_val, ne_val, scalar_type)
+    end
+    threaded_loop_minbatch(assemble, nc, model.context)
+    return nz
+end
+
+function fill_conservation_eq_fused!(nz, r, cell, acc, positions,
+        conn_pos, conn_data, global_cell_map, state, timestep, law, model,
+        flow_disc, ::Val{Np}, ::Val{Ne}, scalar_type::Val{T}) where {Np, Ne, T}
+    acc_partials = zeros(SMatrix{Ne, Np})
+    acc_r = zeros(SVector{Ne})
+    for equation in 1:Ne
+        acc_r = setindex(acc_r, get_entry_val(acc, cell, equation), equation)
+    end
+    @simd for partial in 1:Np
+        for equation in 1:Ne
+            derivative = get_entry(acc, cell, equation, partial)
+            acc_partials = setindex(
+                acc_partials, derivative, equation, partial)
+        end
+    end
+
+    self = full_cell(cell, global_cell_map)
+    local_state = new_entity_index(state, self)
+    dt = @inbounds timestep[1]
+    first_connection = @inbounds conn_pos[cell]
+    last_connection = @inbounds conn_pos[cell + 1] - 1
+    if Np > 0
+        for connection in first_connection:last_connection
+            connection_data = @inbounds conn_data[connection]
+            (; self, other, face, face_sign) = connection_data
+            flux = face_flux!(
+                zero(flux_vector_type(law, scalar_type)), self, other, face,
+                face_sign, law, local_state, model, dt, flow_disc)
+            for equation in 1:Ne
+                flux_entry = @inbounds flux[equation]
+                acc_r = setindex(
+                    acc_r, acc_r[equation] + value(flux_entry), equation)
+            end
+            outer_position = get_jacobian_pos(
+                Np, connection, 1, 1, positions)
+            is_inner = outer_position > 0
+            if is_inner
+                @simd for partial in 1:Np
+                    @inbounds for equation in 1:Ne
+                        derivative = get_entry_impl(flux[equation], partial)
+                        acc_partials = setindex(acc_partials,
+                            acc_partials[equation, partial] + derivative,
+                            equation, partial)
+                        if !(nz isa Missing)
+                            position = get_jacobian_pos(
+                                Np, connection, equation, partial, positions)
+                            update_jacobian_inner!(nz, position, -derivative)
+                        end
+                    end
+                end
+            else
+                @simd for partial in 1:Np
+                    @inbounds for equation in 1:Ne
+                        derivative = get_entry_impl(flux[equation], partial)
+                        acc_partials = setindex(acc_partials,
+                            acc_partials[equation, partial] + derivative,
+                            equation, partial)
+                    end
+                end
+            end
+        end
+    end
+    @inbounds for equation in 1:Ne
+        r[equation, cell] = acc_r[equation]
+    end
+    if !(nz isa Missing)
+        @simd for partial in 1:Np
+            for equation in 1:Ne
+                derivative = @inbounds acc_partials[equation, partial]
+                position = get_jacobian_pos(acc, cell, equation, partial)
+                update_jacobian_inner!(nz, position, derivative)
+            end
+        end
+    end
+    return nothing
 end
 
 # function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
@@ -560,10 +710,18 @@ function update_accumulation!(eq_s, law, storage, model, dt)
     conserved = eq_s.accumulation_symbol
     acc = get_entries(eq_s.accumulation)
     m0, m = state_pair(storage, conserved, model)
+    ncomponents, nc = size(acc)
     if m isa AbstractVector
-        @. acc[1,:] = (m - m0)/dt
+        update_scalar(c) = (@inbounds acc[1, c] = (m[c] - m0[c])/dt)
+        threaded_loop_minbatch(update_scalar, nc, model.context)
     else
-        @. acc = (m - m0)/dt
+        function update_components(c)
+            for component in 1:ncomponents
+                @inbounds acc[component, c] =
+                    (m[component, c] - m0[component, c])/dt
+            end
+        end
+        threaded_loop_minbatch(update_components, nc, model.context)
     end
     return acc
 end
@@ -578,6 +736,16 @@ function update_equation!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw
     @tic "fluxes" update_half_face_flux!(eq_s, law, storage, model, dt)
 end
 
+function update_equation!(
+        eq_s::ConservationLawTPFAStorage{
+            A, Missing, Nothing, S, F}, law::ConservationLaw,
+        storage, model, dt) where {
+            A, S, F<:FusedEquationAssemblyStorage}
+    reset_sources!(eq_s)
+    @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
+    fill!(eq_s.fused_equation_assembly.timestep, dt)
+end
+
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     fd = law.flow_discretization
     state = storage.state
@@ -587,57 +755,75 @@ end
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, state, model, dt, flow_disc)
     flux_c = get_entries(eq_s.half_face_flux_cells)
 
-    N, M = size(flux_c)
+    N, _ = size(flux_c)
     T = eltype(flux_c)
-    # flux_static = reinterpret(SVector{N, T}, flux_c)
-    flux_static = unsafe_reinterpret(SVector{N, T}, flux_c, M)
     state_c = local_ad(state, 1, T)
-    update_half_face_flux_tpfa!(flux_static, law, state_c, model, dt, flow_disc, Cells())
+    update_half_face_flux_tpfa!(flux_c, law, state_c, model, dt, flow_disc, Cells())
 
     hf_face = eq_s.half_face_flux_faces
     if !isnothing(hf_face)
         flux_v = get_entries(hf_face)
         F = eltype(flux_v)
-        face_flux_static = reinterpret(SVector{N, F}, flux_v)
         state_f = local_ad(state, 1, F)
-        update_half_face_flux_tpfa!(face_flux_static, law, state_f, model, dt, flow_disc, Faces())
+        update_half_face_flux_tpfa!(flux_v, law, state_f, model, dt, flow_disc, Faces())
     end
 end
 
-function update_half_face_flux_tpfa!(hf_cells::Union{AbstractArray{SVector{N, T}}, AbstractVector{T}}, eq, state::S, model, dt, flow_disc, ::Cells) where {T, N, S<:LocalStateAD}
+@inline flux_storage_scalar_type(::AbstractArray{T}) where {T<:Real} = T
+@inline flux_storage_scalar_type(
+    ::AbstractArray{<:SVector{N, T}}) where {N, T} = T
+
+@inline function store_flux_entry!(storage::AbstractMatrix, index, entry)
+    for component in axes(storage, 1)
+        @inbounds storage[component, index] = entry[component]
+    end
+end
+
+@inline store_flux_entry!(storage::AbstractArray{<:SVector}, index, entry) =
+    (@inbounds storage[index] = entry)
+@inline store_flux_entry!(storage::AbstractVector{<:Real}, index, entry) =
+    (@inbounds storage[index] = entry[1])
+
+function update_half_face_flux_tpfa!(hf_cells::AbstractArray, eq,
+        state::S, model, dt, flow_disc, ::Cells) where S<:LocalStateAD
     conn_data = flow_disc.conn_data
     conn_pos = flow_disc.conn_pos
-    M = global_map(model.domain)
-    nc = length(conn_pos)-1
-    function F(c)
-        self = full_cell(c, M)
+    map = global_map(model.domain)
+    scalar_type = Val(flux_storage_scalar_type(hf_cells))
+    nc = length(conn_pos) - 1
+    function update(c)
+        self = full_cell(c, map)
         state_c = new_entity_index(state, self)
-        update_half_face_flux_tpfa_internal!(hf_cells, eq, state_c, model, dt, flow_disc, conn_pos, conn_data, c)
+        first = @inbounds conn_pos[c]
+        last = @inbounds conn_pos[c + 1] - 1
+        for i in first:last
+            (; self, other, face, face_sign) = @inbounds conn_data[i]
+            entry = face_flux!(
+                zero(flux_vector_type(eq, scalar_type)), self, other, face,
+                face_sign, eq, state_c, model, dt, flow_disc)
+            store_flux_entry!(hf_cells, i, entry)
+        end
     end
-    @tic "flux (cells)" threaded_loop_minbatch(F, nc, model.context)
+    @tic "flux (cells)" threaded_loop_minbatch(update, nc, model.context)
     return hf_cells
 end
 
-function update_half_face_flux_tpfa_internal!(hf_cells::AbstractArray{T}, eq, state, model, dt, flow_disc, conn_pos, conn_data, c) where T
-    start = @inbounds conn_pos[c]
-    stop = @inbounds conn_pos[c+1]-1
-    for i in start:stop
-        (; self, other, face, face_sign) = @inbounds conn_data[i]
-        @inbounds hf_cells[i] = face_flux!(zero(T), self, other, face, face_sign, eq, state, model, dt, flow_disc)
-    end
-end
-
-function update_half_face_flux_tpfa!(hf_faces::AbstractArray{SVector{N, T}}, eq, state, model, dt, flow_disc, ::Faces) where {T, N}
+function update_half_face_flux_tpfa!(hf_faces::AbstractArray, eq, state,
+        model, dt, flow_disc, ::Faces)
     nf = number_of_faces(model.domain)
-    pr = physical_representation(model.domain)
-    neighbors = get_neighborship(pr)
-    function F(f)
+    neighbors = get_neighborship(physical_representation(model.domain))
+    scalar_type = Val(flux_storage_scalar_type(hf_faces))
+    function update(f)
         state_f = new_entity_index(state, f)
         @inbounds left = neighbors[1, f]
         @inbounds right = neighbors[2, f]
-        @inbounds hf_faces[f] = face_flux!(hf_faces[f], left, right, f, 1, eq, state_f, model, dt, flow_disc)
+        entry = face_flux!(
+            zero(flux_vector_type(eq, scalar_type)), left, right, f, 1,
+            eq, state_f, model, dt, flow_disc)
+        store_flux_entry!(hf_faces, f, entry)
     end
-    @tic "flux (faces)" threaded_loop_minbatch(F, nf, model.context)
+    @tic "flux (faces)" threaded_loop_minbatch(update, nf, model.context)
+    return hf_faces
 end
 
 function face_flux!(entry, l, r, f, face_sign, eq, state, model, dt, disc)

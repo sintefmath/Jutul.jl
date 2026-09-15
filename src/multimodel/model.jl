@@ -472,6 +472,13 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
 end
 
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
+
+    function push_with_offset!(dest, idx, offset)
+        for i in idx
+            push!(dest, i + offset)
+        end
+        return dest
+    end
     I = Int[]
     J = Int[]
     outstr = "Determining sparse pattern of $(length(targets))×$(length(sources)) models:\n"
@@ -513,12 +520,8 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                 @assert minimum(i) >= 1 "I index was lower than 1 for $source → $target"
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
 
-                for ii in i
-                    push!(I, ii + equation_offset)
-                end
-                for jj in j
-                    push!(J, jj + variable_offset)
-                end
+                push_with_offset!(I, i, equation_offset)
+                push_with_offset!(J, j, variable_offset)
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1) with bz=($bz_n,$bz_m).\n"
             variable_offset += m
@@ -600,7 +603,8 @@ function setup_linearized_system!(storage, model::MultiModel)
                     sparse_pattern = sparse_pattern'
                 end
                 bz_pair = (block_sizes[rowg], block_sizes[colg])
-                this_block = LinearizedBlock(sparse_pattern, bz_pair, row_layout, col_layout)
+                this_block = LinearizedBlock(
+                    sparse_pattern, ctx, row_layout, col_layout, bz_pair)
                 if is_trans
                     subsystems[colg, rowg] = this_block
                 else
@@ -626,44 +630,185 @@ end
 
 function initialize_storage!(storage, model::MultiModel; kwarg...)
     for key in submodels_symbols(model)
-        initialize_storage!(storage[key], model.models[key]; kwarg...)
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        initialize_storage!(substorage, submodel; kwarg...)
     end
+    synchronize_host_models_to_backend!(storage, model)
+    return nothing
+end
+
+function host_evaluation_entry(storage, key)
+    if !haskey(storage, :host_evaluation)
+        return nothing
+    end
+    host = storage.host_evaluation
+    if !(key in host.keys)
+        return nothing
+    end
+    return (storage = host.storage[key], model = host.model[key])
+end
+
+function submodel_evaluation_pair(storage, model::MultiModel, key)
+    host = host_evaluation_entry(storage, key)
+    if isnothing(host)
+        return (storage[key], model[key])
+    else
+        return (host.storage, host.model)
+    end
+end
+
+function synchronize_host_models_to_backend!(storage, model::MultiModel)
+    if !haskey(storage, :host_evaluation)
+        return storage
+    end
+    host = storage.host_evaluation
+    for key in host.keys
+        host_storage = host.storage[key]
+        host_model = host.model[key]
+        prepare_backend_transfer!(host_storage, host_model)
+        backend_copyto!(storage[key].state, host_storage.state)
+        backend_copyto!(storage[key].state0, host_storage.state0)
+        backend_copyto!(storage[key].parameters, host_storage.parameters)
+        backend_copyto!(storage[key].equations, host_storage.equations)
+    end
+    synchronize(model.context)
+    return storage
+end
+
+function synchronize_backend_increment_to_host!(storage, key)
+    host = host_evaluation_entry(storage, key)
+    if isnothing(host)
+        return storage
+    end
+    backend_copyto!(host.storage.views.primary_variables,
+        storage[key].views.primary_variables)
+    return storage
+end
+
+function synchronize_backend_residual_to_host!(storage, key)
+    host = host_evaluation_entry(storage, key)
+    if isnothing(host)
+        return storage
+    end
+    backend_copyto!(host.storage.views.equations, storage[key].views.equations)
+    return storage
 end
 
 function update_equations!(storage, model::MultiModel, dt; targets = submodels_symbols(model))
     @tic "model equations" for k in targets
-        update_equations!(storage[k], model[k], dt)
+        substorage, submodel = submodel_evaluation_pair(storage, model, k)
+        update_equations!(substorage, submodel, dt)
     end
+    return nothing
 end
 
 function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, kwarg...)
-    # First update all equations
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
-    # Then update the cross terms
-    @tic "crossterm update" update_cross_terms!(storage, model, dt; kwarg...)
-    # Apply forces
     @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
-    # Boundary conditions
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
-    # Apply forces to cross-terms
+    prepare_cross_term_evaluation!(storage, model)
+    @tic "crossterm update" update_cross_terms!(storage, model, dt; kwarg...)
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
+    transfer_cross_term_evaluation!(storage)
+    return nothing
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
     models = model.models
-    for (ctp, ct_s) in zip(model.cross_terms, storage.cross_terms)
+    for index in eachindex(model.cross_terms)
+        ctp = model.cross_terms[index]
+        ct_s = storage.cross_terms[index]
         target = ctp.target::Symbol
         source = ctp.source::Symbol
         ct = ctp.cross_term
         is_match = target in targets && source in sources
         is_match = is_match || (has_symmetry(ct) && (target in sources && source in targets))
         if is_match
-            model_t = models[target]
+            host = host_cross_term_evaluation(storage, index)
+            if isnothing(host)
+                # @info "Device to device $target $source"
+                storage_t = storage[target]
+                storage_s = storage[source]
+                model_t = models[target]
+                model_s = models[source]
+                cross_term = ct
+                cross_term_storage = ct_s
+            else
+                storage_t = host.storage[target]
+                storage_s = host.storage[source]
+                model_t = host.model[target]
+                model_s = host.model[source]
+                cross_term = host.model.cross_terms[index].cross_term
+                cross_term_storage = host.storage.cross_terms[index]
+            end
             eq = ct_equation(model_t, ctp.target_equation)
             ct_bare_type = Base.typename(typeof(ct)).name
-            @tic "$ct_bare_type" update_cross_term!(ct_s, ct, eq, storage[target], storage[source], model_t, models[source], dt)
+            @tic "$ct_bare_type" update_cross_term!(cross_term_storage,
+                cross_term, eq, storage_t, storage_s, model_t, model_s, dt)
         end
     end
+    return nothing
+end
+
+function host_cross_term_evaluation(storage, index)
+    if !haskey(storage, :host_evaluation)
+        return nothing
+    end
+    host = storage.host_evaluation
+    if index in host.cross_term_evaluation.host
+        return host
+    else
+        return nothing
+    end
+end
+
+"""
+    prepare_cross_term_evaluation!(storage, model)
+
+Transfer host-evaluated equations and the inputs required by mixed
+`AssembleOnDevice` and `SolveFullyOnDevice` cross terms. All copies are queued
+before the backend is synchronized, so this is the single synchronization point
+between submodel evaluation and cross-term evaluation.
+"""
+function prepare_cross_term_evaluation!(storage, model::MultiModel)
+    if !haskey(storage, :host_evaluation)
+        return storage
+    end
+    host = storage.host_evaluation
+    for key in host.keys
+        host_storage = host.storage[key]
+        host_model = host.model[key]
+        prepare_backend_transfer!(host_storage, host_model)
+        backend_copyto!(storage[key].equations, host_storage.equations)
+    end
+    for key in host.cross_term_evaluation.mixed_models
+        host_storage = host.storage[key]
+        backend_copyto!(storage[key].state, host_storage.state)
+        backend_copyto!(storage[key].state0, host_storage.state0)
+        backend_copyto!(storage[key].parameters, host_storage.parameters)
+    end
+    synchronize(model.context)
+    return storage
+end
+
+"""
+    transfer_cross_term_evaluation!(storage)
+
+Transfer cross terms evaluated on the host to their preallocated backend
+storage. The transfer is queued after all cross-term forces have been applied.
+"""
+function transfer_cross_term_evaluation!(storage)
+    if !haskey(storage, :host_evaluation)
+        return storage
+    end
+    host = storage.host_evaluation
+    for index in host.cross_term_evaluation.host
+        destination = storage.cross_terms[index]
+        source = host.storage.cross_terms[index]
+        backend_copyto!(destination.target, source.target)
+        backend_copyto!(destination.source, source.source)
+    end
+    return storage
 end
 
 function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
@@ -677,12 +822,13 @@ function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model
     else
         update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
     end
+    return nothing
 end
 
 function update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s_target, ct_s_source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
-    for i in 1:ct_s.N
-        prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
-    end
+    prepare(i) = prepare_cross_term_in_entity!(
+        i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
+    threaded_loop(prepare, ct_s.N, model_t.context)
     state_s_v = as_value(state_s)
     state0_s_v = as_value(state0_s)
     for cache in values(ct_s_target)
@@ -694,61 +840,79 @@ function update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s_targ
     for cache in values(ct_s_source)
         update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
     end
+    return nothing
 end
 
 function update_cross_term_helper_impl!(state_t, state0_t, state_s, state0_s, ct_s_target, ct_s_source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
-    for i in 1:ct_s.N
-        prepare_cross_term_in_entity!(i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
-    end
+    prepare(i) = prepare_cross_term_in_entity!(
+        i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt)
+    threaded_loop(prepare, ct_s.N, model_t.context)
     # Target and source are aliased. We just update one of them.
     @assert ct_s_target === ct_s_source
     update_cross_term_for_entity!(ct_s_source, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
+    return nothing
 end
 
 
 function update_cross_term_inner_source!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
-    nothing
+    return nothing
 end
 
 function update_cross_term_inner_source!(cache::GenericAutoDiffCache{<:Any, <:Any, ∂x, <:Any, <:Any, <:Any, <:Any, <:Any}, ct, eq, state_s, state0_s, state_t, state0_t, model_t, model_s, dt) where ∂x
     state_s_local = local_ad(state_s, 1, ∂x)
     state0_s_local = local_ad(state0_s, 1, ∂x)
     update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s_local, state0_s_local, model_t, model_s, dt)
+    return nothing
 end
 
 function update_cross_term_inner_target!(cache, ct, eq, state_s, state0_s, state_t_v, state0_t_v, model_t, model_s, dt)
-    nothing
+    return nothing
 end
 
 function update_cross_term_inner_target!(cache::GenericAutoDiffCache{<:Any, <:Any, ∂x, <:Any, <:Any, <:Any, <:Any, <:Any}, ct, eq, state_s, state0_s, state_t, state0_t, model_t, model_s, dt) where ∂x
     state_t_local = local_ad(state_t, 1, ∂x)
     state0_t_local = local_ad(state0_t, 1, ∂x)
     update_cross_term_for_entity!(cache, ct, eq, state_t_local, state0_t_local, state_s, state0_s, model_t, model_s, dt)
+    return nothing
 end
 
 function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
-    v = cache.entries
-    vars = cache.variables
-    for i in 1:number_of_entities(cache)
-        ldisc = local_discretization(ct, i)
-        @inbounds for j in vrange(cache, i)
-            v_i = @views v[:, j]
-            var = vars[j]
-            state_t = new_entity_index(state_t, var)
-            state0_t = new_entity_index(state0_t, var)
-            state_s = new_entity_index(state_s, var)
-            state0_s = new_entity_index(state0_s, var)
-            update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
-        end
-    end
+    states = (state_t, state0_t, state_s, state0_s)
+    models = (model_t, model_s)
+    update(i) = update_cross_term_for_entity_inner!(cache, i, ct, states, models, eq, dt)
+    threaded_loop_minbatch(update, number_of_entities(cache), model_t.context)
+    return nothing
 end
 
+function update_cross_term_for_entity_inner!(cache, i, ct, states, models, eq, dt)
+    v = cache.entries
+    vars = cache.variables
+    state_t, state0_t, state_s, state0_s = states
+    model_t, model_s = models
+    ldisc = local_discretization(ct, i)
+    @inbounds for j in vrange(cache, i)
+        v_i = @views v[:, j]
+        var = vars[j]
+        state_t_i = new_entity_index(state_t, var)
+        state0_t_i = new_entity_index(state0_t, var)
+        state_s_i = new_entity_index(state_s, var)
+        state0_s_i = new_entity_index(state0_s, var)
+        update_cross_term_in_entity!(v_i, i, state_t_i, state0_t_i,
+            state_s_i, state0_s_i, model_t, model_s, ct, eq, dt, ldisc)
+    end
+    return nothing
+end
+
+
 function update_cross_term_for_entity!(cache::AbstractArray, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
-    for i in axes(cache, 2)
+    function update(i)
         ldisc = local_discretization(ct, i)
         v_i = @views cache[:, i]
         update_cross_term_in_entity!(v_i, i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt, ldisc)
+        return nothing
     end
+    threaded_loop_minbatch(update, size(cache, 2), model_t.context)
+    return nothing
 end
 
 function update_linearized_system!(storage, model::MultiModel, executor = default_executor();
@@ -882,14 +1046,18 @@ end
 
 function update_secondary_variables!(storage, model::MultiModel, is_state0::Bool; targets = submodels_symbols(model))
     for key in targets
-        update_secondary_variables!(storage[key], model.models[key], is_state0)
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        update_secondary_variables!(substorage, submodel, is_state0)
     end
+    return nothing
 end
 
 function update_secondary_variables!(storage, model::MultiModel; targets = submodels_symbols(model))
     for key in targets
-        update_secondary_variables!(storage[key], model.models[key])
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        update_secondary_variables!(substorage, submodel)
     end
+    return nothing
 end
 
 function update_secondary_variables_state!(state, model::MultiModel; targets = submodels_symbols(model))
@@ -923,8 +1091,8 @@ function check_convergence(storage, model::MultiModel, cfg;
         else
             inc = update_report[key]
         end
-        s = storage[key]
-        m = model.models[key]
+        synchronize_backend_residual_to_host!(storage, key)
+        s, m = submodel_evaluation_pair(storage, model, key)
         eqs = m.equations
         eqs_s = s.equations
         eqs_view = s.views.equations
@@ -953,11 +1121,10 @@ function check_convergence(storage, model::MultiModel, cfg;
 end
 
 function update_primary_variables!(storage, model::MultiModel; targets = submodels_symbols(model), kwarg...)
-    models = model.models
     report = Dict{Symbol, AbstractDict}()
     for key in targets
-        m = models[key]
-        s = storage[key]
+        synchronize_backend_increment_to_host!(storage, key)
+        s, m = submodel_evaluation_pair(storage, model, key)
         dx_v = s.views.primary_variables
         pdef = s.variable_definitions.primary_variables
         report[key] = update_primary_variables!(s.state, dx_v, m, pdef; state = s.state, kwarg...)
@@ -967,56 +1134,110 @@ end
 
 function update_extra_state_fields!(storage, model::MultiModel, dt, time)
     for key in submodels_symbols(model)
-        update_extra_state_fields!(storage[key], model.models[key], dt, time)
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        update_extra_state_fields!(substorage, submodel, dt, time)
     end
     return storage
 end
 
 function reset_state_to_previous_state!(storage, model::MultiModel)
-    submodels_storage_apply!(storage, model, reset_state_to_previous_state!)
+    for key in submodels_symbols(model)
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        reset_state_to_previous_state!(substorage, submodel)
+    end
+    synchronize_host_models_to_backend!(storage, model)
+    return nothing
 end
 
 function reset_previous_state!(storage, model::MultiModel, state0)
     for key in submodels_symbols(model)
-        reset_previous_state!(storage[key], model.models[key], state0[key])
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        reset_previous_state!(substorage, submodel, state0[key])
     end
+    synchronize_host_models_to_backend!(storage, model)
+    return nothing
 end
 
 function update_after_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     report = JUTUL_OUTPUT_TYPE()
     for key in targets
-        report[key] = update_after_step!(storage[key], model.models[key], dt, forces[key]; kwarg...)
+        host = host_evaluation_entry(storage, key)
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        local_forces = forces_for_evaluation(forces, host)
+        report[key] = update_after_step!(
+            substorage, submodel, dt, local_forces[key]; kwarg...)
     end
+    synchronize_host_models_to_backend!(storage, model)
     return report
 end
 
 function update_before_step!(storage, model::MultiModel, dt, forces; targets = submodels_symbols(model), kwarg...)
     for key in targets
-        m = model.models[key]
-        update_before_step_multimodel!(storage, model, m, dt, forces, key; kwarg...)
-        f = forces[key]
-        s = storage[key]
+        host = host_evaluation_entry(storage, key)
+        if isnothing(host)
+            outer_storage = storage
+            outer_model = model
+        else
+            outer_storage = storage.host_evaluation.storage
+            outer_model = storage.host_evaluation.model
+        end
+        local_forces = forces_for_evaluation(forces, host)
+        s, m = submodel_evaluation_pair(storage, model, key)
+        update_before_step_multimodel_backend!(
+            outer_storage, outer_model, storage, model,
+            m, dt, local_forces, key; kwarg...)
+        f = local_forces[key]
         update_before_step!(s, m, dt, f; kwarg...)
     end
+    synchronize_host_models_to_backend!(storage, model)
+    return nothing
 end
 
 function update_before_step_multimodel!(storage, model, submodel, dt, forces, label; kwarg...)
+    return nothing
+end
 
+"""
+    update_before_step_multimodel_backend!(storage, model,
+        backend_storage, backend_model, submodel, dt, forces, label; kwarg...)
+
+Backend-aware variant of [`update_before_step_multimodel!`](@ref). `storage`
+and `model` are the selected evaluation view, while `backend_storage` and
+`backend_model` are the simulator's preallocated backend objects. The default
+implementation delegates to the ordinary hook.
+"""
+function update_before_step_multimodel_backend!(
+        storage, model, backend_storage, backend_model,
+        submodel, dt, forces, label; kwarg...)
+    update_before_step_multimodel!(
+        storage, model, submodel, dt, forces, label; kwarg...)
+    return nothing
 end
 
 function apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, targets = submodels_symbols(model))
     for key in targets
-        subforce = forces[key]
+        host = host_evaluation_entry(storage, key)
+        local_forces = forces_for_evaluation(forces, host)
+        subforce = local_forces[key]
         if !isnothing(subforce)
-            apply_forces!(storage[key], model.models[key], dt, subforce; time = time)
+            substorage, submodel = submodel_evaluation_pair(storage, model, key)
+            apply_forces!(substorage, submodel, dt, subforce; time = time)
         end
     end
+    return nothing
 end
+
+forces_for_host(forces) = forces
+forces_for_backend(forces) = forces
+forces_for_evaluation(forces, ::Nothing) = forces_for_backend(forces)
+forces_for_evaluation(forces, ::Any) = forces_for_host(forces)
 
 function apply_boundary_conditions!(storage, model::MultiModel; targets = submodels_symbols(model))
     for key in targets
-        apply_boundary_conditions!(storage[key], storage[key].parameters, model.models[key])
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        apply_boundary_conditions!(substorage, substorage.parameters, submodel)
     end
+    return nothing
 end
 
 
@@ -1028,9 +1249,9 @@ end
 
 function get_output_state(storage, model::MultiModel)
     out = JUTUL_OUTPUT_TYPE()
-    models = model.models
     for key in submodels_symbols(model)
-        out[key] = get_output_state(storage[key], models[key])
+        substorage, submodel = submodel_evaluation_pair(storage, model, key)
+        out[key] = get_output_state(substorage, submodel)
     end
     return out
 end
@@ -1063,8 +1284,15 @@ end
 
 function reset_variables!(storage, model::MultiModel, state; kwarg...)
     for (k, m) in pairs(model.models)
-        reset_variables!(storage[k], m, state[k]; kwarg...)
+        host = host_evaluation_entry(storage, k)
+        if isnothing(host)
+            reset_variables!(storage[k], m, state[k]; kwarg...)
+        else
+            reset_variables!(host.storage, host.model, state[k]; kwarg...)
+        end
     end
+    synchronize_host_models_to_backend!(storage, model)
+    return nothing
 end
 
 function sort_variables!(model::MultiModel, t = :primary)

@@ -72,9 +72,11 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         B, C, D, E = get_schur_blocks!(sys, false)
         # A = B - CE\D
         n = size(first(C), 1)
-        T = eltype(sys[1, 1].r)
-        apply! = get_schur_apply(sys.schur_buffer, Val(T), B, C, D, E)
-        op = LinearOperator(Float64, n, n, false, false, apply!)
+        residual_type = eltype(sys[1, 1].r)
+        scalar_type = eltype(sys.r_buffer)
+        apply! = get_schur_apply(
+            sys.schur_buffer, Val(residual_type), B, C, D, E)
+        op = LinearOperator(scalar_type, n, n, false, false, apply!)
     else
         S = sys.subsystems
         if true
@@ -122,9 +124,7 @@ function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
         buf_b, = buffers[i+1]
         mul!(buf_b, D[i], Δx)
         # now buf_b = D*Δx
-        @batch minbatch=1000 for j in 1:n
-            @inbounds buf_b[j] -= b_i[j]
-        end
+        buf_b .-= b_i
         y_i = view(y, (offset+1):(offset+n))
         ldiv!(y_i, E[i], buf_b)
         offset += length(b_i)

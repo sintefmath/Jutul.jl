@@ -38,9 +38,9 @@ module JutulAMGCLWrapExt
     function Jutul.update_preconditioner!(p::Jutul.AMGCLPreconditioner, A::Jutul.StaticCSR.StaticSparsityMatrixCSR, b, ctx, executor)
         n, m = size(A)
         @assert n == m
-        rowptr = replace_values_sparse_array!(p.rowptr, A.At.colptr)
-        colval = replace_values_sparse_array!(p.colval, A.At.rowval)
-        nzval = A.At.nzval
+        rowptr = replace_values_sparse_array!(p.rowptr, A.rowptr)
+        colval = replace_values_sparse_array!(p.colval, A.colval)
+        nzval = A.nzval
         F = get_amgcl_wrapper_constructor(p)
         op = F(m, rowptr, colval, nzval, 1, p.param)
         e = AMGCLWrap.error_state(op)
