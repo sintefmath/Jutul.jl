@@ -672,7 +672,7 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
         ctp = model.cross_terms[index]
         ct_s = storage.cross_terms[index]
         (; cross_term, target, source) = ctp
-        host = host_cross_term_evaluation(storage, target, source, index)
+        host = host_cross_term_evaluation(storage, index)
         if isnothing(host)
             evaluation_storage = storage
             evaluation_model = model
@@ -700,6 +700,7 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
             backend_copyto!(ct_s.source, evaluation_cross_term_storage.source)
         end
     end
+    return nothing
 end
 
 function apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, source, targets, dt, forces; kwarg...)

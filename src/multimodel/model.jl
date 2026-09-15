@@ -634,9 +634,13 @@ function initialize_storage!(storage, model::MultiModel; kwarg...)
 end
 
 function host_evaluation_entry(storage, key)
-    haskey(storage, :host_evaluation) || return nothing
+    if !haskey(storage, :host_evaluation)
+        return nothing
+    end
     host = storage.host_evaluation
-    key in host.keys || return nothing
+    if !(key in host.keys)
+        return nothing
+    end
     return (storage = host.storage[key], model = host.model[key])
 end
 
@@ -649,22 +653,51 @@ function submodel_evaluation_pair(storage, model::MultiModel, key)
     end
 end
 
+"""
+    submodel_backend_evaluation_pair(storage, model, key)
+
+Return the preallocated backend storage and model for a submodel. For the
+hybrid view used by `AssembleOnDevice` hooks, this bypasses its detached host
+substorage. In an ordinary multimodel storage it is equivalent to indexing the
+given storage and model directly.
+"""
+function submodel_backend_evaluation_pair(storage, model::MultiModel, key)
+    if haskey(storage, :backend_evaluation)
+        backend = storage.backend_evaluation
+        return (backend.storage[key], backend.model[key])
+    else
+        return (storage[key], model[key])
+    end
+end
+
 function synchronize_host_submodel_to_backend!(storage, model::MultiModel, key;
         state = true, state0 = true, parameters = true, equations = true)
     host = host_evaluation_entry(storage, key)
-    isnothing(host) && return storage
+    if isnothing(host)
+        return storage
+    end
     prepare_backend_transfer!(host.storage, host.model)
-    state && backend_copyto!(storage[key].state, host.storage.state)
-    state0 && backend_copyto!(storage[key].state0, host.storage.state0)
-    parameters && backend_copyto!(storage[key].parameters, host.storage.parameters)
-    equations && backend_copyto!(storage[key].equations, host.storage.equations)
+    if state
+        backend_copyto!(storage[key].state, host.storage.state)
+    end
+    if state0
+        backend_copyto!(storage[key].state0, host.storage.state0)
+    end
+    if parameters
+        backend_copyto!(storage[key].parameters, host.storage.parameters)
+    end
+    if equations
+        backend_copyto!(storage[key].equations, host.storage.equations)
+    end
     synchronize(model[key].context)
     return storage
 end
 
 function synchronize_backend_increment_to_host!(storage, model::MultiModel, key)
     host = host_evaluation_entry(storage, key)
-    isnothing(host) && return storage
+    if isnothing(host)
+        return storage
+    end
     backend_copyto!(host.storage.views.primary_variables,
         storage[key].views.primary_variables)
     return storage
@@ -672,16 +705,23 @@ end
 
 function synchronize_backend_residual_to_host!(storage, model::MultiModel, key)
     host = host_evaluation_entry(storage, key)
-    isnothing(host) && return storage
+    if isnothing(host)
+        return storage
+    end
     backend_copyto!(host.storage.views.equations, storage[key].views.equations)
     return storage
 end
 
 function synchronize_backend_state_to_host!(storage, model::MultiModel;
         targets = submodels_symbols(model))
-    haskey(storage, :host_evaluation) || return storage
+    if !haskey(storage, :host_evaluation)
+        return storage
+    end
     host = storage.host_evaluation
     for key in targets
+        if !(key in host.keys)
+            continue
+        end
         backend_copyto!(host.storage[key].state, storage[key].state)
         backend_copyto!(host.storage[key].state0, storage[key].state0)
     end
@@ -711,6 +751,7 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
 end
 
 function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
+    prepare_cross_term_evaluation!(storage, model)
     models = model.models
     for index in eachindex(model.cross_terms)
         ctp = model.cross_terms[index]
@@ -721,7 +762,7 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels
         is_match = target in targets && source in sources
         is_match = is_match || (has_symmetry(ct) && (target in sources && source in targets))
         if is_match
-            host = host_cross_term_evaluation(storage, target, source, index)
+            host = host_cross_term_evaluation(storage, index)
             if isnothing(host)
                 storage_t = storage[target]
                 storage_s = storage[source]
@@ -747,14 +788,39 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels
             end
         end
     end
+    return nothing
 end
 
-function host_cross_term_evaluation(storage, target, source, index)
-    haskey(storage, :host_evaluation) || return nothing
+function host_cross_term_evaluation(storage, index)
+    if !haskey(storage, :host_evaluation)
+        return nothing
+    end
     host = storage.host_evaluation
-    target in host.keys || return nothing
-    source in host.keys || return nothing
-    return host
+    if index in host.cross_term_evaluation.host
+        return host
+    else
+        return nothing
+    end
+end
+
+"""
+    prepare_cross_term_evaluation!(storage, model)
+
+Synchronize the preallocated backend states for all `AssembleOnDevice` models
+that participate in at least one mixed `AssembleOnDevice` and
+`SolveFullyOnDevice` cross term. Each participating model is synchronized once,
+even when it occurs in several cross terms.
+"""
+function prepare_cross_term_evaluation!(storage, model::MultiModel)
+    if !haskey(storage, :host_evaluation)
+        return storage
+    end
+    host = storage.host_evaluation
+    for key in host.cross_term_evaluation.mixed_models
+        synchronize_host_submodel_to_backend!(storage, model, key;
+            equations = false)
+    end
+    return storage
 end
 
 function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)

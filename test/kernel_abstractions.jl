@@ -5,6 +5,13 @@ using SparseArrays
 import Adapt
 import Jutul.KernelExecution: secondary_variable_evaluation_plan
 
+const mixed_cross_term_prepare_count = Ref(0)
+function Jutul.prepare_backend_transfer!(storage,
+        model::SimulationModel{<:ScalarTestDomain})
+    mixed_cross_term_prepare_count[] += 1
+    return storage
+end
+
 struct KernelArgumentTestAdaptor end
 struct KernelArgumentArray{T}
     length::Int
@@ -216,6 +223,68 @@ end
     @test simulator.model[:A].context.reduce_memory
     @test !simulator.model[:B].context.reduce_memory
     @test simulator.storage.host_evaluation.keys == (:B,)
+    host = simulator.storage.host_evaluation
+    @test host.model[:A] === simulator.model[:A]
+    @test host.storage[:A] === simulator.storage[:A]
+    @test host.storage.state[:A] === simulator.storage.state[:A]
+    @test host.storage.state0[:A] === simulator.storage.state0[:A]
+    @test host.model[:B] !== simulator.model[:B]
+    @test host.storage[:B] !== simulator.storage[:B]
+    @test host.storage.cross_terms[1] === simulator.storage.cross_terms[1]
+    @test isempty(host.cross_term_evaluation.host)
+    @test host.cross_term_evaluation.mixed == [1]
+    @test host.cross_term_evaluation.mixed_models == [:B]
+    backend_b_storage, backend_b_model =
+        Jutul.submodel_backend_evaluation_pair(host.storage, host.model, :B)
+    @test backend_b_storage === simulator.storage[:B]
+    @test backend_b_model === simulator.model[:B]
+
+    # Mixed cross terms execute on the backend. Refreshing their inputs must
+    # therefore copy the AssembleOnDevice state into its preallocated mirror,
+    # without copying the SolveFullyOnDevice state to the host.
+    host.storage.B.state.XVar .= 2.0
+    simulator.storage.B.state.XVar .= -10.0
+    simulator.storage.A.state.XVar .= 5.0
+    Jutul.update_cross_terms!(simulator.storage, simulator.model, 1.0)
+    @test only(simulator.storage.B.state.XVar) == 2.0
+    @test only(host.storage.A.state.XVar) == 5.0
+    mixed_entries = simulator.storage.cross_terms[1].target.Cells.entries
+    @test Jutul.value(only(mixed_entries)) == 3.0
+    host.storage.B.state.XVar .= 0.0
+    simulator.storage.B.state.XVar .= 0.0
+    simulator.storage.A.state.XVar .= 0.0
+
+    reverse_mixed = MultiModel((A = model_a, B = model_b))
+    add_cross_term!(reverse_mixed, ScalarTestCrossTerm();
+        target = :B, source = :A, equation = :test_equation)
+    reverse_mixed_simulator = transfer_to_backend(
+        Simulator(reverse_mixed; state0 = state0), CPU();
+        group_execution = group_execution)
+    reverse_host = reverse_mixed_simulator.storage.host_evaluation
+    reverse_host.storage.B.state.XVar .= 2.0
+    reverse_mixed_simulator.storage.A.state.XVar .= 5.0
+    Jutul.update_cross_terms!(reverse_mixed_simulator.storage,
+        reverse_mixed_simulator.model, 1.0)
+    reverse_entries =
+        reverse_mixed_simulator.storage.cross_terms[1].target.Cells.entries
+    @test Jutul.value(only(reverse_entries)) == -3.0
+
+    overlapping_mixed = MultiModel((A = model_a, B = model_b))
+    for _ in 1:2
+        add_cross_term!(overlapping_mixed, ScalarTestCrossTerm();
+            target = :A, source = :B, equation = :test_equation)
+    end
+    overlapping_mixed_simulator = transfer_to_backend(
+        Simulator(overlapping_mixed; state0 = state0), CPU();
+        group_execution = group_execution)
+    overlapping_host = overlapping_mixed_simulator.storage.host_evaluation
+    @test overlapping_host.cross_term_evaluation.mixed == [1, 2]
+    @test overlapping_host.cross_term_evaluation.mixed_models == [:B]
+    mixed_cross_term_prepare_count[] = 0
+    Jutul.prepare_cross_term_evaluation!(
+        overlapping_mixed_simulator.storage,
+        overlapping_mixed_simulator.model)
+    @test mixed_cross_term_prepare_count[] == 1
 
     adjoint_source = MultiModel((A = model_a, B = model_b), groups = [1, 2],
         group_execution = [SolveFullyOnDevice, AssembleOnDevice])
@@ -250,4 +319,41 @@ end
         group_execution = NothingOnDevice)
     cpu_only_simulator = Simulator(cpu_only; state0 = state0)
     @test transfer_to_backend(cpu_only_simulator, CPU()) === cpu_only_simulator
+
+    host_only = MultiModel((A = model_a, B = model_b),
+        group_execution = AssembleOnDevice)
+    add_cross_term!(host_only, ScalarTestCrossTerm();
+        target = :A, source = :B, equation = :test_equation)
+    host_only_simulator = transfer_to_backend(
+        Simulator(host_only; state0 = state0), CPU())
+    host_only_storage = host_only_simulator.storage.host_evaluation
+    @test host_only_storage.keys == (:A, :B)
+    @test host_only_storage.cross_term_evaluation.host == [1]
+    @test isempty(host_only_storage.cross_term_evaluation.mixed)
+    @test isempty(host_only_storage.cross_term_evaluation.mixed_models)
+    @test host_only_storage.storage.cross_terms[1] !==
+        host_only_simulator.storage.cross_terms[1]
+    host_only_storage.storage.A.state.XVar .= 7.0
+    host_only_storage.storage.B.state.XVar .= 4.0
+    Jutul.update_cross_terms!(host_only_simulator.storage,
+        host_only_simulator.model, 1.0)
+    host_entries = host_only_storage.storage.cross_terms[1].target.Cells.entries
+    device_entries = host_only_simulator.storage.cross_terms[1].target.Cells.entries
+    @test Jutul.value(only(host_entries)) == 3.0
+    @test Jutul.value(only(device_entries)) == 3.0
+
+    device_only = MultiModel((A = model_a, B = model_b),
+        group_execution = SolveFullyOnDevice)
+    add_cross_term!(device_only, ScalarTestCrossTerm();
+        target = :A, source = :B, equation = :test_equation)
+    device_only_simulator = transfer_to_backend(
+        Simulator(device_only; state0 = state0), CPU())
+    @test !haskey(device_only_simulator.storage, :host_evaluation)
+    device_only_simulator.storage.A.state.XVar .= 7.0
+    device_only_simulator.storage.B.state.XVar .= 4.0
+    Jutul.update_cross_terms!(device_only_simulator.storage,
+        device_only_simulator.model, 1.0)
+    device_only_entries =
+        device_only_simulator.storage.cross_terms[1].target.Cells.entries
+    @test Jutul.value(only(device_only_entries)) == 3.0
 end

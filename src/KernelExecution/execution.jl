@@ -606,10 +606,142 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
     )
 end
 
+struct HostCrossTermEvaluation
+    host::Vector{Int}
+    mixed::Vector{Int}
+    mixed_models::Vector{Symbol}
+end
+
 struct HostEvaluationStorage{M, S, K}
     model::M
     storage::S
     keys::K
+    cross_term_evaluation::HostCrossTermEvaluation
+end
+
+function host_substorage_mirror(storage, model)
+    # A submodel's equation and primary-variable views point into the outer
+    # multimodel linear system. Rebuild them against local buffers so retaining
+    # a small host-evaluated submodel does not also retain the fully device-side
+    # models' CPU residual and increment buffers through a parent view.
+    detached = JutulStorage(OrderedDict{Symbol, Any}(pairs(data(storage))))
+    views = storage.views
+    if ismissing(views.equations)
+        residual = missing
+    else
+        residual = zeros(
+            float_type(model.context), number_of_equations(model))
+    end
+    if ismissing(views.primary_variables)
+        increment = missing
+    else
+        increment = zeros(
+            float_type(model.context), number_of_degrees_of_freedom(model))
+    end
+    detached[:views] = setup_equations_and_primary_variable_views(
+        detached, model, residual, increment)
+    return detached
+end
+
+function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
+        storage_backend, host_keys)
+    function is_host_key(key)
+        return key in host_keys
+    end
+
+    models = OrderedDict{Symbol, Any}()
+    storages = OrderedDict{Symbol, Any}()
+    states = JutulStorage()
+    states0 = JutulStorage()
+    for key in submodels_symbols(model_backend)
+        if is_host_key(key)
+            submodel = model_cpu[key]
+            substorage = host_substorage_mirror(storage_cpu[key], submodel)
+        else
+            # Fully device-side entries are shared with the backend simulator.
+            # In particular, there is no retained CPU state for these models.
+            submodel = model_backend[key]
+            substorage = storage_backend[key]
+        end
+        models[key] = submodel
+        storages[key] = substorage
+        states[key] = substorage.state
+        states0[key] = substorage.state0
+    end
+
+    cross_terms = Vector{CrossTermPair}()
+    cross_term_storage = Any[]
+    host_cross_terms = Int[]
+    mixed_cross_terms = Int[]
+    mixed_models = Symbol[]
+    for index in eachindex(model_backend.cross_terms)
+        ctp = model_backend.cross_terms[index]
+        target_on_host = is_host_key(ctp.target)
+        source_on_host = is_host_key(ctp.source)
+        if target_on_host && source_on_host
+            push!(cross_terms, model_cpu.cross_terms[index])
+            push!(cross_term_storage, storage_cpu.cross_terms[index])
+            push!(host_cross_terms, index)
+        else
+            push!(cross_terms, ctp)
+            push!(cross_term_storage, storage_backend.cross_terms[index])
+            if target_on_host || source_on_host
+                push!(mixed_cross_terms, index)
+                if target_on_host
+                    mixed_model = ctp.target
+                else
+                    mixed_model = ctp.source
+                end
+                if !(mixed_model in mixed_models)
+                    push!(mixed_models, mixed_model)
+                end
+            end
+        end
+    end
+    cross_term_evaluation = HostCrossTermEvaluation(
+        host_cross_terms, mixed_cross_terms, mixed_models)
+
+    if isnothing(model_backend.groups)
+        groups = nothing
+    else
+        groups = copy(model_backend.groups)
+    end
+    evaluation_model = MultiModel(models, multimodel_label(model_backend);
+        cross_terms = cross_terms,
+        groups = groups,
+        group_execution = model_backend.group_execution,
+        context = model_backend.context,
+        reduction = model_backend.reduction,
+        specialize = false,
+        specialize_ad = model_backend.specialize_ad)
+
+    # Start with backend-owned outer storage and replace only the pieces that
+    # are deliberately evaluated on the host. This gives multimodel hooks a
+    # complete view without retaining the original CPU multimodel storage.
+    evaluation_data = OrderedDict{Symbol, Any}(pairs(data(storage_backend)))
+    for (key, substorage) in storages
+        evaluation_data[key] = substorage
+    end
+    evaluation_data[:state] = states
+    evaluation_data[:state0] = states0
+    evaluation_data[:cross_terms] = cross_term_storage
+    # Application-level multimodel hooks may need to evaluate a coupled
+    # operation on the backend (for example, a host-assembled well using a
+    # fully device-side reservoir). Keep direct references to the already
+    # allocated backend substorages without retaining the original CPU
+    # multimodel storage or introducing a cycle through `storage_backend`.
+    backend_storages = JutulStorage()
+    for key in submodels_symbols(model_backend)
+        backend_storages[key] = storage_backend[key]
+    end
+    evaluation_data[:backend_evaluation] = (
+        model = model_backend,
+        storage = backend_storages,
+    )
+    evaluation_storage = JutulStorage(evaluation_data)
+    setup_multimodel_maps!(evaluation_storage, evaluation_model)
+    return HostEvaluationStorage(evaluation_model, evaluation_storage,
+        host_keys, cross_term_evaluation)
 end
 
 """
@@ -924,11 +1056,6 @@ function transfer_multimodel_to_backend(sim::Simulator,
     converted[:LinearizedSystem] = lsys
     converted[:cross_terms] = [adapt_backend_value(ctx, ct_s)
         for ct_s in storage_setup.cross_terms]
-    if !isempty(host_keys)
-        converted[:host_evaluation] = HostEvaluationStorage(
-            model_cpu, storage_cpu, host_keys)
-    end
-
     storage = JutulStorage(converted)
     setup_multimodel_maps!(storage, model)
     setup_equations_and_primary_variable_views!(storage, model, lsys)
@@ -937,6 +1064,10 @@ function transfer_multimodel_to_backend(sim::Simulator,
     # compiler type. Individual submodel fields remain immutable and concrete
     # when dispatched to their kernels.
     storage = specialize_simulator_storage(storage, model, false)
+    if !isempty(host_keys)
+        data(storage)[:host_evaluation] = setup_host_evaluation(
+            model_cpu, storage_cpu, model, storage, host_keys)
+    end
     synchronize(ctx)
     return Simulator(sim.executor, model, storage)
 end
