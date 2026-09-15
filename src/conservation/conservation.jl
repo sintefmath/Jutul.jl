@@ -385,17 +385,6 @@ function update_linearized_system_subset_conservation_fused!(
     return nz
 end
 
-# Match the rounding of the cached path, where each flux is materialized before
-# equation assembly. Inlining this call lets LLVM contract flux evaluation with
-# the residual update and can change nonlinear convergence decisions.
-Base.@noinline function fused_tpfa_half_face_flux(
-        law, local_state, model, dt, flow_disc, scalar_type,
-        self, other, face, face_sign)
-    return face_flux!(
-        zero(flux_vector_type(law, scalar_type)), self, other, face,
-        face_sign, law, local_state, model, dt, flow_disc)
-end
-
 function fill_conservation_eq_fused!(nz, r, cell, acc, positions,
         conn_pos, conn_data, global_cell_map, state, timestep, law, model,
         flow_disc, ::Val{Np}, ::Val{Ne}, scalar_type::Val{T}) where {Np, Ne, T}
@@ -421,9 +410,9 @@ function fill_conservation_eq_fused!(nz, r, cell, acc, positions,
         for connection in first_connection:last_connection
             connection_data = @inbounds conn_data[connection]
             (; self, other, face, face_sign) = connection_data
-            flux = fused_tpfa_half_face_flux(
-                law, local_state, model, dt, flow_disc, scalar_type,
-                self, other, face, face_sign)
+            flux = face_flux!(
+                zero(flux_vector_type(law, scalar_type)), self, other, face,
+                face_sign, law, local_state, model, dt, flow_disc)
             for equation in 1:Ne
                 flux_entry = @inbounds flux[equation]
                 acc_r = setindex(
