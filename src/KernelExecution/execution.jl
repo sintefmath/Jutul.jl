@@ -11,12 +11,15 @@ function update_values!(v::AbstractArray{T}, next::AbstractArray{S},
         unpack_tag(v) isa JutulEntity)
     strip_partials = Val(eltype(v) <: AbstractFloat &&
         eltype(next_backend) <: ForwardDiff.Dual)
-    strip_partials isa Val{true} && (unpack_tag(next_backend)::JutulEntity)
+    if strip_partials isa Val{true}
+        unpack_tag(next_backend)::JutulEntity
+    end
     function update(i)
         @inbounds old = v[i]
         @inbounds new = next_backend[i]
         new = updated_state_value(old, new, preserve_partials, strip_partials)
         @inbounds v[i] = new
+        return nothing
     end
     threaded_loop_minbatch(update, length(v), context)
     return v
@@ -29,6 +32,7 @@ function replace_values!(old, updated, context::KernelAbstractionsContext)
             update_values!(old[field], next, context)
         end
     end
+    return nothing
 end
 
 # Adapt uses the context as the adaptation target. Backend packages define how
@@ -39,10 +43,10 @@ function Adapt.adapt_storage(ctx::KernelAbstractionsContext,
     # storage. Keep such arrays on the host; AssembleOnDevice submodels use
     # them only during host evaluation and transfer their numeric products.
     target_type = ka_storage_eltype(ctx, T)
-    converted = if target_type === T
-        a
+    if target_type === T
+        converted = a
     else
-        map(value -> convert(target_type, value), a)
+        converted = map(value -> convert(target_type, value), a)
     end
     if isbitstype(target_type)
         return Adapt.adapt(ctx.backend, converted)
@@ -200,8 +204,10 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
         cell_flux = missing
         face_flux = nothing
     else
-        ismissing(s.half_face_flux_cells) && throw(ArgumentError(
-            "Cannot reconstruct TPFA half-face flux storage from fused assembly storage"))
+        if ismissing(s.half_face_flux_cells)
+            throw(ArgumentError(
+                "Cannot reconstruct TPFA half-face flux storage from fused assembly storage"))
+        end
         cell_flux = Adapt.adapt(ctx, s.half_face_flux_cells)
         face_flux = Adapt.adapt(ctx, s.half_face_flux_faces)
         fused = nothing
@@ -247,9 +253,11 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
 end
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::LinearizedSystem)
-    lsys.jac isa StaticSparsityMatrixCSR || throw(ArgumentError(
-        "KernelAbstractions transfer requires a CPU simulator built with ParallelCSRContext"
-    ))
+    if !(lsys.jac isa StaticSparsityMatrixCSR)
+        throw(ArgumentError(
+            "KernelAbstractions transfer requires a CPU simulator built with ParallelCSRContext"
+        ))
+    end
     jac = Adapt.adapt(ctx, lsys.jac)
     r_buffer = Adapt.adapt(ctx, lsys.r_buffer)
     dx_buffer = Adapt.adapt(ctx, lsys.dx_buffer)
@@ -385,7 +393,9 @@ function secondary_variable_evaluation_plan(
     number_of_roots = length(model.primary_variables) + length(model.parameters)
     node_levels = zeros(Int, length(nodes))
     for index in order
-        index <= number_of_roots && continue
+        if index <= number_of_roots
+            continue
+        end
         level = 1
         for dependency in dependencies[index]
             level = max(level, node_levels[positions[dependency]] + 1)
@@ -397,7 +407,9 @@ function secondary_variable_evaluation_plan(
         for index in (number_of_roots + 1):length(nodes))
 
     symbols = collect(keys(secondary))
-    isempty(symbols) && return Vector{Vector{Pair{Symbol, Int}}}()
+    if isempty(symbols)
+        return Vector{Vector{Pair{Symbol, Int}}}()
+    end
     levels = map(symbol -> levels_by_symbol[symbol], symbols)
     active_levels = sort!(unique(levels))
     return map(active_levels) do level
@@ -408,7 +420,7 @@ function secondary_variable_evaluation_plan(
                 push!(entries, symbol => number_of_entities(model, variable))
             end
         end
-        entries
+        return entries
     end
 end
 
@@ -423,6 +435,7 @@ function update_secondary_variables_state!(state, model, vars,
                 indices = entity_eachindex(target, batch, batch_count)
                 update_secondary_variable!(
                     target, variable, model, state, indices)
+                return nothing
             end
             launch_threaded_loop(update, batch_count, context)
         end
@@ -624,7 +637,7 @@ function host_substorage_mirror(storage, model)
     # multimodel linear system. Rebuild them against local buffers so retaining
     # a small host-evaluated submodel does not also retain the fully device-side
     # models' CPU residual and increment buffers through a parent view.
-    detached = JutulStorage(OrderedDict{Symbol, Any}(pairs(data(storage))))
+    mirror = JutulStorage(OrderedDict{Symbol, Any}(pairs(data(storage))))
     views = storage.views
     if ismissing(views.equations)
         residual = missing
@@ -638,9 +651,9 @@ function host_substorage_mirror(storage, model)
         increment = zeros(
             float_type(model.context), number_of_degrees_of_freedom(model))
     end
-    detached[:views] = setup_equations_and_primary_variable_views(
-        detached, model, residual, increment)
-    return detached
+    mirror[:views] = setup_equations_and_primary_variable_views(
+        mirror, model, residual, increment)
+    return mirror
 end
 
 function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
@@ -710,7 +723,7 @@ function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
         cross_terms = cross_terms,
         groups = groups,
         group_execution = model_backend.group_execution,
-        context = model_backend.context,
+        context = model_cpu.context,
         reduction = model_backend.reduction,
         specialize = false,
         specialize_ad = model_backend.specialize_ad)
@@ -725,37 +738,23 @@ function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
     evaluation_data[:state] = states
     evaluation_data[:state0] = states0
     evaluation_data[:cross_terms] = cross_term_storage
-    # Application-level multimodel hooks may need to evaluate a coupled
-    # operation on the backend (for example, a host-assembled well using a
-    # fully device-side reservoir). Keep direct references to the already
-    # allocated backend substorages without retaining the original CPU
-    # multimodel storage or introducing a cycle through `storage_backend`.
-    backend_storages = JutulStorage()
-    for key in submodels_symbols(model_backend)
-        backend_storages[key] = storage_backend[key]
-    end
-    evaluation_data[:backend_evaluation] = (
-        model = model_backend,
-        storage = backend_storages,
-    )
     evaluation_storage = JutulStorage(evaluation_data)
     setup_multimodel_maps!(evaluation_storage, evaluation_model)
     return HostEvaluationStorage(evaluation_model, evaluation_storage,
         host_keys, cross_term_evaluation)
 end
 
-"""
-    prepare_backend_transfer!(storage, model)
-
-Application hook invoked immediately before a host-evaluated submodel is
-copied into its backend mirror. It can refresh preallocated numeric state that
-replaces host-only control or metadata objects in device kernels.
-"""
 function backend_copyto!(destination::AbstractArray, source::AbstractArray)
-    length(destination) == length(source) || throw(DimensionMismatch(
-        "backend copy requires equal lengths, got $(length(destination)) and $(length(source))"))
-    destination === source && return destination
-    isempty(destination) && return destination
+    if length(destination) != length(source)
+        throw(DimensionMismatch(
+            "backend copy requires equal lengths, got $(length(destination)) and $(length(source))"))
+    end
+    if destination === source
+        return destination
+    end
+    if isempty(destination)
+        return destination
+    end
     backend = KernelAbstractions.get_backend(destination)
     source_backend = KernelAbstractions.get_backend(source)
     if backend isa KernelAbstractions.CPU &&
@@ -813,7 +812,9 @@ end
 
 function backend_copyto!(destination::JutulStorage, source::JutulStorage)
     for key in keys(destination)
-        haskey(source, key) || continue
+        if !haskey(source, key)
+            continue
+        end
         backend_copyto!(destination[key], source[key])
     end
     return destination
@@ -821,7 +822,9 @@ end
 
 function backend_copyto!(destination::NamedTuple, source)
     for key in keys(destination)
-        haskey(source, key) || continue
+        if !haskey(source, key)
+            continue
+        end
         backend_copyto!(destination[key], source[key])
     end
     return destination
@@ -922,8 +925,10 @@ storage and copy into preallocated backend mirrors after evaluation.
 function transfer_to_backend(sim::Simulator, backend;
         group_execution = missing, kwarg...)
     model = sim.model
-    model isa Union{SimulationModel, MultiModel} || throw(ArgumentError(
-        "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
+    if !(model isa Union{SimulationModel, MultiModel})
+        throw(ArgumentError(
+            "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
+    end
     ctx = KernelAbstractionsContext(backend;
         float_type = float_type(model.context),
         index_type = index_type(model.context),
@@ -940,7 +945,9 @@ Base.@noinline function transfer_to_backend(sim::Simulator,
         sim = set_transfer_group_execution(sim, group_execution)
     end
     model_cpu = sim.model
-    model_cpu isa SimulationModel || return transfer_multimodel_to_backend(sim, ctx)
+    if !(model_cpu isa SimulationModel)
+        return transfer_multimodel_to_backend(sim, ctx)
+    end
     storage_cpu = sim.storage
     model = Adapt.adapt(ctx, model_cpu)
 
@@ -957,23 +964,28 @@ end
 Base.@noinline function set_transfer_group_execution(sim::Simulator, policy)
     Base.@nospecialize sim policy
     function execution_for_submodel(key, submodel)
-        mode = if policy isa Function
-            policy(key, submodel)
+        if policy isa Function
+            mode = policy(key, submodel)
         elseif policy isa AbstractDict || policy isa NamedTuple
-            get(policy, key, get(policy, :default, SolveFullyOnDevice))
+            mode = get(policy, key,
+                get(policy, :default, SolveFullyOnDevice))
         else
             throw(ArgumentError(
                 "group_execution must be a function or keyed collection"))
         end
-        mode isa DeviceExecutionMode || throw(ArgumentError(
-            "Execution policy for $key must be a DeviceExecutionMode, " *
-            "got $(typeof(mode))"))
+        if !(mode isa DeviceExecutionMode)
+            throw(ArgumentError(
+                "Execution policy for $key must be a DeviceExecutionMode, " *
+                "got $(typeof(mode))"))
+        end
         return mode
     end
 
     model = sim.model
-    model isa MultiModel || throw(ArgumentError(
-        "Per-model execution policies require a MultiModel simulator"))
+    if !(model isa MultiModel)
+        throw(ArgumentError(
+            "Per-model execution policies require a MultiModel simulator"))
+    end
     keys_m = collect(submodels_symbols(model))
     modes_by_key = map(keys_m) do key
         execution_for_submodel(key, model[key])
@@ -997,14 +1009,20 @@ end
 function transfer_multimodel_to_backend(sim::Simulator,
         ctx::KernelAbstractionsContext)
     model_cpu = sim.model
-    model_cpu isa MultiModel || throw(ArgumentError(
-        "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
+    if !(model_cpu isa MultiModel)
+        throw(ArgumentError(
+            "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
+    end
     storage_cpu = sim.storage
 
     modes = model_cpu.group_execution
-    all(==(NothingOnDevice), modes) && return sim
-    any(==(NothingOnDevice), modes) && throw(ArgumentError(
-        "Backend transfer cannot combine all-NothingOnDevice groups with device-resident groups"))
+    if all(==(NothingOnDevice), modes)
+        return sim
+    end
+    if any(==(NothingOnDevice), modes)
+        throw(ArgumentError(
+            "Backend transfer cannot combine all-NothingOnDevice groups with device-resident groups"))
+    end
     storage_cpu = prepare_backend_transfer!(storage_cpu, model_cpu)
     host_keys = tuple((key for key in submodels_symbols(model_cpu)
         if group_execution_mode(model_cpu, key) == AssembleOnDevice)...)
@@ -1079,7 +1097,9 @@ end
 
 function transfer_adjoint_simulator(simulator, execution_model::MultiModel)
     context = execution_model.context
-    context isa KernelAbstractionsContext || return simulator
+    if !(context isa KernelAbstractionsContext)
+        return simulator
+    end
     policy = Dict{Symbol, DeviceExecutionMode}()
     for key in submodels_symbols(execution_model)
         policy[key] = group_execution_mode(execution_model, key)
@@ -1108,7 +1128,9 @@ function adjoint_transfer_canonical_order_inner!(destination::AbstractArray,
         to_canonical)
     bz = 0
     for entity in get_primary_variable_ordered_entities(model)
-        bz == 0 || error("Assumed that block major has a single entity group")
+        if bz != 0
+            error("Assumed that block major has a single entity group")
+        end
         bz = degrees_of_freedom_per_entity(model, entity)::Int
     end
     n = length(source) ÷ bz
@@ -1116,7 +1138,9 @@ function adjoint_transfer_canonical_order_inner!(destination::AbstractArray,
     kernel! = adjoint_block_order_kernel!(context.backend)
     event = kernel!(destination, source, n, bz, to_canonical;
         ndrange = length(source))
-    isnothing(event) || wait(event)
+    if !isnothing(event)
+        wait(event)
+    end
     return destination
 end
 
@@ -1135,7 +1159,9 @@ function LinearAlgebra.mul!(y::AbstractVector,
             Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
     kernel! = ka_csr_mul_kernel!(A.backend)
     event = kernel!(y, A.nzval, A.colval, A.rowptr, x, alpha, beta; ndrange = size(A, 1))
-    isnothing(event) || wait(event)
+    if !isnothing(event)
+        wait(event)
+    end
     return y
 end
 

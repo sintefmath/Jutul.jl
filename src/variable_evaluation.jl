@@ -88,7 +88,7 @@ function update_secondary_variables!(storage, model)
     vars = storage.variable_definitions.secondary_variables
     plan = get(data(storage.variable_definitions),
         :secondary_variable_evaluation_plan, missing)
-    update_secondary_variables_state!(storage.state, model, vars, plan)
+    return update_secondary_variables_state!(storage.state, model, vars, plan)
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
@@ -100,7 +100,7 @@ function update_secondary_variables!(storage, model, is_state0::Bool)
     vars = storage.variable_definitions.secondary_variables
     plan = get(data(storage.variable_definitions),
         :secondary_variable_evaluation_plan, missing)
-    update_secondary_variables_state!(s, model, vars, plan)
+    return update_secondary_variables_state!(s, model, vars, plan)
 end
 
 

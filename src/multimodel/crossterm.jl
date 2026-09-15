@@ -695,10 +695,6 @@ function apply_forces_to_cross_terms!(storage, model::MultiModel, dt, forces; ti
                 evaluation_model, evaluation_storage, evaluation_cross_term,
                 source, target, sources, dt, force_s, time = time)
         end
-        if !isnothing(host)
-            backend_copyto!(ct_s.target, evaluation_cross_term_storage.target)
-            backend_copyto!(ct_s.source, evaluation_cross_term_storage.source)
-        end
     end
     return nothing
 end
@@ -714,6 +710,7 @@ function apply_forces_to_cross_term!(ct_s, model, storage, cross_term, target, s
             end
         end
     end
+    return nothing
 end
 
 apply_force_to_cross_term!(ct_s, cross_term, target, source, model, storage, dt, force; time = time) = nothing

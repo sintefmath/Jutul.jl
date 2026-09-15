@@ -273,6 +273,7 @@ function setup_state!(state, model::JutulModel, init_values::Union{JutulStorage,
         initialize_variable_value!(state, model, svar, psym, init_values, need_value = false, T = T)
     end
     initialize_extra_state_fields!(state, model, T = T)
+    return state
 end
 
 """
@@ -569,6 +570,7 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; extra_sparsit
     end
     outstr *= "$num_equations_total equations total distributed over $counter groups.\n"
     @debug outstr
+    return nothing
 end
 
 
@@ -746,12 +748,14 @@ Update the governing equations using the current set of primary variables, param
 """
 function update_equations!(storage, model, dt = nothing)
     update_equations!(storage, storage.equations, model.equations, model, dt)
+    return nothing
 end
 
 function update_equations!(storage, equations_storage, equations, model, dt)
     for (key, eq) in pairs(equations)
         @tic "$key" update_equation!(equations_storage[key], eq, storage, model, dt)
     end
+    return nothing
 end
 
 """
@@ -765,7 +769,7 @@ function update_linearized_system!(storage, model::JutulModel, executor = defaul
     eqs_views = storage.views.equations
     update_linearized_system!(lsys, eqs, eqs_storage, eqs_views, model;
         storage = storage, kwarg...)
-    post_update_linearized_system!(lsys, executor, storage, model)
+    return post_update_linearized_system!(lsys, executor, storage, model)
 end
 
 function post_update_linearized_system!(lsys, executor, storage, model)
@@ -784,6 +788,7 @@ function update_linearized_system!(lsys, equations, eqs_storage, eqs_views,
                 nzval, r_view, model, eq, eqs_s, storage)
         end
     end
+    return nothing
 end
 
 """
@@ -1082,6 +1087,7 @@ function replace_values!(old, updated, context = DefaultContext())
             update_values!(old[f], updated[f], context)
         end
     end
+    return nothing
 end
 
 function reset_state_to_previous_state!(storage, model)
@@ -1089,14 +1095,17 @@ function reset_state_to_previous_state!(storage, model)
     replace_values!(storage.primary_variables, storage.state0, model.context)
     # Update secondary variables to be in sync with current primary values
     update_secondary_variables!(storage, model)
+    return storage
 end
 
 function reset_previous_state!(storage, model, state0)
     replace_values!(storage.state0, state0, model.context)
+    return nothing
 end
 
 function reset_variables!(storage, model, new_vars; type = :state)
     replace_values!(storage[type], new_vars, model.context)
+    return nothing
 end
 
 function setup_equations_and_primary_variable_views!(storage, model)

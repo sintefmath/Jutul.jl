@@ -559,6 +559,7 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
             update_equation_for_entity!(cache, eq, state, state0, model, dt)
         end
     end
+    return nothing
 end
 
 @inline prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt) = nothing

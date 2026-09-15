@@ -16,8 +16,8 @@ KernelAbstractions. Smaller CPU loops execute directly on the calling thread;
 device backends always launch kernels.
 
 With `reduce_memory=true`, TPFA conservation laws without face-variable fluxes
-use fused equation assembly, computing cell half-face flux values on the
-flyinstead of retaining them in backend storage.
+use fused equation assembly, computing cell half-face flux values on the fly
+instead of retaining them in backend storage.
 """
 struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
     backend::B
@@ -37,11 +37,21 @@ function KernelAbstractionsContext(backend;
         minbatch = 1000,
         reduce_memory = true
     ) where {F, I}
-    backend isa KernelAbstractions.Backend || throw(ArgumentError("backend must be a KernelAbstractions.Backend"))
-    F <: AbstractFloat || throw(ArgumentError("float_type must be an AbstractFloat type"))
-    I <: Integer && I !== Bool || throw(ArgumentError("index_type must be a non-Bool Integer type"))
-    workgroupsize > 0 || throw(ArgumentError("workgroupsize must be positive"))
-    minbatch > 0 || throw(ArgumentError("minbatch must be positive"))
+    if !(backend isa KernelAbstractions.Backend)
+        throw(ArgumentError("backend must be a KernelAbstractions.Backend"))
+    end
+    if !(F <: AbstractFloat)
+        throw(ArgumentError("float_type must be an AbstractFloat type"))
+    end
+    if !(I <: Integer) || I === Bool
+        throw(ArgumentError("index_type must be a non-Bool Integer type"))
+    end
+    if workgroupsize <= 0
+        throw(ArgumentError("workgroupsize must be positive"))
+    end
+    if minbatch <= 0
+        throw(ArgumentError("minbatch must be positive"))
+    end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout)}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
         secondary_async, reduce_memory
@@ -85,7 +95,9 @@ end
 
 function launch_threaded_loop(f, n, ctx::KernelAbstractionsContext;
         cpu_minbatch::Int = minbatch(ctx))
-    n <= 0 && return nothing
+    if n <= 0
+        return nothing
+    end
     if is_cpu_backend(ctx) && n <= cpu_minbatch
         @inbounds for index in 1:n
             f(index)
@@ -98,7 +110,9 @@ end
 
 function threaded_loop(f, n, ctx::KernelAbstractionsContext)
     event = launch_threaded_loop(f, n, ctx)
-    isnothing(event) || wait(event)
+    if !isnothing(event)
+        wait(event)
+    end
     return nothing
 end
 
@@ -108,6 +122,8 @@ function threaded_loop_minbatch(f, n, ctx::KernelAbstractionsContext,
         return threaded_loop(f, n, ctx)
     end
     event = launch_threaded_loop(f, n, ctx; cpu_minbatch = cpu_minbatch)
-    isnothing(event) || wait(event)
+    if !isnothing(event)
+        wait(event)
+    end
     return nothing
 end

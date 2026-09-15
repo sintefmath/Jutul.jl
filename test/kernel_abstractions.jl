@@ -234,10 +234,6 @@ end
     @test isempty(host.cross_term_evaluation.host)
     @test host.cross_term_evaluation.mixed == [1]
     @test host.cross_term_evaluation.mixed_models == [:B]
-    backend_b_storage, backend_b_model =
-        Jutul.submodel_backend_evaluation_pair(host.storage, host.model, :B)
-    @test backend_b_storage === simulator.storage[:B]
-    @test backend_b_model === simulator.model[:B]
 
     # Mixed cross terms execute on the backend. Refreshing their inputs must
     # therefore copy the AssembleOnDevice state into its preallocated mirror,
@@ -245,6 +241,7 @@ end
     host.storage.B.state.XVar .= 2.0
     simulator.storage.B.state.XVar .= -10.0
     simulator.storage.A.state.XVar .= 5.0
+    Jutul.prepare_cross_term_evaluation!(simulator.storage, simulator.model)
     Jutul.update_cross_terms!(simulator.storage, simulator.model, 1.0)
     @test only(simulator.storage.B.state.XVar) == 2.0
     @test only(host.storage.A.state.XVar) == 5.0
@@ -263,6 +260,8 @@ end
     reverse_host = reverse_mixed_simulator.storage.host_evaluation
     reverse_host.storage.B.state.XVar .= 2.0
     reverse_mixed_simulator.storage.A.state.XVar .= 5.0
+    Jutul.prepare_cross_term_evaluation!(
+        reverse_mixed_simulator.storage, reverse_mixed_simulator.model)
     Jutul.update_cross_terms!(reverse_mixed_simulator.storage,
         reverse_mixed_simulator.model, 1.0)
     reverse_entries =
@@ -281,9 +280,9 @@ end
     @test overlapping_host.cross_term_evaluation.mixed == [1, 2]
     @test overlapping_host.cross_term_evaluation.mixed_models == [:B]
     mixed_cross_term_prepare_count[] = 0
-    Jutul.prepare_cross_term_evaluation!(
+    Jutul.update_equations_and_apply_forces!(
         overlapping_mixed_simulator.storage,
-        overlapping_mixed_simulator.model)
+        overlapping_mixed_simulator.model, 1.0, forces)
     @test mixed_cross_term_prepare_count[] == 1
 
     adjoint_source = MultiModel((A = model_a, B = model_b), groups = [1, 2],
@@ -335,8 +334,11 @@ end
         host_only_simulator.storage.cross_terms[1]
     host_only_storage.storage.A.state.XVar .= 7.0
     host_only_storage.storage.B.state.XVar .= 4.0
+    Jutul.prepare_cross_term_evaluation!(
+        host_only_simulator.storage, host_only_simulator.model)
     Jutul.update_cross_terms!(host_only_simulator.storage,
         host_only_simulator.model, 1.0)
+    Jutul.transfer_cross_term_evaluation!(host_only_simulator.storage)
     host_entries = host_only_storage.storage.cross_terms[1].target.Cells.entries
     device_entries = host_only_simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(host_entries)) == 3.0
