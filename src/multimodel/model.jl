@@ -472,6 +472,13 @@ function add_sparse_local!(I, J, x, eq_label, s, target_model, source_model, ind
 end
 
 function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol}, sources::Vector{Symbol}, row_context, col_context)
+
+    function push_with_offset!(dest, idx, offset)
+        for i in idx
+            push!(dest, i + offset)
+        end
+        return dest
+    end
     I = Int[]
     J = Int[]
     outstr = "Determining sparse pattern of $(length(targets))×$(length(sources)) models:\n"
@@ -513,12 +520,8 @@ function get_sparse_arguments(storage, model::MultiModel, targets::Vector{Symbol
                 @assert minimum(i) >= 1 "I index was lower than 1 for $source → $target"
                 @assert minimum(j) >= 1 "J index was lower than 1 for $source → $target"
 
-                for ii in i
-                    push!(I, ii + equation_offset)
-                end
-                for jj in j
-                    push!(J, jj + variable_offset)
-                end
+                push_with_offset!(I, i, equation_offset)
+                push_with_offset!(J, j, variable_offset)
             end
             outstr *= "$source → $target: $n rows and $m columns starting at $(equation_offset+1), $(variable_offset+1) with bz=($bz_n,$bz_m).\n"
             variable_offset += m

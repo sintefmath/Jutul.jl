@@ -613,6 +613,12 @@ function get_sparse_arguments(storage, model, row_layout::ScalarLayout, col_layo
 end
 
 function get_sparse_arguments(storage, model, row_layout::T, col_layout::T) where T<:BlockMajorLayout
+    function push_and_convert!(dest, idx, ::Val{Num_t}) where Num_t
+        for i in idx
+            push!(dest, convert(Num_t, i))
+        end
+        return dest
+    end
     eq_storage = storage[:equations]
     primary_entities = get_primary_variable_ordered_entities(model)
     entity = only(primary_entities)
@@ -644,12 +650,8 @@ function get_sparse_arguments(storage, model, row_layout::T, col_layout::T) wher
     nv = length(S.I)
     sizehint!(I, nv)
     sizehint!(J, nv)
-    for i in S.I
-        push!(I, convert(it, i))
-    end
-    for j in S.J
-        push!(J, convert(it, j))
-    end
+    push_and_convert!(I, S.I, Val(it))
+    push_and_convert!(J, S.J, Val(it))
     return SparsePattern(I, J, ndof, ndof, row_layout, col_layout, block_size)
 end
 
