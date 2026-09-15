@@ -78,6 +78,16 @@ function Adapt.adapt_structure(to, interpolant::LinearInterpolant)
     )
 end
 
+function Adapt.adapt_structure(to, interpolant::BilinearInterpolant)
+    return BilinearInterpolant(
+        Adapt.adapt(to, interpolant.X),
+        Adapt.adapt(to, interpolant.Y),
+        Adapt.adapt(to, interpolant.F),
+        Adapt.adapt(to, interpolant.lookup_x),
+        Adapt.adapt(to, interpolant.lookup_y)
+    )
+end
+
 function Adapt.adapt_structure(to, flow::PotentialFlow{AD}) where AD
     return PotentialFlow(
         Adapt.adapt(to, flow.kgrad),

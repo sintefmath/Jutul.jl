@@ -13,6 +13,17 @@ Base.eltype(::KernelArgumentArray{T}) where T = T
 Adapt.adapt_storage(::KernelArgumentTestAdaptor, array::AbstractArray) =
     KernelArgumentArray{eltype(array)}(length(array))
 
+@testset "Kernel argument interpolation adaptation" begin
+    interpolant = Jutul.BilinearInterpolant(
+        [0.0, 1.0], [0.0, 1.0], [1.0 2.0; 3.0 4.0])
+    kernel_interpolant = Adapt.adapt(
+        KernelArgumentTestAdaptor(), interpolant)
+    @test kernel_interpolant.X isa KernelArgumentArray{Float64}
+    @test kernel_interpolant.Y isa KernelArgumentArray{Float64}
+    @test kernel_interpolant.F isa KernelArgumentArray{Float64}
+    @test isbitstype(typeof(kernel_interpolant))
+end
+
 struct SecondaryPlanA end
 struct SecondaryPlanB end
 struct SecondaryPlanC end

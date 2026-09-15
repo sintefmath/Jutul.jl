@@ -9,7 +9,8 @@ module KernelExecution
     import DataStructures: OrderedDict
 
     using ..Jutul
-    import ..Jutul: AssembleOnDevice, CompactAutoDiffCache, ConservationLaw,
+    import ..Jutul: AssembleOnDevice, BilinearInterpolant,
+        CompactAutoDiffCache, ConservationLaw,
         ConservationLawTPFAStorage, CrossTermPair, DeviceExecutionMode,
         DiscretizedDomain, EntityCounter, EquationMajorLayout, FactorStore,
         GenericAutoDiffCache, GPUJutulContext, JutulEntity, JutulForce,
