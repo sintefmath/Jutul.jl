@@ -9,7 +9,7 @@ export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
 
 export transfer, allocate_array
 
-export AbstractJutulStorage, JutulStorage, StaticJutulStorage
+export AbstractJutulStorage, JutulStorage, ImmutableJutulStorage
 
 import Base: show, size, setindex!, getindex, ndims
 
@@ -626,7 +626,7 @@ struct JutulStorage <: AbstractJutulStorage
 end
 
 """Immutable storage whose named fields and value types are fully specialized."""
-struct StaticJutulStorage{K<:NamedTuple} <: AbstractJutulStorage
+struct ImmutableJutulStorage{K<:NamedTuple} <: AbstractJutulStorage
     data::K
 end
 
@@ -634,7 +634,7 @@ function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
     if S isa JutulStorage
         @assert isempty(kwarg)
         return S
-    elseif S isa StaticJutulStorage
+    elseif S isa ImmutableJutulStorage
         S = data(S)
     end
     @assert S isa Union{AbstractDict, NamedTuple}
@@ -652,10 +652,10 @@ function convert_to_immutable_storage(S::JutulStorage)
         return S
     end
     tup = convert_to_immutable_storage(data(S))
-    return StaticJutulStorage(tup)
+    return ImmutableJutulStorage(tup)
 end
 
-convert_to_immutable_storage(S::StaticJutulStorage) = S
+convert_to_immutable_storage(S::ImmutableJutulStorage) = S
 
 function convert_to_immutable_storage(S::NamedTuple)
     return S
@@ -690,7 +690,7 @@ function Base.getproperty(S::JutulStorage, name::Symbol)
     Base.getindex(data(S), name)
 end
 
-function Base.getproperty(S::StaticJutulStorage, name::Symbol)
+function Base.getproperty(S::ImmutableJutulStorage, name::Symbol)
     Base.getproperty(data(S), name)
 end
 
@@ -698,8 +698,8 @@ Base.propertynames(S::AbstractJutulStorage) = keys(getfield(S, :data))
 
 data(S::AbstractJutulStorage) = getfield(S, :data)
 
-function Adapt.adapt_structure(to, S::StaticJutulStorage)
-    return StaticJutulStorage(Adapt.adapt(to, data(S)))
+function Adapt.adapt_structure(to, S::ImmutableJutulStorage)
+    return ImmutableJutulStorage(Adapt.adapt(to, data(S)))
 end
 
 function Base.setproperty!(S::AbstractJutulStorage, name::Symbol, x)
@@ -728,11 +728,11 @@ function Base.keys(S::JutulStorage)
 end
 
 
-function Base.haskey(S::StaticJutulStorage{<:NamedTuple{K}}, name::Symbol) where K
+function Base.haskey(S::ImmutableJutulStorage{<:NamedTuple{K}}, name::Symbol) where K
     return name in K
 end
 
-function Base.keys(S::StaticJutulStorage{<:NamedTuple{K}}) where K
+function Base.keys(S::ImmutableJutulStorage{<:NamedTuple{K}}) where K
     return K
 end
 
@@ -741,7 +741,7 @@ function Base.show(io::IO, t::MIME"text/plain", @nospecialize(storage::AbstractJ
     if storage isa JutulStorage
         println(io, "JutulStorage (mutable) with fields:")
     else
-        println(io, "StaticJutulStorage with fields:")
+        println(io, "ImmutableJutulStorage with fields:")
     end
     for key in keys(D)
         println(io, "  $key: $(typeof(D[key]))")

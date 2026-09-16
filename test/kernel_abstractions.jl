@@ -20,22 +20,22 @@ Base.eltype(::KernelArgumentArray{T}) where T = T
 Adapt.adapt_storage(::KernelArgumentTestAdaptor, array::AbstractArray) =
     KernelArgumentArray{eltype(array)}(length(array))
 
-@testset "StaticJutulStorage kernel arguments" begin
+@testset "ImmutableJutulStorage kernel arguments" begin
     mutable_storage = JutulStorage(values = (1.0, 2.0))
     other_mutable_storage = JutulStorage(other = "value")
     storage = convert_to_immutable_storage(mutable_storage)
     @test mutable_storage isa JutulStorage
     @test typeof(mutable_storage) === typeof(other_mutable_storage)
     @test JutulStorage(mutable_storage) === mutable_storage
-    @test storage isa StaticJutulStorage
+    @test storage isa ImmutableJutulStorage
     @test isbitstype(typeof(storage))
     @test sizeof(storage) == sizeof(Jutul.data(storage))
     @test @inferred(getproperty(storage, :values)) === (1.0, 2.0)
     @test !isbitstype(typeof(mutable_storage))
 
-    array_storage = StaticJutulStorage((values = [1.0, 2.0],))
+    array_storage = ImmutableJutulStorage((values = [1.0, 2.0],))
     adapted = Adapt.adapt(KernelArgumentTestAdaptor(), array_storage)
-    @test adapted isa StaticJutulStorage
+    @test adapted isa ImmutableJutulStorage
     @test adapted.values isa KernelArgumentArray{Float64}
     @test isbitstype(typeof(adapted))
 end

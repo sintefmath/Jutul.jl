@@ -15,7 +15,7 @@ module KernelExecution
         DiscretizedDomain, EntityCounter, EquationMajorLayout, FactorStore,
         FusedEquationAssemblyStorage,
         AbstractJutulStorage, GenericAutoDiffCache, GPUJutulContext,
-        JutulEntity, JutulForce, JutulStorage, StaticJutulStorage,
+        JutulEntity, JutulForce, JutulStorage, ImmutableJutulStorage,
         KAPreconditioners,
         LinearInterpolant, LinearizedBlock, LinearizedSystem, LinearizedType,
         LocalPerspectiveAD, LocalStateAD, MultiLinearizedSystem, MultiModel,

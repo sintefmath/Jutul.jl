@@ -363,7 +363,7 @@ function adapt_backend_value(ctx, x::AbstractDict)
     return (; (Symbol(k) => adapt_backend_value(ctx, v) for (k, v) in pairs(x))...)
 end
 adapt_backend_value(ctx, x::AbstractJutulStorage) =
-    StaticJutulStorage(adapt_backend_value(ctx, data(x)))
+    ImmutableJutulStorage(adapt_backend_value(ctx, data(x)))
 adapt_backend_value(ctx, x::AbstractVector{<:AbstractJutulStorage}) =
     tuple((adapt_backend_value(ctx, v) for v in x)...)
 adapt_backend_value(ctx, x) = Adapt.adapt(ctx, x)
