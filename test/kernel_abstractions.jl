@@ -12,6 +12,9 @@ function Jutul.prepare_backend_transfer!(storage,
     return storage
 end
 
+struct KernelTransferParameter <: ScalarVariable end
+Jutul.default_value(model, ::KernelTransferParameter) = 1.0
+
 struct KernelArgumentTestAdaptor end
 struct KernelArgumentArray{T}
     length::Int
@@ -216,6 +219,8 @@ end
     system = ScalarTestSystem()
     model_a = SimulationModel(ScalarTestDomain(), system)
     model_b = SimulationModel(ScalarTestDomain(), system)
+    set_parameters!(model_b;
+        KernelTransferParameter = KernelTransferParameter())
     model = MultiModel((A = model_a, B = model_b))
     add_cross_term!(model, ScalarTestCrossTerm();
         target = :A, source = :B, equation = :test_equation)
@@ -261,13 +266,33 @@ end
     host.storage.B.state.XVar .= 2.0
     simulator.storage.B.state.XVar .= -10.0
     simulator.storage.A.state.XVar .= 5.0
-    Jutul.prepare_cross_term_evaluation!(simulator.storage, simulator.model)
+    host.storage.B.state0.XVar .= 8.0
+    simulator.storage.B.state0.XVar .= -8.0
+    host.storage.B.parameters.KernelTransferParameter .= 9.0
+    simulator.storage.B.parameters.KernelTransferParameter .= -2.0
+    simulator.storage.B.state0.KernelTransferParameter .= -3.0
+    Jutul.sync_host_evaluation(simulator.storage, simulator.model;
+        state = true, state0 = false, parameters = false)
     Jutul.update_cross_terms!(simulator.storage, simulator.model, 1.0)
     @test only(simulator.storage.B.state.XVar) == 2.0
+    @test only(simulator.storage.B.state0.XVar) == -8.0
+    @test only(simulator.storage.B.parameters.KernelTransferParameter) == -3.0
+    @test only(simulator.storage.B.state0.KernelTransferParameter) == -3.0
     @test only(host.storage.A.state.XVar) == 5.0
     mixed_entries = simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(mixed_entries)) == 3.0
+    Jutul.sync_host_evaluation(simulator.storage, simulator.model;
+        state = false, state0 = true, parameters = false)
+    @test only(simulator.storage.B.state0.XVar) == 8.0
+    @test only(simulator.storage.B.parameters.KernelTransferParameter) == -3.0
+    Jutul.sync_host_evaluation(simulator.storage, simulator.model;
+        state = false, state0 = false, parameters = true)
+    @test only(simulator.storage.B.parameters.KernelTransferParameter) == 9.0
+    @test only(simulator.storage.B.state0.KernelTransferParameter) == 9.0
     host.storage.B.state.XVar .= 0.0
+    host.storage.B.state0.XVar .= 0.0
+    host.storage.B.parameters.KernelTransferParameter .= 1.0
+    Jutul.sync_host_evaluation(simulator.storage, simulator.model)
     simulator.storage.B.state.XVar .= 0.0
     simulator.storage.A.state.XVar .= 0.0
 
@@ -280,7 +305,7 @@ end
     reverse_host = reverse_mixed_simulator.storage.host_evaluation
     reverse_host.storage.B.state.XVar .= 2.0
     reverse_mixed_simulator.storage.A.state.XVar .= 5.0
-    Jutul.prepare_cross_term_evaluation!(
+    Jutul.sync_host_evaluation(
         reverse_mixed_simulator.storage, reverse_mixed_simulator.model)
     Jutul.update_cross_terms!(reverse_mixed_simulator.storage,
         reverse_mixed_simulator.model, 1.0)
@@ -354,7 +379,7 @@ end
         host_only_simulator.storage.cross_terms[1]
     host_only_storage.storage.A.state.XVar .= 7.0
     host_only_storage.storage.B.state.XVar .= 4.0
-    Jutul.prepare_cross_term_evaluation!(
+    Jutul.sync_host_evaluation(
         host_only_simulator.storage, host_only_simulator.model)
     Jutul.update_cross_terms!(host_only_simulator.storage,
         host_only_simulator.model, 1.0)

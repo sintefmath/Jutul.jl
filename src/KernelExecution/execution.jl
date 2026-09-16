@@ -745,6 +745,83 @@ function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
         host_keys, cross_term_evaluation)
 end
 
+function prepare_host_transfer!(backend::KernelAbstractions.Backend,
+        value::Array)
+    KernelAbstractions.pagelock!(backend, value)
+    return value
+end
+
+function host_transfer_root_array(value)
+    while value isa Union{
+            SubArray,
+            Base.ReshapedArray,
+            Base.ReinterpretArray,
+            LinearAlgebra.Adjoint,
+            LinearAlgebra.Transpose}
+        value = parent(value)
+    end
+    return value
+end
+
+function prepare_host_transfer_value!(backend, value, seen::IdDict)
+    Base.@nospecialize value
+    if value isa AbstractArray
+        root = host_transfer_root_array(value)
+        if root isa Array && !isempty(root) && !haskey(seen, root)
+            seen[root] = nothing
+            prepare_host_transfer!(backend, root)
+        end
+    elseif value isa AbstractJutulStorage || value isa NamedTuple ||
+            value isa Tuple
+        for entry in values(value)
+            prepare_host_transfer_value!(backend, entry, seen)
+        end
+    elseif value isa GenericAutoDiffCache || value isa CompactAutoDiffCache
+        prepare_host_transfer_value!(backend, value.entries, seen)
+    elseif value isa ConservationLawTPFAStorage
+        prepare_host_transfer_value!(backend, value.accumulation, seen)
+        if !ismissing(value.half_face_flux_cells)
+            prepare_host_transfer_value!(
+                backend, value.half_face_flux_cells, seen)
+        end
+        if !ismissing(value.half_face_flux_faces)
+            prepare_host_transfer_value!(
+                backend, value.half_face_flux_faces, seen)
+        end
+        if !isnothing(value.sources)
+            prepare_host_transfer_value!(backend, value.sources, seen)
+        end
+    end
+    return value
+end
+
+function prepare_host_evaluation_transfer!(backend, host::HostEvaluationStorage)
+    seen = IdDict{Any, Nothing}()
+    for key in host.keys
+        host_storage = host.storage[key]
+        prepare_host_transfer_value!(backend, host_storage.equations, seen)
+        prepare_host_transfer_value!(
+            backend, host_storage.views.primary_variables, seen)
+        prepare_host_transfer_value!(
+            backend, host_storage.views.equations, seen)
+    end
+    for key in host.cross_term_evaluation.mixed_models
+        host_storage = host.storage[key]
+        for state_key in keys(host_storage.state)
+            if !haskey(host_storage.parameters, state_key)
+                prepare_host_transfer_value!(
+                    backend, host_storage.state[state_key], seen)
+            end
+        end
+    end
+    for index in host.cross_term_evaluation.host
+        cross_term = host.storage.cross_terms[index]
+        prepare_host_transfer_value!(backend, cross_term.target, seen)
+        prepare_host_transfer_value!(backend, cross_term.source, seen)
+    end
+    return host
+end
+
 function backend_copyto!(destination::AbstractArray, source::AbstractArray)
     if length(destination) != length(source)
         throw(DimensionMismatch(
@@ -1085,8 +1162,10 @@ function transfer_multimodel_to_backend(sim::Simulator,
     # when dispatched to their kernels.
     storage = specialize_simulator_storage(storage, model, false)
     if !isempty(host_keys)
-        data(storage)[:host_evaluation] = setup_host_evaluation(
+        host_evaluation = setup_host_evaluation(
             model_cpu, storage_cpu, model, storage, host_keys)
+        prepare_host_evaluation_transfer!(ctx.backend, host_evaluation)
+        data(storage)[:host_evaluation] = host_evaluation
     end
     synchronize(ctx)
     return Simulator(sim.executor, model, storage)

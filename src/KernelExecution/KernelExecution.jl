@@ -32,6 +32,7 @@ module KernelExecution
         matrix_layout, minbatch, multimodel_label, nthreads,
         number_of_degrees_of_freedom, number_of_entities,
         number_of_equations, nzval_index_type, prepare_backend_transfer!,
+        prepare_host_transfer!,
         preprocess_forces, refactorize_linear_system!, replace_values!,
         setup_equations_and_primary_variable_views,
         setup_equations_and_primary_variable_views!, setup_linearized_system!,

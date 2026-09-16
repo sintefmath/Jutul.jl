@@ -657,7 +657,31 @@ function submodel_evaluation_pair(storage, model::MultiModel, key)
     end
 end
 
-function synchronize_host_models_to_backend!(storage, model::MultiModel)
+function backend_copy_state_without_parameters!(destination, source,
+        parameters)
+    for key in keys(destination)
+        if !haskey(parameters, key) && haskey(source, key)
+            backend_copyto!(destination[key], source[key])
+        end
+    end
+    return destination
+end
+
+function backend_copy_parameters!(destination, source)
+    backend_copyto!(destination.parameters, source.parameters)
+    for key in keys(destination.parameters)
+        if haskey(destination.state0, key) && haskey(source.parameters, key)
+            backend_copyto!(destination.state0[key], source.parameters[key])
+        end
+    end
+    return destination
+end
+
+function synchronize_host_models_to_backend!(storage, model::MultiModel;
+        state::Bool = true,
+        state0::Bool = true,
+        parameters::Bool = true,
+        equations::Bool = true)
     if !haskey(storage, :host_evaluation)
         return storage
     end
@@ -666,10 +690,23 @@ function synchronize_host_models_to_backend!(storage, model::MultiModel)
         host_storage = host.storage[key]
         host_model = host.model[key]
         prepare_backend_transfer!(host_storage, host_model)
-        backend_copyto!(storage[key].state, host_storage.state)
-        backend_copyto!(storage[key].state0, host_storage.state0)
-        backend_copyto!(storage[key].parameters, host_storage.parameters)
-        backend_copyto!(storage[key].equations, host_storage.equations)
+        backend_storage = storage[key]
+        if state
+            backend_copy_state_without_parameters!(
+                backend_storage.state, host_storage.state,
+                host_storage.parameters)
+        end
+        if state0
+            backend_copy_state_without_parameters!(
+                backend_storage.state0, host_storage.state0,
+                host_storage.parameters)
+        end
+        if parameters
+            backend_copy_parameters!(backend_storage, host_storage)
+        end
+        if equations
+            backend_copyto!(backend_storage.equations, host_storage.equations)
+        end
     end
     synchronize(model.context)
     return storage
@@ -706,7 +743,8 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forc
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
     @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
-    prepare_cross_term_evaluation!(storage, model)
+    sync_host_evaluation(storage, model;
+        state = true, state0 = false, parameters = false)
     @tic "crossterm update" update_cross_terms!(storage, model, dt; kwarg...)
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
     transfer_cross_term_evaluation!(storage)
@@ -763,14 +801,19 @@ function host_cross_term_evaluation(storage, index)
 end
 
 """
-    prepare_cross_term_evaluation!(storage, model)
+    sync_host_evaluation(storage, model; state, state0, parameters)
 
 Transfer host-evaluated equations and the inputs required by mixed
 `AssembleOnDevice` and `SolveFullyOnDevice` cross terms. All copies are queued
 before the backend is synchronized, so this is the single synchronization point
-between submodel evaluation and cross-term evaluation.
+between submodel evaluation and cross-term evaluation. State and previous-state
+copies exclude parameter fields; enabling `parameters` updates the parameter
+aliases in both backend states.
 """
-function prepare_cross_term_evaluation!(storage, model::MultiModel)
+function sync_host_evaluation(storage, model::MultiModel;
+        state::Bool = true,
+        state0::Bool = true,
+        parameters::Bool = true)
     if !haskey(storage, :host_evaluation)
         return storage
     end
@@ -783,9 +826,20 @@ function prepare_cross_term_evaluation!(storage, model::MultiModel)
     end
     for key in host.cross_term_evaluation.mixed_models
         host_storage = host.storage[key]
-        backend_copyto!(storage[key].state, host_storage.state)
-        backend_copyto!(storage[key].state0, host_storage.state0)
-        backend_copyto!(storage[key].parameters, host_storage.parameters)
+        backend_storage = storage[key]
+        if state
+            backend_copy_state_without_parameters!(
+                backend_storage.state, host_storage.state,
+                host_storage.parameters)
+        end
+        if state0
+            backend_copy_state_without_parameters!(
+                backend_storage.state0, host_storage.state0,
+                host_storage.parameters)
+        end
+        if parameters
+            backend_copy_parameters!(backend_storage, host_storage)
+        end
     end
     synchronize(model.context)
     return storage
@@ -1145,7 +1199,9 @@ function reset_state_to_previous_state!(storage, model::MultiModel)
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
         reset_state_to_previous_state!(substorage, submodel)
     end
-    synchronize_host_models_to_backend!(storage, model)
+    synchronize_host_models_to_backend!(storage, model;
+        state = true, state0 = false, parameters = false,
+        equations = false)
     return nothing
 end
 
@@ -1154,7 +1210,9 @@ function reset_previous_state!(storage, model::MultiModel, state0)
         substorage, submodel = submodel_evaluation_pair(storage, model, key)
         reset_previous_state!(substorage, submodel, state0[key])
     end
-    synchronize_host_models_to_backend!(storage, model)
+    synchronize_host_models_to_backend!(storage, model;
+        state = false, state0 = true, parameters = false,
+        equations = false)
     return nothing
 end
 
@@ -1167,7 +1225,9 @@ function update_after_step!(storage, model::MultiModel, dt, forces; targets = su
         report[key] = update_after_step!(
             substorage, submodel, dt, local_forces[key]; kwarg...)
     end
-    synchronize_host_models_to_backend!(storage, model)
+    synchronize_host_models_to_backend!(storage, model;
+        state = false, state0 = true, parameters = true,
+        equations = false)
     return report
 end
 
@@ -1189,7 +1249,9 @@ function update_before_step!(storage, model::MultiModel, dt, forces; targets = s
         f = local_forces[key]
         update_before_step!(s, m, dt, f; kwarg...)
     end
-    synchronize_host_models_to_backend!(storage, model)
+    synchronize_host_models_to_backend!(storage, model;
+        state = false, state0 = false, parameters = true,
+        equations = false)
     return nothing
 end
 
@@ -1282,16 +1344,21 @@ function number_of_equations(model::MultiModel)
     return sum(number_of_equations, model.models)
 end
 
-function reset_variables!(storage, model::MultiModel, state; kwarg...)
+function reset_variables!(storage, model::MultiModel, state;
+        type = :state, kwarg...)
     for (k, m) in pairs(model.models)
         host = host_evaluation_entry(storage, k)
         if isnothing(host)
-            reset_variables!(storage[k], m, state[k]; kwarg...)
+            reset_variables!(storage[k], m, state[k]; type, kwarg...)
         else
-            reset_variables!(host.storage, host.model, state[k]; kwarg...)
+            reset_variables!(host.storage, host.model, state[k]; type, kwarg...)
         end
     end
-    synchronize_host_models_to_backend!(storage, model)
+    synchronize_host_models_to_backend!(storage, model;
+        state = type === :state,
+        state0 = type === :state0,
+        parameters = type === :parameters,
+        equations = false)
     return nothing
 end
 

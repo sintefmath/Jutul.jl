@@ -1,5 +1,6 @@
 export KernelAbstractionsContext
-export transfer_to_backend, backend_copyto!, prepare_backend_transfer!
+export transfer_to_backend, backend_copyto!, prepare_backend_transfer!,
+    prepare_host_transfer!
 
 """
     transfer_to_backend(simulator, backend; kwargs...)
@@ -24,6 +25,15 @@ Application hook for refreshing host-side numeric buffers immediately before
 they are copied to a backend mirror.
 """
 prepare_backend_transfer!(storage, model) = storage
+
+"""
+    prepare_host_transfer!(backend, value)
+
+Backend hook called during simulator transfer for host buffers that will be
+copied to or from the backend repeatedly. Backends can use this hook to pin or
+otherwise optimize the host allocation. The default implementation is a no-op.
+"""
+prepare_host_transfer!(backend, value) = value
 
 "Create a factorization for a linear-system block."
 factorize_linear_system(constructor, matrix) = constructor(matrix)
