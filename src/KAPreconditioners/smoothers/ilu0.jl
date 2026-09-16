@@ -1,18 +1,20 @@
 @inline function device_find_column(rowptr, colval, row, column)
-    lo = rowptr[row]
-    hi = rowptr[row + 1] - one(eltype(rowptr))
-    while lo <= hi
+    # CSR column ranges are sorted by construction. Find the first stored
+    # column that is not smaller than the target.
+    index_one = one(eltype(rowptr))
+    @inbounds lo = rowptr[row]
+    @inbounds hi = rowptr[row + 1] - index_one
+    row_end = hi
+    while lo < hi
         mid = (lo + hi) >>> 1
-        value = colval[mid]
-        if value == column
-            return mid
-        elseif value < column
-            lo = mid + one(eltype(rowptr))
+        @inbounds if colval[mid] < column
+            lo = mid + index_one
         else
-            hi = mid - one(eltype(rowptr))
+            hi = mid
         end
     end
-    zero(eltype(rowptr))
+    @inbounds found = lo <= row_end && colval[lo] == column
+    return found ? lo : zero(eltype(rowptr))
 end
 
 function diagonal_positions(rowptr::Vector{Ti}, colval::Vector{Ti}, n::Int) where Ti
@@ -506,7 +508,42 @@ function ilu_solve!(x::AbstractVector,
                     state::DILUState{D,AV,RP,CV},
                     b::AbstractVector) where {D,AV,RP<:Vector,CV}
     ensure_smoother_work!(state, b)
-    ilu_solve_cpu!(x, state, b, state.work)
+    if ilu_cpu_uses_serial(state)
+        ilu_solve_cpu!(x, state, b, state.work)
+    else
+        ilu_solve_levels_cpu!(x, state, b, state.work)
+    end
+end
+
+function ilu_solve_levels_cpu!(x, state::DILUState, b, work)
+    values = state.values
+    inverse_diagonal = state.inverse_diagonal
+    rowptr = state.rowptr
+    colval = state.colval
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    lower = ILULevelPhase(offsets, rows) do i
+        value = b[i]
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            j < i && (value -= values[k]*work[j])
+        end
+        @inbounds work[i] = inverse_diagonal[i]*value
+    end
+    damping = state.config.damping
+    rows = state.upper_rows
+    offsets = state.upper_offsets
+    upper = ILULevelPhase(offsets, rows) do i
+        correction = zero(eltype(x))
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            j > i && (correction += values[k]*x[j])
+        end
+        @inbounds x[i] = damping*(work[i] -
+            inverse_diagonal[i]*correction)
+    end
+    foreach_ilu_level(state, lower, upper)
+    return x
 end
 
 function ilu_solve_cpu!(x, state::DILUState, b, work)
@@ -553,7 +590,48 @@ function ilu_smooth_result!(x::AbstractVector, A::StaticSparsityMatrixCSR,
                             b::AbstractVector,
                             state::ILU0State{F,D,RP,CV}) where {F,D,RP<:Vector,CV}
     ensure_smoother_work!(state, b)
-    ilu_smooth_result_cpu!(x, A, b, state, state.work, state.residual)
+    if ilu_cpu_uses_serial(state)
+        ilu_smooth_result_cpu!(x, A, b, state, state.work, state.residual)
+    else
+        ilu_smooth_result_levels_cpu!(
+            x, A, b, state, state.work, state.residual)
+    end
+end
+
+function ilu_smooth_result_levels_cpu!(
+        x, A, b, state::ILU0State, work, correction)
+    factors = state.factors
+    inverse_diagonal = state.inverse_diagonal
+    rowptr = state.rowptr
+    colval = state.colval
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    lower = ILULevelPhase(offsets, rows) do i
+        value = b[i]
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            value -= A.nzval[k]*x[j]
+            j < i && (value -= factors[k]*work[j])
+        end
+        @inbounds work[i] = value
+    end
+    damping = state.config.damping
+    rows = state.upper_rows
+    offsets = state.upper_offsets
+    upper = ILULevelPhase(offsets, rows) do i
+        value = work[i]
+        @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            j = colval[k]
+            j > i && (value -= factors[k]*correction[j])
+        end
+        delta = damping*(inverse_diagonal[i]*value)
+        @inbounds begin
+            correction[i] = delta
+            x[i] += delta
+        end
+    end
+    foreach_ilu_level(state, lower, upper)
+    return x
 end
 
 function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
