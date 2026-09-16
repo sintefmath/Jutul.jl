@@ -1,4 +1,4 @@
-module JutulKAPreconditionersCUDAExt
+module JutulCUDAExt
 
 using Jutul
 using Jutul.KAPreconditioners
@@ -7,6 +7,8 @@ using CUDA
 using CUDA.CUSPARSE: CuSparseMatrixCSR
 using KernelAbstractions
 using LinearAlgebra
+import Adapt
+import CUDA: KernelAdaptor
 
 KAPreconditioners.native_dense_lu(::CuArray) = true
 
@@ -33,8 +35,10 @@ function LinearAlgebra.mul!(y::CuArray{Tv, 1},
     return mul!(y, cusparse_wrapper(A), x)
 end
 
-using Adapt
-import CUDA: KernelAdaptor
-adapt_structure(to, x::ImmutableJutulStorage) = x
+function Jutul.convert_evaluation_state(state,
+        ::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend})
+    state = Jutul.convert_to_immutable_storage(state)
+    return Adapt.adapt(KernelAdaptor(), state)
+end
 
 end

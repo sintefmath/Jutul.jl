@@ -1,4 +1,4 @@
-module JutulKAPreconditionersAMDGPUExt
+module JutulAMDGPUExt
 
 using Jutul
 using Jutul.KAPreconditioners
