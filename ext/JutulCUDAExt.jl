@@ -35,10 +35,10 @@ function LinearAlgebra.mul!(y::CuArray{Tv, 1},
     return mul!(y, cusparse_wrapper(A), x)
 end
 
-function Jutul.convert_evaluation_state(state,
-        ::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend})
-    state = Jutul.convert_to_immutable_storage(state)
-    return Adapt.adapt(KernelAdaptor(), state)
-end
+# function Adapt.adapt_structure(to::KernelAdaptor, x::Jutul.ImmutableJutulStorage)
+#     # Already converted for us before
+#     # println("Adapting structure for KernelAdaptor and ImmutableJutulStorage")
+#     return x
+# end
 
 end
