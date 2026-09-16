@@ -33,4 +33,8 @@ function LinearAlgebra.mul!(y::CuArray{Tv, 1},
     return mul!(y, cusparse_wrapper(A), x)
 end
 
+using Adapt
+import CUDA: KernelAdaptor
+adapt_structure(to, x::ImmutableJutulStorage) = x
+
 end
