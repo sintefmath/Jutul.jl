@@ -70,7 +70,7 @@ function prepare_step_storage(storage, model, ::Missing)
     return missing
 end
 
-function specialize_simulator_storage(storage::JutulStorage, model_or_nothing, specialize)
+function specialize_simulator_storage(storage::AbstractJutulStorage, model_or_nothing, specialize)
     if specialize
         out = convert_to_immutable_storage(storage)
     elseif !(data(storage) isa AbstractDict)

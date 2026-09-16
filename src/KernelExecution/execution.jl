@@ -362,8 +362,9 @@ adapt_backend_value(ctx, x::Tuple) = map(v -> adapt_backend_value(ctx, v), x)
 function adapt_backend_value(ctx, x::AbstractDict)
     return (; (Symbol(k) => adapt_backend_value(ctx, v) for (k, v) in pairs(x))...)
 end
-adapt_backend_value(ctx, x::JutulStorage) = JutulStorage(adapt_backend_value(ctx, data(x)))
-adapt_backend_value(ctx, x::AbstractVector{<:JutulStorage}) =
+adapt_backend_value(ctx, x::AbstractJutulStorage) =
+    StaticJutulStorage(adapt_backend_value(ctx, data(x)))
+adapt_backend_value(ctx, x::AbstractVector{<:AbstractJutulStorage}) =
     tuple((adapt_backend_value(ctx, v) for v in x)...)
 adapt_backend_value(ctx, x) = Adapt.adapt(ctx, x)
 
@@ -810,7 +811,8 @@ function backend_copyto!(destination::SubArray{T, 1, P, I, true},
     return destination
 end
 
-function backend_copyto!(destination::JutulStorage, source::JutulStorage)
+function backend_copyto!(destination::AbstractJutulStorage,
+        source::AbstractJutulStorage)
     for key in keys(destination)
         if !haskey(source, key)
             continue

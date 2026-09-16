@@ -27,7 +27,7 @@ function Simulator(model; extra_timing = false, executor = default_executor(), k
     model::JutulModel
     set_global_timer!(extra_timing)
     storage = simulator_storage(model; kwarg...)
-    storage::JutulStorage
+    storage::AbstractJutulStorage
     print_global_timer(extra_timing)
     return Simulator(executor, model, storage)
 end

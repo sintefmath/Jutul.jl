@@ -216,14 +216,14 @@ function setup_equations_and_primary_variable_views!(storage, model::MultiModel,
     end
 end
 
-function specialize_simulator_storage(storage::JutulStorage, model::MultiModel, specialize)
+function specialize_simulator_storage(storage::AbstractJutulStorage, model::MultiModel, specialize)
     specialize_outer = multi_model_is_specialized(model)
     specialize = specialize || specialize_outer
     sym = submodels_symbols(model)
     for (k, v) in data(storage)
         if k in sym
             storage[k] = specialize_simulator_storage(v, model[k], specialize)
-        elseif v isa JutulStorage
+        elseif v isa AbstractJutulStorage
             storage[k] = specialize_simulator_storage(v, nothing, specialize)
         else
             storage[k] = convert_to_immutable_storage(v)
@@ -1260,7 +1260,7 @@ function get_submodel_storage(storage, arg...)
     map((x) -> storage[x], arg)
 end
 
-get_submodel_storage(storage, k) = (storage[k]::JutulStorage, )
+get_submodel_storage(storage, k) = (storage[k]::AbstractJutulStorage, )
 
 function get_submodels(model, arg...)
     map((x) -> model.models[x], arg)

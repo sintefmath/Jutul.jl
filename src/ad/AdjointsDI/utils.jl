@@ -57,7 +57,7 @@ function setup_vectorize_nested!(meta, data, active = missing;
         return act
     end
     for (k, v) in pairs(data)
-        if v isa AbstractDict || v isa JutulStorage
+        if v isa AbstractDict || v isa AbstractJutulStorage
             subheader = copy(header)
             push!(subheader, k)
             setup_vectorize_nested!(meta, v, active; active_type = active_type, header = subheader)

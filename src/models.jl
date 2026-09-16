@@ -265,7 +265,7 @@ end
 
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::JutulModel, init_values::Union{JutulStorage, AbstractDict} = Dict(); T = float_type(model.context))
+function setup_state!(state, model::JutulModel, init_values::Union{AbstractJutulStorage, AbstractDict} = Dict(); T = float_type(model.context))
     for (psym, pvar) in pairs(get_primary_variables(model))
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true, T = T)
     end
@@ -464,9 +464,9 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
             end
         end
         # Both states now contain all parameters, ready to store.
-        storage[:state0] = state0
-        storage[:state] = state
-        storage[:parameters] = parameters
+        storage[:state0] = JutulStorage(state0)
+        storage[:state] = JutulStorage(state)
+        storage[:parameters] = JutulStorage(parameters)
         storage[:primary_variables] = reference_variables(storage, model, :primary)
     end
     @tic "model" setup_storage_model(storage, model)

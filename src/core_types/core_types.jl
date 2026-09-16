@@ -9,7 +9,7 @@ export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
 
 export transfer, allocate_array
 
-export JutulStorage
+export AbstractJutulStorage, JutulStorage, StaticJutulStorage
 
 import Base: show, size, setindex!, getindex, ndims
 
@@ -617,25 +617,34 @@ end
 
 import Base: getindex, @propagate_inbounds, parent, size, axes
 
-struct JutulStorage{K}
-    data::Union{JUTUL_OUTPUT_TYPE, K}
+abstract type AbstractJutulStorage end
+
+"""Mutable, unspecialized storage backed by `JUTUL_OUTPUT_TYPE`."""
+struct JutulStorage <: AbstractJutulStorage
+    data::JUTUL_OUTPUT_TYPE
     always_mutable::Bool
-    function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
-        if isa(S, AbstractDict)
-            K = Nothing
-            for (k, v) in kwarg
-                S[k] = v
-            end
-        elseif S isa JutulStorage
-            @assert length(kwarg) == 0
-            return S
-        else
-            @assert isa(S, NamedTuple)
-            K = typeof(S)
-            @assert length(kwarg) == 0
-        end
-        return new{K}(S, always_mutable)
+end
+
+"""Immutable storage whose named fields and value types are fully specialized."""
+struct StaticJutulStorage{K<:NamedTuple} <: AbstractJutulStorage
+    data::K
+end
+
+function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
+    if S isa JutulStorage
+        @assert isempty(kwarg)
+        return S
+    elseif S isa StaticJutulStorage
+        S = data(S)
     end
+    @assert S isa Union{AbstractDict, NamedTuple}
+    if !(S isa JUTUL_OUTPUT_TYPE)
+        S = JUTUL_OUTPUT_TYPE(pairs(S))
+    end
+    for (k, v) in kwarg
+        S[k] = v
+    end
+    return JutulStorage(S, always_mutable)
 end
 
 function convert_to_immutable_storage(S::JutulStorage)
@@ -643,14 +652,16 @@ function convert_to_immutable_storage(S::JutulStorage)
         return S
     end
     tup = convert_to_immutable_storage(data(S))
-    return JutulStorage(tup)
+    return StaticJutulStorage(tup)
 end
+
+convert_to_immutable_storage(S::StaticJutulStorage) = S
 
 function convert_to_immutable_storage(S::NamedTuple)
     return S
 end
 
-function Base.getindex(S::JutulStorage, i::Int)
+function Base.getindex(S::AbstractJutulStorage, i::Int)
     d = data(S)
     if d isa OrderedDict
         for (j, v) in enumerate(values(d))
@@ -663,71 +674,74 @@ function Base.getindex(S::JutulStorage, i::Int)
         return d[i]
     end
 end
-Base.length(S::JutulStorage, arg...) = Base.length(values(S), arg...)
-Base.iterate(S::JutulStorage, arg...) = Base.iterate(values(S), arg...)
-function Base.map(f, S::JutulStorage)
+Base.length(S::AbstractJutulStorage, arg...) = Base.length(values(S), arg...)
+Base.iterate(S::AbstractJutulStorage, arg...) = Base.iterate(values(S), arg...)
+function Base.map(f, S::AbstractJutulStorage)
     d = data(S)
     if d isa OrderedDict
         d = NamedTuple(d)
     end
     return Base.map(f, d)
 end
-Base.pairs(S::JutulStorage) = Base.pairs(data(S))
-Base.values(S::JutulStorage) = Base.values(data(S))
+Base.pairs(S::AbstractJutulStorage) = Base.pairs(data(S))
+Base.values(S::AbstractJutulStorage) = Base.values(data(S))
 
-function Base.getproperty(S::JutulStorage{Nothing}, name::Symbol)
+function Base.getproperty(S::JutulStorage, name::Symbol)
     Base.getindex(data(S), name)
 end
 
-function Base.getproperty(S::JutulStorage, name::Symbol)
+function Base.getproperty(S::StaticJutulStorage, name::Symbol)
     Base.getproperty(data(S), name)
 end
 
-Base.propertynames(S::JutulStorage) = keys(getfield(S, :data))
+Base.propertynames(S::AbstractJutulStorage) = keys(getfield(S, :data))
 
-data(S::JutulStorage{Nothing}) = getfield(S, :data)
-data(S::JutulStorage{T}) where T = getfield(S, :data)::T
+data(S::AbstractJutulStorage) = getfield(S, :data)
 
-function Base.setproperty!(S::JutulStorage, name::Symbol, x)
+function Adapt.adapt_structure(to, S::StaticJutulStorage)
+    return StaticJutulStorage(Adapt.adapt(to, data(S)))
+end
+
+function Base.setproperty!(S::AbstractJutulStorage, name::Symbol, x)
     Base.setproperty!(data(S), name, x)
 end
 
-function Base.setindex!(S::JutulStorage, x, name::Symbol)
+function Base.setindex!(S::AbstractJutulStorage, x, name::Symbol)
     Base.setindex!(data(S), x, name)
 end
 
-function Base.getindex(S::JutulStorage, name::Symbol)
+function Base.getindex(S::AbstractJutulStorage, name::Symbol)
     Base.getindex(data(S), name)
 end
 
-function Base.getindex(S::JutulStorage, name::Pair)
+function Base.getindex(S::AbstractJutulStorage, name::Pair)
     # This is hacked in for CompositeSystem
     return S[last(name)]
 end
 
-function Base.haskey(S::JutulStorage{Nothing}, name::Symbol)
+function Base.haskey(S::JutulStorage, name::Symbol)
     return Base.haskey(data(S), name)
 end
 
-function Base.keys(S::JutulStorage{Nothing})
+function Base.keys(S::JutulStorage)
     return Tuple(keys(data(S)))
 end
 
 
-function Base.haskey(S::JutulStorage{NamedTuple{K, V}}, name::Symbol) where {K, V}
+function Base.haskey(S::StaticJutulStorage{<:NamedTuple{K}}, name::Symbol) where K
     return name in K
 end
 
-function Base.keys(S::JutulStorage{NamedTuple{K, V}}) where {K, V}
+function Base.keys(S::StaticJutulStorage{<:NamedTuple{K}}) where K
     return K
 end
 
-function Base.show(io::IO, t::MIME"text/plain", @nospecialize(storage::JutulStorage))
+function Base.show(io::IO, t::MIME"text/plain", @nospecialize(storage::AbstractJutulStorage))
     D = data(storage)
-    if isa(D, AbstractDict)
+    if storage isa JutulStorage
         println(io, "JutulStorage (mutable) with fields:")
     else
-        println(io, "JutulStorage (immutable) with fields:")
+        println(io, "StaticJutulStorage with fields:")
     end
     for key in keys(D)
         println(io, "  $key: $(typeof(D[key]))")
@@ -1257,7 +1271,7 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
         end
         models = models_new
     else
-        models::JutulStorage
+        models::AbstractJutulStorage
     end
     if reduction == :schur_apply
         if length(groups) == 1
@@ -1595,7 +1609,7 @@ mutable struct AdjointPackedResult
     state0
     input_data
     Nstep::Int
-    function AdjointPackedResult(states::Vector{JutulStorage{T}}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing, input_data = missing) where T
+    function AdjointPackedResult(states::Vector{<:AbstractJutulStorage}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing, input_data = missing)
         if length(states) != length(step_infos)
             error("States and step_infos must have the same length, was $(length(states)) and $(length(step_infos))")
         end
@@ -1671,7 +1685,7 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     if !ismissing(forces)
         forces = map(i -> forces_for_timestep(nothing, forces, dt, i), step_index)
     end
-    function convert_state_to_jutul_storage(x::JutulStorage)
+    function convert_state_to_jutul_storage(x::AbstractJutulStorage)
         return x
     end
     function convert_state_to_jutul_storage(x::Any)
