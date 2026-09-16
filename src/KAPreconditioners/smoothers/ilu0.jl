@@ -1,7 +1,4 @@
 @inline function device_find_column(rowptr, colval, row, column)
-    lo = rowptr[row]
-    hi = rowptr[row + 1] - one(eltype(rowptr))
-    while lo <= hi
     # CSR column ranges are sorted by construction. Find the first stored
     # column that is not smaller than the target.
     index_one = one(eltype(rowptr))
@@ -10,19 +7,12 @@
     row_end = hi
     while lo < hi
         mid = (lo + hi) >>> 1
-        value = colval[mid]
-        if value == column
-            return mid
-        elseif value < column
-            lo = mid + one(eltype(rowptr))
         @inbounds if colval[mid] < column
             lo = mid + index_one
         else
-            hi = mid - one(eltype(rowptr))
             hi = mid
         end
     end
-    zero(eltype(rowptr))
     @inbounds found = lo <= row_end && colval[lo] == column
     return found ? lo : zero(eltype(rowptr))
 end
