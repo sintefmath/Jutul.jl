@@ -395,6 +395,23 @@ end
     @test_throws ArgumentError resetup_amg!(H, changed_graph, :memory)
 end
 
+@testset "backend buffer capacity reuse" begin
+    backend = JLBackend()
+    allocation = JLArray(collect(Int32, 1:12))
+    shortened = KAPreconditioners.copy_reusing(
+        allocation, collect(Int32, 1:7), backend)
+    @test length(shortened) == 7
+    @test KAPreconditioners.reusable_buffer(shortened) === allocation
+    @test Array(shortened) == collect(Int32, 1:7)
+
+    regrown = KAPreconditioners.copy_reusing(
+        shortened, collect(Int32, 8:-1:1), backend)
+    @test length(regrown) == 8
+    @test KAPreconditioners.reusable_buffer(regrown) === allocation
+    @test Array(regrown) == collect(Int32, 8:-1:1)
+
+end
+
 @testset "standalone and Krylov solves" begin
     A = poisson_2d(18)
     b = ones(size(A, 1))

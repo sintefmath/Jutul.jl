@@ -1111,18 +1111,112 @@ end
     end
 end
 
-"""Copy into an old backend buffer when its element type and length match."""
+"""Logical prefix retaining the full backend allocation for later reuse."""
+struct BackendBufferPrefix{T, V, A} <: AbstractVector{T}
+    view::V
+    allocation::A
+end
+
+function BackendBufferPrefix(view::V, allocation::A) where {V, A}
+    return BackendBufferPrefix{eltype(view), V, A}(view, allocation)
+end
+
+Base.size(buffer::BackendBufferPrefix) = size(getfield(buffer, :view))
+Base.axes(buffer::BackendBufferPrefix) = axes(getfield(buffer, :view))
+Base.length(buffer::BackendBufferPrefix) = length(getfield(buffer, :view))
+Base.IndexStyle(::Type{<:BackendBufferPrefix{T, V}}) where {T, V} =
+    IndexStyle(V)
+@inline Base.getindex(buffer::BackendBufferPrefix, index::Int) =
+    getindex(getfield(buffer, :view), index)
+@inline Base.setindex!(buffer::BackendBufferPrefix, value, index::Int) =
+    setindex!(getfield(buffer, :view), value, index)
+Base.fill!(buffer::BackendBufferPrefix, value) =
+    fill!(getfield(buffer, :view), value)
+Base.Array(buffer::BackendBufferPrefix) =
+    Array(getfield(buffer, :view))
+Base.copy(buffer::BackendBufferPrefix) =
+    copy(getfield(buffer, :view))
+function Base.copyto!(destination::BackendBufferPrefix,
+        source::AbstractArray)
+    copyto!(getfield(destination, :view), source)
+    return destination
+end
+function Base.copyto!(destination::AbstractArray,
+        source::BackendBufferPrefix)
+    copyto!(destination, getfield(source, :view))
+    return destination
+end
+function Base.copyto!(destination::BackendBufferPrefix,
+        source::BackendBufferPrefix)
+    copyto!(getfield(destination, :view), getfield(source, :view))
+    return destination
+end
+function Base.copyto!(destination::BackendBufferPrefix,
+        destination_offset::Integer, source::AbstractArray,
+        source_offset::Integer, count::Integer)
+    copyto!(getfield(destination, :view), destination_offset,
+        source, source_offset, count)
+    return destination
+end
+function Base.copyto!(destination::AbstractArray,
+        destination_offset::Integer, source::BackendBufferPrefix,
+        source_offset::Integer, count::Integer)
+    copyto!(destination, destination_offset,
+        getfield(source, :view), source_offset, count)
+    return destination
+end
+function Base.copyto!(destination::BackendBufferPrefix,
+        destination_offset::Integer, source::BackendBufferPrefix,
+        source_offset::Integer, count::Integer)
+    copyto!(getfield(destination, :view), destination_offset,
+        getfield(source, :view), source_offset, count)
+    return destination
+end
+KernelAbstractions.get_backend(buffer::BackendBufferPrefix) =
+    KernelAbstractions.get_backend(getfield(buffer, :view))
+function Adapt.adapt_structure(to, buffer::BackendBufferPrefix)
+    return BackendBufferPrefix(
+        Adapt.adapt(to, getfield(buffer, :view)),
+        Adapt.adapt(to, getfield(buffer, :allocation)))
+end
+
+"""Return the allocation backing a contiguous prefix used for reuse."""
+reusable_buffer(buffer::BackendBufferPrefix) =
+    getfield(buffer, :allocation)
+
+function reusable_buffer(buffer)
+    if buffer isa SubArray{<:Any, 1}
+        indices = parentindices(buffer)
+        if length(indices) == 1 && only(indices) isa AbstractUnitRange &&
+                first(only(indices)) == firstindex(parent(buffer))
+            return parent(buffer)
+        end
+    end
+    return buffer
+end
+
+"""Use the first `n` entries of a backend buffer without reallocating it."""
+function buffer_prefix(buffer, n::Integer)
+    n == length(buffer) && return buffer
+    prefix = view(buffer, firstindex(buffer):(firstindex(buffer) + n - 1))
+    return BackendBufferPrefix(prefix, buffer)
+end
+
+"""Copy into an old backend allocation when its type and capacity permit."""
 function copy_reusing(old, src::AbstractVector, backend)
     old === src && return old
-    compatible = old isa AbstractVector && eltype(old) === eltype(src) &&
-                 buffer_backend_matches(old, backend)
-    if compatible && old isa Vector
-        resize!(old, length(src))
-        copyto!(old, host_copy_source(src))
-        return old
-    elseif compatible && length(old) == length(src)
-        copyto!(old, 1, host_copy_source(src), 1, length(src))
-        return old
+    allocation = reusable_buffer(old)
+    compatible = allocation isa AbstractVector &&
+                 eltype(allocation) === eltype(src) &&
+                 buffer_backend_matches(allocation, backend)
+    if compatible && allocation isa Vector
+        resize!(allocation, length(src))
+        copyto!(allocation, host_copy_source(src))
+        return allocation
+    elseif compatible && length(allocation) >= length(src)
+        destination = buffer_prefix(allocation, length(src))
+        copyto!(destination, 1, host_copy_source(src), 1, length(src))
+        return destination
     end
     backend_copy(backend, src)
 end

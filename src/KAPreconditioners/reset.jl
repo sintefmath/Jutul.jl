@@ -97,6 +97,13 @@ function replace_hierarchy!(H::AMGHierarchy, fresh::AMGHierarchy)
     H
 end
 
+"""
+Backend hook invoked after a symbolic hierarchy rebuild has replaced its old
+device buffers. Accelerators whose array storage is released by host finalizers
+can collect those wrappers before the next large rebuild starts.
+"""
+release_replaced_backend_storage!(backend) = nothing
+
 function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
     # The finest graph is fixed by the discretization. Rebuild all strength,
     # splitting, interpolation, and coarse symbolic data, but retain level 1's
@@ -105,6 +112,7 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
     H.levels = build_hierarchy(finest, H.options; reuse_levels=H.levels,
                                 workspace=H.workspace, host_finest=host_finest,
                                 reuse_finest_structure=true)
+    release_replaced_backend_storage!(H.backend)
     H.block_size = matrix_block_size(H.levels[1].A)
     H.last_iterations = 0
     H.last_residual = Inf

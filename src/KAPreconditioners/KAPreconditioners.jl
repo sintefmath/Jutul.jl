@@ -3,6 +3,7 @@ module KAPreconditioners
 using KernelAbstractions
 using LinearAlgebra
 using SparseArrays
+import Adapt
 
 using ..Jutul: StaticSparsityMatrixCSR, colvals, minbatch
 import ..Jutul: apply_ka_amg!, apply_ka_smoother!, setup_ka_amg,

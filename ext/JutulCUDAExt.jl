@@ -12,6 +12,16 @@ import CUDA: KernelAdaptor
 
 KAPreconditioners.native_dense_lu(::CuArray) = true
 
+function KAPreconditioners.release_replaced_backend_storage!(
+        ::CUDA.CUDABackend)
+    # A symbolic AMG rebuild can replace gigabytes of device buffers while the
+    # corresponding small CuArray wrappers do not put meaningful pressure on
+    # Julia's host GC. Finalize them at the rebuild boundary so subsequent
+    # rebuilds reuse the CUDA pool instead of increasing its high-water mark.
+    GC.gc(true)
+    return nothing
+end
+
 const CUSPARSEValue = Union{Float32, Float64, ComplexF32, ComplexF64}
 
 function cusparse_wrapper(A::StaticSparsityMatrixCSR{Tv, Ti}) where {Tv, Ti}
