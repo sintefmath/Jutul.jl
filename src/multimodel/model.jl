@@ -1382,12 +1382,15 @@ function check_convergence(storage, model::MultiModel, cfg;
     tol_cfg = cfg[:tolerances]
     errors = OrderedDict()
     for key in targets
+        synchronize_backend_residual_to_host!(storage, key)
+    end
+    synchronize(model.context)
+    for key in targets
         if ismissing(update_report)
             inc = missing
         else
             inc = update_report[key]
         end
-        synchronize_backend_residual_to_host!(storage, key)
         s, m = submodel_evaluation_pair(storage, model, key)
         eqs = m.equations
         eqs_s = s.equations
@@ -1420,6 +1423,9 @@ function update_primary_variables!(storage, model::MultiModel; targets = submode
     report = Dict{Symbol, AbstractDict}()
     for key in targets
         synchronize_backend_increment_to_host!(storage, key)
+    end
+    synchronize(model.context)
+    for key in targets
         s, m = submodel_evaluation_pair(storage, model, key)
         dx_v = s.views.primary_variables
         pdef = s.variable_definitions.primary_variables

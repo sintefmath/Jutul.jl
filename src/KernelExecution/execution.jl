@@ -863,11 +863,17 @@ function backend_copyto!(destination::AbstractArray, source::AbstractArray)
     source_backend = KernelAbstractions.get_backend(source)
     if backend isa KernelAbstractions.CPU &&
             !(source_backend isa KernelAbstractions.CPU)
-        # Base's generic copy between a device view and a host view iterates
-        # with scalar indexing. Materialize the source through its backend's
-        # bulk host-transfer path before copying into the (possibly strided)
-        # destination view.
-        copyto!(destination, Adapt.adapt(Array, source))
+        if applicable(KernelAbstractions.copyto!,
+                source_backend, destination, source)
+            # Repeated host mirrors are pinned during backend transfer. Queue
+            # the device-to-host copy directly into that storage instead of
+            # allocating a temporary host array for every state field.
+            KernelAbstractions.copyto!(
+                source_backend, destination, source)
+        else
+            # Avoid scalar iteration for backends without a direct copy hook.
+            copyto!(destination, Adapt.adapt(Array, source))
+        end
     elseif applicable(KernelAbstractions.copyto!, backend, destination, source)
         # Host-evaluated submodels own their source buffers for the duration of
         # the simulation. Queue their copies on the backend so a structured
