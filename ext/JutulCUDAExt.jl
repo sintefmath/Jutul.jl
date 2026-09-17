@@ -35,10 +35,51 @@ function LinearAlgebra.mul!(y::CuArray{Tv, 1},
     return mul!(y, cusparse_wrapper(A), x)
 end
 
-# function Adapt.adapt_structure(to::KernelAdaptor, x::Jutul.ImmutableJutulStorage)
-#     # Already converted for us before
-#     # println("Adapting structure for KernelAdaptor and ImmutableJutulStorage")
-#     return x
-# end
+function Jutul.maybe_convert_evaluation_state(
+        state::Jutul.ImmutableJutulStorage,
+        context::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend})
+    converted = Adapt.adapt(KernelAdaptor(), Jutul.data(state))
+    return Jutul.ImmutableJutulStorage(converted)
+end
+
+# Evaluation states are converted once during simulator transfer. Treat the
+# immutable wrapper as an already device-compatible kernel argument thereafter.
+function Adapt.adapt_structure(
+        ::KernelAdaptor, state::Jutul.ImmutableJutulStorage)
+    return state
+end
+
+# KernelAbstractions' CUDA launcher converts arguments when constructing the
+# kernel and again when launching it. Jutul's threaded loop only needs a
+# one-dimensional CUDA kernel, so convert its callable once and launch the
+# compiled kernel with argument conversion disabled.
+function jutul_threaded_loop_kernel(f, n::Int)
+    index = (CUDA.blockIdx().x - 1)*CUDA.blockDim().x + CUDA.threadIdx().x
+    if index <= n
+        @inbounds f(Int(index))
+    end
+    return nothing
+end
+
+function Jutul.KernelExecution.launch_threaded_loop(f, n,
+        context::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend};
+        cpu_minbatch::Int = Jutul.minbatch(context))
+    if n <= 0
+        return nothing
+    end
+    n = Int(n)
+    device_f = CUDA.cudaconvert(f)
+    kernel = CUDA.cufunction(
+        jutul_threaded_loop_kernel, Tuple{typeof(device_f), Int};
+        always_inline = context.backend.always_inline,
+        maxthreads = context.workgroupsize)
+    threads = min(n, context.workgroupsize)
+    blocks = cld(n, threads)
+    GC.@preserve f begin
+        kernel(device_f, n;
+            threads = threads, blocks = blocks, convert = Val(false))
+    end
+    return nothing
+end
 
 end

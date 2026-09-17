@@ -232,6 +232,9 @@ end
         simulator = transfer_to_backend(cpu_simulator, CPU())
 
         @test simulator.model.context isa KernelAbstractionsContext
+        @test !haskey(simulator.storage, :evaluation_state)
+        @test evaluation_state(simulator.storage) === simulator.storage.state
+        @test evaluation_state0(simulator.storage) === simulator.storage.state0
         @test !haskey(simulator.storage.variable_definitions,
             :secondary_variable_evaluation_plan)
         @test minbatch(simulator.storage.LinearizedSystem.jac) ==

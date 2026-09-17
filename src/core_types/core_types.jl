@@ -10,6 +10,7 @@ export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
 export transfer, allocate_array
 
 export AbstractJutulStorage, JutulStorage, ImmutableJutulStorage
+export evaluation_state, evaluation_state0, maybe_convert_evaluation_state
 
 import Base: show, size, setindex!, getindex, ndims
 
@@ -628,6 +629,25 @@ end
 """Immutable storage whose named fields and value types are fully specialized."""
 struct ImmutableJutulStorage{K<:NamedTuple} <: AbstractJutulStorage
     data::K
+end
+
+"""
+    maybe_convert_evaluation_state(state::ImmutableJutulStorage, context)
+
+Backend hook for constructing a pre-converted, isbits state mirror used as a
+kernel argument. Return `nothing` when the ordinary state can be used directly.
+"""
+maybe_convert_evaluation_state(
+    state::ImmutableJutulStorage, context) = nothing
+
+@inline function evaluation_state(storage)
+    return haskey(storage, :evaluation_state) ?
+        storage.evaluation_state : storage.state
+end
+
+@inline function evaluation_state0(storage)
+    return haskey(storage, :evaluation_state0) ?
+        storage.evaluation_state0 : storage.state0
 end
 
 function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)

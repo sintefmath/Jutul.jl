@@ -544,8 +544,8 @@ end
 Update equation based on currently stored properties
 """
 function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
-    state = storage.state
-    state0 = storage.state0
+    state = evaluation_state(storage)
+    state0 = evaluation_state0(storage)
     prepare(i) = prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
     threaded_loop(prepare, number_of_entities(model, eq), model.context)
     if eq_s isa AbstractArray

@@ -903,11 +903,11 @@ function transfer_cross_term_evaluation!(storage, model::MultiModel)
 end
 
 function update_cross_term!(ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
-    state_t = storage_t.state
-    state0_t = storage_t.state0
+    state_t = evaluation_state(storage_t)
+    state0_t = evaluation_state0(storage_t)
 
-    state_s = storage_s.state
-    state0_s = storage_s.state0
+    state_s = evaluation_state(storage_s)
+    state0_s = evaluation_state0(storage_s)
     if ct_s[:helper_mode]
         update_cross_term_helper_impl!(state_t, state0_t, state_s, state0_s, ct_s.target, ct_s.source, ct_s, ct::CrossTerm, eq, storage_t, storage_s, model_t, model_s, dt)
     else

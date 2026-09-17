@@ -1003,6 +1003,15 @@ function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
     end
     converted[:state] = state
     converted[:state0] = state0
+    state_evaluation = maybe_convert_evaluation_state(state, ctx)
+    if !isnothing(state_evaluation)
+        state0_evaluation = maybe_convert_evaluation_state(state0, ctx)
+        if isnothing(state0_evaluation)
+            error("Evaluation-state conversion must be defined for both state and state0")
+        end
+        converted[:evaluation_state] = state_evaluation
+        converted[:evaluation_state0] = state0_evaluation
+    end
     converted[:equations] = equations
     converted[:variable_definitions] = variable_definitions
     converted[:primary_variables] = state_references(

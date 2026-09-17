@@ -353,7 +353,7 @@ function update_linearized_system_equation!(nz, r, model,
     acc = eq_s.accumulation
     update_linearized_system_subset_conservation_fused!(
         nz, r, model, law, acc, eq_s.fused_equation_assembly,
-        storage.state)
+        evaluation_state(storage))
     if use_sparse_sources(law)
         update_linearized_system_subset_conservation_sources!(
             nz, r, model, acc, eq_s.sources)
@@ -698,8 +698,8 @@ function half_face_flux_sparse_pos!(fluxpos, jac, nc, conn_data, neq, nder, equa
 end
 
 function state_pair(storage, conserved, model)
-    m0 = storage.state0[conserved]
-    m = storage.state[conserved]
+    m0 = evaluation_state0(storage)[conserved]
+    m = evaluation_state(storage)[conserved]
     M = global_map(model.domain)
     v = x -> active_view(x, M)
     return (v(m0), v(m))
@@ -748,7 +748,7 @@ end
 
 function update_half_face_flux!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
     fd = law.flow_discretization
-    state = storage.state
+    state = evaluation_state(storage)
     update_half_face_flux!(eq_s, law, state, model, dt, fd)
 end
 

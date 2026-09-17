@@ -15,8 +15,8 @@ function declare_pattern(model, e::ScalarTestEquation{ManualTestDisc}, eq_storag
 end
 
 function update_equation!(eq_s::CompactAutoDiffCache, eq::ScalarTestEquation{ManualTestDisc}, storage, model, dt)
-    X = storage.state.XVar
-    X0 = storage.state0.XVar
+    X = evaluation_state(storage).XVar
+    X0 = evaluation_state0(storage).XVar
     equation = get_entries(eq_s)
     @. equation = (X - X0)/dt
 end

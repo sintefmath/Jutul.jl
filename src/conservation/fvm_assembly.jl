@@ -165,8 +165,10 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
 end
 
 function update_equation!(eq_s::ConservationLawFiniteVolumeStorage, law::ConservationLaw, storage, model, dt)
+    state = evaluation_state(storage)
+    state0 = evaluation_state0(storage)
     for i in 1:number_of_entities(model, law)
-        prepare_equation_in_entity!(i, law, eq_s, storage.state, storage.state0, model, dt)
+        prepare_equation_in_entity!(i, law, eq_s, state, state0, model, dt)
     end
     @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
     @tic "fluxes" fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
@@ -186,7 +188,7 @@ function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
     nu, ne, np = ad_dims(face_cache)
     T = eltype(face_cache)
     val = @SVector zeros(T, ne)
-    local_state = local_ad(storage.state, 1, T)
+    local_state = local_ad(evaluation_state(storage), 1, T)
     vars = face_cache.variables
     fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
 end
