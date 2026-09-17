@@ -49,6 +49,16 @@ function Adapt.adapt_structure(
     return state
 end
 
+function Jutul.maybe_convert_cross_term_evaluation(
+        plan::Jutul.PreparedCrossTermEvaluation,
+        ::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend})
+    converted = Adapt.adapt(KernelAdaptor(), plan)
+    if !isbitstype(typeof(converted))
+        error("CUDA cross-term evaluation plan must be an isbits type")
+    end
+    return converted
+end
+
 # KernelAbstractions' CUDA launcher converts arguments when constructing the
 # kernel and again when launching it. Jutul's threaded loop only needs a
 # one-dimensional CUDA kernel, so convert its callable once and launch the
@@ -77,6 +87,35 @@ function Jutul.KernelExecution.launch_threaded_loop(f, n,
     blocks = cld(n, threads)
     GC.@preserve f begin
         kernel(device_f, n;
+            threads = threads, blocks = blocks, convert = Val(false))
+    end
+    return nothing
+end
+
+function jutul_preconverted_threaded_loop_kernel(f, n::Int, args...)
+    index = (CUDA.blockIdx().x - 1)*CUDA.blockDim().x + CUDA.threadIdx().x
+    if index <= n
+        @inbounds f(Int(index), args...)
+    end
+    return nothing
+end
+
+function Jutul.launch_preconverted_threaded_loop(f, n,
+        context::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend},
+        args...)
+    if n <= 0
+        return nothing
+    end
+    n = Int(n)
+    argument_types = Tuple{typeof(f), Int, map(typeof, args)...}
+    kernel = CUDA.cufunction(
+        jutul_preconverted_threaded_loop_kernel, argument_types;
+        always_inline = context.backend.always_inline,
+        maxthreads = context.workgroupsize)
+    threads = min(n, context.workgroupsize)
+    blocks = cld(n, threads)
+    GC.@preserve f args begin
+        kernel(f, n, args...;
             threads = threads, blocks = blocks, convert = Val(false))
     end
     return nothing
