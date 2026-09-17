@@ -971,7 +971,7 @@ function update_cross_term_for_entity!(cache, ct, eq, state_t, state0_t, state_s
     states = (state_t, state0_t, state_s, state0_s)
     models = (model_t, model_s)
     update(i) = update_cross_term_for_entity_inner!(cache, i, ct, states, models, eq, dt)
-    threaded_loop_minbatch(update, number_of_entities(cache), model_t.context)
+    threaded_loop_minbatch(update, number_of_entities(cache), model_t.context; do_wait = false)
     return nothing
 end
 

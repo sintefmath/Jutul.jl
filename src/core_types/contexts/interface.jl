@@ -49,7 +49,7 @@ function threaded_loop(F, N, threads::Symbol)
     end
 end
 
-function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = minbatch(context))
+function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = minbatch(context); do_wait = true)
     N_threads = nthreads(context)
     N_batches = clamp(N_threads ÷ minbatch, 1, N)
     threads = thread_type(context)
@@ -80,9 +80,9 @@ function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = min
     end
 end
 
-function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads)
+function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads, do_wait = true)
     ctx = ParallelCSRContext(thread_type = thread_type, minbatch = minbatch)
-    threaded_loop_minbatch(F, N, ctx)
+    return threaded_loop_minbatch(F, N, ctx; do_wait = do_wait)
 end
 
 backend_to_host(::JutulContext, x) = x

@@ -153,12 +153,14 @@ function threaded_loop(f, n, ctx::KernelAbstractionsContext)
 end
 
 function threaded_loop_minbatch(f, n, ctx::KernelAbstractionsContext,
-        cpu_minbatch::Int = minbatch(ctx))
+        cpu_minbatch::Int = minbatch(ctx);
+        do_wait::Bool = true
+    )
     if !is_cpu_backend(ctx)
         return threaded_loop(f, n, ctx)
     end
     event = launch_threaded_loop(f, n, ctx; cpu_minbatch = cpu_minbatch)
-    if !isnothing(event)
+    if !isnothing(event) && do_wait
         wait(event)
     end
     return nothing
