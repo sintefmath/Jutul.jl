@@ -726,14 +726,22 @@ function update_state_dependents!(storage, model::JutulModel, dt, forces; time =
 end
 
 """
-    update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
+    update_equations_and_apply_forces!(storage, model, dt, forces;
+        time = NaN, do_sync = true)
 
 Update the model equations and apply boundary conditions and forces. Does not fill linearized system.
+By default the model backend is synchronized after evaluation. Pass
+`do_sync=false` when a later evaluation boundary will synchronize it.
 """
-function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN, kwarg...)
+function update_equations_and_apply_forces!(storage, model, dt, forces;
+        time = NaN, do_sync::Bool = true, kwarg...)
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
     @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
+    if do_sync
+        synchronize(model.context)
+    end
+    return nothing
 end
 
 function apply_boundary_conditions!(storage, model::JutulModel)

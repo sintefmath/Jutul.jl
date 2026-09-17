@@ -739,19 +739,36 @@ function update_equations!(storage, model::MultiModel, dt; targets = submodels_s
     return nothing
 end
 
-function update_equations_and_apply_forces!(storage, model::MultiModel, dt, forces; time = NaN, kwarg...)
+function update_equations_and_apply_forces!(storage, model::MultiModel, dt,
+        forces; time = NaN, do_sync::Bool = true, kwarg...)
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
     @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
-    sync_host_evaluation(storage, model;
+    maybe_synchronize_device_host!(storage, model;
         state = true, state0 = false, parameters = false)
-    @tic "crossterm update" update_cross_terms!(storage, model, dt; kwarg...)
+    @tic "crossterm update" update_cross_terms!(storage, model, dt;
+        do_sync = false, kwarg...)
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
-    transfer_cross_term_evaluation!(storage)
+    transfer_cross_term_evaluation!(storage, model)
+    if do_sync
+        synchronize(model.context)
+    end
     return nothing
 end
 
-function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels_symbols(model), sources = submodels_symbols(model))
+"""
+    update_cross_terms!(storage, model, dt;
+        targets = submodels_symbols(model),
+        sources = submodels_symbols(model), do_sync = true)
+
+Evaluate matching cross terms and synchronize the multimodel backend by
+default. Pass `do_sync=false` when the caller will synchronize after launching
+additional backend work.
+"""
+function update_cross_terms!(storage, model::MultiModel, dt;
+        targets = submodels_symbols(model),
+        sources = submodels_symbols(model),
+        do_sync::Bool = true)
     models = model.models
     for index in eachindex(model.cross_terms)
         ctp = model.cross_terms[index]
@@ -785,6 +802,9 @@ function update_cross_terms!(storage, model::MultiModel, dt; targets = submodels
                 cross_term, eq, storage_t, storage_s, model_t, model_s, dt)
         end
     end
+    if do_sync
+        synchronize(model.context)
+    end
     return nothing
 end
 
@@ -801,17 +821,18 @@ function host_cross_term_evaluation(storage, index)
 end
 
 """
-    sync_host_evaluation(storage, model; state, state0, parameters)
+    maybe_synchronize_device_host!(storage, model; state, state0, parameters)
 
 Transfer host-evaluated equations and the inputs required by mixed
 `AssembleOnDevice` and `SolveFullyOnDevice` cross terms. By default mixed cross
 terms execute on the host, so only the current state of their device-side model
 is copied back. With `mixed_cross_terms_on_host=false` at backend transfer, the
 host-side state is instead copied to the backend as before. All copies are
-queued before the backend is synchronized, so this is the single synchronization
-point between submodel evaluation and cross-term evaluation.
+queued before the backend is synchronized when device state must be available
+to host-side cross-term evaluation. Other transfers remain asynchronous until
+the next evaluation boundary.
 """
-function sync_host_evaluation(storage, model::MultiModel;
+function maybe_synchronize_device_host!(storage, model::MultiModel;
         state::Bool = true,
         state0::Bool = true,
         parameters::Bool = true)
@@ -850,21 +871,28 @@ function sync_host_evaluation(storage, model::MultiModel;
             end
         end
     end
-    synchronize(model.context)
+    needs_host_state = host.cross_term_evaluation.mixed_on_host && state &&
+        !isempty(host.cross_term_evaluation.mixed_models)
+    if needs_host_state
+        synchronize(model.context)
+    end
     return storage
 end
 
 """
-    transfer_cross_term_evaluation!(storage)
+    transfer_cross_term_evaluation!(storage, model)
 
 Transfer cross terms evaluated on the host to their preallocated backend
 storage. The transfer is queued after all cross-term forces have been applied.
 """
-function transfer_cross_term_evaluation!(storage)
+function transfer_cross_term_evaluation!(storage, model::MultiModel)
     if !haskey(storage, :host_evaluation)
         return storage
     end
     host = storage.host_evaluation
+    if !isempty(host.cross_term_evaluation.host)
+        synchronize(model.context)
+    end
     for index in host.cross_term_evaluation.host
         destination = storage.cross_terms[index]
         source = host.storage.cross_terms[index]
