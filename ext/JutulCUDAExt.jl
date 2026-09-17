@@ -49,8 +49,8 @@ function Adapt.adapt_structure(
     return state
 end
 
-function Jutul.maybe_convert_cross_term_evaluation(
-        plan::Jutul.PreparedCrossTermEvaluation,
+function Jutul.KernelExecution.maybe_convert_cross_term_evaluation(
+        plan::Jutul.KernelExecution.PreparedCrossTermEvaluation,
         ::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend})
     converted = Adapt.adapt(KernelAdaptor(), plan)
     if !isbitstype(typeof(converted))
@@ -100,7 +100,7 @@ function jutul_preconverted_threaded_loop_kernel(f, n::Int, args...)
     return nothing
 end
 
-function Jutul.launch_preconverted_threaded_loop(f, n,
+function Jutul.KernelExecution.launch_preconverted_threaded_loop(f, n,
         context::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend},
         args...)
     if n <= 0

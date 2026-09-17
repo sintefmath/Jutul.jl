@@ -1203,8 +1203,7 @@ function transfer_multimodel_to_backend(sim::Simulator,
     converted[:LinearizedSystem] = lsys
     cross_term_storage = [adapt_backend_value(ctx, ct_s)
         for ct_s in storage_setup.cross_terms]
-    converted[:cross_terms] = cross_term_storage
-    cross_term_evaluations = map(eachindex(model.cross_terms)) do index
+    cross_term_storage = map(eachindex(model.cross_terms)) do index
         pair = model.cross_terms[index]
         target = pair.target
         source = pair.source
@@ -1214,7 +1213,7 @@ function transfer_multimodel_to_backend(sim::Simulator,
         evaluate_on_host |= mixed_cross_terms_on_host &&
             (target_on_host || source_on_host)
         if evaluate_on_host
-            nothing
+            cross_term_storage[index]
         else
             model_t = model[target]
             model_s = model[source]
@@ -1222,12 +1221,16 @@ function transfer_multimodel_to_backend(sim::Simulator,
             plan = setup_cross_term_evaluation(
                 cross_term_storage[index], pair.cross_term, equation,
                 converted[target], converted[source], model_t, model_s)
-            maybe_convert_cross_term_evaluation(plan, ctx)
+            evaluation = maybe_convert_cross_term_evaluation(plan, ctx)
+            if isnothing(evaluation)
+                cross_term_storage[index]
+            else
+                PreparedCrossTermStorage(
+                    cross_term_storage[index], evaluation)
+            end
         end
     end
-    if any(x -> !isnothing(x), cross_term_evaluations)
-        converted[:cross_term_evaluations] = cross_term_evaluations
-    end
+    converted[:cross_terms] = cross_term_storage
     storage = JutulStorage(converted)
     setup_multimodel_maps!(storage, model)
     setup_equations_and_primary_variable_views!(storage, model, lsys)
