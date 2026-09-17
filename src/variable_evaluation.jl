@@ -122,12 +122,15 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
     return update_secondary_variables_state!(state, model, vars, missing)
 end
 
+secondary_variables_use_device_kernels(ctx) = ctx isa GPUJutulContext
+secondary_variables_thread_context(ctx) = ctx
+
 function update_secondary_variables_state!(state, model, vars, ::Missing)
     ctx = model.context
     var_pairs = pairs(vars)
     M = length(var_pairs)
     if M > 0
-        if ctx isa GPUJutulContext
+        if secondary_variables_use_device_kernels(ctx)
             for (symbol, var) in var_pairs
                 @tic "$symbol" begin
                     v = state[symbol]
@@ -138,11 +141,12 @@ function update_secondary_variables_state!(state, model, vars, ::Missing)
             end
             return state
         end
+        thread_ctx = secondary_variables_thread_context(ctx)
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
         K = number_of_entities(model, first_var)
         mb = minbatch(ctx)
-        N = nthreads(ctx)
+        N = nthreads(thread_ctx)
         N_batches = clamp(K ÷ mb, 1, N)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
@@ -162,7 +166,7 @@ function update_secondary_variables_state!(state, model, vars, ::Missing)
                     update_secondary_variable!(v, var, model, state, ix)
                 end
             end
-            threaded_loop(batch_update, N_batches, ctx)
+            threaded_loop(batch_update, N_batches, thread_ctx)
         end
     end
     return state

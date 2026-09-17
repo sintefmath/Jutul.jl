@@ -597,6 +597,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
             matrix_layout = matrix_layout(source),
             workgroupsize = ctx.workgroupsize,
             minbatch = minbatch(ctx),
+            use_kernels_for_secondary = ctx.use_kernels_for_secondary,
+            secondary_async = ctx.secondary_async,
             reduce_memory = reduce_memory
         )
     end
@@ -624,6 +626,7 @@ struct HostCrossTermEvaluation
     host::Vector{Int}
     mixed::Vector{Int}
     mixed_models::Vector{Symbol}
+    mixed_on_host::Bool
 end
 
 struct HostEvaluationStorage{M, S, K}
@@ -658,9 +661,37 @@ function host_substorage_mirror(storage, model)
 end
 
 function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
-        storage_backend, host_keys)
+        storage_backend, host_keys;
+        mixed_cross_terms_on_host::Bool = true)
     function is_host_key(key)
         return key in host_keys
+    end
+
+    host_cross_terms = Int[]
+    mixed_cross_terms = Int[]
+    mixed_models = Symbol[]
+    mixed_device_models = Symbol[]
+    for index in eachindex(model_backend.cross_terms)
+        ctp = model_backend.cross_terms[index]
+        target_on_host = is_host_key(ctp.target)
+        source_on_host = is_host_key(ctp.source)
+        if target_on_host && source_on_host
+            push!(host_cross_terms, index)
+        elseif target_on_host || source_on_host
+            push!(mixed_cross_terms, index)
+            if mixed_cross_terms_on_host
+                push!(host_cross_terms, index)
+                mixed_model = target_on_host ? ctp.source : ctp.target
+                if !(mixed_model in mixed_device_models)
+                    push!(mixed_device_models, mixed_model)
+                end
+            else
+                mixed_model = target_on_host ? ctp.target : ctp.source
+            end
+            if !(mixed_model in mixed_models)
+                push!(mixed_models, mixed_model)
+            end
+        end
     end
 
     models = OrderedDict{Symbol, Any}()
@@ -671,6 +702,12 @@ function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
         if is_host_key(key)
             submodel = model_cpu[key]
             substorage = host_substorage_mirror(storage_cpu[key], submodel)
+        elseif key in mixed_device_models
+            submodel = model_cpu[key]
+            # Retain the original CPU storage as the cross-term mirror. Its
+            # static state0/parameter data remains valid; only current state is
+            # refreshed from the backend in the nonlinear loop.
+            substorage = storage_cpu[key]
         else
             # Fully device-side entries are shared with the backend simulator.
             # In particular, there is no retained CPU state for these models.
@@ -685,35 +722,24 @@ function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
 
     cross_terms = Vector{CrossTermPair}()
     cross_term_storage = Any[]
-    host_cross_terms = Int[]
-    mixed_cross_terms = Int[]
-    mixed_models = Symbol[]
     for index in eachindex(model_backend.cross_terms)
         ctp = model_backend.cross_terms[index]
         target_on_host = is_host_key(ctp.target)
         source_on_host = is_host_key(ctp.source)
-        if target_on_host && source_on_host
+        evaluate_on_host = target_on_host && source_on_host
+        evaluate_on_host |= mixed_cross_terms_on_host &&
+            (target_on_host || source_on_host)
+        if evaluate_on_host
             push!(cross_terms, model_cpu.cross_terms[index])
             push!(cross_term_storage, storage_cpu.cross_terms[index])
-            push!(host_cross_terms, index)
         else
             push!(cross_terms, ctp)
             push!(cross_term_storage, storage_backend.cross_terms[index])
-            if target_on_host || source_on_host
-                push!(mixed_cross_terms, index)
-                if target_on_host
-                    mixed_model = ctp.target
-                else
-                    mixed_model = ctp.source
-                end
-                if !(mixed_model in mixed_models)
-                    push!(mixed_models, mixed_model)
-                end
-            end
         end
     end
     cross_term_evaluation = HostCrossTermEvaluation(
-        host_cross_terms, mixed_cross_terms, mixed_models)
+        host_cross_terms, mixed_cross_terms, mixed_models,
+        mixed_cross_terms_on_host)
 
     if isnothing(model_backend.groups)
         groups = nothing
@@ -999,10 +1025,14 @@ discovery and Jacobian/cross-term alignment finish on the CPU before the CSR
 arrays are moved. Array aliases used by primary variables, parameters,
 residual views and Jacobian buffers are rebuilt against the adapted root
 arrays. Submodels marked [`AssembleOnDevice`](@ref) retain their CPU model and
-storage and copy into preallocated backend mirrors after evaluation.
+storage and copy into preallocated backend mirrors after evaluation. Mixed
+host/device cross terms execute on the host by default; set
+`mixed_cross_terms_on_host=false` to use backend evaluation instead.
 """
 function transfer_to_backend(sim::Simulator, backend;
-        group_execution = missing, kwarg...)
+        group_execution = missing,
+        mixed_cross_terms_on_host::Bool = true,
+        kwarg...)
     model = sim.model
     if !(model isa Union{SimulationModel, MultiModel})
         throw(ArgumentError(
@@ -1013,19 +1043,23 @@ function transfer_to_backend(sim::Simulator, backend;
         index_type = index_type(model.context),
         matrix_layout = matrix_layout(model.context),
         kwarg...)
-    return transfer_to_backend(sim, ctx; group_execution = group_execution)
+    return transfer_to_backend(sim, ctx;
+        group_execution = group_execution,
+        mixed_cross_terms_on_host = mixed_cross_terms_on_host)
 end
 
 Base.@noinline function transfer_to_backend(sim::Simulator,
         ctx::KernelAbstractionsContext;
-        group_execution = missing)
+        group_execution = missing,
+        mixed_cross_terms_on_host::Bool = true)
     Base.@nospecialize sim
     if !ismissing(group_execution)
         sim = set_transfer_group_execution(sim, group_execution)
     end
     model_cpu = sim.model
     if !(model_cpu isa SimulationModel)
-        return transfer_multimodel_to_backend(sim, ctx)
+        return transfer_multimodel_to_backend(sim, ctx;
+            mixed_cross_terms_on_host = mixed_cross_terms_on_host)
     end
     storage_cpu = sim.storage
     model = Adapt.adapt(ctx, model_cpu)
@@ -1086,7 +1120,8 @@ Base.@noinline function set_transfer_group_execution(sim::Simulator, policy)
 end
 
 function transfer_multimodel_to_backend(sim::Simulator,
-        ctx::KernelAbstractionsContext)
+        ctx::KernelAbstractionsContext;
+        mixed_cross_terms_on_host::Bool = true)
     model_cpu = sim.model
     if !(model_cpu isa MultiModel)
         throw(ArgumentError(
@@ -1163,7 +1198,8 @@ function transfer_multimodel_to_backend(sim::Simulator,
     storage = specialize_simulator_storage(storage, model, false)
     if !isempty(host_keys)
         host_evaluation = setup_host_evaluation(
-            model_cpu, storage_cpu, model, storage, host_keys)
+            model_cpu, storage_cpu, model, storage, host_keys;
+            mixed_cross_terms_on_host = mixed_cross_terms_on_host)
         prepare_host_evaluation_transfer!(ctx.backend, host_evaluation)
         data(storage)[:host_evaluation] = host_evaluation
     end

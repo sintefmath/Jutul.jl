@@ -2,6 +2,7 @@
     KernelAbstractionsContext(backend; float_type=Float64, index_type=Int,
                               matrix_layout=EquationMajorLayout(),
                               workgroupsize=256, minbatch=minbatch(nothing),
+                              use_kernels_for_secondary=!is_cpu_backend,
                               reduce_memory=true)
 
 Execution context for a [`SimulationModel`](@ref) or [`MultiModel`](@ref) on a
@@ -15,6 +16,13 @@ host-side execution per submodel through
 KernelAbstractions. Smaller CPU loops execute directly on the calling thread;
 device backends always launch kernels.
 
+`use_kernels_for_secondary` controls whether secondary properties use
+KernelAbstractions kernels. It defaults to `false` for the CPU backend, where
+the regular host-parallel path is generally preferable, and to `true` for
+accelerator backends, which require kernel evaluation for device arrays.
+`secondary_async` additionally controls whether independent secondary-property
+kernels are launched asynchronously.
+
 With `reduce_memory=true`, TPFA conservation laws without face-variable fluxes
 use fused equation assembly, computing cell half-face flux values on the fly
 instead of retaining them in backend storage.
@@ -24,6 +32,7 @@ struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
     matrix_layout::L
     workgroupsize::Int
     minbatch::Int
+    use_kernels_for_secondary::Bool
     secondary_async::Bool
     reduce_memory::Bool
 end
@@ -31,7 +40,8 @@ end
 function KernelAbstractionsContext(backend;
         float_type::Type{F} = Float64,
         index_type::Type{I} = Int,
-        secondary_async = !(backend isa KernelAbstractions.CPU),
+        use_kernels_for_secondary = missing,
+        secondary_async = missing,
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
         minbatch = 1000,
@@ -52,9 +62,27 @@ function KernelAbstractionsContext(backend;
     if minbatch <= 0
         throw(ArgumentError("minbatch must be positive"))
     end
+    if ismissing(use_kernels_for_secondary)
+        # Preserve the previous explicit `secondary_async=true` CPU behavior,
+        # where that option also selected the kernel evaluation path.
+        use_kernels_for_secondary =
+            !(backend isa KernelAbstractions.CPU) || secondary_async === true
+    end
+    if ismissing(secondary_async)
+        secondary_async = use_kernels_for_secondary
+    end
+    if !use_kernels_for_secondary &&
+            !(backend isa KernelAbstractions.CPU)
+        throw(ArgumentError(
+            "use_kernels_for_secondary=false requires a CPU backend"))
+    end
+    if secondary_async && !use_kernels_for_secondary
+        throw(ArgumentError(
+            "secondary_async=true requires use_kernels_for_secondary=true"))
+    end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout)}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
-        secondary_async, reduce_memory
+        use_kernels_for_secondary, secondary_async, reduce_memory
     )
 end
 
@@ -75,6 +103,12 @@ end
 KernelAbstractions.get_backend(ctx::KernelAbstractionsContext) = ctx.backend
 is_cpu_backend(ctx::KernelAbstractionsContext) =
     ctx.backend isa KernelAbstractions.CPU
+secondary_variables_use_device_kernels(ctx::KernelAbstractionsContext) =
+    ctx.use_kernels_for_secondary
+function secondary_variables_thread_context(ctx::KernelAbstractionsContext)
+    @assert is_cpu_backend(ctx)
+    return :batch
+end
 
 function Base.adjoint(ctx::KernelAbstractionsContext)
     return KernelAbstractionsContext(ctx.backend;
@@ -83,6 +117,8 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         matrix_layout = adjoint(matrix_layout(ctx)),
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
+        use_kernels_for_secondary = ctx.use_kernels_for_secondary,
+        secondary_async = ctx.secondary_async,
         reduce_memory = ctx.reduce_memory
     )
 end

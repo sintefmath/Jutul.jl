@@ -804,11 +804,12 @@ end
     sync_host_evaluation(storage, model; state, state0, parameters)
 
 Transfer host-evaluated equations and the inputs required by mixed
-`AssembleOnDevice` and `SolveFullyOnDevice` cross terms. All copies are queued
-before the backend is synchronized, so this is the single synchronization point
-between submodel evaluation and cross-term evaluation. State and previous-state
-copies exclude parameter fields; enabling `parameters` updates the parameter
-aliases in both backend states.
+`AssembleOnDevice` and `SolveFullyOnDevice` cross terms. By default mixed cross
+terms execute on the host, so only the current state of their device-side model
+is copied back. With `mixed_cross_terms_on_host=false` at backend transfer, the
+host-side state is instead copied to the backend as before. All copies are
+queued before the backend is synchronized, so this is the single synchronization
+point between submodel evaluation and cross-term evaluation.
 """
 function sync_host_evaluation(storage, model::MultiModel;
         state::Bool = true,
@@ -827,18 +828,26 @@ function sync_host_evaluation(storage, model::MultiModel;
     for key in host.cross_term_evaluation.mixed_models
         host_storage = host.storage[key]
         backend_storage = storage[key]
-        if state
-            backend_copy_state_without_parameters!(
-                backend_storage.state, host_storage.state,
-                host_storage.parameters)
-        end
-        if state0
-            backend_copy_state_without_parameters!(
-                backend_storage.state0, host_storage.state0,
-                host_storage.parameters)
-        end
-        if parameters
-            backend_copy_parameters!(backend_storage, host_storage)
+        if host.cross_term_evaluation.mixed_on_host
+            if state
+                backend_copy_state_without_parameters!(
+                    host_storage.state, backend_storage.state,
+                    host_storage.parameters)
+            end
+        else
+            if state
+                backend_copy_state_without_parameters!(
+                    backend_storage.state, host_storage.state,
+                    host_storage.parameters)
+            end
+            if state0
+                backend_copy_state_without_parameters!(
+                    backend_storage.state0, host_storage.state0,
+                    host_storage.parameters)
+            end
+            if parameters
+                backend_copy_parameters!(backend_storage, host_storage)
+            end
         end
     end
     synchronize(model.context)
