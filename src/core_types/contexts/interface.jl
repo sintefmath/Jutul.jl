@@ -20,12 +20,12 @@ function thread_type(context::JutulContext)
     return :threads
 end
 
-function threaded_loop(F, N, context::JutulContext)
+function threaded_loop(F, N, context::JutulContext; do_wait = true)
     threads = thread_type(context)
-    return threaded_loop(F, N, threads)
+    return threaded_loop(F, N, threads; do_wait = do_wait)
 end
 
-function threaded_loop(F, N, threads::Symbol)
+function threaded_loop(F, N, threads::Symbol; do_wait = true)
     if N == 1
         F(1)
     elseif threads == :threads

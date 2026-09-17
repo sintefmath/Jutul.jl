@@ -144,9 +144,9 @@ function launch_threaded_loop(f, n, ctx::KernelAbstractionsContext;
     return kernel!(f; ndrange = n)
 end
 
-function threaded_loop(f, n, ctx::KernelAbstractionsContext)
+function threaded_loop(f, n, ctx::KernelAbstractionsContext; do_wait = true)
     event = launch_threaded_loop(f, n, ctx)
-    if !isnothing(event)
+    if !isnothing(event) && do_wait
         wait(event)
     end
     return nothing
