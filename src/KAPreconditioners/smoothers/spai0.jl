@@ -77,7 +77,8 @@ end
     end
 end
 
-function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0(); reuse=nothing) where Tv
+function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0();
+        reuse=nothing, reallocation_tracker=nothing) where Tv
     matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("SPAI0 requires a square matrix"))
     compatible = reuse isa SPAI0State && reuse.n == matrix_nrows(A) &&
                  same_backend(reuse.backend, matrix_backend(A)) &&
@@ -95,10 +96,13 @@ function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0(); r
         old_temporary = nothing
         old_residual = nothing
     end
-    diagonal = zeros_reusing(old_diagonal, matrix_backend(A), Tv, matrix_nrows(A))
+    diagonal = zeros_reusing(old_diagonal, matrix_backend(A), Tv,
+        matrix_nrows(A); reallocation_tracker=reallocation_tracker)
     if Tv <: Number
-        temporary = zeros_reusing(old_temporary, matrix_backend(A), Tv, matrix_nrows(A))
-        residual = zeros_reusing(old_residual, matrix_backend(A), Tv, matrix_nrows(A))
+        temporary = zeros_reusing(old_temporary, matrix_backend(A), Tv,
+            matrix_nrows(A); reallocation_tracker=reallocation_tracker)
+        residual = zeros_reusing(old_residual, matrix_backend(A), Tv,
+            matrix_nrows(A); reallocation_tracker=reallocation_tracker)
     else
         temporary = nothing
         residual = nothing
@@ -108,8 +112,9 @@ function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0(); r
     update_smoother!(state, A)
 end
 
-setup_smoother(A::SparseMatrixCSC, config::SPAI0=SPAI0(); reuse=nothing) =
-    setup_smoother(csr_matrix(A), config; reuse=reuse)
+setup_smoother(A::SparseMatrixCSC, config::SPAI0=SPAI0(); reuse=nothing,
+        reallocation_tracker=nothing) = setup_smoother(csr_matrix(A), config;
+    reuse=reuse, reallocation_tracker=reallocation_tracker)
 
 function update_smoother!(state::SPAI0State, A::StaticSparsityMatrixCSR)
     length(state.diagonal) == matrix_nrows(A) ||

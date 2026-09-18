@@ -211,6 +211,7 @@ mutable struct AMGHierarchy{Tv,Ti}
     pattern_colval::Vector{Ti}
     last_iterations::Int
     last_residual::Float64
+    pending_replaced_storage::Int
 end
 
 Base.size(H::AMGHierarchy) = size(H.levels[1].A)

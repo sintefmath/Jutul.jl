@@ -304,13 +304,39 @@ function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}) where Tv
     factors, inverse_diagonal
 end
 
-function setup_smoother(A::StaticSparsityMatrixCSR, config::ILU0; reuse=nothing)
+function replaced_ilu_storage_bytes(state::ILU0State)
+    return backend_buffer_bytes(state.factors) +
+           backend_buffer_bytes(state.inverse_diagonal) +
+           backend_buffer_bytes(state.diagonal_positions) +
+           backend_buffer_bytes(state.factor_rows) +
+           backend_buffer_bytes(state.upper_rows) +
+           backend_buffer_bytes(state.work) +
+           backend_buffer_bytes(state.residual)
+end
+
+function replaced_ilu_storage_bytes(state::DILUState)
+    return backend_buffer_bytes(state.values) +
+           backend_buffer_bytes(state.inverse_diagonal) +
+           backend_buffer_bytes(state.diagonal_positions) +
+           backend_buffer_bytes(state.transpose_positions) +
+           backend_buffer_bytes(state.factor_rows) +
+           backend_buffer_bytes(state.upper_rows) +
+           backend_buffer_bytes(state.work) +
+           backend_buffer_bytes(state.residual)
+end
+
+replaced_ilu_storage_bytes(state) = 0
+
+function setup_smoother(A::StaticSparsityMatrixCSR, config::ILU0;
+        reuse=nothing, reallocation_tracker=nothing)
     matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("ILU0 requires a square matrix"))
     if reuse isa ILU0State && same_backend(reuse.backend, matrix_backend(A)) &&
        same_smoother_pattern(reuse, A)
         reuse.config = config
         return update_smoother!(reuse, A)
     end
+    mark_backend_reallocation!(
+        reallocation_tracker, replaced_ilu_storage_bytes(reuse))
     symbolic = ilu_symbolic(A)
     factors, inverse_diagonal = allocate_factor_storage(A)
     state = ILU0State(factors, inverse_diagonal, nothing, nothing,
@@ -325,13 +351,16 @@ function setup_smoother(A::StaticSparsityMatrixCSR, config::ILU0; reuse=nothing)
     update_smoother!(state, A)
 end
 
-function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU; reuse=nothing)
+function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU;
+        reuse=nothing, reallocation_tracker=nothing)
     matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("DILU requires a square matrix"))
     if reuse isa DILUState && same_backend(reuse.backend, matrix_backend(A)) &&
        same_smoother_pattern(reuse, A)
         reuse.config = config
         return update_smoother!(reuse, A)
     end
+    mark_backend_reallocation!(
+        reallocation_tracker, replaced_ilu_storage_bytes(reuse))
     symbolic = ilu_symbolic(A)
     backend = matrix_backend(A)
     # The dependency levels expose parallelism without changing the natural
@@ -350,8 +379,9 @@ function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU; reuse=nothing)
     update_smoother!(state, A)
 end
 
-setup_smoother(A::SparseMatrixCSC, config::Union{ILU0,DILU}; reuse=nothing) =
-    setup_smoother(csr_matrix(A), config; reuse=reuse)
+setup_smoother(A::SparseMatrixCSC, config::Union{ILU0,DILU}; reuse=nothing,
+        reallocation_tracker=nothing) = setup_smoother(csr_matrix(A), config;
+    reuse=reuse, reallocation_tracker=reallocation_tracker)
 
 function update_smoother!(state::ILU0State, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)

@@ -12,13 +12,18 @@ import CUDA: KernelAdaptor
 
 KAPreconditioners.native_dense_lu(::CuArray) = true
 
+KAPreconditioners.replaced_backend_storage_cleanup_threshold(
+    ::CUDA.CUDABackend) = 256*1024^2
+
 function KAPreconditioners.release_replaced_backend_storage!(
         ::CUDA.CUDABackend)
     # A symbolic AMG rebuild can replace gigabytes of device buffers while the
     # corresponding small CuArray wrappers do not put meaningful pressure on
-    # Julia's host GC. Finalize them at the rebuild boundary so subsequent
-    # rebuilds reuse the CUDA pool instead of increasing its high-water mark.
+    # Julia's host GC. The AMG hierarchy accumulates the sizes of allocations
+    # it actually replaces and invokes this hook only after that garbage reaches
+    # the CUDA cleanup threshold, amortizing collection across small rebuilds.
     GC.gc(true)
+    CUDA.reclaim()
     return nothing
 end
 

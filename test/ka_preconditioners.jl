@@ -410,6 +410,50 @@ end
     @test KAPreconditioners.reusable_buffer(regrown) === allocation
     @test Array(regrown) == collect(Int32, 8:-1:1)
 
+    tracker = Ref(0)
+    expanded = KAPreconditioners.copy_reusing(
+        regrown, collect(Int32, 1:16), backend;
+        reallocation_tracker=tracker)
+    expanded_allocation = KAPreconditioners.reusable_buffer(expanded)
+    @test tracker[] == sizeof(Int32)*length(allocation)
+    @test length(expanded) == 16
+    @test length(expanded_allocation) > length(expanded)
+    @test Array(expanded) == collect(Int32, 1:16)
+
+    tracker[] = 0
+    reused_expansion = KAPreconditioners.copy_reusing(
+        expanded, collect(Int32, 17:-1:1), backend;
+        reallocation_tracker=tracker)
+    @test iszero(tracker[])
+    @test KAPreconditioners.reusable_buffer(reused_expansion) ===
+          expanded_allocation
+    @test Array(reused_expansion) == collect(Int32, 17:-1:1)
+
+    tracker[] = 0
+    zero_buffer = KAPreconditioners.zeros_reusing(
+        JLArray(zeros(Float64, 4)), backend, Float64, 7;
+        reallocation_tracker=tracker)
+    zero_allocation = KAPreconditioners.reusable_buffer(zero_buffer)
+    @test tracker[] == sizeof(Float64)*4
+    @test length(zero_allocation) > length(zero_buffer)
+    @test all(iszero, Array(zero_buffer))
+
+    tracker[] = 0
+    reused_zero_buffer = KAPreconditioners.zeros_reusing(
+        zero_buffer, backend, Float64, 6;
+        reallocation_tracker=tracker)
+    @test iszero(tracker[])
+    @test KAPreconditioners.reusable_buffer(reused_zero_buffer) ===
+          zero_allocation
+
+    large_matrix = csr_matrix(spdiagm(0 => fill(2.0, 12)); backend=backend)
+    small_matrix = csr_matrix(spdiagm(0 => fill(2.0, 7)); backend=backend)
+    smoother = setup_smoother(large_matrix, SPAI0())
+    tracker[] = 0
+    setup_smoother(small_matrix, SPAI0(); reuse=smoother,
+                   reallocation_tracker=tracker)
+    @test iszero(tracker[])
+
 end
 
 @testset "standalone and Krylov solves" begin

@@ -94,25 +94,35 @@ function replace_hierarchy!(H::AMGHierarchy, fresh::AMGHierarchy)
     H.pattern_colval = fresh.pattern_colval
     H.last_iterations = 0
     H.last_residual = Inf
+    H.pending_replaced_storage = fresh.pending_replaced_storage
     H
 end
 
 """
-Backend hook invoked after a symbolic hierarchy rebuild has replaced its old
-device buffers. Accelerators whose array storage is released by host finalizers
-can collect those wrappers before the next large rebuild starts.
+Backend hook invoked after symbolic hierarchy rebuilds have accumulated enough
+replaced device storage. Accelerators whose array storage is released by host
+finalizers can collect those wrappers and release allocator cache here.
 """
 release_replaced_backend_storage!(backend) = nothing
+replaced_backend_storage_cleanup_threshold(backend) = 0
 
 function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
     # The finest graph is fixed by the discretization. Rebuild all strength,
     # splitting, interpolation, and coarse symbolic data, but retain level 1's
     # structural arrays and use the supplied host values for symbolic setup.
     finest = H.levels[1].A
+    replaced_bytes = Ref(0)
     H.levels = build_hierarchy(finest, H.options; reuse_levels=H.levels,
                                 workspace=H.workspace, host_finest=host_finest,
-                                reuse_finest_structure=true)
-    release_replaced_backend_storage!(H.backend)
+                                reuse_finest_structure=true,
+                                reallocation_tracker=replaced_bytes)
+    H.pending_replaced_storage += replaced_bytes[]
+    cleanup_threshold = replaced_backend_storage_cleanup_threshold(H.backend)
+    if H.pending_replaced_storage > 0 &&
+            H.pending_replaced_storage >= cleanup_threshold
+        release_replaced_backend_storage!(H.backend)
+        H.pending_replaced_storage = 0
+    end
     H.block_size = matrix_block_size(H.levels[1].A)
     H.last_iterations = 0
     H.last_residual = Inf

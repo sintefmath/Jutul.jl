@@ -391,8 +391,15 @@ function coarse_solve!(x, b, S::CoarseLUState, backend, block_size)
     ldiv!(x, S.factors, b)
 end
 
+logical_backend_buffer(buffer) = buffer
+
 function coarse_solve!(x, b, S::DenseLUState, backend, block_size)
-    ldiv!(x, S.factorization, b)
+    # Accelerator library methods dispatch on their native vector types rather
+    # than AbstractVector. Strip the capacity-retaining wrapper while keeping
+    # the logical prefix passed to the dense coarse solve.
+    ldiv!(logical_backend_buffer(x), S.factorization,
+          logical_backend_buffer(b))
+    return x
 end
 
 function coarse_solve!(x, b, S::HostLUState, backend, block_size)

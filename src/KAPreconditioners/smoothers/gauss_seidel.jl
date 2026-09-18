@@ -1,5 +1,6 @@
 function setup_smoother(A::StaticSparsityMatrixCSR{Tv},
-        config::GaussSeidel; reuse=nothing) where Tv
+        config::GaussSeidel; reuse=nothing,
+        reallocation_tracker=nothing) where Tv
     matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch(
         "Gauss-Seidel requires a square matrix"))
     matrix_backend(A) isa KernelAbstractions.CPU || throw(ArgumentError(
@@ -21,7 +22,9 @@ function setup_smoother(A::StaticSparsityMatrixCSR{Tv},
 end
 
 setup_smoother(A::SparseMatrixCSC, config::GaussSeidel;
-        reuse=nothing) = setup_smoother(csr_matrix(A), config; reuse=reuse)
+        reuse=nothing, reallocation_tracker=nothing) = setup_smoother(
+    csr_matrix(A), config; reuse=reuse,
+    reallocation_tracker=reallocation_tracker)
 
 function update_smoother!(state::GaussSeidelState,
         A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector}) where {Tv,Ti}

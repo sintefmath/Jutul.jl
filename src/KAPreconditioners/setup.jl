@@ -1174,6 +1174,8 @@ function Base.copyto!(destination::BackendBufferPrefix,
 end
 KernelAbstractions.get_backend(buffer::BackendBufferPrefix) =
     KernelAbstractions.get_backend(getfield(buffer, :view))
+logical_backend_buffer(buffer::BackendBufferPrefix) =
+    getfield(buffer, :view)
 function Adapt.adapt_structure(to, buffer::BackendBufferPrefix)
     return BackendBufferPrefix(
         Adapt.adapt(to, getfield(buffer, :view)),
@@ -1195,6 +1197,13 @@ function reusable_buffer(buffer)
     return buffer
 end
 
+backend_buffer_bytes(::Nothing) = 0
+function backend_buffer_bytes(buffer::AbstractArray)
+    allocation = reusable_buffer(buffer)
+    return sizeof(eltype(allocation))*length(allocation)
+end
+backend_buffer_bytes(buffer) = 0
+
 """Use the first `n` entries of a backend buffer without reallocating it."""
 function buffer_prefix(buffer, n::Integer)
     n == length(buffer) && return buffer
@@ -1202,14 +1211,45 @@ function buffer_prefix(buffer, n::Integer)
     return BackendBufferPrefix(prefix, buffer)
 end
 
+mark_backend_reallocation!(::Nothing, bytes::Integer) = nothing
+function mark_backend_reallocation!(tracker, bytes::Integer)
+    bytes > 0 || return nothing
+    tracker[] += bytes
+    return nothing
+end
+
+"""Capacity used when an existing backend buffer has to grow."""
+function grown_backend_capacity(current::Integer, required::Integer)
+    required <= current && return Int(current)
+    # Leave modest headroom after a growth. AMG coarse-grid sizes tend to move
+    # by a few percent between nonlinear updates, so exact-size allocations
+    # otherwise replace the same buffers over and over.
+    from_current = current + max(cld(current, 4), 1)
+    from_required = required + max(cld(required, 8), 1)
+    return Int(max(from_current, from_required))
+end
+
+function allocate_grown_backend_buffer(src::AbstractVector, backend,
+        current_capacity::Integer, reallocation_tracker)
+    capacity = grown_backend_capacity(current_capacity, length(src))
+    allocation = backend_zeros(backend, eltype(src), capacity)
+    destination = buffer_prefix(allocation, length(src))
+    copyto!(destination, 1, host_copy_source(src), 1, length(src))
+    replaced_bytes = current_capacity*sizeof(eltype(src))
+    mark_backend_reallocation!(reallocation_tracker, replaced_bytes)
+    return destination
+end
+
 """Copy into an old backend allocation when its type and capacity permit."""
-function copy_reusing(old, src::AbstractVector, backend)
+function copy_reusing(old, src::AbstractVector, backend;
+        reallocation_tracker=nothing)
     old === src && return old
     allocation = reusable_buffer(old)
     compatible = allocation isa AbstractVector &&
                  eltype(allocation) === eltype(src) &&
                  buffer_backend_matches(allocation, backend)
     if compatible && allocation isa Vector
+        sizehint!(allocation, length(src); shrink=false)
         resize!(allocation, length(src))
         copyto!(allocation, host_copy_source(src))
         return allocation
@@ -1217,60 +1257,106 @@ function copy_reusing(old, src::AbstractVector, backend)
         destination = buffer_prefix(allocation, length(src))
         copyto!(destination, 1, host_copy_source(src), 1, length(src))
         return destination
+    elseif compatible
+        return allocate_grown_backend_buffer(
+            src, backend, length(allocation), reallocation_tracker)
     end
-    backend_copy(backend, src)
+    destination = backend_copy(backend, src)
+    mark_backend_reallocation!(
+        reallocation_tracker, backend_buffer_bytes(old))
+    return destination
 end
 
-function zeros_reusing(old, backend, ::Type{T}, n::Integer) where T
+function zeros_reusing(old, backend, ::Type{T}, n::Integer;
+        reallocation_tracker=nothing) where T
     n = Int(n)
-    compatible = old isa AbstractVector && eltype(old) === T &&
-                 buffer_backend_matches(old, backend)
-    if compatible && old isa Vector
-        resize!(old, n)
-        fill!(old, zero(T))
-        return old
-    elseif compatible && length(old) == n
-        fill!(old, zero(T))
-        return old
+    allocation = reusable_buffer(old)
+    compatible = allocation isa AbstractVector && eltype(allocation) === T &&
+                 buffer_backend_matches(allocation, backend)
+    if compatible && allocation isa Vector
+        sizehint!(allocation, n; shrink=false)
+        resize!(allocation, n)
+        fill!(allocation, zero(T))
+        return allocation
+    elseif compatible && length(allocation) >= n
+        destination = buffer_prefix(allocation, n)
+        fill!(destination, zero(T))
+        return destination
+    elseif compatible
+        capacity = grown_backend_capacity(length(allocation), n)
+        destination = buffer_prefix(backend_zeros(backend, T, capacity), n)
+        mark_backend_reallocation!(reallocation_tracker,
+            length(allocation)*sizeof(T))
+        return destination
     end
-    backend_zeros(backend, T, n)
+    destination = backend_zeros(backend, T, n)
+    mark_backend_reallocation!(
+        reallocation_tracker, backend_buffer_bytes(old))
+    return destination
 end
 
-function owned_on_backend_reusing(A::StaticSparsityMatrixCSR, backend, block_size, old)
-    isnothing(old) && return owned_on_backend(A, backend, block_size)
-    rp = copy_reusing(old.rowptr, A.rowptr, backend)
-    cv = copy_reusing(old.colval, A.colval, backend)
-    av = copy_reusing(old.nzval, A.nzval, backend)
+function owned_on_backend_reusing(A::StaticSparsityMatrixCSR, backend, block_size, old;
+        reallocation_tracker=nothing)
+    if isnothing(old)
+        return owned_on_backend(A, backend, block_size)
+    end
+    rp = copy_reusing(old.rowptr, A.rowptr, backend;
+                      reallocation_tracker=reallocation_tracker)
+    cv = copy_reusing(old.colval, A.colval, backend;
+                      reallocation_tracker=reallocation_tracker)
+    av = copy_reusing(old.nzval, A.nzval, backend;
+                      reallocation_tracker=reallocation_tracker)
     csr_matrix(rp, cv, av, matrix_nrows(A), matrix_ncols(A);
         backend = backend, block_size = block_size)
 end
 
-function device_prolongation_reusing(P::Prolongation{Tv,Ti}, backend, old) where {Tv,Ti}
-    isnothing(old) && return device_prolongation(P, backend)
-    rp = copy_reusing(old.rowptr, P.rowptr, backend)
-    cv = copy_reusing(old.colval, P.colval, backend)
-    pv = copy_reusing(old.nzval, P.nzval, backend)
+function device_prolongation_reusing(P::Prolongation{Tv,Ti}, backend, old;
+        reallocation_tracker=nothing) where {Tv,Ti}
+    if isnothing(old)
+        return device_prolongation(P, backend)
+    end
+    rp = copy_reusing(old.rowptr, P.rowptr, backend;
+                      reallocation_tracker=reallocation_tracker)
+    cv = copy_reusing(old.colval, P.colval, backend;
+                      reallocation_tracker=reallocation_tracker)
+    pv = copy_reusing(old.nzval, P.nzval, backend;
+                      reallocation_tracker=reallocation_tracker)
     Prolongation{Tv,Ti,typeof(rp),typeof(cv),typeof(pv)}(rp, cv, pv, P.nrow, P.ncol)
 end
 
-function device_transpose_reusing(M::TransposeMap{Ti}, backend, old) where Ti
-    isnothing(old) && return device_transpose(M, backend)
-    o = copy_reusing(old.offsets, M.offsets, backend)
-    r = copy_reusing(old.fine_rows, M.fine_rows, backend)
-    p = copy_reusing(old.p_indices, M.p_indices, backend)
+function device_transpose_reusing(M::TransposeMap{Ti}, backend, old;
+        reallocation_tracker=nothing) where Ti
+    if isnothing(old)
+        return device_transpose(M, backend)
+    end
+    o = copy_reusing(old.offsets, M.offsets, backend;
+                     reallocation_tracker=reallocation_tracker)
+    r = copy_reusing(old.fine_rows, M.fine_rows, backend;
+                     reallocation_tracker=reallocation_tracker)
+    p = copy_reusing(old.p_indices, M.p_indices, backend;
+                     reallocation_tracker=reallocation_tracker)
     TransposeMap{Ti,typeof(o),typeof(r),typeof(p)}(o, r, p)
 end
 
-function device_galerkin_reusing(M::GalerkinMap{Ti}, backend, old) where Ti
-    isnothing(old) && return device_galerkin(M, backend)
-    o = copy_reusing(old.offsets, M.offsets, backend)
-    l = copy_reusing(old.p_left, M.p_left, backend)
-    a = copy_reusing(old.a_index, M.a_index, backend)
-    r = copy_reusing(old.p_right, M.p_right, backend)
+function device_galerkin_reusing(M::GalerkinMap{Ti}, backend, old;
+        reallocation_tracker=nothing) where Ti
+    if isnothing(old)
+        return device_galerkin(M, backend)
+    end
+    o = copy_reusing(old.offsets, M.offsets, backend;
+                     reallocation_tracker=reallocation_tracker)
+    l = copy_reusing(old.p_left, M.p_left, backend;
+                     reallocation_tracker=reallocation_tracker)
+    a = copy_reusing(old.a_index, M.a_index, backend;
+                     reallocation_tracker=reallocation_tracker)
+    r = copy_reusing(old.p_right, M.p_right, backend;
+                     reallocation_tracker=reallocation_tracker)
     GalerkinMap{Ti,typeof(o),typeof(l),typeof(a),typeof(r)}(o, l, a, r)
 end
 
 native_dense_lu(::Any) = false
+native_dense_lu(buffer::BackendBufferPrefix) =
+    native_dense_lu(reusable_buffer(buffer))
 
 function build_host_coarse_solver(A::StaticSparsityMatrixCSR{Tv,Ti}) where {Tv,Ti}
     C = host_csr(A)
@@ -1307,7 +1393,8 @@ end
 
 function make_level(A_cpu::StaticSparsityMatrixCSR{Tv,Ti}, P_cpu, Pt_cpu, G_cpu, cf, cmap,
                      strong, backend, options, old_level=nothing;
-                     reuse_A_structure::Bool=false) where {Tv,Ti}
+                     reuse_A_structure::Bool=false,
+                     reallocation_tracker=nothing) where {Tv,Ti}
     if isnothing(old_level) && backend isa KernelAbstractions.CPU
         # The symbolic setup has already created owned CPU arrays. Retain them
         # directly instead of duplicating the complete hierarchy.
@@ -1320,26 +1407,31 @@ function make_level(A_cpu::StaticSparsityMatrixCSR{Tv,Ti}, P_cpu, Pt_cpu, G_cpu,
         A = if reuse_A_structure
             old_A
         else
-            owned_on_backend_reusing(A_cpu, backend, options.block_size, old_A)
+            owned_on_backend_reusing(A_cpu, backend, options.block_size, old_A;
+                                     reallocation_tracker=reallocation_tracker)
         end
         P = if isnothing(P_cpu)
             nothing
         else
-            device_prolongation_reusing(P_cpu, backend, old_P)
+            device_prolongation_reusing(P_cpu, backend, old_P;
+                                        reallocation_tracker=reallocation_tracker)
         end
         Pt = if isnothing(Pt_cpu)
             nothing
         else
-            device_transpose_reusing(Pt_cpu, backend, old_Pt)
+            device_transpose_reusing(Pt_cpu, backend, old_Pt;
+                                     reallocation_tracker=reallocation_tracker)
         end
         G = if isnothing(G_cpu)
             nothing
         else
-            device_galerkin_reusing(G_cpu, backend, old_G)
+            device_galerkin_reusing(G_cpu, backend, old_G;
+                                    reallocation_tracker=reallocation_tracker)
         end
     end
     old_smoother = optional_property(old_level, :smoother)
-    S = setup_smoother(A, options.smoother; reuse=old_smoother)
+    S = setup_smoother(A, options.smoother; reuse=old_smoother,
+                       reallocation_tracker=reallocation_tracker)
     old_coarse_solver = optional_property(old_level, :coarse_solver)
     coarse_solver = if !isnothing(P_cpu) || options.coarse_solver != :lu
         nothing
@@ -1349,14 +1441,17 @@ function make_level(A_cpu::StaticSparsityMatrixCSR{Tv,Ti}, P_cpu, Pt_cpu, G_cpu,
     old_r = optional_property(old_level, :residual)
     old_xc = optional_property(old_level, :correction)
     old_bc = optional_property(old_level, :rhs)
-    r = zeros_reusing(old_r, backend, Tv, matrix_nrows(A))
+    r = zeros_reusing(old_r, backend, Tv, matrix_nrows(A);
+                      reallocation_tracker=reallocation_tracker)
     ncoarse = if isnothing(P)
         matrix_nrows(A)
     else
         P.ncol
     end
-    xc = zeros_reusing(old_xc, backend, Tv, ncoarse)
-    bc = zeros_reusing(old_bc, backend, Tv, ncoarse)
+    xc = zeros_reusing(old_xc, backend, Tv, ncoarse;
+                       reallocation_tracker=reallocation_tracker)
+    bc = zeros_reusing(old_bc, backend, Tv, ncoarse;
+                       reallocation_tracker=reallocation_tracker)
     if isnothing(old_level) && backend isa KernelAbstractions.CPU
         cf_d, cm_d, st_d = cf, cmap, strong
     else
@@ -1366,17 +1461,20 @@ function make_level(A_cpu::StaticSparsityMatrixCSR{Tv,Ti}, P_cpu, Pt_cpu, G_cpu,
         cf_d = if isnothing(cf)
             nothing
         else
-            copy_reusing(old_cf, cf, backend)
+            copy_reusing(old_cf, cf, backend;
+                         reallocation_tracker=reallocation_tracker)
         end
         cm_d = if isnothing(cmap)
             nothing
         else
-            copy_reusing(old_cm, cmap, backend)
+            copy_reusing(old_cm, cmap, backend;
+                         reallocation_tracker=reallocation_tracker)
         end
         st_d = if isnothing(strong)
             nothing
         else
-            copy_reusing(old_st, strong, backend)
+            copy_reusing(old_st, strong, backend;
+                         reallocation_tracker=reallocation_tracker)
         end
     end
     AMGLevel{Tv,Ti}(A, P, Pt, G, S, coarse_solver, r, xc, bc, cf_d, cm_d, st_d)
@@ -1435,7 +1533,8 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
                           reuse_levels=nothing,
                           workspace=SetupWorkspace(Tv, Ti),
                           host_finest=nothing,
-                          reuse_finest_structure::Bool=false) where {Tv,Ti}
+                          reuse_finest_structure::Bool=false,
+                          reallocation_tracker=nothing) where {Tv,Ti}
     validate_setup_options(options)
     current, stage_slot, backend, cpu_backend =
         initial_hierarchy_state(Ain, options, reuse_levels, workspace, host_finest)
@@ -1548,7 +1647,8 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
         end
         push!(levels, make_level(current, P, Pt, G, cf, cmap, strong, backend,
                                   options, old;
-                                  reuse_A_structure=reuse_finest_structure && level_index == 1))
+                                  reuse_A_structure=reuse_finest_structure && level_index == 1,
+                                  reallocation_tracker=reallocation_tracker))
         if !cpu_backend
             workspace.stage_transpose = Pt
             workspace.stage_galerkin = G
@@ -1565,7 +1665,8 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
     level_index = length(levels) + 1
     old = reuse_level(reuse_levels, level_index)
     push!(levels, make_level(current, nothing, nothing, nothing, nothing, nothing,
-                              nothing, backend, options, old))
+                              nothing, backend, options, old;
+                              reallocation_tracker=reallocation_tracker))
     synchronize_backend(backend)
     levels
 end
@@ -1584,7 +1685,7 @@ function setup_amg(A::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOptions=AMGOpt
     AMGHierarchy{Tv,Ti}(levels, workspace, options, matrix_backend(A),
                         matrix_block_size(levels[1].A),
                         host_prefix(A.rowptr, matrix_nrows(A) + 1),
-                        host_prefix(A.colval, matrix_nonzeros(A)), 0, Inf)
+                        host_prefix(A.colval, matrix_nonzeros(A)), 0, Inf, 0)
 end
 
 setup_amg(A::SparseMatrixCSC, options::AMGOptions=AMGOptions()) =
