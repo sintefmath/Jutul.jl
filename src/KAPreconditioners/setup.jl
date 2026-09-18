@@ -1249,7 +1249,11 @@ function copy_reusing(old, src::AbstractVector, backend;
                  eltype(allocation) === eltype(src) &&
                  buffer_backend_matches(allocation, backend)
     if compatible && allocation isa Vector
-        sizehint!(allocation, length(src); shrink=false)
+        if JULIA_VER_CAN_SHRINK
+            sizehint!(allocation, length(src); shrink=false)
+        else
+            sizehint!(allocation, length(src))
+        end
         resize!(allocation, length(src))
         copyto!(allocation, host_copy_source(src))
         return allocation
@@ -1274,7 +1278,11 @@ function zeros_reusing(old, backend, ::Type{T}, n::Integer;
     compatible = allocation isa AbstractVector && eltype(allocation) === T &&
                  buffer_backend_matches(allocation, backend)
     if compatible && allocation isa Vector
-        sizehint!(allocation, n; shrink=false)
+        if JULIA_VER_CAN_SHRINK
+            sizehint!(allocation, n; shrink=false)
+        else
+            sizehint!(allocation, n)
+        end
         resize!(allocation, n)
         fill!(allocation, zero(T))
         return allocation

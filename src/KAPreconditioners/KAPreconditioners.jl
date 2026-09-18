@@ -1,5 +1,7 @@
 module KAPreconditioners
 
+const JULIA_VER_CAN_SHRINK = VERSION >= v"1.11"
+
 using KernelAbstractions
 using LinearAlgebra
 using SparseArrays
