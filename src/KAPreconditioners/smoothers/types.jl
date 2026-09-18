@@ -1,14 +1,19 @@
 abstract type AbstractSmoother end
 abstract type AbstractSmootherState end
 
+function positive_smoother_parameters(name::AbstractString, steps::Integer,
+                                      damping::Real)
+    steps > 0 || throw(ArgumentError("$name steps must be positive"))
+    damping > 0 || throw(ArgumentError("$name damping must be positive"))
+    return Int(steps), Float64(damping)
+end
+
 """Sparse approximate-inverse relaxation with the matrix sparsity pattern."""
 struct SPAI0 <: AbstractSmoother
     steps::Int
     damping::Float64
     function SPAI0(steps::Integer=2, damping::Real=1.0)
-        steps > 0 || throw(ArgumentError("SPAI0 steps must be positive"))
-        damping > 0 || throw(ArgumentError("SPAI0 damping must be positive"))
-        new(Int(steps), Float64(damping))
+        new(positive_smoother_parameters("SPAI0", steps, damping)...)
     end
 end
 
@@ -39,9 +44,7 @@ struct ILU0 <: AbstractSmoother
     steps::Int
     damping::Float64
     function ILU0(steps::Integer=1, damping::Real=1.0)
-        steps > 0 || throw(ArgumentError("ILU0 steps must be positive"))
-        damping > 0 || throw(ArgumentError("ILU0 damping must be positive"))
-        new(Int(steps), Float64(damping))
+        new(positive_smoother_parameters("ILU0", steps, damping)...)
     end
 end
 
@@ -56,9 +59,7 @@ struct DILU <: AbstractSmoother
     steps::Int
     damping::Float64
     function DILU(steps::Integer=1, damping::Real=1.0)
-        steps > 0 || throw(ArgumentError("DILU steps must be positive"))
-        damping > 0 || throw(ArgumentError("DILU damping must be positive"))
-        new(Int(steps), Float64(damping))
+        new(positive_smoother_parameters("DILU", steps, damping)...)
     end
 end
 

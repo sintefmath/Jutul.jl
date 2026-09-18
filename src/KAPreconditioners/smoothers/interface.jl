@@ -13,6 +13,10 @@ function update_smoother! end
 """Apply one or more stationary smoothing steps to the current iterate `x`."""
 function smooth! end
 
+setup_smoother(A::SparseMatrixCSC,
+        config::Union{SPAI0,GaussSeidel,ILU0,DILU}=SPAI0(); kwargs...) =
+    setup_smoother(csr_matrix(A), config; kwargs...)
+
 smoother_steps(config::AbstractSmoother) = config.steps
 
 Base.size(state::SPAI0State) = (length(state.diagonal), length(state.diagonal))
@@ -37,6 +41,13 @@ function check_smoother_dimensions(x, A::StaticSparsityMatrixCSR, b)
     nothing
 end
 
+function require_square_matrix(A::StaticSparsityMatrixCSR,
+                               name::AbstractString)
+    matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch(
+        "$name requires a square matrix"))
+    return nothing
+end
+
 function same_smoother_pattern(state, A::StaticSparsityMatrixCSR)
     matrix_nrows(A) == state.n || return false
     matrix_ncols(A) == state.n || return false
@@ -47,6 +58,31 @@ function same_smoother_pattern(state, A::StaticSparsityMatrixCSR)
     rowptr = host_prefix(A.rowptr, matrix_nrows(A) + 1)
     colval = host_prefix(A.colval, matrix_nonzeros(A))
     rowptr == state.host_rowptr && colval == state.host_colval
+end
+
+smoother_state_size(state) = state.n
+smoother_state_size(state::SPAI0State) = length(state.diagonal)
+
+function require_smoother_size(state, A::StaticSparsityMatrixCSR,
+                               name::AbstractString)
+    smoother_state_size(state) == matrix_nrows(A) || throw(ArgumentError(
+        "$name state size does not match the matrix"))
+    return nothing
+end
+
+function require_smoother_size_and_backend(state, A::StaticSparsityMatrixCSR,
+                                           name::AbstractString)
+    require_smoother_size(state, A, name)
+    same_backend(matrix_backend(A), state.backend) || throw(ArgumentError(
+        "smoother and matrix must use the same backend"))
+    return nothing
+end
+
+function require_apply_dimensions(x, state, b)
+    n = smoother_state_size(state)
+    length(x) == n || throw(DimensionMismatch())
+    length(b) == n || throw(DimensionMismatch())
+    return nothing
 end
 
 function require_same_smoother_pattern(state, A::StaticSparsityMatrixCSR)
@@ -87,23 +123,30 @@ function axpy!(x::Vector, y::Vector, alpha,
 end
 
 function ensure_smoother_work!(state, prototype)
-    if isnothing(state.work)
-        state.work = similar(prototype)
-    end
-    if isnothing(state.residual)
-        state.residual = similar(prototype)
-    end
+    state.work = ensure_smoother_buffer(state.work, prototype)
+    state.residual = ensure_smoother_buffer(state.residual, prototype)
     state
 end
 
 function ensure_smoother_work!(state::SPAI0State, prototype)
-    if isnothing(state.temporary)
-        state.temporary = similar(prototype)
-    end
-    if isnothing(state.residual)
-        state.residual = similar(prototype)
-    end
+    state.temporary = ensure_smoother_buffer(state.temporary, prototype)
+    state.residual = ensure_smoother_buffer(state.residual, prototype)
     state
+end
+
+ensure_smoother_buffer(buffer, prototype) =
+    isnothing(buffer) ? similar(prototype) : buffer
+
+function update_level_smoother!(
+        state::Union{SPAI0State,GaussSeidelState,ILU0State,DILUState},
+        A::StaticSparsityMatrixCSR, options::AMGOptions)
+    state.config = options.smoother
+    update_smoother!(state, A)
+end
+
+function copy_result!(destination, result)
+    result === destination || copyto!(destination, result)
+    return destination
 end
 
 function smooth!(x::AbstractVector, state::AbstractSmootherState,

@@ -1,8 +1,7 @@
 function setup_smoother(A::StaticSparsityMatrixCSR{Tv},
         config::GaussSeidel; reuse=nothing,
         reallocation_tracker=nothing) where Tv
-    matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch(
-        "Gauss-Seidel requires a square matrix"))
+    require_square_matrix(A, "Gauss-Seidel")
     matrix_backend(A) isa KernelAbstractions.CPU || throw(ArgumentError(
         "Gauss-Seidel is only available on the CPU backend"))
     compatible = reuse isa GaussSeidelState && reuse.n == matrix_nrows(A) &&
@@ -21,15 +20,9 @@ function setup_smoother(A::StaticSparsityMatrixCSR{Tv},
     update_smoother!(state, A)
 end
 
-setup_smoother(A::SparseMatrixCSC, config::GaussSeidel;
-        reuse=nothing, reallocation_tracker=nothing) = setup_smoother(
-    csr_matrix(A), config; reuse=reuse,
-    reallocation_tracker=reallocation_tracker)
-
 function update_smoother!(state::GaussSeidelState,
         A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector}) where {Tv,Ti}
-    state.n == matrix_nrows(A) || throw(ArgumentError(
-        "Gauss-Seidel state size does not match the matrix"))
+    require_smoother_size(state, A, "Gauss-Seidel")
     state.matrix = A
     @inbounds for i in 1:state.n
         diagonal = zero(Tv)
@@ -73,43 +66,38 @@ function gauss_seidel_correction!(x, correction, A, residual,
     x
 end
 
-function smooth_level!(x::Vector,
-        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
-        b::Vector, state::GaussSeidelState, steps::Int;
-        residual=nothing, zero_initial::Bool=false) where {Tv,Ti}
+function gauss_seidel_smooth!(x, A, b, state, steps, rows;
+        residual=nothing, zero_initial::Bool=false)
     if zero_initial
         fill!(x, zero(eltype(x)))
     end
     start = 1
     if !isnothing(residual) && !zero_initial
         gauss_seidel_correction!(x, state.correction, A, residual,
-            state.inverse_diagonal, state.config.damping, 1:state.n)
+            state.inverse_diagonal, state.config.damping, rows)
         start = 2
     end
     for _ in start:steps
         gauss_seidel_sweep!(x, A, b, state.inverse_diagonal,
-            state.config.damping, 1:state.n)
+            state.config.damping, rows)
     end
     x
+end
+
+function smooth_level!(x::Vector,
+        A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
+        b::Vector, state::GaussSeidelState, steps::Int;
+        residual=nothing, zero_initial::Bool=false) where {Tv,Ti}
+    gauss_seidel_smooth!(x, A, b, state, steps, 1:state.n;
+        residual=residual, zero_initial=zero_initial)
 end
 
 function smooth_result!(x::Vector,
         A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
         b::Vector, state::GaussSeidelState, steps::Int;
         residual=nothing, zero_initial::Bool=false) where {Tv,Ti}
-    if !isnothing(residual) && !zero_initial
-        gauss_seidel_correction!(x, state.correction, A, residual,
-            state.inverse_diagonal, state.config.damping, state.n:-1:1)
-        start = 2
-    else
-        zero_initial && fill!(x, zero(eltype(x)))
-        start = 1
-    end
-    for _ in start:steps
-        gauss_seidel_sweep!(x, A, b, state.inverse_diagonal,
-            state.config.damping, state.n:-1:1)
-    end
-    x
+    gauss_seidel_smooth!(x, A, b, state, steps, state.n:-1:1;
+        residual=residual, zero_initial=zero_initial)
 end
 
 function apply!(x::Vector, state::GaussSeidelState, b::Vector)
@@ -123,10 +111,4 @@ function apply!(x::Vector, state::GaussSeidelState, b::Vector)
         state.residual, state.inverse_diagonal, state.config.damping,
         state.n:-1:1)
     x
-end
-
-function update_level_smoother!(state::GaussSeidelState,
-        A::StaticSparsityMatrixCSR, options::AMGOptions)
-    state.config = options.smoother
-    update_smoother!(state, A)
 end

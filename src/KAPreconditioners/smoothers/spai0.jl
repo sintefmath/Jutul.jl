@@ -79,7 +79,7 @@ end
 
 function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0();
         reuse=nothing, reallocation_tracker=nothing) where Tv
-    matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("SPAI0 requires a square matrix"))
+    require_square_matrix(A, "SPAI0")
     compatible = reuse isa SPAI0State && reuse.n == matrix_nrows(A) &&
                  same_backend(reuse.backend, matrix_backend(A)) &&
                  eltype(reuse.diagonal) === Tv
@@ -87,53 +87,40 @@ function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0();
         reuse.config = config
         return update_smoother!(reuse, A)
     end
-    if reuse isa SPAI0State
-        old_diagonal = reuse.diagonal
-        old_temporary = reuse.temporary
-        old_residual = reuse.residual
-    else
-        old_diagonal = nothing
-        old_temporary = nothing
-        old_residual = nothing
-    end
-    diagonal = zeros_reusing(old_diagonal, matrix_backend(A), Tv,
-        matrix_nrows(A); reallocation_tracker=reallocation_tracker)
+    old_diagonal = optional_property(reuse, :diagonal)
+    old_temporary = optional_property(reuse, :temporary)
+    old_residual = optional_property(reuse, :residual)
+    backend = matrix_backend(A)
+    n = matrix_nrows(A)
+    diagonal = zeros_reusing(old_diagonal, backend, Tv,
+        n; reallocation_tracker=reallocation_tracker)
     if Tv <: Number
-        temporary = zeros_reusing(old_temporary, matrix_backend(A), Tv,
-            matrix_nrows(A); reallocation_tracker=reallocation_tracker)
-        residual = zeros_reusing(old_residual, matrix_backend(A), Tv,
-            matrix_nrows(A); reallocation_tracker=reallocation_tracker)
+        temporary = zeros_reusing(old_temporary, backend, Tv, n;
+            reallocation_tracker=reallocation_tracker)
+        residual = zeros_reusing(old_residual, backend, Tv, n;
+            reallocation_tracker=reallocation_tracker)
     else
         temporary = nothing
         residual = nothing
     end
     state = SPAI0State(diagonal, temporary, residual, config,
-                       matrix_backend(A), matrix_block_size(A), matrix_nrows(A))
+                       backend, matrix_block_size(A), n)
     update_smoother!(state, A)
 end
 
-setup_smoother(A::SparseMatrixCSC, config::SPAI0=SPAI0(); reuse=nothing,
-        reallocation_tracker=nothing) = setup_smoother(csr_matrix(A), config;
-    reuse=reuse, reallocation_tracker=reallocation_tracker)
-
 function update_smoother!(state::SPAI0State, A::StaticSparsityMatrixCSR)
-    length(state.diagonal) == matrix_nrows(A) ||
-        throw(ArgumentError("SPAI0 state size does not match the matrix"))
-    same_backend(matrix_backend(A), state.backend) ||
-        throw(ArgumentError("smoother and matrix must use the same backend"))
+    require_smoother_size_and_backend(state, A, "SPAI0")
+    n = matrix_nrows(A)
     kernel! = spai0_setup_kernel!(
         matrix_backend(A), matrix_kernel_block_size(A))
     kernel!(state.diagonal, A.rowptr, A.colval, A.nzval, state.config.damping,
-            matrix_nrows(A); ndrange=matrix_nrows(A))
+            n; ndrange=n)
     state
 end
 
 function update_smoother!(state::SPAI0State{D},
         A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector}) where {D<:Vector,Tv,Ti}
-    length(state.diagonal) == matrix_nrows(A) ||
-        throw(ArgumentError("SPAI0 state size does not match the matrix"))
-    same_backend(matrix_backend(A), state.backend) ||
-        throw(ArgumentError("smoother and matrix must use the same backend"))
+    require_smoother_size_and_backend(state, A, "SPAI0")
     diagonal = state.diagonal
     damping = state.config.damping
     foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
@@ -150,8 +137,7 @@ function update_smoother!(state::SPAI0State{D},
 end
 
 function apply!(x::Vector, state::SPAI0State{D}, b::Vector) where {D<:Vector}
-    length(x) == length(state.diagonal) || throw(DimensionMismatch())
-    length(b) == length(state.diagonal) || throw(DimensionMismatch())
+    require_apply_dimensions(x, state, b)
     diagonal = state.diagonal
     foreach_cpu_row(length(x), state.block_size) do i
         @inbounds x[i] = diagonal[i] * b[i]
@@ -169,14 +155,14 @@ function apply_correction!(x::Vector, state::SPAI0State{D},
 end
 
 function apply!(x::AbstractVector, state::SPAI0State, b::AbstractVector)
-    length(x) == length(state.diagonal) || throw(DimensionMismatch())
-    length(b) == length(state.diagonal) || throw(DimensionMismatch())
+    require_apply_dimensions(x, state, b)
     ensure_smoother_work!(state, b)
     backend = state.backend
+    n = length(x)
     same_backend(KernelAbstractions.get_backend(x), backend) ||
         throw(ArgumentError("output and smoother must use the same backend"))
     kernel! = spai0_apply_kernel!(backend, state.block_size)
-    kernel!(x, b, state.diagonal, length(x); ndrange=length(x))
+    kernel!(x, b, state.diagonal, n; ndrange=n)
     x
 end
 
@@ -193,17 +179,18 @@ end
 function smooth_result!(x, A::StaticSparsityMatrixCSR, b, state::SPAI0State, steps::Int;
                          residual=nothing, zero_initial::Bool=false)
     ensure_smoother_work!(state, b)
+    backend = matrix_backend(A)
     kernel_block_size = matrix_kernel_block_size(A)
-    step! = spai0_step_kernel!(matrix_backend(A), kernel_block_size)
-    residual_step! = spai0_residual_step_kernel!(matrix_backend(A), kernel_block_size)
-    zero_step! = spai0_zero_residual_step_kernel!(
-        matrix_backend(A), kernel_block_size)
+    n = matrix_nrows(A)
+    step! = spai0_step_kernel!(backend, kernel_block_size)
+    residual_step! = spai0_residual_step_kernel!(backend, kernel_block_size)
+    zero_step! = spai0_zero_residual_step_kernel!(backend, kernel_block_size)
     start = 1
     if !isnothing(residual)
         if zero_initial
-            zero_step!(x, residual, state.diagonal, matrix_nrows(A); ndrange=matrix_nrows(A))
+            zero_step!(x, residual, state.diagonal, n; ndrange=n)
         else
-            residual_step!(x, x, residual, state.diagonal, matrix_nrows(A); ndrange=matrix_nrows(A))
+            residual_step!(x, x, residual, state.diagonal, n; ndrange=n)
         end
         steps == 1 && return x
         start = 2
@@ -211,7 +198,7 @@ function smooth_result!(x, A::StaticSparsityMatrixCSR, b, state::SPAI0State, ste
     src, dst = x, state.temporary
     for _ in start:steps
         step!(dst, src, b, state.diagonal, A.rowptr, A.colval, A.nzval,
-              matrix_nrows(A); ndrange=matrix_nrows(A))
+              n; ndrange=n)
         src, dst = dst, src
     end
     src
@@ -259,15 +246,15 @@ function smooth_level!(x, A::StaticSparsityMatrixCSR, b, state::SPAI0State, step
                   residual=nothing, zero_initial::Bool=false)
     result = smooth_result!(x, A, b, state, steps;
                              residual=residual, zero_initial=zero_initial)
-    result === x || copyto!(x, result)
-    x
+    copy_result!(x, result)
 end
 
 function smooth_once_to!(dst, src, A::StaticSparsityMatrixCSR, b, state::SPAI0State)
+    n = matrix_nrows(A)
     kernel! = spai0_step_kernel!(
         matrix_backend(A), matrix_kernel_block_size(A))
     kernel!(dst, src, b, state.diagonal, A.rowptr, A.colval, A.nzval,
-            matrix_nrows(A); ndrange=matrix_nrows(A))
+            n; ndrange=n)
     dst
 end
 
@@ -279,10 +266,11 @@ end
 
 function zero_smooth_residual!(x, residual, A::StaticSparsityMatrixCSR, b,
                                 state::SPAI0State)
+    n = matrix_nrows(A)
     kernel! = zero_spai0_residual_kernel!(
         matrix_backend(A), matrix_kernel_block_size(A))
     kernel!(x, residual, b, state.diagonal, A.rowptr, A.colval, A.nzval,
-            matrix_nrows(A); ndrange=matrix_nrows(A))
+            n; ndrange=n)
     residual
 end
 
@@ -303,9 +291,4 @@ function zero_smooth_residual!(x::Vector, residual::Vector,
         end
     end
     residual
-end
-
-function update_level_smoother!(state::SPAI0State, A::StaticSparsityMatrixCSR, options::AMGOptions)
-    state.config = options.smoother
-    update_smoother!(state, A)
 end

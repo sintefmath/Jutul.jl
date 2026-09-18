@@ -185,7 +185,6 @@ function bilinear_interp(X, Y, F, x, y, lookup_x = missing, lookup_y = missing)
     @inbounds begin
         x_1 = X[x_pos]
         x_2 = X[x_pos+1]
-        Δx = x_2 - x_1
 
         y_1 = Y[y_pos]
         y_2 = Y[y_pos+1]

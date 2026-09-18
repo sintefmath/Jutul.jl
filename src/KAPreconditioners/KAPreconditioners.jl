@@ -32,18 +32,16 @@ apply_ka_amg!(x, hierarchy, b) = apply!(x, hierarchy, b)
 setup_ka_smoother(A, config; reuse = nothing) =
     setup_smoother(A, config; reuse = reuse)
 update_ka_smoother!(state, A) = update_smoother!(state, A)
+
+smoother_index_type(::SPAI0State) = Int32
+smoother_index_type(state::GaussSeidelState) = eltype(state.matrix.colval)
+smoother_index_type(state) = eltype(state.host_rowptr)
+
 function update_ka_smoother!(state, A::SparseMatrixCSC)
-    index_type = if state isa SPAI0State
-        Int32
-    elseif state isa GaussSeidelState
-        eltype(state.matrix.colval)
-    else
-        eltype(state.host_rowptr)
-    end
     matrix = csr_matrix(A;
         backend = state.backend,
         block_size = state.block_size,
-        index_type = index_type
+        index_type = smoother_index_type(state)
     )
     return update_smoother!(state, matrix)
 end

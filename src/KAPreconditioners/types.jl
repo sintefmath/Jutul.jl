@@ -1,6 +1,17 @@
 abstract type AbstractCoarsening end
 abstract type AbstractInterpolation end
 
+function interpolation_parameters(truncation::Real, max_elements::Integer,
+                                  norm_p::Integer; allow_unlimited::Bool)
+    truncation >= 0 || throw(ArgumentError("truncation must be non-negative"))
+    valid_maximum = allow_unlimited ? max_elements >= 0 : max_elements > 0
+    maximum_requirement = allow_unlimited ? "non-negative" : "positive"
+    valid_maximum || throw(ArgumentError(
+        "max_elements must be $maximum_requirement"))
+    norm_p > 0 || throw(ArgumentError("norm_p must be positive"))
+    return Float64(truncation), Int(max_elements), Int(norm_p)
+end
+
 """Unsmoothed, strength-based aggregation."""
 struct Aggregation <: AbstractCoarsening
     theta::Float64
@@ -29,10 +40,9 @@ struct ClassicalInterpolation <: AbstractInterpolation
     rescale::Bool
     function ClassicalInterpolation(truncation::Real=0.0, max_elements::Integer=0,
                                     norm_p::Integer=2, rescale::Bool=false)
-        truncation >= 0 || throw(ArgumentError("truncation must be non-negative"))
-        max_elements >= 0 || throw(ArgumentError("max_elements must be non-negative"))
-        norm_p > 0 || throw(ArgumentError("norm_p must be positive"))
-        new(Float64(truncation), Int(max_elements), Int(norm_p), rescale)
+        parameters = interpolation_parameters(
+            truncation, max_elements, norm_p; allow_unlimited=true)
+        new(parameters..., rescale)
     end
 end
 
@@ -49,10 +59,9 @@ struct ExtendedIInterpolation <: AbstractInterpolation
     rescale::Bool
     function ExtendedIInterpolation(truncation::Real=0.0, max_elements::Integer=4,
                                     norm_p::Integer=2, rescale::Bool=true)
-        truncation >= 0 || throw(ArgumentError("truncation must be non-negative"))
-        max_elements > 0 || throw(ArgumentError("max_elements must be positive"))
-        norm_p > 0 || throw(ArgumentError("norm_p must be positive"))
-        new(Float64(truncation), Int(max_elements), Int(norm_p), rescale)
+        parameters = interpolation_parameters(
+            truncation, max_elements, norm_p; allow_unlimited=false)
+        new(parameters..., rescale)
     end
 end
 

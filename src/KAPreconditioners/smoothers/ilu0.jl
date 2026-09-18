@@ -304,37 +304,37 @@ function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}) where Tv
     factors, inverse_diagonal
 end
 
-function replaced_ilu_storage_bytes(state::ILU0State)
-    return backend_buffer_bytes(state.factors) +
-           backend_buffer_bytes(state.inverse_diagonal) +
-           backend_buffer_bytes(state.diagonal_positions) +
-           backend_buffer_bytes(state.factor_rows) +
-           backend_buffer_bytes(state.upper_rows) +
-           backend_buffer_bytes(state.work) +
-           backend_buffer_bytes(state.residual)
-end
+replaced_ilu_storage_fields(::ILU0State) = (
+    :factors, :inverse_diagonal, :diagonal_positions, :factor_rows,
+    :upper_rows, :work, :residual)
+replaced_ilu_storage_fields(::DILUState) = (
+    :values, :inverse_diagonal, :diagonal_positions, :transpose_positions,
+    :factor_rows, :upper_rows, :work, :residual)
 
-function replaced_ilu_storage_bytes(state::DILUState)
-    return backend_buffer_bytes(state.values) +
-           backend_buffer_bytes(state.inverse_diagonal) +
-           backend_buffer_bytes(state.diagonal_positions) +
-           backend_buffer_bytes(state.transpose_positions) +
-           backend_buffer_bytes(state.factor_rows) +
-           backend_buffer_bytes(state.upper_rows) +
-           backend_buffer_bytes(state.work) +
-           backend_buffer_bytes(state.residual)
+function replaced_ilu_storage_bytes(state::Union{ILU0State,DILUState})
+    bytes = 0
+    for field in replaced_ilu_storage_fields(state)
+        bytes += backend_buffer_bytes(getproperty(state, field))
+    end
+    return bytes
 end
 
 replaced_ilu_storage_bytes(state) = 0
 
+function reuse_ilu_smoother!(reuse, A, config, ::Type{S}) where S
+    compatible = reuse isa S &&
+                 same_backend(reuse.backend, matrix_backend(A)) &&
+                 same_smoother_pattern(reuse, A)
+    compatible || return nothing
+    reuse.config = config
+    return update_smoother!(reuse, A)
+end
+
 function setup_smoother(A::StaticSparsityMatrixCSR, config::ILU0;
         reuse=nothing, reallocation_tracker=nothing)
-    matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("ILU0 requires a square matrix"))
-    if reuse isa ILU0State && same_backend(reuse.backend, matrix_backend(A)) &&
-       same_smoother_pattern(reuse, A)
-        reuse.config = config
-        return update_smoother!(reuse, A)
-    end
+    require_square_matrix(A, "ILU0")
+    reused = reuse_ilu_smoother!(reuse, A, config, ILU0State)
+    isnothing(reused) || return reused
     mark_backend_reallocation!(
         reallocation_tracker, replaced_ilu_storage_bytes(reuse))
     symbolic = ilu_symbolic(A)
@@ -353,12 +353,9 @@ end
 
 function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU;
         reuse=nothing, reallocation_tracker=nothing)
-    matrix_nrows(A) == matrix_ncols(A) || throw(DimensionMismatch("DILU requires a square matrix"))
-    if reuse isa DILUState && same_backend(reuse.backend, matrix_backend(A)) &&
-       same_smoother_pattern(reuse, A)
-        reuse.config = config
-        return update_smoother!(reuse, A)
-    end
+    require_square_matrix(A, "DILU")
+    reused = reuse_ilu_smoother!(reuse, A, config, DILUState)
+    isnothing(reused) || return reused
     mark_backend_reallocation!(
         reallocation_tracker, replaced_ilu_storage_bytes(reuse))
     symbolic = ilu_symbolic(A)
@@ -379,28 +376,24 @@ function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU;
     update_smoother!(state, A)
 end
 
-setup_smoother(A::SparseMatrixCSC, config::Union{ILU0,DILU}; reuse=nothing,
-        reallocation_tracker=nothing) = setup_smoother(csr_matrix(A), config;
-    reuse=reuse, reallocation_tracker=reallocation_tracker)
+factor_values(state::ILU0State) = state.factors
+factor_values(state::DILUState) = state.values
+factor_kernel(::ILU0State) = ilu0_factor_level_kernel!
+factor_kernel(::DILUState) = dilu_factor_level_kernel!
+factor_arguments(state::ILU0State) = (
+    state.factors, state.inverse_diagonal, state.rowptr, state.colval,
+    state.diagonal_positions)
+factor_arguments(state::DILUState) = (
+    state.inverse_diagonal, state.values, state.rowptr, state.colval,
+    state.diagonal_positions, state.transpose_positions)
 
-function update_smoother!(state::ILU0State, A::StaticSparsityMatrixCSR)
+function update_smoother!(state::Union{ILU0State,DILUState},
+                          A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
-    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
-    kernel! = ilu0_factor_level_kernel!(state.backend, state.block_size)
+    copyto!(factor_values(state), 1, A.nzval, 1, matrix_nonzeros(A))
+    kernel! = factor_kernel(state)(state.backend, state.block_size)
     launch_levels!(kernel!, state.factor_offsets, state.factor_rows,
-                    state.factors, state.inverse_diagonal, state.rowptr,
-                    state.colval, state.diagonal_positions)
-    state
-end
-
-function update_smoother!(state::DILUState, A::StaticSparsityMatrixCSR)
-    require_same_smoother_pattern(state, A)
-    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
-    kernel! = dilu_factor_level_kernel!(state.backend, state.block_size)
-    launch_levels!(kernel!, state.factor_offsets, state.factor_rows,
-                    state.inverse_diagonal, state.values, state.rowptr,
-                    state.colval, state.diagonal_positions,
-                    state.transpose_positions)
+                   factor_arguments(state)...)
     state
 end
 
@@ -477,15 +470,31 @@ function update_smoother!(
     state
 end
 
-function ilu_solve!(x, state::ILU0State, b)
+solve_kernels(::ILU0State) =
+    (ilu0_lower_level_kernel!, ilu0_upper_level_kernel!)
+solve_kernels(::DILUState) =
+    (dilu_lower_level_kernel!, dilu_upper_level_kernel!)
+lower_solve_arguments(state::ILU0State, b) = (
+    state.work, b, state.factors, state.rowptr, state.colval)
+lower_solve_arguments(state::DILUState, b) = (
+    state.work, b, state.values, state.inverse_diagonal,
+    state.rowptr, state.colval)
+upper_solve_arguments(state::ILU0State, x) = (
+    x, state.work, state.factors, state.inverse_diagonal,
+    state.rowptr, state.colval, state.config.damping)
+upper_solve_arguments(state::DILUState, x) = (
+    x, state.work, state.values, state.inverse_diagonal,
+    state.rowptr, state.colval, state.config.damping)
+
+function ilu_solve!(x, state::Union{ILU0State,DILUState}, b)
     ensure_smoother_work!(state, b)
-    lower! = ilu0_lower_level_kernel!(state.backend, state.block_size)
-    upper! = ilu0_upper_level_kernel!(state.backend, state.block_size)
+    lower_kernel, upper_kernel = solve_kernels(state)
+    lower! = lower_kernel(state.backend, state.block_size)
+    upper! = upper_kernel(state.backend, state.block_size)
     launch_levels!(lower!, state.factor_offsets, state.factor_rows,
-                    state.work, b, state.factors, state.rowptr, state.colval)
+                   lower_solve_arguments(state, b)...)
     launch_levels!(upper!, state.upper_offsets, state.upper_rows,
-                    x, state.work, state.factors, state.inverse_diagonal,
-                    state.rowptr, state.colval, state.config.damping)
+                   upper_solve_arguments(state, x)...)
     x
 end
 
@@ -521,19 +530,6 @@ function ilu_solve_cpu!(x, state::ILU0State, b, work)
     x
 end
 
-function ilu_solve!(x, state::DILUState, b)
-    ensure_smoother_work!(state, b)
-    lower! = dilu_lower_level_kernel!(state.backend, state.block_size)
-    upper! = dilu_upper_level_kernel!(state.backend, state.block_size)
-    launch_levels!(lower!, state.factor_offsets, state.factor_rows,
-                   state.work, b, state.values, state.inverse_diagonal,
-                   state.rowptr, state.colval)
-    launch_levels!(upper!, state.upper_offsets, state.upper_rows,
-                   x, state.work, state.values, state.inverse_diagonal,
-                   state.rowptr, state.colval, state.config.damping)
-    x
-end
-
 function ilu_solve!(x::AbstractVector,
                     state::DILUState{D,AV,RP,CV},
                     b::AbstractVector) where {D,AV,RP<:Vector,CV}
@@ -566,18 +562,32 @@ function ilu_solve_cpu!(x, state::DILUState, b, work)
     x
 end
 
-function ilu_smooth_result!(x, A::StaticSparsityMatrixCSR,
-                            b, state::ILU0State)
+smooth_kernels(::ILU0State) = (
+    ilu0_smooth_lower_level_kernel!, ilu0_smooth_upper_level_kernel!)
+smooth_kernels(::DILUState) = (
+    dilu_smooth_lower_level_kernel!, dilu_smooth_upper_level_kernel!)
+lower_smooth_arguments(state::ILU0State, A, x, b) = (
+    state.work, b, x, A.nzval, state.factors, state.rowptr, state.colval)
+lower_smooth_arguments(state::DILUState, A, x, b) = (
+    state.work, b, x, state.values, state.inverse_diagonal,
+    state.rowptr, state.colval)
+upper_smooth_arguments(state::ILU0State, x) = (
+    x, state.residual, state.work, state.factors, state.inverse_diagonal,
+    state.rowptr, state.colval, state.config.damping)
+upper_smooth_arguments(state::DILUState, x) = (
+    x, state.residual, state.work, state.values, state.inverse_diagonal,
+    state.rowptr, state.colval, state.config.damping)
+
+function ilu_smooth_result!(x, A::StaticSparsityMatrixCSR, b,
+                            state::Union{ILU0State,DILUState})
     ensure_smoother_work!(state, b)
-    lower! = ilu0_smooth_lower_level_kernel!(state.backend, state.block_size)
-    upper! = ilu0_smooth_upper_level_kernel!(state.backend, state.block_size)
+    lower_kernel, upper_kernel = smooth_kernels(state)
+    lower! = lower_kernel(state.backend, state.block_size)
+    upper! = upper_kernel(state.backend, state.block_size)
     launch_levels!(lower!, state.factor_offsets, state.factor_rows,
-                   state.work, b, x, A.nzval, state.factors,
-                   state.rowptr, state.colval)
+                   lower_smooth_arguments(state, A, x, b)...)
     launch_levels!(upper!, state.upper_offsets, state.upper_rows,
-                   x, state.residual, state.work, state.factors,
-                   state.inverse_diagonal, state.rowptr, state.colval,
-                   state.config.damping)
+                   upper_smooth_arguments(state, x)...)
     x
 end
 
@@ -613,21 +623,6 @@ function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
         correction[i] = delta
         x[i] += delta
     end
-    x
-end
-
-function ilu_smooth_result!(x, A::StaticSparsityMatrixCSR,
-                            b, state::DILUState)
-    ensure_smoother_work!(state, b)
-    lower! = dilu_smooth_lower_level_kernel!(state.backend, state.block_size)
-    upper! = dilu_smooth_upper_level_kernel!(state.backend, state.block_size)
-    launch_levels!(lower!, state.factor_offsets, state.factor_rows,
-                   state.work, b, x, state.values, state.inverse_diagonal,
-                   state.rowptr, state.colval)
-    launch_levels!(upper!, state.upper_offsets, state.upper_rows,
-                   x, state.residual, state.work, state.values,
-                   state.inverse_diagonal, state.rowptr, state.colval,
-                   state.config.damping)
     x
 end
 
@@ -668,8 +663,7 @@ end
 
 function apply!(x::AbstractVector, state::Union{ILU0State,DILUState},
                 b::AbstractVector)
-    length(x) == state.n || throw(DimensionMismatch())
-    length(b) == state.n || throw(DimensionMismatch())
+    require_apply_dimensions(x, state, b)
     same_backend(KernelAbstractions.get_backend(x), state.backend) ||
         throw(ArgumentError("output and smoother must use the same backend"))
     ilu_solve!(x, state, b)
@@ -714,10 +708,4 @@ function smooth_result!(x, A::StaticSparsityMatrixCSR, b,
     end
     smooth_level!(x, A, b, state, steps;
                   residual=residual, zero_initial=zero_initial)
-end
-
-function update_level_smoother!(state::Union{ILU0State,DILUState}, A::StaticSparsityMatrixCSR,
-                           options::AMGOptions)
-    state.config = options.smoother
-    update_smoother!(state, A)
 end

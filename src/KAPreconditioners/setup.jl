@@ -1,26 +1,8 @@
-function workspace_buffer(workspace, field::Symbol)
-    if isnothing(workspace)
-        nothing
-    else
-        getproperty(workspace, field)
-    end
-end
+optional_property(::Nothing, field::Symbol) = nothing
+optional_property(value, field::Symbol) = getproperty(value, field)
 
-function optional_property(value, field::Symbol)
-    if isnothing(value)
-        nothing
-    else
-        getproperty(value, field)
-    end
-end
-
-function host_copy_source(src)
-    if src isa BitVector
-        Vector{Bool}(src)
-    else
-        src
-    end
-end
+host_copy_source(src::BitVector) = Vector{Bool}(src)
+host_copy_source(src) = src
 
 function host_buffer(old, ::Type{T}, n::Integer; zeroed::Bool=false) where T
     if old isa Vector{T}
@@ -37,30 +19,33 @@ end
 
 function strength(A::StaticSparsityMatrixCSR{Tv,Ti}, theta::Real, max_row_sum::Real=1.0,
                    reuse=nothing) where {Tv,Ti}
-    if reuse isa AbstractVector{Bool} && buffer_backend_matches(reuse, matrix_backend(A)) &&
-       (reuse isa Vector || length(reuse) == matrix_nonzeros(A))
+    backend = matrix_backend(A)
+    number_of_nonzeros = matrix_nonzeros(A)
+    n = matrix_nrows(A)
+    if reuse isa AbstractVector{Bool} && buffer_backend_matches(reuse, backend) &&
+       (reuse isa Vector || length(reuse) == number_of_nonzeros)
         strong = if reuse isa Vector
-            host_buffer(reuse, Bool, matrix_nonzeros(A))
+            host_buffer(reuse, Bool, number_of_nonzeros)
         else
             reuse
         end
     else
-        strong = backend_zeros(matrix_backend(A), Bool, matrix_nonzeros(A))
+        strong = backend_zeros(backend, Bool, number_of_nonzeros)
     end
-    k! = strength_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
-    k!(strong, A.rowptr, A.colval, A.nzval, theta, max_row_sum, matrix_nrows(A);
-       ndrange=matrix_nrows(A))
-    synchronize_backend(matrix_backend(A))
+    k! = strength_kernel!(backend, matrix_kernel_block_size(A))
+    k!(strong, A.rowptr, A.colval, A.nzval, theta, max_row_sum, n;
+       ndrange=n)
+    synchronize_backend(backend)
     strong
 end
 
 function strong_transpose(A::StaticSparsityMatrixCSR{Tv,Ti}, strong, workspace=nothing) where {Tv,Ti}
-    counts = host_buffer(workspace_buffer(workspace, :ti1),
+    counts = host_buffer(optional_property(workspace, :ti1),
                           Ti, matrix_nrows(A); zeroed=true)
     @inbounds for i in 1:matrix_nrows(A), k in nzrange(A, i)
         strong[k] && (counts[A.colval[k]] += one(Ti))
     end
-    offsets = host_buffer(workspace_buffer(workspace, :ti2),
+    offsets = host_buffer(optional_property(workspace, :ti2),
                            Ti, matrix_nrows(A) + 1)
     offsets[1] = one(Ti)
     @inbounds for i in 1:matrix_nrows(A)
@@ -68,7 +53,7 @@ function strong_transpose(A::StaticSparsityMatrixCSR{Tv,Ti}, strong, workspace=n
     end
     cursor = counts
     copyto!(cursor, 1, offsets, 1, matrix_nrows(A))
-    sources = host_buffer(workspace_buffer(workspace, :ti3),
+    sources = host_buffer(optional_property(workspace, :ti3),
                            Ti, Int(offsets[end]-1))
     @inbounds for i in 1:matrix_nrows(A), k in nzrange(A, i)
         if strong[k]
@@ -238,7 +223,7 @@ end
 function hmis_rs_first_pass!(A::StaticSparsityMatrixCSR, strong, offsets, sources, cf,
                               workspace=nothing)
     n = matrix_nrows(A)
-    measure = host_buffer(workspace_buffer(workspace, :int1), Int, n)
+    measure = host_buffer(optional_property(workspace, :int1), Int, n)
     @inbounds for i in 1:n
         measure[i] = offsets[i+1] - offsets[i]
     end
@@ -269,13 +254,13 @@ function hmis_rs_first_pass!(A::StaticSparsityMatrixCSR, strong, offsets, source
     @inbounds for i in 1:n
         cf[i] == 0 && (top = max(top, measure[i]))
     end
-    head = host_buffer(workspace_buffer(workspace, :int2),
+    head = host_buffer(optional_property(workspace, :int2),
                         Int, top + 1; zeroed=true)
-    tail = host_buffer(workspace_buffer(workspace, :int3),
+    tail = host_buffer(optional_property(workspace, :int3),
                         Int, top + 1; zeroed=true)
-    next = host_buffer(workspace_buffer(workspace, :int4),
+    next = host_buffer(optional_property(workspace, :int4),
                         Int, n; zeroed=true)
-    prev = host_buffer(workspace_buffer(workspace, :int5),
+    prev = host_buffer(optional_property(workspace, :int5),
                         Int, n; zeroed=true)
     @inbounds for i in 1:n
         cf[i] == 0 || continue
@@ -339,7 +324,7 @@ function hmis_rs_first_pass!(A::StaticSparsityMatrixCSR, strong, offsets, source
 end
 
 function hypre_randomized_measure(offsets, n::Int, workspace=nothing)
-    measure = host_buffer(workspace_buffer(workspace, :real1),
+    measure = host_buffer(optional_property(workspace, :real1),
                            Float64, n)
     seed = Int64(2747)
     inv_modulus = 1.0 / 2147483647.0
@@ -458,15 +443,34 @@ end
 
 @inline function accumulate_candidate!(cols::Vector{Ti}, vals::Vector{Tv},
                                         col::Ti, value::Tv) where {Tv,Ti}
+    position = candidate_index(cols, col)
+    if iszero(position)
+        push!(cols, col)
+        push!(vals, value)
+    else
+        @inbounds vals[position] += value
+    end
+    nothing
+end
+
+@inline function candidate_index(cols, col)
     @inbounds for q in eachindex(cols)
-        if cols[q] == col
-            vals[q] += value
-            return nothing
+        cols[q] == col && return q
+    end
+    return 0
+end
+
+@inline candidate_present(cols, col) = !iszero(candidate_index(cols, col))
+
+function scale_candidate_weights!(values::Vector{Tv},
+                                  effective_diagonal) where Tv
+    if abs(effective_diagonal) > eps(real(Tv))
+        scale = -inv(effective_diagonal)
+        @inbounds for q in eachindex(values)
+            values[q] *= scale
         end
     end
-    push!(cols, col)
-    push!(vals, value)
-    nothing
+    return nothing
 end
 
 function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
@@ -504,16 +508,7 @@ function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
             continue
         end
 
-        direct = 0
-        if cf[j] == 1
-            target = cmap[j]
-            for q in eachindex(cols)
-                if cols[q] == target
-                    direct = q
-                    break
-                end
-            end
-        end
+        direct = cf[j] == 1 ? candidate_index(cols, cmap[j]) : 0
         if direct != 0
             vals[direct] += aij
         elseif strong[k] && cf[j] == -1
@@ -531,13 +526,7 @@ function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
                 sign_j * real(ajl) < 0 || continue
                 included = l == i
                 if !included && cf[l] == 1
-                    target = cmap[l]
-                    for p in eachindex(cols)
-                        if cols[p] == target
-                            included = true
-                            break
-                        end
-                    end
+                    included = candidate_present(cols, cmap[l])
                 end
                 included && (denominator += ajl)
             end
@@ -551,13 +540,8 @@ function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
                     if l == i
                         effective_diagonal += distribute * ajl
                     elseif cf[l] == 1
-                        target = cmap[l]
-                        for p in eachindex(cols)
-                            if cols[p] == target
-                                vals[p] += distribute * ajl
-                                break
-                            end
-                        end
+                        position = candidate_index(cols, cmap[l])
+                        iszero(position) || (vals[position] += distribute * ajl)
                     end
                 end
             else
@@ -567,13 +551,7 @@ function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
             effective_diagonal += aij
         end
     end
-    if abs(effective_diagonal) > eps(real(Tv))
-        scale = -inv(effective_diagonal)
-        @inbounds for q in eachindex(vals)
-            vals[q] *= scale
-        end
-    end
-    nothing
+    scale_candidate_weights!(vals, effective_diagonal)
 end
 
 function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
@@ -604,39 +582,22 @@ function candidate_weights!(cols::Vector{Ti}, vals::Vector{Tv},
         for q in nzrange(A, j)
             l = A.colval[q]
             cf[l] == 1 || continue
-            target = cmap[l]
-            for p in eachindex(cols)
-                if cols[p] == target
-                    denominator += A.nzval[q]
-                    break
-                end
-            end
+            candidate_present(cols, cmap[l]) && (denominator += A.nzval[q])
         end
         if abs(denominator) > eps(real(Tv))
             distribute = A.nzval[k] / denominator
             for q in nzrange(A, j)
                 l = A.colval[q]
                 cf[l] == 1 || continue
-                target = cmap[l]
-                for p in eachindex(cols)
-                    if cols[p] == target
-                        vals[p] += distribute * A.nzval[q]
-                        break
-                    end
-                end
+                position = candidate_index(cols, cmap[l])
+                iszero(position) || (vals[position] += distribute * A.nzval[q])
             end
         else
             effective_diagonal += A.nzval[k]
         end
     end
 
-    if abs(effective_diagonal) > eps(real(Tv))
-        scale = -inv(effective_diagonal)
-        @inbounds for q in eachindex(vals)
-            vals[q] *= scale
-        end
-    end
-    nothing
+    scale_candidate_weights!(vals, effective_diagonal)
 end
 
 @inline function candidate_score(value, p::Int)
@@ -697,6 +658,14 @@ end
     count
 end
 
+function select_interpolation_candidates!(cols, vals, A, row, cf, cmap,
+                                          strong, diagonal, interpolation)
+    candidate_weights!(cols, vals, A, row, cf, cmap, strong, diagonal,
+                       interpolation)
+    sort_candidates!(cols, vals, interpolation.norm_p)
+    return candidate_count(vals, interpolation)
+end
+
 function with_setup_rows(f, n::Int)
     if Threads.nthreads() > 1 && n >= 4_096
         Threads.@threads :static for i in 1:n
@@ -710,7 +679,7 @@ function with_setup_rows(f, n::Int)
     nothing
 end
 
-function same_boolean_prefix(a::Vector{Bool}, b::Vector{Bool}, n::Int)
+function same_prefix(a::AbstractVector, b::AbstractVector, n::Int)
     @inbounds for k in 1:n
         a[k] == b[k] || return false
     end
@@ -721,21 +690,16 @@ function same_csr_pattern(a::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:V
                            b::StaticSparsityMatrixCSR{Tv,Ti}, workspace) where {Tv,Ti}
     size(a) == size(b) && matrix_nonzeros(a) == matrix_nonzeros(b) || return false
     old_rp = host_prefix_reusing(workspace.ti2, b.rowptr, matrix_nrows(b) + 1)
-    @inbounds for k in 1:(matrix_nrows(a)+1)
-        a.rowptr[k] == old_rp[k] || return false
-    end
+    same_prefix(a.rowptr, old_rp, matrix_nrows(a) + 1) || return false
     old_cv = host_prefix_reusing(workspace.ti3, b.colval, matrix_nonzeros(b))
-    @inbounds for k in 1:matrix_nonzeros(a)
-        a.colval[k] == old_cv[k] || return false
-    end
-    true
+    return same_prefix(a.colval, old_cv, matrix_nonzeros(a))
 end
 
 function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, strong,
                              interpolation::AbstractInterpolation,
                              reuse=nothing, workspace=nothing) where {Tv,Ti}
     n = matrix_nrows(A)
-    diagonal = host_buffer(workspace_buffer(workspace, :values),
+    diagonal = host_buffer(optional_property(workspace, :values),
                             Tv, n; zeroed=true)
     with_setup_rows(n) do i, _
         value = zero(Tv)
@@ -756,16 +720,15 @@ function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, str
     else
         workspace.interpolation_vals
     end
-    counts = host_buffer(workspace_buffer(workspace, :ti1), Ti, n)
+    counts = host_buffer(optional_property(workspace, :ti1), Ti, n)
     with_setup_rows(n) do i, tid
         if cf[i] == 1
             @inbounds counts[i] = one(Ti)
         else
             candidate_cols, candidate_vals = scratch_cols[tid], scratch_vals[tid]
-            candidate_weights!(candidate_cols, candidate_vals, A, i, cf, cmap,
-                                strong, diagonal, interpolation)
-            sort_candidates!(candidate_cols, candidate_vals, interpolation.norm_p)
-            selected = candidate_count(candidate_vals, interpolation)
+            selected = select_interpolation_candidates!(
+                candidate_cols, candidate_vals, A, i, cf, cmap, strong,
+                diagonal, interpolation)
             @inbounds counts[i] = Ti(selected)
         end
     end
@@ -788,10 +751,9 @@ function build_prolongation(A::StaticSparsityMatrixCSR{Tv,Ti}, cf, cmap, nc, str
             end
         else
             candidate_cols, candidate_vals = scratch_cols[tid], scratch_vals[tid]
-            candidate_weights!(candidate_cols, candidate_vals, A, i, cf, cmap,
-                                strong, diagonal, interpolation)
-            sort_candidates!(candidate_cols, candidate_vals, interpolation.norm_p)
-            count = candidate_count(candidate_vals, interpolation)
+            count = select_interpolation_candidates!(
+                candidate_cols, candidate_vals, A, i, cf, cmap, strong,
+                diagonal, interpolation)
             if count > 0
                 scale = one(Tv)
                 if interpolation.rescale && count < length(candidate_vals)
@@ -845,7 +807,7 @@ end
 
 function transpose_map(P::Prolongation{Tv,Ti}, reuse=nothing,
                         workspace=nothing) where {Tv,Ti}
-    counts = host_buffer(workspace_buffer(workspace, :ti1),
+    counts = host_buffer(optional_property(workspace, :ti1),
                           Ti, P.ncol; zeroed=true)
     @inbounds for i in 1:P.nrow, k in P.rowptr[i]:(P.rowptr[i+1]-1)
         counts[P.colval[k]] += one(Ti)
@@ -858,7 +820,7 @@ function transpose_map(P::Prolongation{Tv,Ti}, reuse=nothing,
     @inbounds for J in 1:P.ncol
         offsets[J+1] = offsets[J] + counts[J]
     end
-    cursor = host_buffer(workspace_buffer(workspace, :ti2),
+    cursor = host_buffer(optional_property(workspace, :ti2),
                           Ti, P.ncol + 1)
     copyto!(cursor, offsets)
     pnnz = Int(P.rowptr[P.nrow+1] - one(Ti))
@@ -890,6 +852,25 @@ end
     lo
 end
 
+function collect_galerkin_columns!(columns, markers, A, P, Pt,
+                                   coarse_row, thread_id)
+    empty!(columns)
+    @inbounds for q in Pt.offsets[coarse_row]:(Pt.offsets[coarse_row+1]-1)
+        fine_row = Pt.fine_rows[q]
+        for a_index in nzrange(A, fine_row)
+            fine_column = A.colval[a_index]
+            for p_index in P.rowptr[fine_column]:(P.rowptr[fine_column+1]-1)
+                coarse_column = P.colval[p_index]
+                if markers[coarse_column, thread_id] != coarse_row
+                    markers[coarse_column, thread_id] = coarse_row
+                    push!(columns, coarse_column)
+                end
+            end
+        end
+    end
+    return columns
+end
+
 function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{Tv,Ti},
                              Pt::TransposeMap{Ti}, reuse=nothing,
                              reuse_coarse=nothing, workspace=nothing) where {Tv,Ti}
@@ -919,7 +900,7 @@ function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{T
     else
         workspace.galerkin_cols
     end
-    row_counts = host_buffer(workspace_buffer(workspace, :ti1), Ti, nc)
+    row_counts = host_buffer(optional_property(workspace, :ti1), Ti, nc)
 
     # Discover the exact sorted coarse pattern in parallel, one coarse row at a
     # time. Dense thread-local markers make duplicate removal O(1) per triple
@@ -927,20 +908,7 @@ function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{T
     with_setup_rows(nc) do II, tid
         I = Ti(II)
         columns = scratch[tid]
-        empty!(columns)
-        @inbounds for q in Pt.offsets[I]:(Pt.offsets[I+1]-1)
-            i = Pt.fine_rows[q]
-            for aidx in nzrange(A, i)
-                j = A.colval[aidx]
-                for pright in P.rowptr[j]:(P.rowptr[j+1]-1)
-                    J = P.colval[pright]
-                    if markers[J, tid] != I
-                        markers[J, tid] = I
-                        push!(columns, J)
-                    end
-                end
-            end
-        end
+        collect_galerkin_columns!(columns, markers, A, P, Pt, I, tid)
         @inbounds row_counts[I] = Ti(length(columns))
     end
 
@@ -978,20 +946,7 @@ function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{T
     with_setup_rows(nc) do II, tid
         I = Ti(II)
         columns = scratch[tid]
-        empty!(columns)
-        @inbounds for q in Pt.offsets[I]:(Pt.offsets[I+1]-1)
-            i = Pt.fine_rows[q]
-            for aidx in nzrange(A, i)
-                j = A.colval[aidx]
-                for pright in P.rowptr[j]:(P.rowptr[j+1]-1)
-                    J = P.colval[pright]
-                    if markers[J, tid] != I
-                        markers[J, tid] = I
-                        push!(columns, J)
-                    end
-                end
-            end
-        end
+        collect_galerkin_columns!(columns, markers, A, P, Pt, I, tid)
         # The entries are unique, so stability is irrelevant. Explicit
         # in-place QuickSort avoids radix-sort scratch allocation per row.
         sort!(columns; alg=QuickSort)
@@ -1011,7 +966,7 @@ function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{T
     nzval = host_buffer(old_nzval, Tv, coarse_nnz; zeroed=true)
     Ac = csr_matrix(rowptr, colval, nzval, nc, nc;
         block_size = matrix_block_size(A))
-    counts = host_buffer(workspace_buffer(workspace, :ti1),
+    counts = host_buffer(optional_property(workspace, :ti1),
                           Ti, coarse_nnz; zeroed=true)
     with_setup_rows(nc) do II, tid
         I = Ti(II)
@@ -1075,34 +1030,6 @@ function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{T
     Ac, map, same_pattern
 end
 
-function device_prolongation(P::Prolongation{Tv,Ti}, backend) where {Tv,Ti}
-    rp = backend_copy(backend, P.rowptr)
-    cv = backend_copy(backend, P.colval)
-    pv = backend_copy(backend, P.nzval)
-    Prolongation{Tv,Ti,typeof(rp),typeof(cv),typeof(pv)}(rp, cv, pv, P.nrow, P.ncol)
-end
-
-function device_transpose(M::TransposeMap{Ti}, backend) where Ti
-    o, r, p = backend_copy(backend, M.offsets), backend_copy(backend, M.fine_rows), backend_copy(backend, M.p_indices)
-    TransposeMap{Ti,typeof(o),typeof(r),typeof(p)}(o, r, p)
-end
-
-function device_galerkin(M::GalerkinMap{Ti}, backend) where Ti
-    o = backend_copy(backend, M.offsets); l = backend_copy(backend, M.p_left)
-    a = backend_copy(backend, M.a_index); r = backend_copy(backend, M.p_right)
-    GalerkinMap{Ti,typeof(o),typeof(l),typeof(a),typeof(r)}(o, l, a, r)
-end
-
-function owned_on_backend(A::StaticSparsityMatrixCSR, backend, block_size)
-    C = host_csr(A)
-    csr_matrix(
-        backend_copy(backend, C.rowptr),
-        backend_copy(backend, C.colval),
-        backend_copy(backend, C.nzval),
-        matrix_nrows(C), matrix_ncols(C);
-        backend = backend, block_size = block_size)
-end
-
 @inline function buffer_backend_matches(buffer, backend)
     try
         same_backend(KernelAbstractions.get_backend(buffer), backend)
@@ -1121,40 +1048,43 @@ function BackendBufferPrefix(view::V, allocation::A) where {V, A}
     return BackendBufferPrefix{eltype(view), V, A}(view, allocation)
 end
 
-Base.size(buffer::BackendBufferPrefix) = size(getfield(buffer, :view))
-Base.axes(buffer::BackendBufferPrefix) = axes(getfield(buffer, :view))
-Base.length(buffer::BackendBufferPrefix) = length(getfield(buffer, :view))
+backend_view(buffer::BackendBufferPrefix) = getfield(buffer, :view)
+backend_allocation(buffer::BackendBufferPrefix) = getfield(buffer, :allocation)
+
+Base.size(buffer::BackendBufferPrefix) = size(backend_view(buffer))
+Base.axes(buffer::BackendBufferPrefix) = axes(backend_view(buffer))
+Base.length(buffer::BackendBufferPrefix) = length(backend_view(buffer))
 Base.IndexStyle(::Type{<:BackendBufferPrefix{T, V}}) where {T, V} =
     IndexStyle(V)
 @inline Base.getindex(buffer::BackendBufferPrefix, index::Int) =
-    getindex(getfield(buffer, :view), index)
+    getindex(backend_view(buffer), index)
 @inline Base.setindex!(buffer::BackendBufferPrefix, value, index::Int) =
-    setindex!(getfield(buffer, :view), value, index)
+    setindex!(backend_view(buffer), value, index)
 Base.fill!(buffer::BackendBufferPrefix, value) =
-    fill!(getfield(buffer, :view), value)
+    fill!(backend_view(buffer), value)
 Base.Array(buffer::BackendBufferPrefix) =
-    Array(getfield(buffer, :view))
+    Array(backend_view(buffer))
 Base.copy(buffer::BackendBufferPrefix) =
-    copy(getfield(buffer, :view))
+    copy(backend_view(buffer))
 function Base.copyto!(destination::BackendBufferPrefix,
         source::AbstractArray)
-    copyto!(getfield(destination, :view), source)
+    copyto!(backend_view(destination), source)
     return destination
 end
 function Base.copyto!(destination::AbstractArray,
         source::BackendBufferPrefix)
-    copyto!(destination, getfield(source, :view))
+    copyto!(destination, backend_view(source))
     return destination
 end
 function Base.copyto!(destination::BackendBufferPrefix,
         source::BackendBufferPrefix)
-    copyto!(getfield(destination, :view), getfield(source, :view))
+    copyto!(backend_view(destination), backend_view(source))
     return destination
 end
 function Base.copyto!(destination::BackendBufferPrefix,
         destination_offset::Integer, source::AbstractArray,
         source_offset::Integer, count::Integer)
-    copyto!(getfield(destination, :view), destination_offset,
+    copyto!(backend_view(destination), destination_offset,
         source, source_offset, count)
     return destination
 end
@@ -1162,40 +1092,40 @@ function Base.copyto!(destination::AbstractArray,
         destination_offset::Integer, source::BackendBufferPrefix,
         source_offset::Integer, count::Integer)
     copyto!(destination, destination_offset,
-        getfield(source, :view), source_offset, count)
+        backend_view(source), source_offset, count)
     return destination
 end
 function Base.copyto!(destination::BackendBufferPrefix,
         destination_offset::Integer, source::BackendBufferPrefix,
         source_offset::Integer, count::Integer)
-    copyto!(getfield(destination, :view), destination_offset,
-        getfield(source, :view), source_offset, count)
+    copyto!(backend_view(destination), destination_offset,
+        backend_view(source), source_offset, count)
     return destination
 end
 KernelAbstractions.get_backend(buffer::BackendBufferPrefix) =
-    KernelAbstractions.get_backend(getfield(buffer, :view))
+    KernelAbstractions.get_backend(backend_view(buffer))
 logical_backend_buffer(buffer::BackendBufferPrefix) =
-    getfield(buffer, :view)
+    backend_view(buffer)
 function Adapt.adapt_structure(to, buffer::BackendBufferPrefix)
     return BackendBufferPrefix(
-        Adapt.adapt(to, getfield(buffer, :view)),
-        Adapt.adapt(to, getfield(buffer, :allocation)))
+        Adapt.adapt(to, backend_view(buffer)),
+        Adapt.adapt(to, backend_allocation(buffer)))
 end
 
 """Return the allocation backing a contiguous prefix used for reuse."""
 reusable_buffer(buffer::BackendBufferPrefix) =
-    getfield(buffer, :allocation)
+    backend_allocation(buffer)
 
-function reusable_buffer(buffer)
-    if buffer isa SubArray{<:Any, 1}
-        indices = parentindices(buffer)
-        if length(indices) == 1 && only(indices) isa AbstractUnitRange &&
-                first(only(indices)) == firstindex(parent(buffer))
-            return parent(buffer)
-        end
+function reusable_buffer(buffer::SubArray{<:Any,1})
+    indices = parentindices(buffer)
+    if length(indices) == 1 && only(indices) isa AbstractUnitRange &&
+            first(only(indices)) == firstindex(parent(buffer))
+        return parent(buffer)
     end
     return buffer
 end
+
+reusable_buffer(buffer) = buffer
 
 backend_buffer_bytes(::Nothing) = 0
 function backend_buffer_bytes(buffer::AbstractArray)
@@ -1240,21 +1170,32 @@ function allocate_grown_backend_buffer(src::AbstractVector, backend,
     return destination
 end
 
+function reusable_backend_allocation(old, ::Type{T}, backend) where T
+    allocation = reusable_buffer(old)
+    compatible = allocation isa AbstractVector &&
+                 eltype(allocation) === T &&
+                 buffer_backend_matches(allocation, backend)
+    return allocation, compatible
+end
+
+function resize_backend_vector!(buffer::Vector, n::Integer)
+    if JULIA_VER_CAN_SHRINK
+        sizehint!(buffer, n; shrink=false)
+    else
+        sizehint!(buffer, n)
+    end
+    resize!(buffer, n)
+    return buffer
+end
+
 """Copy into an old backend allocation when its type and capacity permit."""
 function copy_reusing(old, src::AbstractVector, backend;
         reallocation_tracker=nothing)
     old === src && return old
-    allocation = reusable_buffer(old)
-    compatible = allocation isa AbstractVector &&
-                 eltype(allocation) === eltype(src) &&
-                 buffer_backend_matches(allocation, backend)
+    allocation, compatible = reusable_backend_allocation(
+        old, eltype(src), backend)
     if compatible && allocation isa Vector
-        if JULIA_VER_CAN_SHRINK
-            sizehint!(allocation, length(src); shrink=false)
-        else
-            sizehint!(allocation, length(src))
-        end
-        resize!(allocation, length(src))
+        resize_backend_vector!(allocation, length(src))
         copyto!(allocation, host_copy_source(src))
         return allocation
     elseif compatible && length(allocation) >= length(src)
@@ -1271,19 +1212,19 @@ function copy_reusing(old, src::AbstractVector, backend;
     return destination
 end
 
+function copy_optional_reusing(old, source, backend;
+        reallocation_tracker=nothing)
+    isnothing(source) && return nothing
+    return copy_reusing(old, source, backend;
+        reallocation_tracker=reallocation_tracker)
+end
+
 function zeros_reusing(old, backend, ::Type{T}, n::Integer;
         reallocation_tracker=nothing) where T
     n = Int(n)
-    allocation = reusable_buffer(old)
-    compatible = allocation isa AbstractVector && eltype(allocation) === T &&
-                 buffer_backend_matches(allocation, backend)
+    allocation, compatible = reusable_backend_allocation(old, T, backend)
     if compatible && allocation isa Vector
-        if JULIA_VER_CAN_SHRINK
-            sizehint!(allocation, n; shrink=false)
-        else
-            sizehint!(allocation, n)
-        end
-        resize!(allocation, n)
+        resize_backend_vector!(allocation, n)
         fill!(allocation, zero(T))
         return allocation
     elseif compatible && length(allocation) >= n
@@ -1305,59 +1246,48 @@ end
 
 function owned_on_backend_reusing(A::StaticSparsityMatrixCSR, backend, block_size, old;
         reallocation_tracker=nothing)
-    if isnothing(old)
-        return owned_on_backend(A, backend, block_size)
-    end
-    rp = copy_reusing(old.rowptr, A.rowptr, backend;
+    source = isnothing(old) ? host_csr(A) : A
+    rp = copy_reusing(optional_property(old, :rowptr), source.rowptr, backend;
                       reallocation_tracker=reallocation_tracker)
-    cv = copy_reusing(old.colval, A.colval, backend;
+    cv = copy_reusing(optional_property(old, :colval), source.colval, backend;
                       reallocation_tracker=reallocation_tracker)
-    av = copy_reusing(old.nzval, A.nzval, backend;
+    av = copy_reusing(optional_property(old, :nzval), source.nzval, backend;
                       reallocation_tracker=reallocation_tracker)
-    csr_matrix(rp, cv, av, matrix_nrows(A), matrix_ncols(A);
+    csr_matrix(rp, cv, av, matrix_nrows(source), matrix_ncols(source);
         backend = backend, block_size = block_size)
 end
 
 function device_prolongation_reusing(P::Prolongation{Tv,Ti}, backend, old;
         reallocation_tracker=nothing) where {Tv,Ti}
-    if isnothing(old)
-        return device_prolongation(P, backend)
-    end
-    rp = copy_reusing(old.rowptr, P.rowptr, backend;
+    rp = copy_reusing(optional_property(old, :rowptr), P.rowptr, backend;
                       reallocation_tracker=reallocation_tracker)
-    cv = copy_reusing(old.colval, P.colval, backend;
+    cv = copy_reusing(optional_property(old, :colval), P.colval, backend;
                       reallocation_tracker=reallocation_tracker)
-    pv = copy_reusing(old.nzval, P.nzval, backend;
+    pv = copy_reusing(optional_property(old, :nzval), P.nzval, backend;
                       reallocation_tracker=reallocation_tracker)
     Prolongation{Tv,Ti,typeof(rp),typeof(cv),typeof(pv)}(rp, cv, pv, P.nrow, P.ncol)
 end
 
 function device_transpose_reusing(M::TransposeMap{Ti}, backend, old;
         reallocation_tracker=nothing) where Ti
-    if isnothing(old)
-        return device_transpose(M, backend)
-    end
-    o = copy_reusing(old.offsets, M.offsets, backend;
+    o = copy_reusing(optional_property(old, :offsets), M.offsets, backend;
                      reallocation_tracker=reallocation_tracker)
-    r = copy_reusing(old.fine_rows, M.fine_rows, backend;
+    r = copy_reusing(optional_property(old, :fine_rows), M.fine_rows, backend;
                      reallocation_tracker=reallocation_tracker)
-    p = copy_reusing(old.p_indices, M.p_indices, backend;
+    p = copy_reusing(optional_property(old, :p_indices), M.p_indices, backend;
                      reallocation_tracker=reallocation_tracker)
     TransposeMap{Ti,typeof(o),typeof(r),typeof(p)}(o, r, p)
 end
 
 function device_galerkin_reusing(M::GalerkinMap{Ti}, backend, old;
         reallocation_tracker=nothing) where Ti
-    if isnothing(old)
-        return device_galerkin(M, backend)
-    end
-    o = copy_reusing(old.offsets, M.offsets, backend;
+    o = copy_reusing(optional_property(old, :offsets), M.offsets, backend;
                      reallocation_tracker=reallocation_tracker)
-    l = copy_reusing(old.p_left, M.p_left, backend;
+    l = copy_reusing(optional_property(old, :p_left), M.p_left, backend;
                      reallocation_tracker=reallocation_tracker)
-    a = copy_reusing(old.a_index, M.a_index, backend;
+    a = copy_reusing(optional_property(old, :a_index), M.a_index, backend;
                      reallocation_tracker=reallocation_tracker)
-    r = copy_reusing(old.p_right, M.p_right, backend;
+    r = copy_reusing(optional_property(old, :p_right), M.p_right, backend;
                      reallocation_tracker=reallocation_tracker)
     GalerkinMap{Ti,typeof(o),typeof(l),typeof(a),typeof(r)}(o, l, a, r)
 end
@@ -1418,24 +1348,15 @@ function make_level(A_cpu::StaticSparsityMatrixCSR{Tv,Ti}, P_cpu, Pt_cpu, G_cpu,
             owned_on_backend_reusing(A_cpu, backend, options.block_size, old_A;
                                      reallocation_tracker=reallocation_tracker)
         end
-        P = if isnothing(P_cpu)
-            nothing
-        else
-            device_prolongation_reusing(P_cpu, backend, old_P;
-                                        reallocation_tracker=reallocation_tracker)
-        end
-        Pt = if isnothing(Pt_cpu)
-            nothing
-        else
-            device_transpose_reusing(Pt_cpu, backend, old_Pt;
-                                     reallocation_tracker=reallocation_tracker)
-        end
-        G = if isnothing(G_cpu)
-            nothing
-        else
-            device_galerkin_reusing(G_cpu, backend, old_G;
-                                    reallocation_tracker=reallocation_tracker)
-        end
+        P = isnothing(P_cpu) ? nothing : device_prolongation_reusing(
+            P_cpu, backend, old_P;
+            reallocation_tracker=reallocation_tracker)
+        Pt = isnothing(Pt_cpu) ? nothing : device_transpose_reusing(
+            Pt_cpu, backend, old_Pt;
+            reallocation_tracker=reallocation_tracker)
+        G = isnothing(G_cpu) ? nothing : device_galerkin_reusing(
+            G_cpu, backend, old_G;
+            reallocation_tracker=reallocation_tracker)
     end
     old_smoother = optional_property(old_level, :smoother)
     S = setup_smoother(A, options.smoother; reuse=old_smoother,
@@ -1451,11 +1372,7 @@ function make_level(A_cpu::StaticSparsityMatrixCSR{Tv,Ti}, P_cpu, Pt_cpu, G_cpu,
     old_bc = optional_property(old_level, :rhs)
     r = zeros_reusing(old_r, backend, Tv, matrix_nrows(A);
                       reallocation_tracker=reallocation_tracker)
-    ncoarse = if isnothing(P)
-        matrix_nrows(A)
-    else
-        P.ncol
-    end
+    ncoarse = isnothing(P) ? matrix_nrows(A) : P.ncol
     xc = zeros_reusing(old_xc, backend, Tv, ncoarse;
                        reallocation_tracker=reallocation_tracker)
     bc = zeros_reusing(old_bc, backend, Tv, ncoarse;
@@ -1466,24 +1383,12 @@ function make_level(A_cpu::StaticSparsityMatrixCSR{Tv,Ti}, P_cpu, Pt_cpu, G_cpu,
         old_cf = optional_property(old_level, :cf)
         old_cm = optional_property(old_level, :coarse_map)
         old_st = optional_property(old_level, :strength)
-        cf_d = if isnothing(cf)
-            nothing
-        else
-            copy_reusing(old_cf, cf, backend;
-                         reallocation_tracker=reallocation_tracker)
-        end
-        cm_d = if isnothing(cmap)
-            nothing
-        else
-            copy_reusing(old_cm, cmap, backend;
-                         reallocation_tracker=reallocation_tracker)
-        end
-        st_d = if isnothing(strong)
-            nothing
-        else
-            copy_reusing(old_st, strong, backend;
-                         reallocation_tracker=reallocation_tracker)
-        end
+        cf_d = copy_optional_reusing(old_cf, cf, backend;
+            reallocation_tracker=reallocation_tracker)
+        cm_d = copy_optional_reusing(old_cm, cmap, backend;
+            reallocation_tracker=reallocation_tracker)
+        st_d = copy_optional_reusing(old_st, strong, backend;
+            reallocation_tracker=reallocation_tracker)
     end
     AMGLevel{Tv,Ti}(A, P, Pt, G, S, coarse_solver, r, xc, bc, cf_d, cm_d, st_d)
 end
@@ -1493,6 +1398,24 @@ function reuse_level(reuse_levels, level_index)
         nothing
     else
         reuse_levels[level_index]
+    end
+end
+
+function setup_reuse_buffer(cpu_backend, old_level, field::Symbol,
+                            staged_buffer)
+    return cpu_backend ? optional_property(old_level, field) : staged_buffer
+end
+
+next_stage_matrix(workspace, stage_slot) =
+    stage_slot == 1 ? workspace.stage_matrix2 : workspace.stage_matrix1
+
+function store_stage_matrix!(workspace, stage_slot, matrix)
+    if stage_slot == 1
+        workspace.stage_matrix2 = matrix
+        return 2
+    else
+        workspace.stage_matrix1 = matrix
+        return 1
     end
 end
 
@@ -1510,23 +1433,15 @@ function validate_setup_options(options::AMGOptions)
     nothing
 end
 
-function initial_hierarchy_state(Ain::StaticSparsityMatrixCSR, options, reuse_levels, workspace,
-                                  host_finest)
+function initial_hierarchy_state(Ain::StaticSparsityMatrixCSR, reuse_levels,
+                                 workspace, host_finest)
     backend = matrix_backend(Ain)
     cpu_backend = backend isa KernelAbstractions.CPU
     if !isnothing(host_finest)
         current = host_finest
-        stage_slot = if cpu_backend
-            0
-        else
-            1
-        end
+        stage_slot = cpu_backend ? 0 : 1
     elseif cpu_backend
-        old_first = if isnothing(reuse_levels) || isempty(reuse_levels)
-            nothing
-        else
-            reuse_levels[1].A
-        end
+        old_first = optional_property(reuse_level(reuse_levels, 1), :A)
         current = host_csr_reusing(Ain, old_first)
         stage_slot = 0
     else
@@ -1545,37 +1460,29 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
                           reallocation_tracker=nothing) where {Tv,Ti}
     validate_setup_options(options)
     current, stage_slot, backend, cpu_backend =
-        initial_hierarchy_state(Ain, options, reuse_levels, workspace, host_finest)
+        initial_hierarchy_state(Ain, reuse_levels, workspace, host_finest)
     levels = AMGLevel{Tv,Ti}[]
     pattern_matches_old = reuse_finest_structure
     for level_index in 1:(options.max_levels-1)
-        matrix_nrows(current) <= options.coarse_size && break
+        n = matrix_nrows(current)
+        n <= options.coarse_size && break
+        number_of_nonzeros = matrix_nonzeros(current)
         old = reuse_level(reuse_levels, level_index)
-        symbolic_old = if cpu_backend
-            old
-        else
-            nothing
-        end
+        symbolic_old = cpu_backend ? old : nothing
         reusable_split = pattern_matches_old && !isnothing(old) &&
                          !isnothing(old.P) && size(old.A) == size(current) &&
-                         matrix_nonzeros(old.A) == matrix_nonzeros(current)
+                         matrix_nonzeros(old.A) == number_of_nonzeros
         old_strength = if reusable_split && cpu_backend
             workspace.bool1
-        elseif cpu_backend
-            optional_property(symbolic_old, :strength)
         else
-            workspace.stage_strength
+            setup_reuse_buffer(cpu_backend, symbolic_old, :strength,
+                               workspace.stage_strength)
         end
-        old_cf = if cpu_backend
-            optional_property(symbolic_old, :cf)
-        else
-            workspace.stage_cf
-        end
-        old_map = if cpu_backend
-            optional_property(symbolic_old, :coarse_map)
-        else
-            workspace.stage_coarse_map
-        end
+        old_cf = setup_reuse_buffer(
+            cpu_backend, symbolic_old, :cf, workspace.stage_cf)
+        old_map = setup_reuse_buffer(
+            cpu_backend, symbolic_old, :coarse_map,
+            workspace.stage_coarse_map)
         theta = options.coarsening.theta
         strong = strength(current, theta, options.max_row_sum, old_strength)
         cpu_backend || (workspace.stage_strength = strong)
@@ -1583,20 +1490,23 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
         if reusable_split
             old_strong = old.strength
             if cpu_backend
-                reuse_split = same_boolean_prefix(strong, old_strong, matrix_nonzeros(current))
+                reuse_split = same_prefix(strong, old_strong,
+                                          number_of_nonzeros)
             else
-                old_host = host_buffer(workspace.bool1, Bool, matrix_nonzeros(current))
-                copyto!(old_host, 1, old_strong, 1, matrix_nonzeros(current))
-                reuse_split = same_boolean_prefix(strong, old_host, matrix_nonzeros(current))
+                old_host = host_buffer(
+                    workspace.bool1, Bool, number_of_nonzeros)
+                copyto!(old_host, 1, old_strong, 1, number_of_nonzeros)
+                reuse_split = same_prefix(strong, old_host,
+                                          number_of_nonzeros)
             end
         end
         if reuse_split
             if cpu_backend
                 cf, cmap = old.cf, old.coarse_map
             else
-                cf = host_prefix_reusing(workspace.stage_cf, old.cf, matrix_nrows(current))
+                cf = host_prefix_reusing(workspace.stage_cf, old.cf, n)
                 cmap = host_prefix_reusing(workspace.stage_coarse_map,
-                                             old.coarse_map, matrix_nrows(current))
+                                             old.coarse_map, n)
                 workspace.stage_cf = cf
                 workspace.stage_coarse_map = cmap
             end
@@ -1609,11 +1519,8 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
                                      old_cf, old_map, workspace)
             nc == 0 && break
         end
-        old_P = if cpu_backend
-            optional_property(symbolic_old, :P)
-        else
-            workspace.stage_prolongation
-        end
+        old_P = setup_reuse_buffer(
+            cpu_backend, symbolic_old, :P, workspace.stage_prolongation)
         P = build_prolongation(current, cf, cmap, nc, strong,
                                 options.interpolation, old_P, workspace)
         if !cpu_backend
@@ -1622,26 +1529,16 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
             workspace.stage_prolongation = P
         end
         nc == 0 && break
-        nc >= matrix_nrows(current) && break
-        old_Pt = if cpu_backend
-            optional_property(symbolic_old, :Pt)
-        else
-            workspace.stage_transpose
-        end
-        old_G = if cpu_backend
-            optional_property(symbolic_old, :galerkin)
-        else
-            workspace.stage_galerkin
-        end
+        nc >= n && break
+        old_Pt = setup_reuse_buffer(
+            cpu_backend, symbolic_old, :Pt, workspace.stage_transpose)
+        old_G = setup_reuse_buffer(
+            cpu_backend, symbolic_old, :galerkin, workspace.stage_galerkin)
         if cpu_backend
             old_coarse_level = reuse_level(reuse_levels, level_index + 1)
             old_coarse = optional_property(old_coarse_level, :A)
         else
-            old_coarse = if stage_slot == 1
-                workspace.stage_matrix2
-            else
-                workspace.stage_matrix1
-            end
+            old_coarse = next_stage_matrix(workspace, stage_slot)
         end
         Pt = transpose_map(P, old_Pt, workspace)
         coarse, G, staging_pattern_match =
@@ -1660,13 +1557,7 @@ function build_hierarchy(Ain::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOption
         if !cpu_backend
             workspace.stage_transpose = Pt
             workspace.stage_galerkin = G
-            if stage_slot == 1
-                workspace.stage_matrix2 = coarse
-                stage_slot = 2
-            else
-                workspace.stage_matrix1 = coarse
-                stage_slot = 1
-            end
+            stage_slot = store_stage_matrix!(workspace, stage_slot, coarse)
         end
         current = coarse
     end

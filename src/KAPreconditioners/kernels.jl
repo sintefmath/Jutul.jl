@@ -134,6 +134,29 @@ end
     end
 end
 
+@inline function normalize_interpolation_row!(values, first, last, row_sum,
+                                              rescale)
+    if rescale && !iszero(row_sum)
+        @inbounds for index in first:last
+            values[index] /= row_sum
+        end
+    elseif iszero(row_sum)
+        count = last - first + 1
+        value = one(eltype(values)) / count
+        @inbounds for index in first:last
+            values[index] = value
+        end
+    end
+    return nothing
+end
+
+@inline function row_contains_column(columns, first, last, target)
+    @inbounds for index in first:last
+        columns[index] == target && return true
+    end
+    return false
+end
+
 @kernel function update_extended_i_p_kernel!(pv, @Const(prp), @Const(pcv),
                                    @Const(arp), @Const(acv), @Const(av),
                                    @Const(cf), @Const(cmap), @Const(strong),
@@ -177,16 +200,8 @@ end
                         pv[pidx] = w
                         rowsum += w
                     end
-                    if rescale && !iszero(rowsum)
-                        for pidx in firstp:lastp
-                            pv[pidx] /= rowsum
-                        end
-                    elseif iszero(rowsum)
-                        v = one(eltype(pv)) / (lastp-firstp+1)
-                        for pidx in firstp:lastp
-                            pv[pidx] = v
-                        end
-                    end
+                    normalize_interpolation_row!(
+                        pv, firstp, lastp, rowsum, rescale)
                 end
             end
         end
@@ -215,13 +230,8 @@ end
                             q = acv[aj]
                             if cf[q] == 1
                                 target = cmap[q]
-                                included = false
-                                for candidate in firstp:lastp
-                                    if pcv[candidate] == target
-                                        included = true
-                                        break
-                                    end
-                                end
+                                included = row_contains_column(
+                                    pcv, firstp, lastp, target)
                                 included && (denominator += av[aj])
                             end
                         end
@@ -243,13 +253,8 @@ end
                                 q = acv[aj]
                                 if cf[q] == 1
                                     target = cmap[q]
-                                    included = false
-                                    for candidate in firstp:lastp
-                                        if pcv[candidate] == target
-                                            included = true
-                                            break
-                                        end
-                                    end
+                                    included = row_contains_column(
+                                        pcv, firstp, lastp, target)
                                     if included
                                         denominator += av[aj]
                                         target == J && (coupling += av[aj])
@@ -269,16 +274,8 @@ end
                     @inbounds pv[pidx] = weight
                     rowsum += weight
                 end
-                if rescale && !iszero(rowsum)
-                    @inbounds for pidx in firstp:lastp
-                        pv[pidx] /= rowsum
-                    end
-                elseif iszero(rowsum)
-                    value = one(eltype(pv)) / (lastp-firstp+1)
-                    @inbounds for pidx in firstp:lastp
-                        pv[pidx] = value
-                    end
-                end
+                normalize_interpolation_row!(
+                    pv, firstp, lastp, rowsum, rescale)
             end
         end
     end
@@ -287,8 +284,9 @@ end
 function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::AbstractVector)
     length(y) == matrix_nrows(A) || throw(DimensionMismatch())
     length(x) == matrix_ncols(A) || throw(DimensionMismatch())
+    n = matrix_nrows(A)
     k! = spmv_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
-    k!(y, A.rowptr, A.colval, A.nzval, x, matrix_nrows(A); ndrange=matrix_nrows(A))
+    k!(y, A.rowptr, A.colval, A.nzval, x, n; ndrange=n)
     y
 end
 
@@ -313,24 +311,32 @@ const CPU_THREAD_THRESHOLD = 8_192
     nothing
 end
 
+@inline function csr_row_product(A, x, row, ::Type{T}) where T
+    value = zero(T)
+    @inbounds @simd for k in A.rowptr[row]:(A.rowptr[row+1]-1)
+        value += A.nzval[k] * x[A.colval[k]]
+    end
+    return value
+end
+
 function LinearAlgebra.mul!(y::Vector, A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                             x::Vector) where {Tv,Ti}
     length(y) == matrix_nrows(A) || throw(DimensionMismatch())
     length(x) == matrix_ncols(A) || throw(DimensionMismatch())
     foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
-        value = zero(eltype(y))
-        @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i+1]-1)
-            value += A.nzval[k] * x[A.colval[k]]
-        end
+        value = csr_row_product(A, x, i, eltype(y))
         @inbounds y[i] = value
     end
     y
 end
 
 function copy_matrix_values!(dst::StaticSparsityMatrixCSR, src::StaticSparsityMatrixCSR)
-    matrix_nonzeros(dst) == matrix_nonzeros(src) || throw(ArgumentError("matrix patterns differ"))
+    number_of_nonzeros = matrix_nonzeros(dst)
+    number_of_nonzeros == matrix_nonzeros(src) ||
+        throw(ArgumentError("matrix patterns differ"))
     k! = copy_kernel!(matrix_backend(dst), matrix_kernel_block_size(dst))
-    k!(dst.nzval, src.nzval, matrix_nonzeros(dst); ndrange=matrix_nonzeros(dst))
+    k!(dst.nzval, src.nzval, number_of_nonzeros;
+       ndrange=number_of_nonzeros)
     dst
 end
 
@@ -358,14 +364,16 @@ function update_coarse_solver!(S::CoarseLUState, A::StaticSparsityMatrixCSR)
 end
 
 function copy_csr_to_dense!(dense, A::StaticSparsityMatrixCSR)
-    fill_backend!(dense, zero(eltype(dense)), matrix_backend(A),
-                  matrix_kernel_block_size(A))
-    k! = csr_to_dense_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
-    k!(dense, A.rowptr, A.colval, A.nzval, matrix_nrows(A); ndrange=matrix_nrows(A))
+    backend = matrix_backend(A)
+    block_size = matrix_kernel_block_size(A)
+    n = matrix_nrows(A)
+    fill_backend!(dense, zero(eltype(dense)), backend, block_size)
+    k! = csr_to_dense_kernel!(backend, block_size)
+    k!(dense, A.rowptr, A.colval, A.nzval, n; ndrange=n)
     # Generic `lu!` implementations may access the array from the host, while
     # accelerator implementations enqueue work on their own library stream.
     # Make the KernelAbstractions writes visible before either kind is called.
-    synchronize_backend(matrix_backend(A))
+    synchronize_backend(backend)
     dense
 end
 
@@ -410,8 +418,9 @@ function coarse_solve!(x, b, S::HostLUState, backend, block_size)
 end
 
 function residual!(r, A::StaticSparsityMatrixCSR, x, b)
+    n = matrix_nrows(A)
     k! = residual_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
-    k!(r, b, x, A.rowptr, A.colval, A.nzval, matrix_nrows(A); ndrange=matrix_nrows(A))
+    k!(r, b, x, A.rowptr, A.colval, A.nzval, n; ndrange=n)
     r
 end
 
@@ -419,10 +428,7 @@ end
 function residual!(r::Vector, A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                     x::Vector, b::Vector) where {Tv,Ti}
     foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
-        value = zero(eltype(r))
-        @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i+1]-1)
-            value += A.nzval[k] * x[A.colval[k]]
-        end
+        value = csr_row_product(A, x, i, eltype(r))
         @inbounds r[i] = b[i] - value
     end
     r

@@ -17,6 +17,14 @@ function restrict!(bc::Vector, Pt::TransposeMap, P::Prolongation, r::Vector,
     bc
 end
 
+@inline function prolongation_row_value(P, coarse_values, row, ::Type{T}) where T
+    value = zero(T)
+    @inbounds @simd for k in P.rowptr[row]:(P.rowptr[row+1]-1)
+        value += P.nzval[k] * coarse_values[P.colval[k]]
+    end
+    return value
+end
+
 function prolong!(x, P::Prolongation, xc, backend, block_size)
     k! = prolong_kernel!(backend, block_size)
     k!(x, P.rowptr, P.colval, P.nzval, xc, P.nrow; ndrange=P.nrow)
@@ -26,10 +34,7 @@ end
 function prolong!(x::Vector, P::Prolongation, xc::Vector,
                    ::KernelAbstractions.CPU, block_size)
     foreach_cpu_row(P.nrow, block_size) do i
-        value = zero(eltype(x))
-        @inbounds @simd for k in P.rowptr[i]:(P.rowptr[i+1]-1)
-            value += P.nzval[k] * xc[P.colval[k]]
-        end
+        value = prolongation_row_value(P, xc, i, eltype(x))
         @inbounds x[i] += value
     end
     x
@@ -44,10 +49,7 @@ end
 function prolong_to!(dst::Vector, src::Vector, P::Prolongation, xc::Vector,
                       ::KernelAbstractions.CPU, block_size)
     foreach_cpu_row(P.nrow, block_size) do i
-        value = zero(eltype(dst))
-        @inbounds @simd for k in P.rowptr[i]:(P.rowptr[i+1]-1)
-            value += P.nzval[k] * xc[P.colval[k]]
-        end
+        value = prolongation_row_value(P, xc, i, eltype(dst))
         @inbounds dst[i] = src[i] + value
     end
     dst
@@ -104,8 +106,7 @@ end
 """Apply one cycle to the current iterate without clearing it."""
 function cycle!(x::AbstractVector, H::AMGHierarchy, b::AbstractVector)
     result = vcycle!(x, b, H, 1)
-    result === x || copyto!(x, result)
-    x
+    copy_result!(x, result)
 end
 cycle!(x::AbstractVector, H::AMGHierarchy, ::Any, b::AbstractVector) = cycle!(x, H, b)
 
@@ -116,12 +117,12 @@ function apply!(x::AbstractVector, H::AMGHierarchy, b::AbstractVector)
     # The zero-initial V-cycle writes every entry of x before reading it. This
     # saves both the finest SpMV and a separate clear of every level buffer.
     result = vcycle!(x, b, H, 1; residual=b, zero_initial=true)
-    result === x || copyto!(x, result)
-    x
+    copy_result!(x, result)
 end
 
 function apply!(x::AbstractVector, H::AMGHierarchy, A, b::AbstractVector)
-    size(A) == size(H) || throw(DimensionMismatch("operator and hierarchy sizes differ"))
+    size(A) == size(H) || throw(DimensionMismatch(
+        "operator and hierarchy sizes differ"))
     apply!(x, H, b)
 end
 
@@ -159,7 +160,7 @@ function solve!(x::AbstractVector, H::AMGHierarchy, b::AbstractVector;
         # Reuse the convergence-check residual as the first Jacobi update.
         # Calling cycle! here would immediately calculate the same A*x again.
         result = vcycle!(x, b, H, 1; residual=level.residual)
-        result === x || copyto!(x, result)
+        copy_result!(x, result)
     end
     x, Int(maxiter)
 end
