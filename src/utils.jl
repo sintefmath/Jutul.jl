@@ -1270,8 +1270,7 @@ function benchmark_secondary_variables(model::SimulationModel, state;
         if verbose
             jutul_message("Benchmark", "Benchmarking secondary variable $k...")
         end
-        t_elapsed = @time @timeit timer "$k" for _ in 1:n
-            println("Benchmarking $k")
+        t_elapsed = @elapsed @timeit timer "$k" for _ in 1:n
             update_secondary_variable!(state[k], var, model, state)
             synchronize(model.context)
         end
