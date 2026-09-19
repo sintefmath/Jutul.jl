@@ -20,12 +20,12 @@ function thread_type(context::JutulContext)
     return :threads
 end
 
-function threaded_loop(F, N, context::JutulContext)
+function threaded_loop(F, N, context::JutulContext; do_wait = true)
     threads = thread_type(context)
-    return threaded_loop(F, N, threads)
+    return threaded_loop(F, N, threads; do_wait = do_wait)
 end
 
-function threaded_loop(F, N, threads::Symbol)
+function threaded_loop(F, N, threads::Symbol; do_wait = true)
     if N == 1
         F(1)
     elseif threads == :threads
@@ -49,7 +49,7 @@ function threaded_loop(F, N, threads::Symbol)
     end
 end
 
-function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = minbatch(context))
+function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = minbatch(context); do_wait = true)
     N_threads = nthreads(context)
     N_batches = clamp(N_threads ÷ minbatch, 1, N)
     threads = thread_type(context)
@@ -80,10 +80,12 @@ function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = min
     end
 end
 
-function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads)
+function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads, do_wait = true)
     ctx = ParallelCSRContext(thread_type = thread_type, minbatch = minbatch)
-    threaded_loop_minbatch(F, N, ctx)
+    return threaded_loop_minbatch(F, N, ctx; do_wait = do_wait)
 end
+
+backend_to_host(::JutulContext, x) = x
 
 function jacobian_eltype(context, layout, block_size)
     return float_type(context)

@@ -87,11 +87,12 @@ end
 function check_increment(dx, pvar, key)
     has_bad_values = any(!isfinite, dx)
     if has_bad_values
-        bad = findall(isfinite.(vec(dx)) .== false)
+        dx_host = Array(dx)
+        bad = findall(!isfinite, vec(dx_host))
         n_bad = length(bad)
         n = min(10, length(bad))
         bad = bad[1:n]
-        @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad, values: $(dx[bad])"
+        @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad, values: $(dx_host[bad])"
     end
     ok = !has_bad_values
     return ok
@@ -1241,4 +1242,57 @@ function check_equal_perm(a, b)
         end
     end
     return is_equal
+end
+
+function benchmark_secondary_variables(sim::JutulSimulator; kwarg...)
+    state = evaluation_state(sim)
+    model = get_simulator_model(sim)
+    return benchmark_secondary_variables(model, state; kwarg...)
+end
+
+function benchmark_secondary_variables(model::SimulationModel, state;
+        warm = true,
+        n = 100,
+        verbose = false,
+        timer = TimerOutput()
+    )
+    svars = get_secondary_variables(model)
+    context = model.context
+    function evaluate_variable(k, var, state, model, n)
+        target = state[k]
+        batch_count = length(entity_eachindex(target))
+        for _ in 1:n
+            if secondary_variables_use_device_kernels(context)
+                function update(batch)
+                    indices = entity_eachindex(target, batch, batch_count)
+                    update_secondary_variable!(
+                        target, var, model, state, indices)
+                    return nothing
+                end
+                Jutul.KernelExecution.launch_threaded_loop(update, batch_count, context)
+            else
+                update_secondary_variable!(target, var, model, state)
+                synchronize(model.context)
+            end
+        end
+    end
+    if verbose
+        jutul_message("Benchmark", "Starting benchmark of secondary variables...")
+    end
+    if warm
+        for (k, var) in pairs(svars)
+            evaluate_variable(k, var, state, model, 1)  # Warm-up with a single evaluation
+        end
+    end
+    for (k, var) in pairs(svars)
+        if verbose
+            jutul_message("Benchmark", "Benchmarking secondary variable $k...")
+        end
+        t_elapsed = @elapsed @timeit timer "$k" evaluate_variable(k, var, state, model, n)
+        if verbose
+            jutul_message("Benchmark", "Elapsed time for secondary variable $k: $t_elapsed seconds afer $n iterations")
+        end
+    end
+
+    return timer
 end

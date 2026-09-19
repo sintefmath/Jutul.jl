@@ -32,7 +32,7 @@ function convert_to_immutable_storage(x::ValueStateAD)
     return ValueStateAD(data)
 end
 
-const StateType = Union{NamedTuple,AbstractDict,JutulStorage}
+const StateType = Union{NamedTuple,AbstractDict,AbstractJutulStorage}
 
 as_value(x::StateType) = ValueStateAD(x)
 

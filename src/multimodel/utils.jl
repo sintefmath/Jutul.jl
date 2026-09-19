@@ -124,3 +124,31 @@ function initialize_extra_state_fields!(state, mm::MultiModel; kwarg...)
     end
     return state
 end
+
+function benchmark_secondary_variables(model::MultiModel, state;
+        verbose = false,
+        warm = true,
+        n = 20
+    )
+    to = TimerOutput()
+    if verbose
+        jutul_message("Benchmark", "Starting benchmark of secondary variables...")
+    end
+    if warm
+        if verbose
+            jutul_message("Benchmark", "Warming up secondary variables...")
+        end
+        for k in submodels_symbols(model)
+            benchmark_secondary_variables(model[k], state[k]; warm = true, n = 0)
+        end
+    end
+
+    for k in submodels_symbols(model)
+        if verbose
+            jutul_message("Benchmark", "Benchmarking secondary variables for submodel $k...")
+        end
+        submodel = model[k]
+        @timeit to "$k" benchmark_secondary_variables(submodel, state[k]; warm = false, n = n, timer = to, verbose = verbose)
+    end
+    return to
+end

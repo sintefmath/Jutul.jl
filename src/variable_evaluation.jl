@@ -86,17 +86,22 @@ end
 
 function update_secondary_variables!(storage, model)
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(storage.state, model, vars)
+    plan = get(data(storage.variable_definitions),
+        :secondary_variable_evaluation_plan, missing)
+    return update_secondary_variables_state!(
+        evaluation_state(storage), model, vars, plan)
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
     if is_state0
-        s = storage.state0
+        s = evaluation_state0(storage)
     else
-        s = storage.state
+        s = evaluation_state(storage)
     end
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(s, model, vars)
+    plan = get(data(storage.variable_definitions),
+        :secondary_variable_evaluation_plan, missing)
+    return update_secondary_variables_state!(s, model, vars, plan)
 end
 
 
@@ -115,15 +120,34 @@ function evaluate_all_secondary_variables(x::SimulationModel, state, parameters 
 end
 
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
+    return update_secondary_variables_state!(state, model, vars, missing)
+end
+
+secondary_variables_use_device_kernels(ctx) = ctx isa GPUJutulContext
+secondary_variables_thread_context(ctx) = ctx
+
+function update_secondary_variables_state!(state, model, vars, ::Missing)
     ctx = model.context
     var_pairs = pairs(vars)
     M = length(var_pairs)
     if M > 0
+        if secondary_variables_use_device_kernels(ctx)
+            for (symbol, var) in var_pairs
+                @tic "$symbol" begin
+                    v = state[symbol]
+                    update(i) = update_secondary_variable!(
+                        v, var, model, state, i:i)
+                    threaded_loop(update, number_of_entities(model, var), ctx)
+                end
+            end
+            return state
+        end
+        thread_ctx = secondary_variables_thread_context(ctx)
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
         K = number_of_entities(model, first_var)
         mb = minbatch(ctx)
-        N = nthreads(ctx)
+        N = nthreads(thread_ctx)
         N_batches = clamp(K ÷ mb, 1, N)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
@@ -143,9 +167,10 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                     update_secondary_variable!(v, var, model, state, ix)
                 end
             end
-            threaded_loop(batch_update, N_batches, ctx)
+            threaded_loop(batch_update, N_batches, thread_ctx)
         end
     end
+    return state
 end
 
 # Initializers
@@ -273,7 +298,7 @@ function build_variable_graph(model, primary = model.primary_variables, secondar
         push!(nodes, key)
         push!(edges, []) # No dependencies for parameters - they are static.
     end
-    for (key, var) in secondary
+    for (key, var) in pairs(secondary)
         dep = get_dependencies(var, model)
         push!(nodes, key)
         push!(edges, dep)

@@ -535,15 +535,19 @@ function update_linearized_system_equation!(nz::Missing, r, model, equation::Jut
     return r
 end
 
+function update_linearized_system_equation!(
+        nz, r, model, equation, cache, storage)
+    return update_linearized_system_equation!(nz, r, model, equation, cache)
+end
+
 """
 Update equation based on currently stored properties
 """
 function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
-    state = storage.state
-    state0 = storage.state0
-    for i in 1:number_of_entities(model, eq)
-        prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
-    end
+    state = evaluation_state(storage)
+    state0 = evaluation_state0(storage)
+    prepare(i) = prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
+    threaded_loop(prepare, number_of_entities(model, eq), model.context)
     if eq_s isa AbstractArray
         update_equation_for_entity!(eq_s, eq, state, state0, model, dt)
     else
@@ -555,6 +559,7 @@ function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
             update_equation_for_entity!(cache, eq, state, state0, model, dt)
         end
     end
+    return nothing
 end
 
 @inline prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt) = nothing
@@ -618,7 +623,10 @@ Get the convergence criterion values for a given equation. Can be checked agains
 """
 function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 1.0, update_report = missing)
     n = number_of_equations_per_entity(model, eq)
-    @tic "default" e = vec(maximum(abs, r; dims=2))
+    # Reduce each equation row independently. Unlike maximum(...; dims = 2),
+    # this only transfers the final scalars and does not allocate a temporary
+    # backend array during every convergence check.
+    @tic "default" e = map(i -> maximum(absolute_value, view(r, i, :)), 1:n)
     if n == 1
         names = "R"
     else

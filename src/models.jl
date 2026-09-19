@@ -265,14 +265,15 @@ end
 
 Initialize primary variables and other state fields, given initial values as a Dict
 """
-function setup_state!(state, model::JutulModel, init_values::Union{JutulStorage, AbstractDict} = Dict(); T = float_type(model.context))
-    for (psym, pvar) in get_primary_variables(model)
+function setup_state!(state, model::JutulModel, init_values::Union{AbstractJutulStorage, AbstractDict} = Dict(); T = float_type(model.context))
+    for (psym, pvar) in pairs(get_primary_variables(model))
         initialize_variable_value!(state, model, pvar, psym, init_values, need_value = true, T = T)
     end
-    for (psym, svar) in get_secondary_variables(model)
+    for (psym, svar) in pairs(get_secondary_variables(model))
         initialize_variable_value!(state, model, svar, psym, init_values, need_value = false, T = T)
     end
     initialize_extra_state_fields!(state, model, T = T)
+    return state
 end
 
 """
@@ -293,7 +294,7 @@ function initialize_extra_state_fields!(state, ::Any, model; kwarg...)
 end
 
 function setup_parameters!(prm, data_domain, model, initializer::AbstractDict = Dict(); kwarg...)
-    for (psym, pvar) in get_parameters(model)
+    for (psym, pvar) in pairs(get_parameters(model))
         initialize_parameter_value!(prm, data_domain, model, pvar, psym, initializer; kwarg...)
     end
     return prm
@@ -463,9 +464,9 @@ function setup_storage!(storage, model::JutulModel; setup_linearized_system = tr
             end
         end
         # Both states now contain all parameters, ready to store.
-        storage[:state0] = state0
-        storage[:state] = state
-        storage[:parameters] = parameters
+        storage[:state0] = JutulStorage(state0)
+        storage[:state] = JutulStorage(state)
+        storage[:parameters] = JutulStorage(parameters)
         storage[:primary_variables] = reference_variables(storage, model, :primary)
     end
     @tic "model" setup_storage_model(storage, model)
@@ -553,7 +554,7 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; extra_sparsit
     end
     counter = 1
     num_equations_total = 0
-    for (sym, eq) in model.equations
+    for (sym, eq) in pairs(model.equations)
         num = number_of_equations_per_entity(model, eq)
         ne = number_of_entities(model, eq)
         n = num*ne
@@ -569,6 +570,7 @@ function setup_storage_equations!(eqs, storage, model::JutulModel; extra_sparsit
     end
     outstr *= "$num_equations_total equations total distributed over $counter groups.\n"
     @debug outstr
+    return nothing
 end
 
 
@@ -611,6 +613,12 @@ function get_sparse_arguments(storage, model, row_layout::ScalarLayout, col_layo
 end
 
 function get_sparse_arguments(storage, model, row_layout::T, col_layout::T) where T<:BlockMajorLayout
+    function push_and_convert!(dest, idx, ::Val{Num_t}) where Num_t
+        for i in idx
+            push!(dest, convert(Num_t, i))
+        end
+        return dest
+    end
     eq_storage = storage[:equations]
     primary_entities = get_primary_variable_ordered_entities(model)
     entity = only(primary_entities)
@@ -642,12 +650,8 @@ function get_sparse_arguments(storage, model, row_layout::T, col_layout::T) wher
     nv = length(S.I)
     sizehint!(I, nv)
     sizehint!(J, nv)
-    for i in S.I
-        push!(I, convert(it, i))
-    end
-    for j in S.J
-        push!(J, convert(it, j))
-    end
+    push_and_convert!(I, S.I, Val(it))
+    push_and_convert!(J, S.J, Val(it))
     return SparsePattern(I, J, ndof, ndof, row_layout, col_layout, block_size)
 end
 
@@ -722,14 +726,22 @@ function update_state_dependents!(storage, model::JutulModel, dt, forces; time =
 end
 
 """
-    update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN)
+    update_equations_and_apply_forces!(storage, model, dt, forces;
+        time = NaN, do_sync = true)
 
 Update the model equations and apply boundary conditions and forces. Does not fill linearized system.
+By default the model backend is synchronized after evaluation. Pass
+`do_sync=false` when a later evaluation boundary will synchronize it.
 """
-function update_equations_and_apply_forces!(storage, model, dt, forces; time = NaN, kwarg...)
+function update_equations_and_apply_forces!(storage, model, dt, forces;
+        time = NaN, do_sync::Bool = true, kwarg...)
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
     @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
+    if do_sync
+        synchronize(model.context)
+    end
+    return nothing
 end
 
 function apply_boundary_conditions!(storage, model::JutulModel)
@@ -746,12 +758,14 @@ Update the governing equations using the current set of primary variables, param
 """
 function update_equations!(storage, model, dt = nothing)
     update_equations!(storage, storage.equations, model.equations, model, dt)
+    return nothing
 end
 
 function update_equations!(storage, equations_storage, equations, model, dt)
     for (key, eq) in pairs(equations)
         @tic "$key" update_equation!(equations_storage[key], eq, storage, model, dt)
     end
+    return nothing
 end
 
 """
@@ -763,23 +777,28 @@ function update_linearized_system!(storage, model::JutulModel, executor = defaul
     eqs = model.equations
     eqs_storage = storage.equations
     eqs_views = storage.views.equations
-    update_linearized_system!(lsys, eqs, eqs_storage, eqs_views, model; kwarg...)
-    post_update_linearized_system!(lsys, executor, storage, model)
+    update_linearized_system!(lsys, eqs, eqs_storage, eqs_views, model;
+        storage = storage, kwarg...)
+    return post_update_linearized_system!(lsys, executor, storage, model)
 end
 
 function post_update_linearized_system!(lsys, executor, storage, model)
     # Do nothing.
 end
 
-function update_linearized_system!(lsys, equations, eqs_storage, eqs_views, model::JutulModel; equation_offset = 0, r = lsys.r_buffer, nzval = lsys.jac_buffer)
+function update_linearized_system!(lsys, equations, eqs_storage, eqs_views,
+        model::JutulModel; equation_offset = 0, r = lsys.r_buffer,
+        nzval = lsys.jac_buffer, storage = missing)
     for key in keys(equations)
         @tic "$key" begin
             eq = equations[key]
             eqs_s = eqs_storage[key]
             r_view = eqs_views[key]
-            update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s)
+            update_linearized_system_equation!(
+                nzval, r_view, model, eq, eqs_s, storage)
         end
     end
+    return nothing
 end
 
 """
@@ -953,14 +972,10 @@ function update_primary_variables!(primary_storage, dx, model::JutulModel, prima
 end
 
 function increment_norm(dX, state, model, X, pvar)
-    T = eltype(dX)
+    T = typeof(value(zero(eltype(dX))))
     scale = @something variable_scale(pvar) one(T)
-    max_v = sum_v = zero(T)
-    for dx in dX
-        dx_abs = abs(dx)
-        max_v = max(max_v, dx_abs)
-        sum_v += dx_abs
-    end
+    sum_v = sum_absolute_values(dX)
+    max_v = maximum_absolute_value(dX)
     return (sum = scale*sum_v, max = scale*max_v)
 end
 
@@ -987,11 +1002,11 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
     defs = storage.variable_definitions
     pvar = defs.primary_variables
     for k in keys(pvar)
-        report[k] = variable_change_report(state[k], state0[k], pvar[k])
+        report[k] = variable_change_report(state[k], state0[k], pvar[k], model.context)
     end
     svar = defs.secondary_variables
     for k in keys(svar)
-        report[k] = variable_change_report(state[k], state0[k], svar[k])
+        report[k] = variable_change_report(state[k], state0[k], svar[k], model.context)
     end
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_after_step!(storage, model.system, model, dt, forces; kwarg...)
@@ -999,13 +1014,13 @@ function update_after_step!(storage, model, dt, forces; kwarg...)
 
     # Synchronize previous state with new state
     for key in keys(pvar)
-        update_values!(state0[key], state[key])
+        update_values!(state0[key], state[key], model.context)
     end
     for key in keys(svar)
-        update_values!(state0[key], state[key])
+        update_values!(state0[key], state[key], model.context)
     end
     for key in defs.extra_variable_fields
-        update_values!(state0[key], state[key])
+        update_values!(state0[key], state[key], model.context)
     end
     return report
 end
@@ -1020,25 +1035,38 @@ function update_parameter_before_step!(prm_val, prm, storage, model, dt, forces)
     return prm_val
 end
 
-function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar) where T<:Real
-    max_dv = max_v = sum_dv = sum_v = zero(T)
-    @inbounds @simd for i in eachindex(X)
-        x = value(X[i])::T
-        dx = x - value(X0[i])
-
-        dx_abs = abs(dx)
-        max_dv = max(max_dv, dx_abs)
-        sum_dv += dx_abs
-
-        x_abs = abs(x)
-        max_v = max(max_v, x_abs)
-        sum_v += x_abs
-    end
-    return (dx = (sum = sum_dv, max = max_dv), x = (sum = sum_v, max = max_v), n = length(X))
+function variable_change_report(X::AbstractArray, X0::AbstractArray{T}, pvar,
+        ::JutulContext = DefaultContext()) where T<:Real
+    return (dx = (sum = sum_absolute_differences(X, X0),
+                  max = maximum_absolute_difference(X, X0)),
+            x = (sum = sum_absolute_values(X), max = maximum_absolute_value(X)),
+            n = length(X))
 end
 
 function variable_change_report(X, X0, pvar)
     return nothing
+end
+
+variable_change_report(X, X0, pvar, ::JutulContext) = nothing
+
+@inline absolute_value(x) = abs(value(x))
+@inline absolute_difference(x, x0) = abs(value(x) - x0)
+
+sum_absolute_values(x) = sum(absolute_value, x)
+sum_absolute_differences(x, x0) = mapreduce(absolute_difference, +, x, x0)
+
+function maximum_absolute_value(x)
+    if isempty(x)
+        return zero(typeof(value(zero(eltype(x)))))
+    end
+    return maximum(absolute_value, x)
+end
+
+function maximum_absolute_difference(x, x0)
+    if isempty(x)
+        return zero(typeof(value(zero(eltype(x)))))
+    end
+    return mapreduce(absolute_difference, max, x, x0)
 end
 
 function update_after_step!(storage, ::Any, model, dt, forces; time = NaN)
@@ -1051,33 +1079,43 @@ function get_output_state(storage, model)
     D = JUTUL_OUTPUT_TYPE()
     for k in model.output_variables
         if haskey(s0, k)
-            D[k] = copy(s0[k])
+            value = s0[k]
+            host_value = backend_to_host(model.context, value)
+            if host_value === value
+                D[k] = copy(value)
+            else
+                D[k] = host_value
+            end
         end
     end
     return D
 end
 
-function replace_values!(old, updated)
+function replace_values!(old, updated, context = DefaultContext())
     for f in keys(old)
         if haskey(updated, f)
-            update_values!(old[f], updated[f])
+            update_values!(old[f], updated[f], context)
         end
     end
+    return nothing
 end
 
 function reset_state_to_previous_state!(storage, model)
     # Replace primary variable values with those from previous state
-    replace_values!(storage.primary_variables, storage.state0)
+    replace_values!(storage.primary_variables, storage.state0, model.context)
     # Update secondary variables to be in sync with current primary values
     update_secondary_variables!(storage, model)
+    return storage
 end
 
 function reset_previous_state!(storage, model, state0)
-    replace_values!(storage.state0, state0)
+    replace_values!(storage.state0, state0, model.context)
+    return nothing
 end
 
 function reset_variables!(storage, model, new_vars; type = :state)
-    replace_values!(storage[type], new_vars)
+    replace_values!(storage[type], new_vars, model.context)
+    return nothing
 end
 
 function setup_equations_and_primary_variable_views!(storage, model)
@@ -1115,7 +1153,7 @@ function setup_primary_variable_views(storage, model, dx)
             nu = count_active_entities(model.domain, u)
             Dx = get_matrix_view(dx, np, nu, false, offset)
             local_offset = 0
-            for (pkey, p) in primary
+            for (pkey, p) in pairs(primary)
                 # This is a bit inefficient
                 if u != associated_entity(p)
                     continue
@@ -1129,7 +1167,7 @@ function setup_primary_variable_views(storage, model, dx)
         end
     else
         offset = 0
-        for (pkey, p) in primary
+        for (pkey, p) in pairs(primary)
             n = number_of_degrees_of_freedom(model, p)
             m = degrees_of_freedom_per_entity(model, p)
             rng = (offset+1):(n+offset)
