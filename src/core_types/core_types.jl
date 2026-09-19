@@ -641,13 +641,21 @@ maybe_convert_evaluation_state(
     state::ImmutableJutulStorage, context) = nothing
 
 @inline function evaluation_state(storage)
-    return haskey(storage, :evaluation_state) ?
-        storage.evaluation_state : storage.state
+    return get(storage, :evaluation_state, storage.state)
 end
 
 @inline function evaluation_state0(storage)
-    return haskey(storage, :evaluation_state0) ?
-        storage.evaluation_state0 : storage.state0
+    return get(storage, :evaluation_state0, storage.state0)
+end
+
+function evaluation_state(s::JutulSimulator)
+    storage = get_simulator_storage(s)
+    return evaluation_state(storage)
+end
+
+function evaluation_state0(s::JutulSimulator)
+    storage = get_simulator_storage(s)
+    return evaluation_state0(storage)
 end
 
 function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
@@ -713,6 +721,8 @@ end
 function Base.getproperty(S::ImmutableJutulStorage, name::Symbol)
     Base.getproperty(data(S), name)
 end
+
+Base.get(S::AbstractJutulStorage, name::Symbol, default) = get(data(S), name, default)
 
 Base.propertynames(S::AbstractJutulStorage) = keys(getfield(S, :data))
 
