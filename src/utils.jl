@@ -1257,23 +1257,25 @@ function benchmark_secondary_variables(model::SimulationModel, state;
         timer = TimerOutput()
     )
     svars = get_secondary_variables(model)
-
+    function evaluate_variable(k, var, state, model, n)
+        for _ in 1:n
+            update_secondary_variable!(state[k], var, model, state)
+            synchronize(model.context)
+        end
+    end
     if verbose
         jutul_message("Benchmark", "Starting benchmark of secondary variables...")
     end
     if warm
         for (k, var) in pairs(svars)
-            update_secondary_variable!(state[k], var, model, state)
+            evaluate_variable(k, var, state, model, 1)  # Warm-up with a single evaluation
         end
     end
     for (k, var) in pairs(svars)
         if verbose
             jutul_message("Benchmark", "Benchmarking secondary variable $k...")
         end
-        t_elapsed = @elapsed @timeit timer "$k" for _ in 1:n
-            update_secondary_variable!(state[k], var, model, state)
-            synchronize(model.context)
-        end
+        t_elapsed = @elapsed @timeit timer "$k" evaluate_variable(k, var, state, model, n)
         if verbose
             jutul_message("Benchmark", "Elapsed time for secondary variable $k: $t_elapsed seconds afer $n iterations")
         end
