@@ -1243,3 +1243,30 @@ function check_equal_perm(a, b)
     end
     return is_equal
 end
+
+function benchmark_secondary_variables(sim::JutulSimulator; warm = true, n = 20)
+    state = evaluation_state(sim)
+    model = get_simulator_model(sim)
+    return benchmark_secondary_variables(model, state; warm = warm, n = n)
+end
+
+function benchmark_secondary_variables(model::SimulationModel, state;
+        warm = true,
+        n = 20,
+        timer = TimerOutput()
+    )
+    svars = get_secondary_variables(model)
+
+    if warm
+        for (k, var) in pairs(svars)
+            update_secondary_variable!(state[k], var, model, state)
+        end
+    end
+    for (k, var) in pairs(svars)
+        @timeit timer "$k" for i in 1:n
+            update_secondary_variable!(state[k], var, model, state)
+        end
+    end
+
+    return timer
+end

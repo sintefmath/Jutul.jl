@@ -124,3 +124,19 @@ function initialize_extra_state_fields!(state, mm::MultiModel; kwarg...)
     end
     return state
 end
+
+function benchmark_secondary_variables(model::MultiModel, state; warm = true, n = 20)
+    to = TimerOutput()
+    if warm
+        for k in submodels_symbols(model)
+            benchmark_secondary_variables(model[k], state[k]; warm = true, n = 0)
+        end
+    end
+    for k in submodels_symbols(model)
+        @timeit to "$k" for i in 1:n
+            submodel = model[k]
+            benchmark_secondary_variables(submodel, state[k]; warm = warm, n = n, timer = to)
+        end
+    end
+    return to
+end
