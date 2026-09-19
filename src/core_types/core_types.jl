@@ -648,16 +648,6 @@ end
     return get(storage, :evaluation_state0, storage.state0)
 end
 
-function evaluation_state(s::JutulSimulator)
-    storage = get_simulator_storage(s)
-    return evaluation_state(storage)
-end
-
-function evaluation_state0(s::JutulSimulator)
-    storage = get_simulator_storage(s)
-    return evaluation_state0(storage)
-end
-
 function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
     if S isa JutulStorage
         @assert isempty(kwarg)

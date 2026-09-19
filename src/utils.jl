@@ -1265,6 +1265,7 @@ function benchmark_secondary_variables(model::SimulationModel, state;
     for (k, var) in pairs(svars)
         @timeit timer "$k" for _ in 1:n
             update_secondary_variable!(state[k], var, model, state)
+            synchronize(model.context)
         end
     end
 

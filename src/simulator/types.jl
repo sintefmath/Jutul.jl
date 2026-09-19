@@ -47,6 +47,16 @@ function get_simulator_storage(sim)
     return sim.storage
 end
 
+function evaluation_state(s::JutulSimulator)
+    storage = get_simulator_storage(s)
+    return evaluation_state(storage)
+end
+
+function evaluation_state0(s::JutulSimulator)
+    storage = get_simulator_storage(s)
+    return evaluation_state0(storage)
+end
+
 function get_prepare_step_handler(sim::JutulSimulator)
     storage = get_simulator_storage(sim)
     return get_prepare_step_handler(storage)
