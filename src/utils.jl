@@ -1244,28 +1244,39 @@ function check_equal_perm(a, b)
     return is_equal
 end
 
-function benchmark_secondary_variables(sim::JutulSimulator; warm = true, n = 100)
+function benchmark_secondary_variables(sim::JutulSimulator; kwarg...)
     state = evaluation_state(sim)
     model = get_simulator_model(sim)
-    return benchmark_secondary_variables(model, state; warm = warm, n = n)
+    return benchmark_secondary_variables(model, state; kwarg...)
 end
 
 function benchmark_secondary_variables(model::SimulationModel, state;
         warm = true,
-        n = 20,
+        n = 100,
+        verbose = false,
         timer = TimerOutput()
     )
     svars = get_secondary_variables(model)
 
+    if verbose
+        jutul_message("Benchmark", "Starting benchmark of secondary variables...")
+    end
     if warm
         for (k, var) in pairs(svars)
             update_secondary_variable!(state[k], var, model, state)
         end
     end
     for (k, var) in pairs(svars)
-        @timeit timer "$k" for _ in 1:n
+        if verbose
+            jutul_message("Benchmark", "Benchmarking secondary variable $k...")
+        end
+        t_elapsed = @time @timeit timer "$k" for _ in 1:n
+            println("Benchmarking $k")
             update_secondary_variable!(state[k], var, model, state)
             synchronize(model.context)
+        end
+        if verbose
+            jutul_message("Benchmark", "Elapsed time for secondary variable $k: $t_elapsed seconds afer $n iterations")
         end
     end
 
