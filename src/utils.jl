@@ -1255,6 +1255,7 @@ function benchmark_secondary_variables(model::SimulationModel, state;
         n = 100,
         verbose = false,
         fake_kernel = false,
+        use_kernel = secondary_variables_use_device_kernels(model.context),
         timer = TimerOutput()
     )
     svars = get_secondary_variables(model)
@@ -1264,14 +1265,18 @@ function benchmark_secondary_variables(model::SimulationModel, state;
         target = state[k]
         batch_count = length(entity_eachindex(target))
         for _ in 1:n
-            @timeit local_timer "$k" if secondary_variables_use_device_kernels(context) || fake_kernel
+            @timeit local_timer "$k" if use_kernel || fake_kernel
                 function update(batch)
                     indices = entity_eachindex(target, batch, batch_count)
                     update_secondary_variable!(
                         target, var, model, state, indices)
                     return nothing
                 end
-                Jutul.KernelExecution.launch_threaded_loop(update, batch_count, context)
+                if use_kernel
+                    Jutul.KernelExecution.launch_threaded_loop(update, batch_count, context)
+                else
+                    threaded_loop(update, batch_count, context)
+                end
                 synchronize(model.context)
             else
                 update_secondary_variable!(target, var, model, state)
