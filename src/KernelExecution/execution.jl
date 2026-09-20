@@ -594,6 +594,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
         return KernelAbstractionsContext(ctx.backend;
             float_type = float_type(ctx),
             index_type = index_type(ctx),
+            linear_float_type = linear_float_type(ctx),
+            linear_index_type = linear_index_type(ctx),
             matrix_layout = matrix_layout(source),
             workgroupsize = ctx.workgroupsize,
             minbatch = minbatch(ctx),
@@ -1079,7 +1081,7 @@ Base.@noinline function transfer_to_backend(sim::Simulator,
     storage_cpu = sim.storage
     model = Adapt.adapt(ctx, model_cpu)
 
-    lsys = Adapt.adapt(ctx, storage_cpu.LinearizedSystem)
+    lsys = Adapt.adapt(linear_solver_context(ctx), storage_cpu.LinearizedSystem)
     storage = adapt_simulation_storage(ctx, storage_cpu, model, lsys)
     data(storage)[:views] = setup_equations_and_primary_variable_views(
         storage, model, lsys.r_buffer, lsys.dx_buffer
@@ -1171,7 +1173,7 @@ function transfer_multimodel_to_backend(sim::Simulator,
     align_cross_terms_to_linearized_system!(storage_setup, model_setup)
 
     model = Adapt.adapt(ctx, model_setup)
-    lsys = Adapt.adapt(ctx, storage_setup.LinearizedSystem)
+    lsys = Adapt.adapt(linear_solver_context(ctx), storage_setup.LinearizedSystem)
     converted = OrderedDict{Symbol, Any}()
 
     ignored = (
@@ -1310,7 +1312,11 @@ end
     @inbounds for pos in rowptr[row]:(rowptr[row + 1] - 1)
         value_row += nzval[pos]*x[colval[pos]]
     end
-    @inbounds y[row] = alpha*value_row + beta*y[row]
+    if iszero(beta)
+        @inbounds y[row] = alpha*value_row
+    else
+        @inbounds y[row] = alpha*value_row + beta*y[row]
+    end
 end
 
 function LinearAlgebra.mul!(y::AbstractVector,

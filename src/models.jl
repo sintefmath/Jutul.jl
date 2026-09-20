@@ -673,7 +673,7 @@ function setup_linearized_system!(storage, model::JutulModel)
 end
 
 function setup_linearized_system(sparse_arg, model)
-    context = model.context
+    context = linear_solver_context(model.context)
     return LinearizedSystem(sparse_arg, context, matrix_layout(context))
 end
 
@@ -936,7 +936,7 @@ end
 
 function solve_and_update!(storage, model::JutulModel, dt = nothing; linear_solver = nothing, recorder = nothing, executor = default_executor(), kwarg...)
     lsys = storage.LinearizedSystem
-    context = model.context
+    context = linear_solver_context(model.context)
     t_solve = @elapsed begin
         @tic "linear solve" (ok, n, history) = linear_solve!(lsys, linear_solver, context, model, storage, dt, recorder, executor)
     end

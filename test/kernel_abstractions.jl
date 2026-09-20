@@ -2,8 +2,31 @@ using Test
 using Jutul
 using KernelAbstractions
 using SparseArrays
+using LinearAlgebra
 import Adapt
 import Jutul.KernelExecution: secondary_variable_evaluation_plan
+
+@testset "KA CSR multiplication with zero beta" begin
+    for T in (Float32, Float64)
+        context = KernelAbstractionsContext(KernelAbstractions.CPU();
+            float_type = T, index_type = Int32)
+        @test Jutul.linear_float_type(context) === T
+        @test Jutul.linear_index_type(context) === Int32
+        matrix = sparse([1, 2], [1, 2], T[2, 3], 2, 2)
+        csr = Adapt.adapt(context,
+            Jutul.StaticSparsityMatrixCSR(copy(matrix')))
+        result = fill(T(NaN), 2)
+        mul!(result, csr, T[1, 2], one(T), zero(T))
+        @test result == T[2, 6]
+        mul!(result, csr, T[1, 2], one(T), one(T))
+        @test result == T[4, 12]
+    end
+    mixed_context = KernelAbstractionsContext(KernelAbstractions.CPU();
+        float_type = Float32, index_type = Int32,
+        linear_float_type = Float64, linear_index_type = Int64)
+    @test Jutul.linear_float_type(mixed_context) === Float64
+    @test Jutul.linear_index_type(mixed_context) === Int64
+end
 
 const mixed_cross_term_prepare_count = Ref(0)
 

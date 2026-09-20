@@ -1,5 +1,7 @@
 """
     KernelAbstractionsContext(backend; float_type=Float64, index_type=Int,
+                              linear_float_type=float_type,
+                              linear_index_type=index_type,
                               matrix_layout=EquationMajorLayout(),
                               workgroupsize=256, minbatch=minbatch(nothing),
                               use_kernels_for_secondary=!is_cpu_backend,
@@ -23,11 +25,15 @@ accelerator backends, which require kernel evaluation for device arrays.
 `secondary_async` additionally controls whether independent secondary-property
 kernels are launched asynchronously.
 
+`float_type` and `index_type` select assembly and state storage. The
+`linear_float_type` and `linear_index_type` keywords select the linearized
+system and solver storage, and default to the corresponding assembly types.
+
 With `reduce_memory=true`, TPFA conservation laws without face-variable fluxes
 use fused equation assembly, computing cell half-face flux values on the fly
 instead of retaining them in backend storage.
 """
-struct KernelAbstractionsContext{B, F, I, L} <: GPUJutulContext
+struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
     backend::B
     matrix_layout::L
     workgroupsize::Int
@@ -40,13 +46,15 @@ end
 function KernelAbstractionsContext(backend;
         float_type::Type{F} = Float64,
         index_type::Type{I} = Int,
+        linear_float_type::Type{LF} = float_type,
+        linear_index_type::Type{LI} = index_type,
         use_kernels_for_secondary = missing,
         secondary_async = missing,
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
         minbatch = 1000,
         reduce_memory = true
-    ) where {F, I}
+    ) where {F, I, LF, LI}
     if !(backend isa KernelAbstractions.Backend)
         throw(ArgumentError("backend must be a KernelAbstractions.Backend"))
     end
@@ -55,6 +63,12 @@ function KernelAbstractionsContext(backend;
     end
     if !(I <: Integer) || I === Bool
         throw(ArgumentError("index_type must be a non-Bool Integer type"))
+    end
+    if !(LF <: AbstractFloat)
+        throw(ArgumentError("linear_float_type must be an AbstractFloat type"))
+    end
+    if !(LI <: Integer) || LI === Bool
+        throw(ArgumentError("linear_index_type must be a non-Bool Integer type"))
     end
     if workgroupsize <= 0
         throw(ArgumentError("workgroupsize must be positive"))
@@ -80,7 +94,7 @@ function KernelAbstractionsContext(backend;
         throw(ArgumentError(
             "secondary_async=true requires use_kernels_for_secondary=true"))
     end
-    return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout)}(
+    return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
         use_kernels_for_secondary, secondary_async, reduce_memory
     )
@@ -88,6 +102,8 @@ end
 
 float_type(::KernelAbstractionsContext{B, F}) where {B, F} = F
 index_type(::KernelAbstractionsContext{B, F, I}) where {B, F, I} = I
+linear_float_type(::KernelAbstractionsContext{B, F, I, L, LF}) where {B, F, I, L, LF} = LF
+linear_index_type(::KernelAbstractionsContext{B, F, I, L, LF, LI}) where {B, F, I, L, LF, LI} = LI
 nzval_index_type(ctx::KernelAbstractionsContext) = index_type(ctx)
 matrix_layout(ctx::KernelAbstractionsContext) = ctx.matrix_layout
 nthreads(::KernelAbstractionsContext) = 1
@@ -114,6 +130,8 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
     return KernelAbstractionsContext(ctx.backend;
         float_type = float_type(ctx),
         index_type = index_type(ctx),
+        linear_float_type = linear_float_type(ctx),
+        linear_index_type = linear_index_type(ctx),
         matrix_layout = adjoint(matrix_layout(ctx)),
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
@@ -121,6 +139,22 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         secondary_async = ctx.secondary_async,
         reduce_memory = ctx.reduce_memory
     )
+end
+
+function linear_solver_context(ctx::KernelAbstractionsContext)
+    if linear_float_type(ctx) === float_type(ctx) &&
+            linear_index_type(ctx) === index_type(ctx)
+        return ctx
+    end
+    return KernelAbstractionsContext(ctx.backend;
+        float_type = linear_float_type(ctx),
+        index_type = linear_index_type(ctx),
+        matrix_layout = matrix_layout(ctx),
+        workgroupsize = ctx.workgroupsize,
+        minbatch = minbatch(ctx),
+        use_kernels_for_secondary = ctx.use_kernels_for_secondary,
+        secondary_async = ctx.secondary_async,
+        reduce_memory = ctx.reduce_memory)
 end
 
 

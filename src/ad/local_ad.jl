@@ -41,8 +41,8 @@ export local_ad
 @inline local_ad(v, ::Nothing) = as_value(v)
 @inline local_ad(v, i) = v
 
-@inline function new_entity_index(state::LocalStateAD{T, I, E}, index::I) where {T, I, E}
-    return LocalStateAD{T, I, E}(index, getfield(state, :data))
+@inline function new_entity_index(state::LocalStateAD{T, I, E}, index::Integer) where {T, I, E}
+    return LocalStateAD{T, I, E}(convert(I, index), getfield(state, :data))
 end
 
 @inline function new_entity_index(x, index)
