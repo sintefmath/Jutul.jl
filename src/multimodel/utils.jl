@@ -152,3 +152,13 @@ function benchmark_secondary_variables(model::MultiModel, state;
     end
     return to
 end
+
+# function benchmark_secondary_variables(sim::Simulator{<:Any, <:MultiModel, <:Any}; kwarg...)
+#     # state = evaluation_state(sim)
+#     model = get_simulator_model(sim)
+#     state = JutulStorage()
+#     for k in submodels_symbols(model)
+#         state[k] = evaluation_state(sim.storage[k])
+#     end
+#     return benchmark_secondary_variables(model, state; kwarg...)
+# end

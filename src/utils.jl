@@ -1254,15 +1254,17 @@ function benchmark_secondary_variables(model::SimulationModel, state;
         warm = true,
         n = 100,
         verbose = false,
+        fake_kernel = false,
         timer = TimerOutput()
     )
     svars = get_secondary_variables(model)
+    dummy_timer = TimerOutput()
     context = model.context
-    function evaluate_variable(k, var, state, model, n)
+    function evaluate_variable(k, var, state, model, n, local_timer)
         target = state[k]
         batch_count = length(entity_eachindex(target))
         for _ in 1:n
-            if secondary_variables_use_device_kernels(context)
+            @timeit local_timer "$k" if secondary_variables_use_device_kernels(context) || fake_kernel
                 function update(batch)
                     indices = entity_eachindex(target, batch, batch_count)
                     update_secondary_variable!(
@@ -1270,6 +1272,7 @@ function benchmark_secondary_variables(model::SimulationModel, state;
                     return nothing
                 end
                 Jutul.KernelExecution.launch_threaded_loop(update, batch_count, context)
+                synchronize(model.context)
             else
                 update_secondary_variable!(target, var, model, state)
                 synchronize(model.context)
@@ -1281,14 +1284,14 @@ function benchmark_secondary_variables(model::SimulationModel, state;
     end
     if warm
         for (k, var) in pairs(svars)
-            evaluate_variable(k, var, state, model, 1)  # Warm-up with a single evaluation
+            evaluate_variable(k, var, state, model, 1, dummy_timer)  # Warm-up with a single evaluation
         end
     end
-    for (k, var) in pairs(svars)
+    @timeit timer "secondary variables" for (k, var) in pairs(svars)
         if verbose
             jutul_message("Benchmark", "Benchmarking secondary variable $k...")
         end
-        t_elapsed = @elapsed @timeit timer "$k" evaluate_variable(k, var, state, model, n)
+        t_elapsed = @elapsed evaluate_variable(k, var, state, model, n, timer)
         if verbose
             jutul_message("Benchmark", "Elapsed time for secondary variable $k: $t_elapsed seconds afer $n iterations")
         end
