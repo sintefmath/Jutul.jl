@@ -865,7 +865,11 @@ function backend_copyto!(destination::AbstractArray, source::AbstractArray)
     source_backend = KernelAbstractions.get_backend(source)
     if backend isa KernelAbstractions.CPU &&
             !(source_backend isa KernelAbstractions.CPU)
-        if applicable(KernelAbstractions.copyto!,
+        if eltype(destination) != eltype(source)
+            # Backend transfer hooks copy raw elements and require matching
+            # element types. Convert on the host after copying device data.
+            copyto!(destination, Adapt.adapt(Array, source))
+        elseif applicable(KernelAbstractions.copyto!,
                 source_backend, destination, source)
             # Repeated host mirrors are pinned during backend transfer. Queue
             # the device-to-host copy directly into that storage instead of
@@ -876,6 +880,14 @@ function backend_copyto!(destination::AbstractArray, source::AbstractArray)
             # Avoid scalar iteration for backends without a direct copy hook.
             copyto!(destination, Adapt.adapt(Array, source))
         end
+    elseif !(backend isa KernelAbstractions.CPU) &&
+            source_backend isa KernelAbstractions.CPU &&
+            eltype(destination) != eltype(source)
+        converted = convert.(eltype(destination), source)
+        KernelAbstractions.copyto!(backend, destination, converted)
+        # The backend copy may be queued asynchronously. Keep the temporary
+        # conversion buffer alive until that copy has completed.
+        KernelAbstractions.synchronize(backend)
     elseif applicable(KernelAbstractions.copyto!, backend, destination, source)
         # Host-evaluated submodels own their source buffers for the duration of
         # the simulation. Queue their copies on the backend so a structured
