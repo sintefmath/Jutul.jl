@@ -158,7 +158,7 @@ function smooth!(x::AbstractVector, state::AbstractSmootherState,
     same_backend(matrix_backend(A), state.backend) ||
         throw(ArgumentError("smoother and matrix must use the same backend"))
     if zero_initial
-        fill_backend!(x, zero(eltype(x)), matrix_backend(A), matrix_block_size(A))
+        fill_backend!(x, zero(eltype(x)), matrix_backend(A), matrix_batch_size(A))
     end
     for _ in 1:Int(steps)
         smoother_residual!(state, A, x, b)

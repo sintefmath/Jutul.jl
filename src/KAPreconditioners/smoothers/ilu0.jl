@@ -347,7 +347,7 @@ function setup_smoother(A::StaticSparsityMatrixCSR, config::ILU0;
                       symbolic.upper_offsets,
                       backend_copy(matrix_backend(A), symbolic.upper_rows),
                       symbolic.rowptr, symbolic.colval, config,
-                      matrix_backend(A), matrix_block_size(A), matrix_nrows(A))
+                      matrix_backend(A), matrix_batch_size(A), matrix_nrows(A))
     update_smoother!(state, A)
 end
 
@@ -372,7 +372,7 @@ function setup_smoother(A::StaticSparsityMatrixCSR, config::DILU;
                       symbolic.upper_offsets,
                       backend_copy(backend, symbolic.upper_rows),
                       symbolic.rowptr, symbolic.colval, config,
-                      backend, matrix_block_size(A), matrix_nrows(A))
+                      backend, matrix_batch_size(A), matrix_nrows(A))
     update_smoother!(state, A)
 end
 

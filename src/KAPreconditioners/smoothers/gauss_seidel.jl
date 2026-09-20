@@ -16,7 +16,7 @@ function setup_smoother(A::StaticSparsityMatrixCSR{Tv},
     correction = zeros(Tv, n)
     residual = zeros(Tv, n)
     state = GaussSeidelState(A, inverse_diagonal, correction, residual,
-        config, matrix_backend(A), matrix_block_size(A), n)
+        config, matrix_backend(A), matrix_batch_size(A), n)
     update_smoother!(state, A)
 end
 

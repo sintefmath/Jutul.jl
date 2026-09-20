@@ -323,7 +323,7 @@ function LinearAlgebra.mul!(y::Vector, A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector
                             x::Vector) where {Tv,Ti}
     length(y) == matrix_nrows(A) || throw(DimensionMismatch())
     length(x) == matrix_ncols(A) || throw(DimensionMismatch())
-    foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
+    foreach_cpu_row(matrix_nrows(A), matrix_batch_size(A)) do i
         value = csr_row_product(A, x, i, eltype(y))
         @inbounds y[i] = value
     end
@@ -427,7 +427,7 @@ end
 
 function residual!(r::Vector, A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                     x::Vector, b::Vector) where {Tv,Ti}
-    foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
+    foreach_cpu_row(matrix_nrows(A), matrix_batch_size(A)) do i
         value = csr_row_product(A, x, i, eltype(r))
         @inbounds r[i] = b[i] - value
     end

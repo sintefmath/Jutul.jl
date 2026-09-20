@@ -17,7 +17,7 @@ end
 # object identity.
 @inline same_backend(first, second) = typeof(first) === typeof(second)
 
-function matrix_block_size(A::StaticSparsityMatrixCSR)
+function matrix_batch_size(A::StaticSparsityMatrixCSR)
     minbatch = A.minbatch
     if matrix_backend(A) isa KernelAbstractions.CPU
         return Int(minbatch)
@@ -32,7 +32,7 @@ function matrix_kernel_block_size(A::StaticSparsityMatrixCSR)
     if matrix_backend(A) isa KernelAbstractions.CPU
         return 128
     else
-        return matrix_block_size(A)
+        return matrix_batch_size(A)
     end
 end
 
@@ -152,7 +152,7 @@ function csr_matrix(A::SparseMatrixCSC{Tv}; backend = nothing,
 end
 
 function csr_matrix(A::StaticSparsityMatrixCSR;
-        backend = matrix_backend(A), block_size = matrix_block_size(A))
+        backend = matrix_backend(A), block_size = matrix_batch_size(A))
     if backend === matrix_backend(A)
         return A
     else
@@ -178,7 +178,7 @@ function host_csr(A::StaticSparsityMatrixCSR)
     colval = host_prefix(A.colval, nnz(A))
     nzval = host_prefix(A.nzval, nnz(A))
     return csr_matrix(rowptr, colval, nzval, size(A, 1), size(A, 2);
-        block_size=matrix_block_size(A))
+        block_size=matrix_batch_size(A))
 end
 
 function host_prefix_reusing(old::Vector{T}, source::AbstractVector{T},
@@ -194,7 +194,7 @@ function host_csr_reusing(A::StaticSparsityMatrixCSR{Tv, Ti}, old) where {Tv, Ti
         colval = host_prefix_reusing(old.colval, A.colval, nnz(A))
         nzval = host_prefix_reusing(old.nzval, A.nzval, nnz(A))
         return csr_matrix(rowptr, colval, nzval, size(A, 1), size(A, 2);
-            block_size=matrix_block_size(A))
+            block_size=matrix_batch_size(A))
     end
     return host_csr(A)
 end

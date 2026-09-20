@@ -78,8 +78,8 @@ end
     @test C !== csr_matrix(A)
     @test eltype(C.rowptr) == Int32
     @test eltype(csr_matrix(A; index_type=Int64).rowptr) == Int64
-    @test KAPreconditioners.matrix_block_size(C) == 128
-    @test KAPreconditioners.matrix_block_size(
+    @test KAPreconditioners.matrix_batch_size(C) == 128
+    @test KAPreconditioners.matrix_batch_size(
         csr_matrix(A; block_size = 32)) == 32
     x = collect(1.0:size(A, 1))
     y = similar(x)

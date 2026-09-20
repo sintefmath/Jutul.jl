@@ -965,7 +965,7 @@ function galerkin_structure(A::StaticSparsityMatrixCSR{Tv,Ti}, P::Prolongation{T
 
     nzval = host_buffer(old_nzval, Tv, coarse_nnz; zeroed=true)
     Ac = csr_matrix(rowptr, colval, nzval, nc, nc;
-        block_size = matrix_block_size(A))
+        block_size = matrix_batch_size(A))
     counts = host_buffer(optional_property(workspace, :ti1),
                           Ti, coarse_nnz; zeroed=true)
     with_setup_rows(nc) do II, tid
@@ -1582,7 +1582,7 @@ function setup_amg(A::StaticSparsityMatrixCSR{Tv,Ti}, options::AMGOptions=AMGOpt
     workspace = SetupWorkspace(Tv, Ti)
     levels = build_hierarchy(A, options; workspace=workspace)
     AMGHierarchy{Tv,Ti}(levels, workspace, options, matrix_backend(A),
-                        matrix_block_size(levels[1].A),
+                        matrix_batch_size(levels[1].A),
                         host_prefix(A.rowptr, matrix_nrows(A) + 1),
                         host_prefix(A.colval, matrix_nonzeros(A)), 0, Inf, 0)
 end

@@ -24,7 +24,7 @@ end
 function galerkin!(coarse::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                     fine::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
                     P::Prolongation, G::GalerkinMap) where {Tv,Ti}
-    foreach_cpu_row(matrix_nonzeros(coarse), matrix_block_size(coarse)) do k
+    foreach_cpu_row(matrix_nonzeros(coarse), matrix_batch_size(coarse)) do k
         value = zero(Tv)
         @inbounds @simd for t in G.offsets[k]:(G.offsets[k+1]-1)
             value += conj(P.nzval[G.p_left[t]]) * fine.nzval[G.a_index[t]] *
@@ -119,7 +119,7 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
         release_replaced_backend_storage!(H.backend)
         H.pending_replaced_storage = 0
     end
-    H.block_size = matrix_block_size(H.levels[1].A)
+    H.block_size = matrix_batch_size(H.levels[1].A)
     reset_solve_history!(H)
 end
 

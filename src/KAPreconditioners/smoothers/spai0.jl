@@ -104,7 +104,7 @@ function setup_smoother(A::StaticSparsityMatrixCSR{Tv}, config::SPAI0=SPAI0();
         residual = nothing
     end
     state = SPAI0State(diagonal, temporary, residual, config,
-                       backend, matrix_block_size(A), n)
+                       backend, matrix_batch_size(A), n)
     update_smoother!(state, A)
 end
 
@@ -123,7 +123,7 @@ function update_smoother!(state::SPAI0State{D},
     require_smoother_size_and_backend(state, A, "SPAI0")
     diagonal = state.diagonal
     damping = state.config.damping
-    foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
+    foreach_cpu_row(matrix_nrows(A), matrix_batch_size(A)) do i
         aii = zero(eltype(diagonal))
         scale = zero(damping)
         @inbounds for k in A.rowptr[i]:(A.rowptr[i+1]-1)
@@ -205,7 +205,7 @@ function smooth_result!(x, A::StaticSparsityMatrixCSR, b, state::SPAI0State, ste
 end
 
 function spai0_step_cpu!(dst, src, A, b, diagonal)
-    foreach_cpu_row(matrix_nrows(A), matrix_block_size(A)) do i
+    foreach_cpu_row(matrix_nrows(A), matrix_batch_size(A)) do i
         value = b[i]
         @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i+1]-1)
             value -= A.nzval[k] * src[A.colval[k]]
