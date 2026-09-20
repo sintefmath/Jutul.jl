@@ -481,10 +481,10 @@ lower_solve_arguments(state::DILUState, b) = (
     state.rowptr, state.colval)
 upper_solve_arguments(state::ILU0State, x) = (
     x, state.work, state.factors, state.inverse_diagonal,
-    state.rowptr, state.colval, state.config.damping)
+    state.rowptr, state.colval, smoother_damping(state))
 upper_solve_arguments(state::DILUState, x) = (
     x, state.work, state.values, state.inverse_diagonal,
-    state.rowptr, state.colval, state.config.damping)
+    state.rowptr, state.colval, smoother_damping(state))
 
 function ilu_solve!(x, state::Union{ILU0State,DILUState}, b)
     ensure_smoother_work!(state, b)
@@ -518,7 +518,7 @@ function ilu_solve_cpu!(x, state::ILU0State, b, work)
         end
         work[i] = value
     end
-    damping = state.config.damping
+    damping = smoother_damping(state)
     @inbounds for i in state.n:-1:1
         value = work[i]
         for k in rowptr[i]:(rowptr[i + 1] - 1)
@@ -550,7 +550,7 @@ function ilu_solve_cpu!(x, state::DILUState, b, work)
         end
         work[i] = inverse_diagonal[i] * value
     end
-    damping = state.config.damping
+    damping = smoother_damping(state)
     @inbounds for i in state.n:-1:1
         correction = zero(eltype(x))
         for k in rowptr[i]:(rowptr[i + 1] - 1)
@@ -573,10 +573,10 @@ lower_smooth_arguments(state::DILUState, A, x, b) = (
     state.rowptr, state.colval)
 upper_smooth_arguments(state::ILU0State, x) = (
     x, state.residual, state.work, state.factors, state.inverse_diagonal,
-    state.rowptr, state.colval, state.config.damping)
+    state.rowptr, state.colval, smoother_damping(state))
 upper_smooth_arguments(state::DILUState, x) = (
     x, state.residual, state.work, state.values, state.inverse_diagonal,
-    state.rowptr, state.colval, state.config.damping)
+    state.rowptr, state.colval, smoother_damping(state))
 
 function ilu_smooth_result!(x, A::StaticSparsityMatrixCSR, b,
                             state::Union{ILU0State,DILUState})
@@ -612,7 +612,7 @@ function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
         end
         work[i] = value
     end
-    damping = state.config.damping
+    damping = smoother_damping(state)
     @inbounds for i in state.n:-1:1
         value = work[i]
         for k in rowptr[i]:(rowptr[i + 1] - 1)
@@ -647,7 +647,7 @@ function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
         end
         work[i] = inverse_diagonal[i] * value
     end
-    damping = state.config.damping
+    damping = smoother_damping(state)
     @inbounds for i in state.n:-1:1
         value = work[i]
         for k in rowptr[i]:(rowptr[i + 1] - 1)
@@ -671,7 +671,7 @@ end
 
 function apply_correction!(x, state::Union{ILU0State,DILUState}, residual)
     ilu_solve!(state.residual, state, residual)
-    axpy!(x, state.residual, one(state.config.damping), state.backend,
+    axpy!(x, state.residual, one(smoother_damping(state)), state.backend,
            state.block_size)
     x
 end

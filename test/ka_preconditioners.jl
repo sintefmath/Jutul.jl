@@ -1,6 +1,7 @@
 using Jutul
 using Jutul.KAPreconditioners
 using JLArrays
+using KernelAbstractions
 import Jutul.Krylov: gmres
 using LinearAlgebra
 using SparseArrays
@@ -48,6 +49,45 @@ function poisson_2d(n, scale=1.0)
     T = spdiagm(-1 => fill(-scale, n-1), 0 => fill(4scale, n), 1 => fill(-scale, n-1))
     E = spdiagm(-1 => fill(-scale, n-1), 1 => fill(-scale, n-1))
     kron(sparse(I, n, n), T) + kron(E, sparse(I, n, n))
+end
+
+@testset "Float32 KA preconditioner scalars" begin
+    A = poisson_2d(5, 1.0f0)
+    @test eltype(A) === Float32
+    @test KAPreconditioners.matrix_scalar_type(
+        SVector{2, Float32}) === Float32
+    @test KAPreconditioners.candidate_count(
+        Float32[1, 0.6, 0.4],
+        ExtendedIInterpolation(0.25, 4, 2, true)) == 2
+
+    for backend in (KernelAbstractions.CPU(), JLBackend())
+        C = csr_matrix(A; backend=backend)
+        @test eltype(C.nzval) === Float32
+        strong = KAPreconditioners.strength(C, 0.25, 0.9)
+        @test eltype(strong) === Bool
+
+        rhs = ones(Float32, size(A, 1))
+        if backend isa KernelAbstractions.CPU
+            b = rhs
+        else
+            b = JLArray(rhs)
+        end
+        for config in (SPAI0(1, 0.7), ILU0(1, 0.7), DILU(1, 0.7))
+            state = setup_smoother(C, config)
+            @test eltype(state) === Float32
+            @test KAPreconditioners.smoother_damping(state) === Float32(0.7)
+            x = similar(b)
+            KAPreconditioners.apply!(x, state, b)
+            @test all(isfinite, Array(x))
+        end
+
+        H = setup_amg(C, AMGOptions(
+            smoother=SPAI0(1, 0.7), coarse_size=8))
+        @test eltype(H) === Float32
+        @test all(level -> eltype(level.A.nzval) === Float32, H.levels)
+        @test KAPreconditioners.smoother_damping(
+            H.levels[1].smoother) === Float32(0.7)
+    end
 end
 
 function sparse_prolongation(P)

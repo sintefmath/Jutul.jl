@@ -107,6 +107,9 @@ end
 operator_nrows(amg::AMGPreconditioner) = amg.dim[1]
 
 function apply!(x, amg::AMGPreconditioner, y, alpha = 1.0, beta = 0.0)
+    T = KAPreconditioners.matrix_scalar_type(eltype(x))
+    alpha = convert(T, alpha)
+    beta = convert(T, beta)
     if iszero(beta)
         apply_ka_amg!(x, amg.factor, y)
         isone(alpha) || lmul!(alpha, x)
@@ -182,6 +185,9 @@ end
 
 function apply!(x, smoother::KASmootherPreconditioner,
         y, alpha = 1.0, beta = 0.0)
+    T = KAPreconditioners.matrix_scalar_type(eltype(x))
+    alpha = convert(T, alpha)
+    beta = convert(T, beta)
     smoother_x, smoother_y = ka_smoother_vectors(smoother, x, y)
     if iszero(beta)
         apply_ka_smoother!(smoother_x, smoother.factor, smoother_y)

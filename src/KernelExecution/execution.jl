@@ -1335,6 +1335,9 @@ function LinearAlgebra.mul!(y::AbstractVector,
         A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, B},
         x::AbstractVector, alpha::Number, beta::Number) where {
             Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+    scalar_type = KAPreconditioners.matrix_scalar_type(eltype(y))
+    alpha = convert(scalar_type, alpha)
+    beta = convert(scalar_type, beta)
     kernel! = ka_csr_mul_kernel!(A.backend)
     event = kernel!(y, A.nzval, A.colval, A.rowptr, x, alpha, beta; ndrange = size(A, 1))
     if !isnothing(event)

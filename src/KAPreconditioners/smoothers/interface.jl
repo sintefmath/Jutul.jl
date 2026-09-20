@@ -34,6 +34,16 @@ Base.eltype(state::GaussSeidelState) = eltype(state.inverse_diagonal)
 Base.eltype(state::ILU0State) = eltype(state.factors)
 Base.eltype(state::DILUState) = eltype(state.values)
 
+function smoother_damping(state::SPAI0State)
+    T = matrix_real_type(eltype(state.diagonal))
+    return convert(T, state.config.damping)
+end
+
+function smoother_damping(state::Union{GaussSeidelState,ILU0State,DILUState})
+    T = matrix_real_type(eltype(state.inverse_diagonal))
+    return convert(T, state.config.damping)
+end
+
 function check_smoother_dimensions(x, A::StaticSparsityMatrixCSR, b)
     length(x) == matrix_ncols(A) || throw(DimensionMismatch("solution length does not match matrix columns"))
     length(b) == matrix_nrows(A) || throw(DimensionMismatch("right-hand side length does not match matrix rows"))

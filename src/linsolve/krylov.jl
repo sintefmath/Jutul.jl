@@ -58,7 +58,7 @@ end
 
 function preconditioner(krylov::AbstractKrylov, sys, context, model, storage, recorder)
     M = krylov.preconditioner
-    Ft = float_type(context)
+    Ft = eltype(vector_residual(sys))
     if isnothing(M)
         op = I
     else
@@ -85,7 +85,7 @@ function linear_solve!(sys::LSystem,
                 )
     cfg = krylov.config
     prec = krylov.preconditioner
-    Ft = float_type(context)
+    Ft = eltype(r)
     sys = krylov_scale_system!(sys, krylov, dt)
     t_prep = @elapsed @tic "prepare" prepare_linear_solve!(sys)
     op = linear_operator(sys)

@@ -20,6 +20,9 @@ import Jutul.KernelExecution: secondary_variable_evaluation_plan
         @test result == T[2, 6]
         mul!(result, csr, T[1, 2], one(T), one(T))
         @test result == T[4, 12]
+        fill!(result, T(NaN))
+        mul!(result, csr, T[1, 2], 1.0, 0.0)
+        @test result == T[2, 6]
     end
     mixed_context = KernelAbstractionsContext(KernelAbstractions.CPU();
         float_type = Float32, index_type = Int32,

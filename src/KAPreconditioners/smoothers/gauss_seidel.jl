@@ -74,12 +74,12 @@ function gauss_seidel_smooth!(x, A, b, state, steps, rows;
     start = 1
     if !isnothing(residual) && !zero_initial
         gauss_seidel_correction!(x, state.correction, A, residual,
-            state.inverse_diagonal, state.config.damping, rows)
+            state.inverse_diagonal, smoother_damping(state), rows)
         start = 2
     end
     for _ in start:steps
         gauss_seidel_sweep!(x, A, b, state.inverse_diagonal,
-            state.config.damping, rows)
+            smoother_damping(state), rows)
     end
     x
 end
@@ -105,10 +105,10 @@ function apply!(x::Vector, state::GaussSeidelState, b::Vector)
     # methods above for its down and up cycles.
     fill!(x, zero(eltype(x)))
     gauss_seidel_sweep!(x, state.matrix, b, state.inverse_diagonal,
-        state.config.damping, 1:state.n)
+        smoother_damping(state), 1:state.n)
     residual!(state.residual, state.matrix, x, b)
     gauss_seidel_correction!(x, state.correction, state.matrix,
-        state.residual, state.inverse_diagonal, state.config.damping,
+        state.residual, state.inverse_diagonal, smoother_damping(state),
         state.n:-1:1)
     x
 end

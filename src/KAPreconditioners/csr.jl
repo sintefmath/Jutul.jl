@@ -2,6 +2,16 @@ matrix_nrows(A::StaticSparsityMatrixCSR) = size(A, 1)
 matrix_ncols(A::StaticSparsityMatrixCSR) = size(A, 2)
 matrix_nonzeros(A::StaticSparsityMatrixCSR) = nnz(A)
 
+function matrix_scalar_type(::Type{T}) where T
+    if T <: Number
+        return T
+    else
+        return eltype(T)
+    end
+end
+
+matrix_real_type(::Type{T}) where T = real(matrix_scalar_type(T))
+
 function matrix_backend(A::StaticSparsityMatrixCSR)
     if isnothing(A.backend)
         return KernelAbstractions.get_backend(A.nzval)

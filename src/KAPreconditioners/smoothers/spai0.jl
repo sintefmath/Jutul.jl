@@ -113,7 +113,7 @@ function update_smoother!(state::SPAI0State, A::StaticSparsityMatrixCSR)
     n = matrix_nrows(A)
     kernel! = spai0_setup_kernel!(
         matrix_backend(A), matrix_kernel_block_size(A))
-    kernel!(state.diagonal, A.rowptr, A.colval, A.nzval, state.config.damping,
+    kernel!(state.diagonal, A.rowptr, A.colval, A.nzval, smoother_damping(state),
             n; ndrange=n)
     state
 end
@@ -122,7 +122,7 @@ function update_smoother!(state::SPAI0State{D},
         A::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector}) where {D<:Vector,Tv,Ti}
     require_smoother_size_and_backend(state, A, "SPAI0")
     diagonal = state.diagonal
-    damping = state.config.damping
+    damping = smoother_damping(state)
     foreach_cpu_row(matrix_nrows(A), matrix_batch_size(A)) do i
         aii = zero(eltype(diagonal))
         scale = zero(damping)
@@ -170,7 +170,7 @@ function apply_correction!(x, state::SPAI0State, residual)
     backend = state.backend
     kernel! = spai0_apply_kernel!(backend, state.block_size)
     kernel!(state.temporary, residual, state.diagonal, length(x); ndrange=length(x))
-    axpy!(x, state.temporary, one(state.config.damping), backend,
+    axpy!(x, state.temporary, one(smoother_damping(state)), backend,
            state.block_size)
     x
 end

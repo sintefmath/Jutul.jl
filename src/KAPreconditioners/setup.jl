@@ -20,6 +20,9 @@ end
 function strength(A::StaticSparsityMatrixCSR{Tv,Ti}, theta::Real, max_row_sum::Real=1.0,
                    reuse=nothing) where {Tv,Ti}
     backend = matrix_backend(A)
+    scalar_type = matrix_real_type(Tv)
+    theta = convert(scalar_type, theta)
+    max_row_sum = convert(scalar_type, max_row_sum)
     number_of_nonzeros = matrix_nonzeros(A)
     n = matrix_nrows(A)
     if reuse isa AbstractVector{Bool} && buffer_backend_matches(reuse, backend) &&
@@ -647,8 +650,9 @@ end
         min(length(vals), interpolation.max_elements)
     end
     if interpolation.truncation > 0
-        cutoff = interpolation.truncation *
-                 candidate_score(vals[1], interpolation.norm_p)
+        leading_score = candidate_score(vals[1], interpolation.norm_p)
+        truncation = convert(typeof(leading_score), interpolation.truncation)
+        cutoff = truncation * leading_score
         @inbounds for q in 1:count
             if candidate_score(vals[q], interpolation.norm_p) < cutoff
                 return q - 1
