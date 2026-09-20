@@ -74,21 +74,32 @@ function ka_storage_eltype(ctx::KernelAbstractionsContext,
     return StaticArrays.similar_type(T, ka_storage_eltype(ctx, eltype(T)))
 end
 
+adapt_interpolation_lookup(to, ::Missing, ::Type{T}) where T = missing
+
+function adapt_interpolation_lookup(to, lookup, ::Type{T}) where T
+    adapted = Adapt.adapt(to, lookup)
+    return (x0 = convert(T, adapted.x0),
+        dx = convert(T, adapted.dx), n = adapted.n)
+end
+
 function Adapt.adapt_structure(to, interpolant::LinearInterpolant)
+    X = Adapt.adapt(to, interpolant.X)
     return LinearInterpolant(
-        Adapt.adapt(to, interpolant.X),
+        X,
         Adapt.adapt(to, interpolant.F),
-        Adapt.adapt(to, interpolant.lookup)
+        adapt_interpolation_lookup(to, interpolant.lookup, eltype(X))
     )
 end
 
 function Adapt.adapt_structure(to, interpolant::BilinearInterpolant)
+    X = Adapt.adapt(to, interpolant.X)
+    Y = Adapt.adapt(to, interpolant.Y)
     return BilinearInterpolant(
-        Adapt.adapt(to, interpolant.X),
-        Adapt.adapt(to, interpolant.Y),
+        X,
+        Y,
         Adapt.adapt(to, interpolant.F),
-        Adapt.adapt(to, interpolant.lookup_x),
-        Adapt.adapt(to, interpolant.lookup_y)
+        adapt_interpolation_lookup(to, interpolant.lookup_x, eltype(X)),
+        adapt_interpolation_lookup(to, interpolant.lookup_y, eltype(Y))
     )
 end
 

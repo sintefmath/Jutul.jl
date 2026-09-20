@@ -31,6 +31,28 @@ import Jutul.KernelExecution: secondary_variable_evaluation_plan
     @test Jutul.linear_index_type(mixed_context) === Int64
 end
 
+@testset "KA interpolation lookup precision" begin
+    context = KernelAbstractionsContext(KernelAbstractions.CPU();
+        float_type = Float32, index_type = Int32)
+    linear = Jutul.get_1d_interpolator(
+        Float64[0, 1, 2], Float64[0, 0.5, 1])
+    linear = Adapt.adapt(context, linear)
+    @test eltype(linear.X) === Float32
+    @test eltype(linear.F) === Float32
+    @test typeof(linear.lookup.x0) === Float32
+    @test typeof(linear.lookup.dx) === Float32
+    @test typeof(linear(0.5f0)) === Float32
+
+    bilinear = Jutul.BilinearInterpolant(
+        Float64[0, 1], Float64[0, 1], Float64[0 1; 1 2])
+    bilinear = Adapt.adapt(context, bilinear)
+    @test typeof(bilinear.lookup_x.x0) === Float32
+    @test typeof(bilinear.lookup_x.dx) === Float32
+    @test typeof(bilinear.lookup_y.x0) === Float32
+    @test typeof(bilinear.lookup_y.dx) === Float32
+    @test typeof(bilinear(0.5f0, 0.5f0)) === Float32
+end
+
 const mixed_cross_term_prepare_count = Ref(0)
 
 mutable struct SynchronizationCountingContext <: Jutul.JutulContext
