@@ -97,11 +97,16 @@ function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = no
         else
             bz = size(e, 1)
         end
+        # Match the subsystem residual's scalar type and storage backend.
+        buffer = similar(vec(subsystems[i, i].r_buffer), ni*bz)
+        fill!(buffer, zero(eltype(buffer)))
         if i == 1
-            push!(schur_buffer, zeros(ni*bz))
+            push!(schur_buffer, buffer)
         else
             # Need two buffers of same size for Schur complement
-            b = (zeros(ni*bz), zeros(ni*bz))
+            second_buffer = similar(buffer)
+            fill!(second_buffer, zero(eltype(second_buffer)))
+            b = (buffer, second_buffer)
             push!(schur_buffer, b)
         end
         n += ni
