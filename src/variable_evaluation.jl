@@ -86,10 +86,8 @@ end
 
 function update_secondary_variables!(storage, model)
     vars = storage.variable_definitions.secondary_variables
-    plan = get(data(storage.variable_definitions),
-        :secondary_variable_evaluation_plan, missing)
     return update_secondary_variables_state!(
-        evaluation_state(storage), model, vars, plan)
+        evaluation_state(storage), model, vars)
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
@@ -99,9 +97,7 @@ function update_secondary_variables!(storage, model, is_state0::Bool)
         s = evaluation_state(storage)
     end
     vars = storage.variable_definitions.secondary_variables
-    plan = get(data(storage.variable_definitions),
-        :secondary_variable_evaluation_plan, missing)
-    return update_secondary_variables_state!(s, model, vars, plan)
+    return update_secondary_variables_state!(s, model, vars)
 end
 
 
@@ -120,13 +116,6 @@ function evaluate_all_secondary_variables(x::SimulationModel, state, parameters 
 end
 
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
-    return update_secondary_variables_state!(state, model, vars, missing)
-end
-
-secondary_variables_use_device_kernels(ctx) = ctx isa GPUJutulContext
-secondary_variables_thread_context(ctx) = ctx
-
-function update_secondary_variables_state!(state, model, vars, ::Missing)
     ctx = model.context
     var_pairs = pairs(vars)
     M = length(var_pairs)
@@ -134,10 +123,15 @@ function update_secondary_variables_state!(state, model, vars, ::Missing)
         if secondary_variables_use_device_kernels(ctx)
             for (symbol, var) in var_pairs
                 @tic "$symbol" begin
-                    v = state[symbol]
-                    update(i) = update_secondary_variable!(
-                        v, var, model, state, i:i)
-                    threaded_loop(update, number_of_entities(model, var), ctx)
+                    if ctx isa KernelAbstractionsContext
+                        KernelExecution.secondary_variable_loop!(
+                            state, model, symbol, ctx)
+                    else
+                        v = state[symbol]
+                        update(i) = update_secondary_variable!(
+                            v, var, model, state, i:i)
+                        threaded_loop(update, number_of_entities(model, var), ctx)
+                    end
                 end
             end
             return state
@@ -172,6 +166,9 @@ function update_secondary_variables_state!(state, model, vars, ::Missing)
     end
     return state
 end
+
+secondary_variables_use_device_kernels(ctx) = ctx isa GPUJutulContext
+secondary_variables_thread_context(ctx) = ctx
 
 # Initializers
 function select_secondary_variables!(model)

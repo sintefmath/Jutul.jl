@@ -379,83 +379,6 @@ adapt_backend_value(ctx, x::AbstractVector{<:AbstractJutulStorage}) =
     tuple((adapt_backend_value(ctx, v) for v in x)...)
 adapt_backend_value(ctx, x) = Adapt.adapt(ctx, x)
 
-"""
-    secondary_variable_evaluation_plan(model, secondary)
-
-Build a CPU-side execution schedule for secondary variables. Each vector in
-the returned vector is one dependency level and contains
-`symbol => entity_count` entries. Variables in one level are independent and
-may be launched without an intermediate synchronization; the next level starts
-only after the backend has finished the preceding level.
-
-Symbols are stored as values in ordinary vectors rather than tuple parameters,
-so the plan type does not specialize on the model's property names. The plan is
-created while simulator storage is transferred and remains on the CPU.
-"""
-function secondary_variable_evaluation_plan(
-        model, secondary = model.secondary_variables)
-    nodes, dependencies = build_variable_graph(
-        model,
-        model.primary_variables,
-        model.secondary_variables,
-        model.parameters
-    )
-    order = sort_symbols(nodes, dependencies)
-    positions = Dict(symbol => index for (index, symbol) in enumerate(nodes))
-    number_of_roots = length(model.primary_variables) + length(model.parameters)
-    node_levels = zeros(Int, length(nodes))
-    for index in order
-        if index <= number_of_roots
-            continue
-        end
-        level = 1
-        for dependency in dependencies[index]
-            level = max(level, node_levels[positions[dependency]] + 1)
-        end
-        node_levels[index] = level
-    end
-    levels_by_symbol = Dict(
-        nodes[index] => node_levels[index]
-        for index in (number_of_roots + 1):length(nodes))
-
-    symbols = collect(keys(secondary))
-    if isempty(symbols)
-        return Vector{Vector{Pair{Symbol, Int}}}()
-    end
-    levels = map(symbol -> levels_by_symbol[symbol], symbols)
-    active_levels = sort!(unique(levels))
-    return map(active_levels) do level
-        entries = Pair{Symbol, Int}[]
-        for symbol in symbols
-            if levels_by_symbol[symbol] == level
-                variable = secondary[symbol]
-                push!(entries, symbol => number_of_entities(model, variable))
-            end
-        end
-        return entries
-    end
-end
-
-function update_secondary_variables_state!(state, model, vars,
-        plan::AbstractVector)
-    context = model.context
-    for level in plan
-        for (symbol, batch_count) in level
-            target = state[symbol]
-            variable = vars[symbol]
-            function update(batch)
-                indices = entity_eachindex(target, batch, batch_count)
-                update_secondary_variable!(
-                    target, variable, model, state, indices)
-                return nothing
-            end
-            launch_threaded_loop(update, batch_count, context)
-        end
-        synchronize(context)
-    end
-    return state
-end
-
 # Forces are created together with the CPU simulator. Move only force values
 # through this recursive interface: schedule and model containers stay on the
 # host, while arrays of actual force objects are transferred in one operation.
@@ -611,7 +534,6 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
             workgroupsize = ctx.workgroupsize,
             minbatch = minbatch(ctx),
             use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-            secondary_async = ctx.secondary_async,
             reduce_memory = reduce_memory
         )
     end
@@ -997,21 +919,7 @@ function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
         model, lsys = nothing)
     function adapt_variable_definitions(definitions)
         adapted = adapt_backend_value(ctx, definitions)
-        contents = data(adapted)
-        if ctx.secondary_async
-            plan = secondary_variable_evaluation_plan(
-                model,
-                adapted.secondary_variables
-            )
-            if contents isa NamedTuple
-                contents = merge(contents,
-                    (secondary_variable_evaluation_plan = plan,))
-            else
-                contents = copy(contents)
-                contents[:secondary_variable_evaluation_plan] = plan
-            end
-        end
-        return JutulStorage(contents)
+        return JutulStorage(data(adapted))
     end
 
     function state_references(state, definitions)

@@ -22,8 +22,6 @@ device backends always launch kernels.
 KernelAbstractions kernels. It defaults to `false` for the CPU backend, where
 the regular host-parallel path is generally preferable, and to `true` for
 accelerator backends, which require kernel evaluation for device arrays.
-`secondary_async` additionally controls whether independent secondary-property
-kernels are launched asynchronously.
 
 `float_type` and `index_type` select assembly and state storage. The
 `linear_float_type` and `linear_index_type` keywords select the linearized
@@ -39,7 +37,6 @@ struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
     workgroupsize::Int
     minbatch::Int
     use_kernels_for_secondary::Bool
-    secondary_async::Bool
     reduce_memory::Bool
 end
 
@@ -49,7 +46,6 @@ function KernelAbstractionsContext(backend;
         linear_float_type::Type{LF} = float_type,
         linear_index_type::Type{LI} = index_type,
         use_kernels_for_secondary = missing,
-        secondary_async = missing,
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
         minbatch = 1000,
@@ -77,26 +73,16 @@ function KernelAbstractionsContext(backend;
         throw(ArgumentError("minbatch must be positive"))
     end
     if ismissing(use_kernels_for_secondary)
-        # Preserve the previous explicit `secondary_async=true` CPU behavior,
-        # where that option also selected the kernel evaluation path.
-        use_kernels_for_secondary =
-            !(backend isa KernelAbstractions.CPU) || secondary_async === true
-    end
-    if ismissing(secondary_async)
-        secondary_async = use_kernels_for_secondary
+        use_kernels_for_secondary = !(backend isa KernelAbstractions.CPU)
     end
     if !use_kernels_for_secondary &&
             !(backend isa KernelAbstractions.CPU)
         throw(ArgumentError(
             "use_kernels_for_secondary=false requires a CPU backend"))
     end
-    if secondary_async && !use_kernels_for_secondary
-        throw(ArgumentError(
-            "secondary_async=true requires use_kernels_for_secondary=true"))
-    end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
-        use_kernels_for_secondary, secondary_async, reduce_memory
+        use_kernels_for_secondary, reduce_memory
     )
 end
 
@@ -136,7 +122,6 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-        secondary_async = ctx.secondary_async,
         reduce_memory = ctx.reduce_memory
     )
 end
@@ -153,7 +138,6 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-        secondary_async = ctx.secondary_async,
         reduce_memory = ctx.reduce_memory)
 end
 
@@ -210,12 +194,15 @@ function secondary_variable_loop!(state, model, k::Symbol,
         ctx::KernelAbstractionsContext; do_wait = true)
     dest = state[k]
     n = length(Jutul.entity_eachindex(dest))
+    if n == 0
+        return nothing
+    end
     var = model[k]
     deps = Tuple(Jutul.get_dependencies(var, model))
     dependencies = NamedTuple{deps}(ntuple(i -> state[deps[i]], length(deps)))
     kernel! = secondary_variable_update_kernel!(ctx.backend, ctx.workgroupsize)
     event = kernel!(dest, var, model, dependencies; ndrange = n)
-    if do_wait
+    if !isnothing(event) && do_wait
         wait(event)
     end
     return event

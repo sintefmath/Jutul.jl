@@ -4,7 +4,6 @@ using KernelAbstractions
 using SparseArrays
 using LinearAlgebra
 import Adapt
-import Jutul.KernelExecution: secondary_variable_evaluation_plan
 
 @testset "KA CSR multiplication with zero beta" begin
     for T in (Float32, Float64)
@@ -139,112 +138,11 @@ end
     @test isbitstype(typeof(kernel_interpolant))
 end
 
-struct SecondaryPlanA end
-struct SecondaryPlanB end
-struct SecondaryPlanC end
-struct SecondaryPlanD end
-
-struct SecondaryPlanTestModel{C, P, S, R}
-    context::C
-    primary_variables::P
-    secondary_variables::S
-    parameters::R
-end
-
-Jutul.get_dependencies(::SecondaryPlanA, model::SecondaryPlanTestModel) = (:X,)
-Jutul.get_dependencies(::SecondaryPlanB, model::SecondaryPlanTestModel) = (:A,)
-Jutul.get_dependencies(::SecondaryPlanC, model::SecondaryPlanTestModel) = (:X,)
-Jutul.get_dependencies(::SecondaryPlanD, model::SecondaryPlanTestModel) = (:B, :C)
-Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanA) = 7
-Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanB) = 7
-Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanC) = 3
-Jutul.number_of_entities(model::SecondaryPlanTestModel, ::SecondaryPlanD) = 3
-
-function Jutul.update_secondary_variable!(target, ::SecondaryPlanA,
-        model::SecondaryPlanTestModel, state, ix)
-    for i in ix
-        target[i] = state.X[i] + 1
-    end
-end
-
-function Jutul.update_secondary_variable!(target, ::SecondaryPlanB,
-        model::SecondaryPlanTestModel, state, ix)
-    for i in ix
-        target[i] = 2*state.A[i]
-    end
-end
-
-function Jutul.update_secondary_variable!(target, ::SecondaryPlanC,
-        model::SecondaryPlanTestModel, state, ix)
-    for i in ix
-        target[i] = state.X[i] - 1
-    end
-end
-
-function Jutul.update_secondary_variable!(target, ::SecondaryPlanD,
-        model::SecondaryPlanTestModel, state, ix)
-    for i in ix
-        target[i] = state.B[i] + state.C[i]
-    end
-end
-
-@testset "Secondary variable dependency levels" begin
-    variables = (B = SecondaryPlanB(), A = SecondaryPlanA(),
-        D = SecondaryPlanD(), C = SecondaryPlanC())
-    model = SecondaryPlanTestModel(
-        KernelAbstractionsContext(CPU();
-            use_kernels_for_secondary = true, workgroupsize = 4),
-        (X = nothing,), variables, NamedTuple())
-    plan = secondary_variable_evaluation_plan(model)
-    @test plan isa Vector{Vector{Pair{Symbol, Int}}}
-    @test plan == [[:A => 7, :C => 3], [:B => 7], [:D => 3]]
-
-    empty_model = SecondaryPlanTestModel(
-        model.context, model.primary_variables, NamedTuple(), NamedTuple())
-    empty_plan = secondary_variable_evaluation_plan(empty_model)
-    @test empty_plan isa Vector{Vector{Pair{Symbol, Int}}}
-    @test isempty(empty_plan)
-
-    state = (
-        X = collect(1.0:7.0),
-        A = zeros(7),
-        B = zeros(7),
-        C = zeros(3),
-        D = zeros(3)
-    )
-    Jutul.update_secondary_variables_state!(
-        state, model, variables, plan)
-    @test state.A == state.X .+ 1
-    @test state.B == 2 .* state.A
-    @test state.C == state.X[1:3] .- 1
-    @test state.D == state.B[1:3] .+ state.C
-
-    host_variables = (A = SecondaryPlanA(), C = SecondaryPlanC(),
-        B = SecondaryPlanB(), D = SecondaryPlanD())
-    host_model = SecondaryPlanTestModel(
-        KernelAbstractionsContext(CPU(); minbatch = 1),
-        (X = nothing,), host_variables, NamedTuple())
-    host_state = (
-        X = collect(1.0:7.0),
-        A = zeros(7),
-        B = zeros(7),
-        C = zeros(3),
-        D = zeros(3)
-    )
-    Jutul.update_secondary_variables_state!(
-        host_state, host_model, host_variables)
-    @test host_state.A == host_state.X .+ 1
-    @test host_state.B == 2 .* host_state.A
-    @test host_state.C == host_state.X[1:3] .- 1
-    @test host_state.D == host_state.B[1:3] .+ host_state.C
-end
-
 @testset "KernelAbstractions context" begin
     threshold_context = KernelAbstractionsContext(CPU();
         minbatch = 4, workgroupsize = 2)
     @test threshold_context.reduce_memory
     @test !threshold_context.use_kernels_for_secondary
-    @test !threshold_context.secondary_async
     @test minbatch(threshold_context) == 4
     @test minbatch(adjoint(threshold_context)) == 4
     @test !adjoint(threshold_context).use_kernels_for_secondary
@@ -252,14 +150,9 @@ end
     kernel_context = KernelAbstractionsContext(CPU();
         use_kernels_for_secondary = true)
     @test kernel_context.use_kernels_for_secondary
-    @test kernel_context.secondary_async
     @test adjoint(kernel_context).use_kernels_for_secondary
     @test !KernelAbstractionsContext(CPU(); reduce_memory = false).reduce_memory
     @test_throws ArgumentError KernelAbstractionsContext(CPU(); minbatch = 0)
-    compatibility_context = KernelAbstractionsContext(CPU();
-        secondary_async = true)
-    @test compatibility_context.use_kernels_for_secondary
-    @test compatibility_context.secondary_async
 
     small_result = zeros(Int, 4)
     small_event = Jutul.KernelExecution.launch_threaded_loop(
@@ -275,16 +168,12 @@ end
         )
         state0 = setup_state(model, Dict(:XVar => 0.0))
         cpu_simulator = Simulator(model, state0 = state0)
-        @test !haskey(cpu_simulator.storage.variable_definitions,
-            :secondary_variable_evaluation_plan)
         simulator = transfer_to_backend(cpu_simulator, CPU())
 
         @test simulator.model.context isa KernelAbstractionsContext
         @test !haskey(simulator.storage, :evaluation_state)
         @test evaluation_state(simulator.storage) === simulator.storage.state
         @test evaluation_state0(simulator.storage) === simulator.storage.state0
-        @test !haskey(simulator.storage.variable_definitions,
-            :secondary_variable_evaluation_plan)
         @test minbatch(simulator.storage.LinearizedSystem.jac) ==
             minbatch(simulator.model.context)
         @test simulator.model.primary_variables isa NamedTuple
@@ -299,14 +188,6 @@ end
             @test kernel_cache.entries isa KernelArgumentArray
             @test kernel_cache.jacobian_positions isa KernelArgumentArray
             @test isbitstype(typeof(kernel_cache))
-        end
-
-        if use_manual
-            kernel_simulator = transfer_to_backend(cpu_simulator,
-                KernelAbstractionsContext(CPU();
-                    use_kernels_for_secondary = true))
-            @test haskey(kernel_simulator.storage.variable_definitions,
-                :secondary_variable_evaluation_plan)
         end
 
         forces = setup_forces(model, sources = ScalarTestForce(1.0))
