@@ -216,7 +216,7 @@ function secondary_variable_loop!(state, model, k::Symbol,
     kernel! = secondary_variable_update_kernel!(ctx.backend, ctx.workgroupsize)
     event = kernel!(dest, var, model, dependencies; ndrange = n)
     if do_wait
-        # wait(event)
+        wait(event)
     end
     return event
 end
