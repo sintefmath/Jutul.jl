@@ -15,17 +15,17 @@ number_of_subsystems(ls::MultiLinearizedSystem) = size(ls.subsystems, 1)
 do_schur(sys) = sys.reduction == :schur_apply
 
 function prepare_linear_solve!(sys::MultiLinearizedSystem)
-    if do_schur(sys)
+    return if do_schur(sys)
         _, C, _, E, a, b = get_schur_blocks!(sys, true, update = true)
         b_buf, = sys.schur_buffer[2]
         # The following is the in-place version of a -= C*(E\b)
         n = length(E)
         @batch for i in 1:n
-            b_buf, = sys.schur_buffer[i+1]
+            b_buf, = sys.schur_buffer[i + 1]
             ldiv!(b_buf, E[i], b[i])
         end
         for i in 1:n
-            b_buf, = sys.schur_buffer[i+1]
+            b_buf, = sys.schur_buffer[i + 1]
             mul!(a, C[i], b_buf, -1.0, 1.0)
         end
     end
@@ -75,7 +75,8 @@ function linear_operator(sys::MultiLinearizedSystem; skip_red = false)
         residual_type = eltype(sys[1, 1].r)
         scalar_type = eltype(sys.r_buffer)
         apply! = get_schur_apply(
-            sys.schur_buffer, Val(residual_type), B, C, D, E)
+            sys.schur_buffer, Val(residual_type), B, C, D, E
+        )
         op = LinearOperator(scalar_type, n, n, false, false, apply!)
     else
         S = sys.subsystems
@@ -97,14 +98,14 @@ function get_schur_apply(schur_buffers, Tv, B, C, D, E)
 end
 
 function update_dx_from_vector!(sys::MultiLinearizedSystem, dx_from_solver; dx = sys.dx)
-    if do_schur(sys)
+    return if do_schur(sys)
         Δx = dx_from_solver
         _, C, D, E, _, b = get_schur_blocks!(sys)
         n = length(dx_from_solver)
         m = length(dx)
 
         x = view(dx, 1:n)
-        y = view(dx, (n+1):m)
+        y = view(dx, (n + 1):m)
 
         schur_dx_update!(x, y, C, D, E, b, sys, dx_from_solver, Δx, sys.schur_buffer)
     else
@@ -118,24 +119,24 @@ function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
     # dy = B = -E\(b - D*Δx) = E\(D*Δx - b)
     offset = 0
     n = length(D)
-    @inbounds for i in 1:n
+    return @inbounds for i in 1:n
         b_i = b[i]
         n = length(b_i)
-        buf_b, = buffers[i+1]
+        buf_b, = buffers[i + 1]
         mul!(buf_b, D[i], Δx)
         # now buf_b = D*Δx
         buf_b .-= b_i
-        y_i = view(y, (offset+1):(offset+n))
+        y_i = view(y, (offset + 1):(offset + n))
         ldiv!(y_i, E[i], buf_b)
         offset += length(b_i)
     end
 end
 
-@inline function schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β::T) where T
+@inline function schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β::T) where {T}
     @tic "spmv (schur)" begin
         n = length(D)
-        @batch for i = 1:n
-            @inbounds b_buf_1, b_buf_2 = schur_buffers[i+1]
+        @batch for i in 1:n
+            @inbounds b_buf_1, b_buf_2 = schur_buffers[i + 1]
             @inbounds D_i = D[i]
             @inbounds E_i = E[i]
             @inbounds C_i = C[i]
@@ -147,14 +148,14 @@ end
     return res
 end
 
-@inline function schur_mul!(res, schur_buffers, ::Val{r_type}, B, C, D, E, x, α, β) where r_type
+@inline function schur_mul!(res, schur_buffers, ::Val{r_type}, B, C, D, E, x, α, β) where {r_type}
     # This function does:
     # res ← β*res + α*(B*x - C*(E\(D*x)))
     n = size(B, 2)
     res_v = unsafe_reinterpret(r_type, res, n)
     x_v = unsafe_reinterpret(r_type, x, n)
     @tic "spmv (block)" mul!(res_v, B, x_v, α, β)
-    schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, true)
+    return schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, true)
 end
 
 function jacobian(sys::MultiLinearizedSystem)

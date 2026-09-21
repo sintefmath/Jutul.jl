@@ -1,16 +1,22 @@
 const KASimulationModel = SimulationModel{<:Any, <:Any, <:Any, <:KernelAbstractionsContext}
 
-function update_values!(v::AbstractArray{T}, next::AbstractArray{S},
-        context::KernelAbstractionsContext) where {T<:Real, S<:Real}
+function update_values!(
+        v::AbstractArray{T}, next::AbstractArray{S},
+        context::KernelAbstractionsContext
+    ) where {T <: Real, S <: Real}
     # Inputs supplied to reset_variables! commonly live in CPU memory. Move
     # them to the execution backend before launching the value-preserving
     # update kernel; GPU kernels cannot index the host array directly.
     next_backend = Adapt.adapt(context, next)
-    preserve_partials = Val(eltype(v) <: ForwardDiff.Dual &&
-        eltype(next_backend) <: Real && eltype(v) !== eltype(next_backend) &&
-        unpack_tag(v) isa JutulEntity)
-    strip_partials = Val(eltype(v) <: AbstractFloat &&
-        eltype(next_backend) <: ForwardDiff.Dual)
+    preserve_partials = Val(
+        eltype(v) <: ForwardDiff.Dual &&
+            eltype(next_backend) <: Real && eltype(v) !== eltype(next_backend) &&
+            unpack_tag(v) isa JutulEntity
+    )
+    strip_partials = Val(
+        eltype(v) <: AbstractFloat &&
+            eltype(next_backend) <: ForwardDiff.Dual
+    )
     if strip_partials isa Val{true}
         unpack_tag(next_backend)::JutulEntity
     end
@@ -37,8 +43,10 @@ end
 
 # Adapt uses the context as the adaptation target. Backend packages define how
 # their own backend converts an Array, while Jutul supplies the structural rules.
-function Adapt.adapt_storage(ctx::KernelAbstractionsContext,
-        a::AbstractArray{T}) where T
+function Adapt.adapt_storage(
+        ctx::KernelAbstractionsContext,
+        a::AbstractArray{T}
+    ) where {T}
     # Device arrays cannot safely own elements with references to host-managed
     # storage. Keep such arrays on the host; AssembleOnDevice submodels use
     # them only during host evaluation and transfer their numeric products.
@@ -58,28 +66,34 @@ Adapt.adapt_storage(::KernelAbstractionsContext, a::AbstractArray{Symbol}) = Tup
 transfer(ctx::KernelAbstractionsContext, x::AbstractArray) = Adapt.adapt(ctx, x)
 backend_to_host(::KernelAbstractionsContext, x) = Adapt.adapt(Array, x)
 
-ka_storage_eltype(::KernelAbstractionsContext, ::Type{T}) where T = T
-ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{T}) where {T<:AbstractFloat} =
+ka_storage_eltype(::KernelAbstractionsContext, ::Type{T}) where {T} = T
+ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{T}) where {T <: AbstractFloat} =
     float_type(ctx)
 ka_storage_eltype(::KernelAbstractionsContext, ::Type{Bool}) = Bool
-ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{T}) where {T<:Integer} =
+ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{T}) where {T <: Integer} =
     index_type(ctx)
-ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{Complex{T}}) where T =
+ka_storage_eltype(ctx::KernelAbstractionsContext, ::Type{Complex{T}}) where {T} =
     Complex{ka_storage_eltype(ctx, T)}
-ka_storage_eltype(ctx::KernelAbstractionsContext,
-        ::Type{ForwardDiff.Dual{Tag,T,N}}) where {Tag,T,N} =
-    ForwardDiff.Dual{Tag,ka_storage_eltype(ctx, T),N}
-function ka_storage_eltype(ctx::KernelAbstractionsContext,
-        ::Type{T}) where {T<:StaticArray}
+ka_storage_eltype(
+    ctx::KernelAbstractionsContext,
+    ::Type{ForwardDiff.Dual{Tag, T, N}}
+) where {Tag, T, N} =
+    ForwardDiff.Dual{Tag, ka_storage_eltype(ctx, T), N}
+function ka_storage_eltype(
+        ctx::KernelAbstractionsContext,
+        ::Type{T}
+    ) where {T <: StaticArray}
     return StaticArrays.similar_type(T, ka_storage_eltype(ctx, eltype(T)))
 end
 
-adapt_interpolation_lookup(to, ::Missing, ::Type{T}) where T = missing
+adapt_interpolation_lookup(to, ::Missing, ::Type{T}) where {T} = missing
 
-function adapt_interpolation_lookup(to, lookup, ::Type{T}) where T
+function adapt_interpolation_lookup(to, lookup, ::Type{T}) where {T}
     adapted = Adapt.adapt(to, lookup)
-    return (x0 = convert(T, adapted.x0),
-        dx = convert(T, adapted.dx), n = adapted.n)
+    return (
+        x0 = convert(T, adapted.x0),
+        dx = convert(T, adapted.dx), n = adapted.n,
+    )
 end
 
 function Adapt.adapt_structure(to, interpolant::LinearInterpolant)
@@ -103,7 +117,7 @@ function Adapt.adapt_structure(to, interpolant::BilinearInterpolant)
     )
 end
 
-function Adapt.adapt_structure(to, flow::PotentialFlow{AD}) where AD
+function Adapt.adapt_structure(to, flow::PotentialFlow{AD}) where {AD}
     return PotentialFlow(
         Adapt.adapt(to, flow.kgrad),
         Adapt.adapt(to, flow.upwind),
@@ -146,8 +160,10 @@ function Adapt.adapt_structure(to, d::TwoPointPotentialFlowHardCoded)
 end
 
 function Adapt.adapt_structure(to, eq::ConservationLaw{C, T, FT, N}) where {C, T, FT, N}
-    return ConservationLaw(Adapt.adapt(to, eq.flow_discretization), C, N;
-        flux = Adapt.adapt(to, eq.flux_type))
+    return ConservationLaw(
+        Adapt.adapt(to, eq.flow_discretization), C, N;
+        flux = Adapt.adapt(to, eq.flux_type)
+    )
 end
 
 function Adapt.adapt_structure(to, c::CompactAutoDiffCache)
@@ -159,8 +175,10 @@ function Adapt.adapt_structure(to, c::CompactAutoDiffCache)
     )
 end
 
-function Adapt.adapt_structure(to,
-        c::GenericAutoDiffCache{N, E, T}) where {N, E, T}
+function Adapt.adapt_structure(
+        to,
+        c::GenericAutoDiffCache{N, E, T}
+    ) where {N, E, T}
     entries = Adapt.adapt(to, c.entries)
     vpos = Adapt.adapt(to, c.vpos)
     variables = Adapt.adapt(to, c.variables)
@@ -169,7 +187,8 @@ function Adapt.adapt_structure(to,
     variable_map = Adapt.adapt(to, c.variable_map)
     return GenericAutoDiffCache{N, E, eltype(entries)}(
         entries, vpos, variables, positions, diagonal,
-      c.number_of_entities_target, c.number_of_entities_source, variable_map)
+        c.number_of_entities_target, c.number_of_entities_source, variable_map
+    )
 end
 
 function Adapt.adapt_structure(to, s::ConservationLawTPFAStorage)
@@ -183,23 +202,31 @@ function Adapt.adapt_structure(to, s::ConservationLawTPFAStorage)
     )
 end
 
-function Adapt.adapt_structure(to,
-        fused::FusedEquationAssemblyStorage{T}) where T
+function Adapt.adapt_structure(
+        to,
+        fused::FusedEquationAssemblyStorage{T}
+    ) where {T}
     return FusedEquationAssemblyStorage{T}(
         Adapt.adapt(to, fused.jacobian_positions),
-        Adapt.adapt(to, fused.timestep))
+        Adapt.adapt(to, fused.timestep)
+    )
 end
 
-function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
-        fused::FusedEquationAssemblyStorage{T}) where T
+function Adapt.adapt_structure(
+        ctx::KernelAbstractionsContext,
+        fused::FusedEquationAssemblyStorage{T}
+    ) where {T}
     target_type = ka_storage_eltype(ctx, T)
     return FusedEquationAssemblyStorage{target_type}(
         Adapt.adapt(ctx, fused.jacobian_positions),
-        Adapt.adapt(ctx, fused.timestep))
+        Adapt.adapt(ctx, fused.timestep)
+    )
 end
 
-function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
-        s::ConservationLawTPFAStorage)
+function Adapt.adapt_structure(
+        ctx::KernelAbstractionsContext,
+        s::ConservationLawTPFAStorage
+    )
     accumulation = Adapt.adapt(ctx, s.accumulation)
     can_fuse = ctx.reduce_memory && isnothing(s.half_face_flux_faces)
     if can_fuse
@@ -210,14 +237,18 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
             entry_type = ka_storage_eltype(ctx, eltype(cell_flux.entries))
             fused = FusedEquationAssemblyStorage{entry_type}(
                 Adapt.adapt(ctx, cell_flux.jacobian_positions),
-                Adapt.adapt(ctx, [zero(float_type(ctx))]))
+                Adapt.adapt(ctx, [zero(float_type(ctx))])
+            )
         end
         cell_flux = missing
         face_flux = nothing
     else
         if ismissing(s.half_face_flux_cells)
-            throw(ArgumentError(
-                "Cannot reconstruct TPFA half-face flux storage from fused assembly storage"))
+            throw(
+                ArgumentError(
+                    "Cannot reconstruct TPFA half-face flux storage from fused assembly storage"
+                )
+            )
         end
         cell_flux = Adapt.adapt(ctx, s.half_face_flux_cells)
         face_flux = Adapt.adapt(ctx, s.half_face_flux_faces)
@@ -225,7 +256,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
     end
     return ConservationLawTPFAStorage(
         accumulation, s.accumulation_symbol, cell_flux, face_flux, nothing,
-        fused)
+        fused
+    )
 end
 
 function Adapt.adapt_structure(to, state::LocalStateAD{T, I, E}) where {T, I, E}
@@ -240,7 +272,8 @@ end
 function Adapt.adapt_structure(to, state::MultiModelLocalStateAD{T, I, E}) where {T, I, E}
     adapted = Adapt.adapt(to, getfield(state, :data))
     return MultiModelLocalStateAD{typeof(adapted), I, E}(
-        getfield(state, :symbol), getfield(state, :index), adapted)
+        getfield(state, :symbol), getfield(state, :index), adapted
+    )
 end
 
 function Adapt.adapt_structure(to, perspective::LocalPerspectiveAD)
@@ -259,15 +292,19 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
     else
         execution_size = ctx.workgroupsize
     end
-    return StaticSparsityMatrixCSR(nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
-        nthreads = 1, minbatch = execution_size, thread_type = :serial)
+    return StaticSparsityMatrixCSR(
+        nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
+        nthreads = 1, minbatch = execution_size, thread_type = :serial
+    )
 end
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::LinearizedSystem)
     if !(lsys.jac isa StaticSparsityMatrixCSR)
-        throw(ArgumentError(
-            "KernelAbstractions transfer requires a CPU simulator built with ParallelCSRContext"
-        ))
+        throw(
+            ArgumentError(
+                "KernelAbstractions transfer requires a CPU simulator built with ParallelCSRContext"
+            )
+        )
     end
     jac = Adapt.adapt(ctx, lsys.jac)
     r_buffer = Adapt.adapt(ctx, lsys.r_buffer)
@@ -300,19 +337,25 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::LinearizedS
     return LinearizedSystem(jac, r, dx, jac_buffer, r_buffer, dx_buffer, lsys.matrix_layout)
 end
 
-function Adapt.adapt_structure(ctx::KernelAbstractionsContext,
-        block::LinearizedBlock{R, C}) where {R, C}
+function Adapt.adapt_structure(
+        ctx::KernelAbstractionsContext,
+        block::LinearizedBlock{R, C}
+    ) where {R, C}
     jac = Adapt.adapt(ctx, block.jac)
     nz = nonzeros(jac)
     buffer_eltype = ka_storage_eltype(ctx, eltype(block.jac_buffer))
     if eltype(nz) == buffer_eltype && length(nz) == length(block.jac_buffer)
         jac_buffer = nz
     else
-        throw(ArgumentError(
-            "KernelAbstractions transfer does not yet support block-valued off-diagonal Jacobians"))
+        throw(
+            ArgumentError(
+                "KernelAbstractions transfer does not yet support block-valued off-diagonal Jacobians"
+            )
+        )
     end
     return LinearizedBlock(
-        jac, jac_buffer, block.rowcol_block_size, R(), C(), Val(:assembled))
+        jac, jac_buffer, block.rowcol_block_size, R(), C(), Val(:assembled)
+    )
 end
 
 function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::MultiLinearizedSystem)
@@ -400,8 +443,10 @@ function preprocess_forces(sim, ctx::KernelAbstractionsContext, forces)
     end
 end
 
-function forces_for_timestep(sim, forces::BackendForces, timesteps,
-        step_index; per_step = false)
+function forces_for_timestep(
+        sim, forces::BackendForces, timesteps,
+        step_index; per_step = false
+    )
     return forces
 end
 
@@ -423,14 +468,18 @@ Base.iterate(forces::BackendForces, state...) = iterate(forces.device, state...)
 transfer_forces_to_backend(ctx::KernelAbstractionsContext, ::Nothing) = nothing
 transfer_forces_to_backend(ctx::KernelAbstractionsContext, force::JutulForce) =
     Adapt.adapt(ctx, force)
-transfer_forces_to_backend(ctx::KernelAbstractionsContext,
-    forces::AbstractVector{<:JutulForce}) = Adapt.adapt(ctx, forces)
+transfer_forces_to_backend(
+    ctx::KernelAbstractionsContext,
+    forces::AbstractVector{<:JutulForce}
+) = Adapt.adapt(ctx, forces)
 transfer_forces_to_backend(ctx::KernelAbstractionsContext, forces::NamedTuple) =
     map(force -> transfer_forces_to_backend(ctx, force), forces)
 transfer_forces_to_backend(ctx::KernelAbstractionsContext, forces::Tuple) =
     map(force -> transfer_forces_to_backend(ctx, force), forces)
-function transfer_forces_to_backend(ctx::KernelAbstractionsContext,
-        forces::AbstractDict)
+function transfer_forces_to_backend(
+        ctx::KernelAbstractionsContext,
+        forces::AbstractDict
+    )
     out = copy(forces)
     for (key, force) in pairs(forces)
         out[key] = transfer_forces_to_backend(ctx, force)
@@ -489,8 +538,10 @@ end
 
 function cpu_csr_model(model::SimulationModel)
     source = model.context
-    context = ParallelCSRContext(1;
-        matrix_layout = matrix_layout(source), thread_type = :serial)
+    context = ParallelCSRContext(
+        1;
+        matrix_layout = matrix_layout(source), thread_type = :serial
+    )
     return SimulationModel(
         model.domain, model.system, context, model.formulation,
         model.data_domain, model.primary_variables, model.secondary_variables,
@@ -500,16 +551,23 @@ function cpu_csr_model(model::SimulationModel)
 end
 
 function cpu_csr_model(model::MultiModel)
-    models = (; (key => cpu_csr_model(submodel)
-        for (key, submodel) in pairs(model.models))...)
-    outer = ParallelCSRContext(1;
-        matrix_layout = matrix_layout(model.context), thread_type = :serial)
+    models = (;
+        (
+            key => cpu_csr_model(submodel)
+                for (key, submodel) in pairs(model.models)
+        )...,
+    )
+    outer = ParallelCSRContext(
+        1;
+        matrix_layout = matrix_layout(model.context), thread_type = :serial
+    )
     if isnothing(model.groups)
         groups = nothing
     else
         groups = copy(model.groups)
     end
-    return MultiModel(models, multimodel_label(model);
+    return MultiModel(
+        models, multimodel_label(model);
         cross_terms = model.cross_terms,
         groups = groups,
         group_execution = model.group_execution,
@@ -525,7 +583,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
         source = submodel.context
         reduce_memory = ctx.reduce_memory &&
             group_execution_mode(model, key) == SolveFullyOnDevice
-        return KernelAbstractionsContext(ctx.backend;
+        return KernelAbstractionsContext(
+            ctx.backend;
             float_type = float_type(ctx),
             index_type = index_type(ctx),
             linear_float_type = linear_float_type(ctx),
@@ -537,8 +596,12 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
             reduce_memory = reduce_memory
         )
     end
-    models = (; (key => Adapt.adapt(backend_subcontext(key, submodel), submodel)
-        for (key, submodel) in pairs(model.models))...)
+    models = (;
+        (
+            key => Adapt.adapt(backend_subcontext(key, submodel), submodel)
+                for (key, submodel) in pairs(model.models)
+        )...,
+    )
     cross_terms = [Adapt.adapt(ctx, ct) for ct in model.cross_terms]
     if isnothing(model.groups)
         groups = nothing
@@ -546,7 +609,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
         groups = copy(model.groups)
     end
     label = multimodel_label(model)
-    return MultiModel(models, label;
+    return MultiModel(
+        models, label;
         cross_terms = cross_terms,
         groups = groups,
         group_execution = model.group_execution,
@@ -582,22 +646,27 @@ function host_substorage_mirror(storage, model)
         residual = missing
     else
         residual = zeros(
-            float_type(model.context), number_of_equations(model))
+            float_type(model.context), number_of_equations(model)
+        )
     end
     if ismissing(views.primary_variables)
         increment = missing
     else
         increment = zeros(
-            float_type(model.context), number_of_degrees_of_freedom(model))
+            float_type(model.context), number_of_degrees_of_freedom(model)
+        )
     end
     mirror[:views] = setup_equations_and_primary_variable_views(
-        mirror, model, residual, increment)
+        mirror, model, residual, increment
+    )
     return mirror
 end
 
-function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
+function setup_host_evaluation(
+        model_cpu, storage_cpu, model_backend,
         storage_backend, host_keys;
-        mixed_cross_terms_on_host::Bool = true)
+        mixed_cross_terms_on_host::Bool = true
+    )
     function is_host_key(key)
         return key in host_keys
     end
@@ -674,21 +743,24 @@ function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
     end
     cross_term_evaluation = HostCrossTermEvaluation(
         host_cross_terms, mixed_cross_terms, mixed_models,
-        mixed_cross_terms_on_host)
+        mixed_cross_terms_on_host
+    )
 
     if isnothing(model_backend.groups)
         groups = nothing
     else
         groups = copy(model_backend.groups)
     end
-    evaluation_model = MultiModel(models, multimodel_label(model_backend);
+    evaluation_model = MultiModel(
+        models, multimodel_label(model_backend);
         cross_terms = cross_terms,
         groups = groups,
         group_execution = model_backend.group_execution,
         context = model_cpu.context,
         reduction = model_backend.reduction,
         specialize = false,
-        specialize_ad = model_backend.specialize_ad)
+        specialize_ad = model_backend.specialize_ad
+    )
 
     # Start with backend-owned outer storage and replace only the pieces that
     # are deliberately evaluated on the host. This gives multimodel hooks a
@@ -702,12 +774,16 @@ function setup_host_evaluation(model_cpu, storage_cpu, model_backend,
     evaluation_data[:cross_terms] = cross_term_storage
     evaluation_storage = JutulStorage(evaluation_data)
     setup_multimodel_maps!(evaluation_storage, evaluation_model)
-    return HostEvaluationStorage(evaluation_model, evaluation_storage,
-        host_keys, cross_term_evaluation)
+    return HostEvaluationStorage(
+        evaluation_model, evaluation_storage,
+        host_keys, cross_term_evaluation
+    )
 end
 
-function prepare_host_transfer!(backend::KernelAbstractions.Backend,
-        value::Array)
+function prepare_host_transfer!(
+        backend::KernelAbstractions.Backend,
+        value::Array
+    )
     KernelAbstractions.pagelock!(backend, value)
     return value
 end
@@ -718,7 +794,8 @@ function host_transfer_root_array(value)
             Base.ReshapedArray,
             Base.ReinterpretArray,
             LinearAlgebra.Adjoint,
-            LinearAlgebra.Transpose}
+            LinearAlgebra.Transpose,
+        }
         value = parent(value)
     end
     return value
@@ -743,11 +820,13 @@ function prepare_host_transfer_value!(backend, value, seen::IdDict)
         prepare_host_transfer_value!(backend, value.accumulation, seen)
         if !ismissing(value.half_face_flux_cells)
             prepare_host_transfer_value!(
-                backend, value.half_face_flux_cells, seen)
+                backend, value.half_face_flux_cells, seen
+            )
         end
         if !ismissing(value.half_face_flux_faces)
             prepare_host_transfer_value!(
-                backend, value.half_face_flux_faces, seen)
+                backend, value.half_face_flux_faces, seen
+            )
         end
         if !isnothing(value.sources)
             prepare_host_transfer_value!(backend, value.sources, seen)
@@ -762,16 +841,19 @@ function prepare_host_evaluation_transfer!(backend, host::HostEvaluationStorage)
         host_storage = host.storage[key]
         prepare_host_transfer_value!(backend, host_storage.equations, seen)
         prepare_host_transfer_value!(
-            backend, host_storage.views.primary_variables, seen)
+            backend, host_storage.views.primary_variables, seen
+        )
         prepare_host_transfer_value!(
-            backend, host_storage.views.equations, seen)
+            backend, host_storage.views.equations, seen
+        )
     end
     for key in host.cross_term_evaluation.mixed_models
         host_storage = host.storage[key]
         for state_key in keys(host_storage.state)
             if !haskey(host_storage.parameters, state_key)
                 prepare_host_transfer_value!(
-                    backend, host_storage.state[state_key], seen)
+                    backend, host_storage.state[state_key], seen
+                )
             end
         end
     end
@@ -785,8 +867,11 @@ end
 
 function backend_copyto!(destination::AbstractArray, source::AbstractArray)
     if length(destination) != length(source)
-        throw(DimensionMismatch(
-            "backend copy requires equal lengths, got $(length(destination)) and $(length(source))"))
+        throw(
+            DimensionMismatch(
+                "backend copy requires equal lengths, got $(length(destination)) and $(length(source))"
+            )
+        )
     end
     if destination === source
         return destination
@@ -830,40 +915,52 @@ end
 # Equation-major views are represented as adjoints of reshaped slices. Peel
 # identical structural wrappers before copying so CPU/backend transfers use a
 # contiguous bulk copy instead of LinearAlgebra's scalar transpose routine.
-function backend_copyto!(destination::LinearAlgebra.Adjoint,
-        source::LinearAlgebra.Adjoint)
+function backend_copyto!(
+        destination::LinearAlgebra.Adjoint,
+        source::LinearAlgebra.Adjoint
+    )
     backend_copyto!(parent(destination), parent(source))
     return destination
 end
 
-function backend_copyto!(destination::LinearAlgebra.Transpose,
-        source::LinearAlgebra.Transpose)
+function backend_copyto!(
+        destination::LinearAlgebra.Transpose,
+        source::LinearAlgebra.Transpose
+    )
     backend_copyto!(parent(destination), parent(source))
     return destination
 end
 
-function backend_copyto!(destination::Base.ReshapedArray,
-        source::AbstractArray)
+function backend_copyto!(
+        destination::Base.ReshapedArray,
+        source::AbstractArray
+    )
     backend_copyto!(parent(destination), vec(source))
     return destination
 end
 
-function backend_copyto!(destination::SubArray{T, 1, P, I, true},
-        source::AbstractArray) where {T, P, I}
+function backend_copyto!(
+        destination::SubArray{T, 1, P, I, true},
+        source::AbstractArray
+    ) where {T, P, I}
     indices = parentindices(destination)
     if length(indices) == 1 && only(indices) isa AbstractUnitRange
         range = only(indices)
         linear_source = vec(source)
-        copyto!(parent(destination), first(range), linear_source,
-            firstindex(linear_source), length(destination))
+        copyto!(
+            parent(destination), first(range), linear_source,
+            firstindex(linear_source), length(destination)
+        )
     else
         copyto!(destination, source)
     end
     return destination
 end
 
-function backend_copyto!(destination::AbstractJutulStorage,
-        source::AbstractJutulStorage)
+function backend_copyto!(
+        destination::AbstractJutulStorage,
+        source::AbstractJutulStorage
+    )
     for key in keys(destination)
         if !haskey(source, key)
             continue
@@ -893,16 +990,22 @@ function backend_copyto!(destination::CompactAutoDiffCache, source::CompactAutoD
     return destination
 end
 
-function backend_copyto!(destination::ConservationLawTPFAStorage,
-        source::ConservationLawTPFAStorage)
+function backend_copyto!(
+        destination::ConservationLawTPFAStorage,
+        source::ConservationLawTPFAStorage
+    )
     backend_copyto!(destination.accumulation, source.accumulation)
     if !ismissing(destination.half_face_flux_cells)
-        backend_copyto!(destination.half_face_flux_cells,
-            source.half_face_flux_cells)
+        backend_copyto!(
+            destination.half_face_flux_cells,
+            source.half_face_flux_cells
+        )
     end
     if !ismissing(destination.half_face_flux_faces)
-        backend_copyto!(destination.half_face_flux_faces,
-            source.half_face_flux_faces)
+        backend_copyto!(
+            destination.half_face_flux_faces,
+            source.half_face_flux_faces
+        )
     end
     if !isnothing(destination.sources) && !isnothing(source.sources)
         backend_copyto!(destination.sources, source.sources)
@@ -910,8 +1013,10 @@ function backend_copyto!(destination::ConservationLawTPFAStorage,
     return destination
 end
 
-function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
-        model, lsys = nothing)
+function adapt_simulation_storage(
+        ctx::KernelAbstractionsContext, storage_cpu,
+        model, lsys = nothing
+    )
     function adapt_variable_definitions(definitions)
         adapted = adapt_backend_value(ctx, definitions)
         return JutulStorage(data(adapted))
@@ -925,12 +1030,15 @@ function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
     state0 = adapt_backend_value(ctx, storage_cpu.state0)
     equations = adapt_backend_value(ctx, storage_cpu.equations)
     variable_definitions = adapt_variable_definitions(
-        storage_cpu.variable_definitions)
+        storage_cpu.variable_definitions
+    )
 
     converted = OrderedDict{Symbol, Any}()
     for (key, value) in pairs(data(storage_cpu))
-        if key in (:state, :state0, :LinearizedSystem, :equations,
-                   :variable_definitions, :primary_variables, :parameters, :views)
+        if key in (
+                :state, :state0, :LinearizedSystem, :equations,
+                :variable_definitions, :primary_variables, :parameters, :views,
+            )
             continue
         end
         converted[key] = adapt_backend_value(ctx, value)
@@ -949,9 +1057,11 @@ function adapt_simulation_storage(ctx::KernelAbstractionsContext, storage_cpu,
     converted[:equations] = equations
     converted[:variable_definitions] = variable_definitions
     converted[:primary_variables] = state_references(
-        state, variable_definitions.primary_variables)
+        state, variable_definitions.primary_variables
+    )
     converted[:parameters] = state_references(
-        state, variable_definitions.parameters)
+        state, variable_definitions.parameters
+    )
     if !isnothing(lsys)
         converted[:LinearizedSystem] = lsys
     end
@@ -972,37 +1082,50 @@ storage and copy into preallocated backend mirrors after evaluation. Mixed
 host/device cross terms execute on the host by default; set
 `mixed_cross_terms_on_host=false` to use backend evaluation instead.
 """
-function transfer_to_backend(sim::Simulator, backend;
+function transfer_to_backend(
+        sim::Simulator, backend;
         group_execution = missing,
         mixed_cross_terms_on_host::Bool = true,
-        kwarg...)
+        kwarg...
+    )
     model = sim.model
     if !(model isa Union{SimulationModel, MultiModel})
-        throw(ArgumentError(
-            "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
+        throw(
+            ArgumentError(
+                "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"
+            )
+        )
     end
-    ctx = KernelAbstractionsContext(backend;
+    ctx = KernelAbstractionsContext(
+        backend;
         float_type = float_type(model.context),
         index_type = index_type(model.context),
         matrix_layout = matrix_layout(model.context),
-        kwarg...)
-    return transfer_to_backend(sim, ctx;
+        kwarg...
+    )
+    return transfer_to_backend(
+        sim, ctx;
         group_execution = group_execution,
-        mixed_cross_terms_on_host = mixed_cross_terms_on_host)
+        mixed_cross_terms_on_host = mixed_cross_terms_on_host
+    )
 end
 
-Base.@noinline function transfer_to_backend(sim::Simulator,
+Base.@noinline function transfer_to_backend(
+        sim::Simulator,
         ctx::KernelAbstractionsContext;
         group_execution = missing,
-        mixed_cross_terms_on_host::Bool = true)
+        mixed_cross_terms_on_host::Bool = true
+    )
     Base.@nospecialize sim
     if !ismissing(group_execution)
         sim = set_transfer_group_execution(sim, group_execution)
     end
     model_cpu = sim.model
     if !(model_cpu isa SimulationModel)
-        return transfer_multimodel_to_backend(sim, ctx;
-            mixed_cross_terms_on_host = mixed_cross_terms_on_host)
+        return transfer_multimodel_to_backend(
+            sim, ctx;
+            mixed_cross_terms_on_host = mixed_cross_terms_on_host
+        )
     end
     storage_cpu = sim.storage
     model = Adapt.adapt(ctx, model_cpu)
@@ -1023,24 +1146,35 @@ Base.@noinline function set_transfer_group_execution(sim::Simulator, policy)
         if policy isa Function
             mode = policy(key, submodel)
         elseif policy isa AbstractDict || policy isa NamedTuple
-            mode = get(policy, key,
-                get(policy, :default, SolveFullyOnDevice))
+            mode = get(
+                policy, key,
+                get(policy, :default, SolveFullyOnDevice)
+            )
         else
-            throw(ArgumentError(
-                "group_execution must be a function or keyed collection"))
+            throw(
+                ArgumentError(
+                    "group_execution must be a function or keyed collection"
+                )
+            )
         end
         if !(mode isa DeviceExecutionMode)
-            throw(ArgumentError(
-                "Execution policy for $key must be a DeviceExecutionMode, " *
-                "got $(typeof(mode))"))
+            throw(
+                ArgumentError(
+                    "Execution policy for $key must be a DeviceExecutionMode, " *
+                        "got $(typeof(mode))"
+                )
+            )
         end
         return mode
     end
 
     model = sim.model
     if !(model isa MultiModel)
-        throw(ArgumentError(
-            "Per-model execution policies require a MultiModel simulator"))
+        throw(
+            ArgumentError(
+                "Per-model execution policies require a MultiModel simulator"
+            )
+        )
     end
     keys_m = collect(submodels_symbols(model))
     modes_by_key = map(keys_m) do key
@@ -1051,24 +1185,31 @@ Base.@noinline function set_transfer_group_execution(sim::Simulator, policy)
     else
         groups = copy(model.groups)
     end
-    rebuilt = MultiModel(model.models, multimodel_label(model);
+    rebuilt = MultiModel(
+        model.models, multimodel_label(model);
         cross_terms = model.cross_terms,
         groups = groups,
         group_execution = modes_by_key,
         context = model.context,
         reduction = model.reduction,
         specialize = false,
-        specialize_ad = model.specialize_ad)
+        specialize_ad = model.specialize_ad
+    )
     return Simulator(sim.executor, rebuilt, sim.storage)
 end
 
-function transfer_multimodel_to_backend(sim::Simulator,
+function transfer_multimodel_to_backend(
+        sim::Simulator,
         ctx::KernelAbstractionsContext;
-        mixed_cross_terms_on_host::Bool = true)
+        mixed_cross_terms_on_host::Bool = true
+    )
     model_cpu = sim.model
     if !(model_cpu isa MultiModel)
-        throw(ArgumentError(
-            "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"))
+        throw(
+            ArgumentError(
+                "KernelAbstractions transfer supports SimulationModel and MultiModel simulators"
+            )
+        )
     end
     storage_cpu = sim.storage
 
@@ -1077,12 +1218,19 @@ function transfer_multimodel_to_backend(sim::Simulator,
         return sim
     end
     if any(==(NothingOnDevice), modes)
-        throw(ArgumentError(
-            "Backend transfer cannot combine all-NothingOnDevice groups with device-resident groups"))
+        throw(
+            ArgumentError(
+                "Backend transfer cannot combine all-NothingOnDevice groups with device-resident groups"
+            )
+        )
     end
     storage_cpu = prepare_backend_transfer!(storage_cpu, model_cpu)
-    host_keys = tuple((key for key in submodels_symbols(model_cpu)
-        if group_execution_mode(model_cpu, key) == AssembleOnDevice)...)
+    host_keys = tuple(
+        (
+            key for key in submodels_symbols(model_cpu)
+                if group_execution_mode(model_cpu, key) == AssembleOnDevice
+        )...
+    )
     for key in host_keys
         prepare_backend_transfer!(storage_cpu[key], model_cpu[key])
     end
@@ -1105,7 +1253,7 @@ function transfer_multimodel_to_backend(sim::Simulator,
     ignored = (
         :state, :state0, :LinearizedSystem, :cross_terms,
         :cross_term_targets_no_symmetry, :cross_term_targets_with_symmetry,
-        :multi_model_maps, :eq_maps
+        :multi_model_maps, :eq_maps,
     )
     model_keys = submodels_symbols(model_cpu)
     for (key, value) in pairs(data(storage_setup))
@@ -1121,7 +1269,8 @@ function transfer_multimodel_to_backend(sim::Simulator,
         submodel = model[key]
         subcontext = submodel.context
         substorage = adapt_simulation_storage(
-            subcontext, storage_setup[key], submodel)
+            subcontext, storage_setup[key], submodel
+        )
         converted[key] = substorage
         state[key] = substorage.state
         state0[key] = substorage.state0
@@ -1129,8 +1278,10 @@ function transfer_multimodel_to_backend(sim::Simulator,
     converted[:state] = state
     converted[:state0] = state0
     converted[:LinearizedSystem] = lsys
-    cross_term_storage = [adapt_backend_value(ctx, ct_s)
-        for ct_s in storage_setup.cross_terms]
+    cross_term_storage = [
+        adapt_backend_value(ctx, ct_s)
+            for ct_s in storage_setup.cross_terms
+    ]
     cross_term_storage = map(eachindex(model.cross_terms)) do index
         pair = model.cross_terms[index]
         target = pair.target
@@ -1148,13 +1299,15 @@ function transfer_multimodel_to_backend(sim::Simulator,
             equation = ct_equation(model_t, pair.target_equation)
             plan = setup_cross_term_evaluation(
                 cross_term_storage[index], pair.cross_term, equation,
-                converted[target], converted[source], model_t, model_s)
+                converted[target], converted[source], model_t, model_s
+            )
             evaluation = maybe_convert_cross_term_evaluation(plan, ctx)
             if isnothing(evaluation)
                 cross_term_storage[index]
             else
                 PreparedCrossTermStorage(
-                    cross_term_storage[index], evaluation)
+                    cross_term_storage[index], evaluation
+                )
             end
         end
     end
@@ -1170,7 +1323,8 @@ function transfer_multimodel_to_backend(sim::Simulator,
     if !isempty(host_keys)
         host_evaluation = setup_host_evaluation(
             model_cpu, storage_cpu, model, storage, host_keys;
-            mixed_cross_terms_on_host = mixed_cross_terms_on_host)
+            mixed_cross_terms_on_host = mixed_cross_terms_on_host
+        )
         prepare_host_evaluation_transfer!(ctx.backend, host_evaluation)
         data(storage)[:host_evaluation] = host_evaluation
     end
@@ -1178,8 +1332,10 @@ function transfer_multimodel_to_backend(sim::Simulator,
     return Simulator(sim.executor, model, storage)
 end
 
-function transfer_adjoint_simulator(simulator,
-        execution_model::KASimulationModel)
+function transfer_adjoint_simulator(
+        simulator,
+        execution_model::KASimulationModel
+    )
     return transfer_to_backend(simulator, adjoint(execution_model.context))
 end
 
@@ -1192,17 +1348,21 @@ function transfer_adjoint_simulator(simulator, execution_model::MultiModel)
     for key in submodels_symbols(execution_model)
         policy[key] = group_execution_mode(execution_model, key)
     end
-    return transfer_to_backend(simulator, adjoint(context);
-        group_execution = policy)
+    return transfer_to_backend(
+        simulator, adjoint(context);
+        group_execution = policy
+    )
 end
 
-@kernel function adjoint_block_order_kernel!(destination, source, n, bz,
-        to_canonical)
+@kernel function adjoint_block_order_kernel!(
+        destination, source, n, bz,
+        to_canonical
+    )
     index = @index(Global)
-    if index <= n*bz
+    if index <= n * bz
         block = (index - 1) ÷ n + 1
         entity = (index - 1) % n + 1
-        block_major = (entity - 1)*bz + block
+        block_major = (entity - 1) * bz + block
         if to_canonical
             @inbounds destination[index] = source[block_major]
         else
@@ -1211,9 +1371,11 @@ end
     end
 end
 
-function adjoint_transfer_canonical_order_inner!(destination::AbstractArray,
+function adjoint_transfer_canonical_order_inner!(
+        destination::AbstractArray,
         source::AbstractArray, model::KASimulationModel, ::BlockMajorLayout,
-        to_canonical)
+        to_canonical
+    )
     bz = 0
     for entity in get_primary_variable_ordered_entities(model)
         if bz != 0
@@ -1224,8 +1386,10 @@ function adjoint_transfer_canonical_order_inner!(destination::AbstractArray,
     n = length(source) ÷ bz
     context = model.context
     kernel! = adjoint_block_order_kernel!(context.backend)
-    event = kernel!(destination, source, n, bz, to_canonical;
-        ndrange = length(source))
+    event = kernel!(
+        destination, source, n, bz, to_canonical;
+        ndrange = length(source)
+    )
     if !isnothing(event)
         wait(event)
     end
@@ -1236,19 +1400,22 @@ end
     row = @index(Global)
     value_row = zero(eltype(y))
     @inbounds for pos in rowptr[row]:(rowptr[row + 1] - 1)
-        value_row += nzval[pos]*x[colval[pos]]
+        value_row += nzval[pos] * x[colval[pos]]
     end
     if iszero(beta)
-        @inbounds y[row] = alpha*value_row
+        @inbounds y[row] = alpha * value_row
     else
-        @inbounds y[row] = alpha*value_row + beta*y[row]
+        @inbounds y[row] = alpha * value_row + beta * y[row]
     end
 end
 
-function LinearAlgebra.mul!(y::AbstractVector,
+function LinearAlgebra.mul!(
+        y::AbstractVector,
         A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, B},
-        x::AbstractVector, alpha::Number, beta::Number) where {
-            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+        x::AbstractVector, alpha::Number, beta::Number
+    ) where {
+        Tv, Ti <: Integer, V, I, R, B <: KernelAbstractions.Backend,
+    }
     scalar_type = KAPreconditioners.matrix_scalar_type(eltype(y))
     alpha = convert(scalar_type, alpha)
     beta = convert(scalar_type, beta)
@@ -1276,30 +1443,42 @@ function host_backend_factorization(matrix::StaticSparsityMatrixCSR)
     right_hand_side = Vector{scalar_type}(undef, size(host_matrix, 1))
     solution = similar(right_hand_side)
     return HostBackendFactorization(
-        factorization, right_hand_side, solution)
+        factorization, right_hand_side, solution
+    )
 end
 
-function factorize_linear_system(constructor,
+function factorize_linear_system(
+        constructor,
         matrix::StaticSparsityMatrixCSR{
-            Tv, Ti, V, I, R, B}) where {
-            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+            Tv, Ti, V, I, R, B,
+        }
+    ) where {
+        Tv, Ti <: Integer, V, I, R, B <: KernelAbstractions.Backend,
+    }
     return host_backend_factorization(matrix)
 end
 
-function refactorize_linear_system!(update!,
+function refactorize_linear_system!(
+        update!,
         factorization::HostBackendFactorization,
         matrix::StaticSparsityMatrixCSR{
-            Tv, Ti, V, I, R, B}) where {
-            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+            Tv, Ti, V, I, R, B,
+        }
+    ) where {
+        Tv, Ti <: Integer, V, I, R, B <: KernelAbstractions.Backend,
+    }
     factorization.factorization = lu(KAPreconditioners.sparse_matrix(matrix))
     return factorization
 end
 
 function transfer_csr_to_backend(
         reference::StaticSparsityMatrixCSR{
-            Tv, Ti, V, I, R, B},
-        matrix::StaticSparsityMatrixCSR) where {
-            Tv, Ti<:Integer, V, I, R, B<:KernelAbstractions.Backend}
+            Tv, Ti, V, I, R, B,
+        },
+        matrix::StaticSparsityMatrixCSR
+    ) where {
+        Tv, Ti <: Integer, V, I, R, B <: KernelAbstractions.Backend,
+    }
     values = similar(reference.nzval, eltype(matrix.nzval), length(matrix.nzval))
     columns = similar(reference.colval, eltype(matrix.colval), length(matrix.colval))
     rows = similar(reference.rowptr, eltype(matrix.rowptr), length(matrix.rowptr))
@@ -1309,22 +1488,29 @@ function transfer_csr_to_backend(
     return StaticSparsityMatrixCSR(
         values, columns, rows, size(matrix, 1), size(matrix, 2),
         reference.backend; nthreads = reference.nthreads,
-        minbatch = reference.minbatch, thread_type = reference.thread_type)
+        minbatch = reference.minbatch, thread_type = reference.thread_type
+    )
 end
 
-function LinearAlgebra.ldiv!(output::AbstractVector,
+function LinearAlgebra.ldiv!(
+        output::AbstractVector,
         factorization::HostBackendFactorization,
-        right_hand_side::AbstractVector)
+        right_hand_side::AbstractVector
+    )
     copyto!(factorization.right_hand_side, right_hand_side)
-    ldiv!(factorization.solution, factorization.factorization,
-        factorization.right_hand_side)
+    ldiv!(
+        factorization.solution, factorization.factorization,
+        factorization.right_hand_side
+    )
     copyto!(output, factorization.solution)
     return output
 end
 
-function linear_solve!(sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR},
+function linear_solve!(
+        sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR},
         ::Nothing, ctx::KernelAbstractionsContext, arg...;
-        dx = sys.dx, r = sys.r_buffer, kwarg...)
+        dx = sys.dx, r = sys.r_buffer, kwarg...
+    )
     A = sys.jac
     nz = Adapt.adapt(Array, nonzeros(A))
     cols = Adapt.adapt(Array, colvals(A))

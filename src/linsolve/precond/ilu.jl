@@ -8,7 +8,7 @@ mutable struct ILUZeroPreconditioner <: JutulPreconditioner
     right::Bool
     function ILUZeroPreconditioner(; left = true, right = false)
         @assert left || right "Left or right preconditioning must be enabled or it will have no effect."
-        new(nothing, nothing, left, right)
+        return new(nothing, nothing, left, right)
     end
 end
 
@@ -17,16 +17,16 @@ is_right_preconditioner(p::ILUZeroPreconditioner) = p.right
 
 function set_dim!(ilu, A, b)
     T = eltype(b)
-    if T<:AbstractFloat
+    if T <: AbstractFloat
         d = 1
     else
         d = length(T)
     end
-    ilu.dim = d .* size(A)
+    return ilu.dim = d .* size(A)
 end
 
 function update_preconditioner!(ilu::ILUZeroPreconditioner, A, b, context, executor)
-    if isnothing(ilu.factor)
+    return if isnothing(ilu.factor)
         ilu.factor = ilu0(A, eltype(b))
         set_dim!(ilu, A, b)
     else
@@ -35,7 +35,7 @@ function update_preconditioner!(ilu::ILUZeroPreconditioner, A, b, context, execu
 end
 
 function update_preconditioner!(ilu::ILUZeroPreconditioner, A::StaticSparsityMatrixCSR, b, context, executor)
-    if isnothing(ilu.factor)
+    return if isnothing(ilu.factor)
         mb = A.minbatch
         max_t = max(size(A, 1) ÷ mb, 1)
         nt = min(A.nthreads, max_t)
@@ -75,7 +75,7 @@ function apply!(x, ilu::ILUZeroPreconditioner, y, α = 1.0, β = 0.0)
     return x
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}) where {F<:Real}
+function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}) where {F <: Real}
     T = eltype(f)
     if T == Float64
         ldiv!(x, f, y)
@@ -90,11 +90,11 @@ function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::Abstrac
 end
 
 function ilu_apply!(x, f::AbstractILUFactorization, y)
-    ldiv!(x, f, y)
+    return ldiv!(x, f, y)
 end
 
-function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}) where {F<:Real}
-    ldiv!(x, f, y)
+function ilu_apply!(x::AbstractArray{F}, f::ILU0Precon{F}, y::AbstractArray{F}) where {F <: Real}
+    return ldiv!(x, f, y)
 end
 
 function ilu_apply!(x, ilu::ILU0Precon, y)

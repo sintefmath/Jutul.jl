@@ -1,4 +1,4 @@
-const MINIMUM_SAT_RELAX = 1e-3
+const MINIMUM_SAT_RELAX = 1.0e-3
 """
 Number of entities (e.g. Cells, Faces) a variable is defined on.
 By default, each primary variable exists on all cells of a discretized domain
@@ -43,7 +43,7 @@ function number_of_values(model, type = :primary)
 end
 
 function number_of_degrees_of_freedom(model::JutulModel, u::JutulEntity)
-    ndof = degrees_of_freedom_per_entity(model, u)*count_active_entities(model.domain, u, for_variables = true)
+    ndof = degrees_of_freedom_per_entity(model, u) * count_active_entities(model.domain, u, for_variables = true)
     return ndof
 end
 
@@ -61,7 +61,7 @@ function number_of_degrees_of_freedom(model, pvars::JutulVariables)
     e = associated_entity(pvars)
     n = count_active_entities(model.domain, e, for_variables = true)
     m = degrees_of_freedom_per_entity(model, pvars)
-    return n*m
+    return n * m
 end
 
 number_of_values(model, pvars::JutulVariables) = prod(value_dim(model, pvars))
@@ -109,10 +109,12 @@ parameter_is_differentiable(::JutulVariables, model) = true
 
 function update_primary_variable!(state, p::JutulVariables, state_symbol, model, dx, w)
     entity = associated_entity(p)
-    active = transfer(model.context,
-        active_entities(model.domain, entity, for_variables = true))
+    active = transfer(
+        model.context,
+        active_entities(model.domain, entity, for_variables = true)
+    )
     v = state[state_symbol]
-    update_jutul_variable_internal!(v, active, p, dx, w, model.context)
+    return update_jutul_variable_internal!(v, active, p, dx, w, model.context)
 end
 
 function update_jutul_variable_internal!(v::AbstractVector, active, p, dx, w, context)
@@ -124,10 +126,11 @@ function update_jutul_variable_internal!(v::AbstractVector, active, p, dx, w, co
     scale = variable_scale(p)
     function update(i)
         @inbounds a_i = active[i]
-        @inbounds v[a_i] = update_value(
-            v[a_i], w*dx[i], abs_max, rel_max, minval, maxval, scale)
+        return @inbounds v[a_i] = update_value(
+            v[a_i], w * dx[i], abs_max, rel_max, minval, maxval, scale
+        )
     end
-    threaded_loop_minbatch(update, nu, context)
+    return threaded_loop_minbatch(update, nu, context)
 end
 
 function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w, context)
@@ -140,15 +143,17 @@ function update_jutul_variable_internal!(v::AbstractMatrix, active, p, dx, w, co
     scale = variable_scale(p)
     function update(i)
         @inbounds a_i = active[i]
-        for j in 1 : n
+        for j in 1:n
             @inbounds v[j, a_i] = update_value(
-                v[j, a_i], w*dx[j, i], abs_max, rel_max, minval, maxval, scale)
+                v[j, a_i], w * dx[j, i], abs_max, rel_max, minval, maxval, scale
+            )
         end
+        return
     end
-    threaded_loop_minbatch(update, nu, context)
+    return threaded_loop_minbatch(update, nu, context)
 end
 
-@inline function choose_increment(v::F, dv, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing, scale = nothing) where {F<:AbstractFloat}
+@inline function choose_increment(v::F, dv, abs_change = nothing, rel_change = nothing, minval = nothing, maxval = nothing, scale = nothing) where {F <: AbstractFloat}
     # Nonlinear relaxation and variable limits are commonly configured as
     # Float64 even when the simulation storage uses a narrower float type.
     # Keep the update in the state value's precision.
@@ -160,10 +165,10 @@ end
     return convert(F, dv)
 end
 # Limit absolute
-@inline limit_abs(dv, abs_change) = sign(dv)*min(abs(dv), abs_change)
+@inline limit_abs(dv, abs_change) = sign(dv) * min(abs(dv), abs_change)
 @inline limit_abs(dv, ::Nothing) = dv
-# Limit relative 
-@inline limit_rel(v, dv, rel_change) = limit_abs(dv, rel_change*abs(v))
+# Limit relative
+@inline limit_rel(v, dv, rel_change) = limit_abs(dv, rel_change * abs(v))
 @inline limit_rel(v, dv, ::Nothing) = dv
 # Lower bounds
 @inline limit_upper(v, dv, maxval) = min(dv, maxval - v)
@@ -174,7 +179,7 @@ end
 @inline limit_lower(v, dv, minval::Nothing) = dv
 
 # Scaling
-@inline scale_increment(dv, scale) = dv*scale
+@inline scale_increment(dv, scale) = dv * scale
 @inline scale_increment(dv, ::Nothing) = dv
 
 @inline update_value(v, dv, arg...) = v + choose_increment(value(v), dv, arg...)
@@ -206,7 +211,7 @@ function initialize_primary_variable_ad!(state, model, pvar::ScalarVariable, sta
     if isnothing(diag_value)
         diag_value = 1.0
     end
-    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_value = diag_value, kwarg...)
+    return initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_value = diag_value, kwarg...)
 end
 
 function initialize_primary_variable_ad!(state, model, pvar, state_symbol, npartials; offset = 0, kwarg...)
@@ -215,13 +220,13 @@ function initialize_primary_variable_ad!(state, model, pvar, state_symbol, npart
         diag_value = 1.0
     end
     N = values_per_entity(model, pvar)
-    dp = (offset+1):(offset+N)
-    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_pos = dp, diag_value = diag_value, kwarg...)
+    dp = (offset + 1):(offset + N)
+    return initialize_variable_ad!(state, model, pvar, state_symbol, npartials, offset + 1; diag_pos = dp, diag_value = diag_value, kwarg...)
 end
 
 function initialize_secondary_variable_ad!(state, model, pvar, state_symbol, npartials; kwarg...)
     diag_pos = NaN
-    initialize_variable_ad!(state, model, pvar, state_symbol, npartials, diag_pos; kwarg...)
+    return initialize_variable_ad!(state, model, pvar, state_symbol, npartials, diag_pos; kwarg...)
 end
 
 function initialize_variable_ad!(state, model, pvar, symb, npartials, diag_pos; kwarg...)
@@ -246,7 +251,7 @@ function initialize_variable_value(model, pvar, val; T = float_type(model.contex
         end
         err_str() = "Passed value for $(typeof(pvar))"
         nm = length(val)
-        @assert nm == nv*nu "$(err_str()) had $nm entries, expected $(nu*nv)"
+        @assert nm == nv * nu "$(err_str()) had $nm entries, expected $(nu * nv)"
         n, m, = size(val)
         @assert n == nv "$(err_str()) had $n rows, expected $nv"
         @assert m == nu "$(err_str()) had $m rows, expected $nu"
@@ -254,7 +259,7 @@ function initialize_variable_value(model, pvar, val; T = float_type(model.contex
     if perform_copy
         val = deepcopy(val)
     end
-    if eltype(val)<:Real
+    if eltype(val) <: Real
         minv = minimum_value(pvar)
         if isnothing(minv)
             minv = -Inf
@@ -265,7 +270,7 @@ function initialize_variable_value(model, pvar, val; T = float_type(model.contex
         end
         clamp!(val, minv, maxv)
     end
-    if T == float_type(model.context) 
+    if T == float_type(model.context)
         val = transfer(model.context, val)
     elseif eltype(val) != T
         T = promote_type(T, eltype(val))
@@ -284,7 +289,7 @@ function default_value(model, variable)
         maxv = Inf
     end
     if isfinite(minv) && isfinite(maxv)
-        default = (minv + maxv)/2
+        default = (minv + maxv) / 2
     else
         default = clamp(0.0, minv, maxv)
     end
@@ -336,7 +341,7 @@ function initialize_parameter_value!(parameters, data_domain, model, param, symb
         vals = default_parameter_values(data_domain, model, param, symb)
         s = "computed defaulted"
     end
-    if eltype(vals)<:AbstractFloat && any(x -> !isfinite(x), vals)
+    if eltype(vals) <: AbstractFloat && any(x -> !isfinite(x), vals)
         num_bad = count(x -> !isfinite(x), vals)
         @error "$num_bad non-finite entries in $s parameter $symb" vals
     end
@@ -372,7 +377,7 @@ function initialize_variable_value(model, pvar::VectorVariables, symb::Symbol, v
 end
 
 # Specific variable implementations that are generic for many types of system follow
-degrees_of_freedom_per_entity(model, v::FractionVariables) =  values_per_entity(model, v) - 1
+degrees_of_freedom_per_entity(model, v::FractionVariables) = values_per_entity(model, v) - 1
 maximum_value(::FractionVariables) = 1.0
 minimum_value(::FractionVariables) = 0.0
 
@@ -385,17 +390,17 @@ end
 
 function unit_sum_init(v, model, npartials, N; offset = 0, kwarg...)
     # nph - 1 primary variables, with the last saturation being initially zero AD
-    dp = vcat((1:N-1) .+ offset, 0)
+    dp = vcat((1:(N - 1)) .+ offset, 0)
     v = allocate_array_ad(v, diag_pos = dp, context = model.context, npartials = npartials; kwarg...)
     for i in 1:size(v, 2)
-        v[end, i] = 1 - sum(v[1:end-1, i])
+        v[end, i] = 1 - sum(v[1:(end - 1), i])
     end
     return v
 end
 
 function update_primary_variable!(state, p::FractionVariables, state_symbol, model, dx, w)
     s = state[state_symbol]
-    unit_sum_update!(s, p, model, dx, w)
+    return unit_sum_update!(s, p, model, dx, w)
 end
 
 unit_update_preserve_direction(::FractionVariables) = true
@@ -405,11 +410,13 @@ function unit_sum_update!(s, p, model, dx, w, entity = Cells())
     abs_max = absolute_increment_limit(p)
     maxval = maximum_value(p)
     minval = minimum_value(p)
-    maxval = maxval - nf*minval
+    maxval = maxval - nf * minval
     context = model.context
-    active_cells = transfer(context,
-        active_entities(model.domain, entity, for_variables = true))
-    if nf == 2
+    active_cells = transfer(
+        context,
+        active_entities(model.domain, entity, for_variables = true)
+    )
+    return if nf == 2
         unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w, context)
     else
         if unit_update_preserve_direction(p)
@@ -426,9 +433,9 @@ function unit_update_direction!(s, dx, nf, nu, active_cells, minval, maxval, abs
     nactive = length(active_cells)
     function update(active_ix)
         @inbounds full_cell = active_cells[active_ix]
-        unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max, w)
+        return unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nactive, minval, maxval, abs_max, w)
     end
-    threaded_loop_minbatch(update, nactive, context)
+    return threaded_loop_minbatch(update, nactive, context)
 end
 
 function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max, w0)
@@ -438,7 +445,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     # First pass: Find the relaxation factors that keep all fractions in [0, 1]
     # and obeying the maximum change targets
     dlast0 = 0.0
-    @inbounds for i = 1:(nf-1)
+    @inbounds for i in 1:(nf - 1)
         v = value(s[i, full_cell])
         dv0 = dx[i, active_ix]
         dv = choose_increment(v, dv0, abs_max, nothing, minval, maxval)
@@ -447,7 +454,7 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
     end
     # Do the same thing for the implicit update of the last value
     dlast = choose_increment(value(s[nf, full_cell]), dlast0, abs_max, nothing, minval, maxval)
-    w = w0*pick_relaxation(w, dlast, dlast0)
+    w = w0 * pick_relaxation(w, dlast, dlast0)
 
     bad_update = w <= MINIMUM_SAT_RELAX
     if bad_update
@@ -455,10 +462,10 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
         # We instead go to the magnitude-preserving version.
         unit_update_magnitude_local!(s, active_ix, full_cell, dx, nf, nu, minval, maxval, abs_max)
     else
-        @inbounds for i in 1:(nf-1)
-            s[i, full_cell] += w*dx[i, active_ix]
+        @inbounds for i in 1:(nf - 1)
+            s[i, full_cell] += w * dx[i, active_ix]
         end
-        @inbounds s[nf, full_cell] += w*dlast0
+        @inbounds s[nf, full_cell] += w * dlast0
         if bad_update
             # Dampening is tiny, update and renormalize instead
             tot = 0.0
@@ -469,9 +476,9 @@ function unit_update_direction_local!(s, active_ix, full_cell, dx, nf, nu, minva
                 s_i = replace_value(s_i, sat)
                 s[i, full_cell] = s_i
             end
-            @inbounds for i = 1:nf
+            @inbounds for i in 1:nf
                 s_i = s[i, full_cell]
-                s_i = replace_value(s_i, value(s_i)/tot)
+                s_i = replace_value(s_i, value(s_i) / tot)
                 s[i, full_cell] = s_i
             end
         end
@@ -486,26 +493,26 @@ function unit_update_pairs!(s, dx, active_cells, minval, maxval, abs_max, w, con
         @inbounds cell = active_cells[i]
         @inbounds v = value(s[1, cell])
         @inbounds dv = dx[i]
-        dv = w*choose_increment(v, dv, abs_max, nothing, minval, maxval)
+        dv = w * choose_increment(v, dv, abs_max, nothing, minval, maxval)
         @inbounds s[1, cell] += dv
-        @inbounds s[2, cell] -= dv
+        return @inbounds s[2, cell] -= dv
     end
-    threaded_loop_minbatch(update, length(active_cells), context)
+    return threaded_loop_minbatch(update, length(active_cells), context)
 end
 
 function unit_update_magnitude!(s, dx, nf, nu, active_cells, minval, maxval, abs_max, context)
     function update(active_ix)
         @inbounds cell = active_cells[active_ix]
-        unit_update_magnitude_local!(s, active_ix, cell, dx, nf, nu, minval, maxval, abs_max)
+        return unit_update_magnitude_local!(s, active_ix, cell, dx, nf, nu, minval, maxval, abs_max)
     end
-    threaded_loop_minbatch(update, length(active_cells), context)
+    return threaded_loop_minbatch(update, length(active_cells), context)
 end
 
 function unit_update_magnitude_local!(s, ix, cell, dx, nf, nu, minval, maxval, abs_max)
     # First pass: Find the relaxation factors that keep all fractions in [0, 1]
     # and obeying the maximum change targets
     dlast0 = zero(eltype(dx))
-    @inbounds for i = 1:(nf-1)
+    @inbounds for i in 1:(nf - 1)
         v = value(s[i, cell])
         dv = dx[i, ix]
         dv = choose_increment(v, dv, abs_max, nothing, minval, maxval)
@@ -515,23 +522,23 @@ function unit_update_magnitude_local!(s, ix, cell, dx, nf, nu, minval, maxval, a
     # Do the same thing for the implicit update of the last value
     dlast = choose_increment(value(s[nf, cell]), dlast0, abs_max, nothing, minval, maxval)
     s[nf, cell] += dlast
-    if dlast != dlast0
+    return if dlast != dlast0
         # Need to renormalize since the last value was not within bounds.
         t = 0.0
-        for i = 1:nf
+        for i in 1:nf
             # Note: Careful to handle AD values correctly here.
             @inbounds t += value(s[i, cell])
         end
-        @inbounds for i = 1:nf
+        @inbounds for i in 1:nf
             s_i = s[i, cell]
-            s[i, cell] = replace_value(s_i, clamp(value(s_i), minval, maxval)/t)
+            s[i, cell] = replace_value(s_i, clamp(value(s_i), minval, maxval) / t)
         end
     end
 end
 
 function pick_relaxation(w, dv, dv0)
     # dv0*w = dv -> w = dv/dv0
-    r = dv/dv0
+    r = dv / dv0
     if dv0 != 0
         w = min(w, r)
     end

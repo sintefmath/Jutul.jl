@@ -76,10 +76,12 @@ end
 
 function composite_generate_submodel(m::CompositeModel, label::Symbol)
     subsys = m.system[label]
-    model = SimulationModel(m.domain, subsys,
-                            formulation = m.formulation,
-                            context = m.context,
-                            data_domain = m.data_domain)
+    model = SimulationModel(
+        m.domain, subsys,
+        formulation = m.formulation,
+        context = m.context,
+        data_domain = m.data_domain
+    )
     return model
 end
 
@@ -136,10 +138,12 @@ function apply_forces!(storage, model::CompositeModel, dt, forces; time = NaN)
             apply_forces_to_equation!(diag_part, storage, composite_submodel(model, name), eq, eq_s, force, time)
         end
     end
+    return
 end
 
 function select_minimum_output_variables!(outputs, system::CompositeSystem, model::CompositeModel)
     for (name, sys) in pairs(system.systems)
         select_minimum_output_variables!(outputs, sys, model)
     end
+    return
 end

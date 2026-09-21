@@ -18,13 +18,13 @@ function Base.show(io::IO, t::MIME"text/plain", g::UnstructuredMesh)
     nc = number_of_cells(g)
     nf = number_of_faces(g)
     nb = number_of_boundary_faces(g)
-    print(io, "UnstructuredMesh with $nc cells, $nf faces and $nb boundary faces")
+    return print(io, "UnstructuredMesh with $nc cells, $nf faces and $nb boundary faces")
 end
 
 export extract_submesh
 
 function extract_submesh(g, arg...; kwarg...)
-    extract_submesh(UnstructuredMesh(g), arg...; kwarg...)
+    return extract_submesh(UnstructuredMesh(g), arg...; kwarg...)
 end
 
 
@@ -40,7 +40,7 @@ function extract_submesh(g::UnstructuredMesh, cells; kwarg...)
         for i in iterable
             push!(vals, i)
         end
-        push!(pos, pos[end]+n)
+        return push!(pos, pos[end] + n)
     end
 
     nf = number_of_faces(g)
@@ -147,8 +147,8 @@ function extract_submesh(g::UnstructuredMesh, cells; kwarg...)
             push!(boundary_cells_faces, faceix)
             num_bnd += 1
         end
-        push!(new_cells_facepos, new_cells_facepos[end]+num_int)
-        push!(boundary_cells_facepos, boundary_cells_facepos[end]+num_bnd)
+        push!(new_cells_facepos, new_cells_facepos[end] + num_int)
+        push!(boundary_cells_facepos, boundary_cells_facepos[end] + num_bnd)
     end
 
     return UnstructuredMesh(

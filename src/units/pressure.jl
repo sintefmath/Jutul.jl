@@ -8,6 +8,5 @@ function si_unit(::Union{Val{:atmosphere}, Val{:atm}})
 end
 
 function si_unit(::Val{:bar})
-    return 1e5
+    return 1.0e5
 end
-

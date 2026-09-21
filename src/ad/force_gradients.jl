@@ -13,7 +13,7 @@ function vectorize_forces(forces, model, targets = force_targets(model); T = Flo
         lengths = lengths,
         offsets = [1],
         meta = meta_for_forces,
-        targets = targets
+        targets = targets,
     )
     n = sum(lengths)
     v = Vector{T}(undef, n)
@@ -51,7 +51,7 @@ function vectorize_forces!(v, model, config, forces; update_config = false)
             continue
         end
         n_f = lengths[lpos]
-        v_f = view(v, (offset+1):(offset+n_f))
+        v_f = view(v, (offset + 1):(offset + n_f))
         m = vectorize_force!(v_f, model, force, k, target)
         # Update global offset here.
         if update_config
@@ -61,7 +61,7 @@ function vectorize_forces!(v, model, config, forces; update_config = false)
                 @assert haskey(m, :lengths) "Bad setup for vector?"
                 push!(offsets, offsets[end] + sum(m[:lengths]))
             end
-            @assert offsets[end] == offsets[end-1] + n_f
+            @assert offsets[end] == offsets[end - 1] + n_f
             meta[k] = m
         end
         lpos += 1
@@ -106,7 +106,7 @@ function vectorize_force!(v, model, forces::Vector, name, variant)
     lengths = Vector{Int}(undef, length(forces))
     for (i, force) in enumerate(forces)
         n_i = vectorization_length(force, model, name, variant)
-        v_i = view(v, (offset+1):(offset + n_i))
+        v_i = view(v, (offset + 1):(offset + n_i))
         meta_sub[i] = vectorize_force!(v_i, model, force, name, variant)
         offset += n_i
         lengths[i] = n_i
@@ -129,7 +129,7 @@ function devectorize_forces(forces, model, X, config; offset = 0)
             continue
         end
         n_i = lengths[ix]
-        X_i = view(X, (offset+1):(offset+n_i))
+        X_i = view(X, (offset + 1):(offset + n_i))
         new_forces[k] = devectorize_force(v, model, X_i, config.meta[k], k, target)
         offset += n_i
         ix += 1
@@ -142,7 +142,7 @@ function devectorize_force(force::Vector, model, X, cfg, name, variant)
     offset = 0
     for (i, f) in enumerate(force)
         n_i = vectorization_length(f, model, name, variant)
-        X_i = view(X, (offset+1):(offset+n_i))
+        X_i = view(X, (offset + 1):(offset + n_i))
         new_force_any[i] = devectorize_force(f, model, X_i, cfg.meta[i], name, variant)
         offset += n_i
     end
@@ -201,11 +201,12 @@ function unique_forces_and_mapping(allforces, timesteps; eachstep = false)
         forces = unique_forces,
         forces_to_timesteps = forces_to_timestep,
         timesteps_to_forces = timesteps_to_forces,
-        num_unique = num_unique_forces
+        num_unique = num_unique_forces,
     )
 end
 
-function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
+function setup_adjoint_forces_storage(
+        model, states, allforces, timesteps, G;
         n_objective = nothing,
         use_sparsity = true,
         eachstep = false,
@@ -239,12 +240,13 @@ function setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
     for (i, force) in enumerate(unique_forces)
         X, config = vectorize_forces(force, model, targets)
         push!(storage[:forces_config], config)
-        push!(offsets, offsets[end]+length(X))
+        push!(offsets, offsets[end] + length(X))
     end
     X, = get_adjoint_forces_vectors(model, storage, allforces)
     F = get_adjoint_forces_setup_function(storage, model, parameters, state0)
     packed_steps = AdjointPackedResult(states, timesteps, allforces)
-    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(X, F, packed_steps, G,
+    storage[:adjoint] = Jutul.AdjointsDI.setup_adjoint_storage_generic(
+        X, F, packed_steps, G,
         single_step_sparsity = single_step_sparsity,
         sparsity_step_type = sparsity_step_type,
         di_sparse = di_sparse
@@ -256,7 +258,7 @@ function get_adjoint_forces_vectors(model, storage, allforces)
     offsets = storage[:forces_offsets]::Vector{Int}
     fmap = storage[:forces_map]
     if !haskey(storage, :X)
-        N = storage[:forces_offsets][end]-1
+        N = storage[:forces_offsets][end] - 1
         storage[:X] = zeros(N)
         storage[:forces_gradient] = zeros(N)
     end
@@ -271,7 +273,7 @@ function get_adjoint_forces_vectors(model, storage, allforces)
             @assert length(configs) == 1
             forces = allforces
         end
-        X_i = view(X, offsets[i]:(offsets[i+1]-1))
+        X_i = view(X, offsets[i]:(offsets[i + 1] - 1))
         vectorize_forces!(X_i, model, cfg, forces)
     end
     return (X, dX)
@@ -284,7 +286,7 @@ function get_adjoint_forces_setup_function(storage, model, parameters, state0)
         fmap = storage[:forces_map]
         ix = step_info[:step]
         i = fmap.timesteps_to_forces[ix]
-        X_i = view(X, offsets[i]:(offsets[i+1]-1))
+        X_i = view(X, offsets[i]:(offsets[i + 1] - 1))
         f = deepcopy(fmap.forces[i])
         dt = step_info[:dt]
         cfg = configs[i]
@@ -313,18 +315,21 @@ function solve_adjoint_forces(case::JutulCase, res, G; kwarg...)
     )
 end
 
-function solve_adjoint_forces(model, states, reports, G, allforces;
+function solve_adjoint_forces(
+        model, states, reports, G, allforces;
         state0 = setup_state(model),
         timesteps = report_timesteps(reports),
         parameters = setup_parameters(model),
         kwarg...
     )
-    storage = setup_adjoint_forces_storage(model, states, allforces, timesteps, G;
+    storage = setup_adjoint_forces_storage(
+        model, states, allforces, timesteps, G;
         state0 = state0,
         parameters = parameters,
         kwarg...
     )
-    return solve_adjoint_forces!(storage, model, states, reports, G, allforces;
+    return solve_adjoint_forces!(
+        storage, model, states, reports, G, allforces;
         state0 = state0,
         timesteps = timesteps,
         parameters = parameters,
@@ -332,7 +337,8 @@ function solve_adjoint_forces(model, states, reports, G, allforces;
     )
 end
 
-function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
+function solve_adjoint_forces!(
+        storage, model, states, reports, G, allforces;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
         init = true,
@@ -367,7 +373,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
         forces = forces,
         forces_to_timesteps = new_forces_to_timesteps,
         timesteps_to_forces = new_timesteps_to_forces,
-        num_unique = num_unique
+        num_unique = num_unique,
     )
 
     if allforces isa Vector
@@ -389,7 +395,7 @@ function solve_adjoint_forces!(storage, model, states, reports, G, allforces;
             packed_steps.step_infos[map(first, new_forces_to_timesteps)]
         )
         offsets = storage[:forces_offsets]
-        dX_i = map(i -> dX[offsets[i]:(offsets[i+1]-1)], 1:(length(offsets)-1))
+        dX_i = map(i -> dX[offsets[i]:(offsets[i + 1] - 1)], 1:(length(offsets) - 1))
         out = (dforces, new_timesteps_to_forces, dX_i, storage[:forces_config])
     else
         out = dX
@@ -496,7 +502,7 @@ function forces_optimization_config(
         timesteps_to_forces = timesteps_to_forces,
         forces_map = force_map,
         offsets = offsets
-        )
+    )
 end
 
 function setup_force_optimization(case, G, opt_config; verbose = true)
@@ -519,8 +525,8 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
             for (k, v) in fconfig
                 val = v[:base_value]
                 if v[:active]
-                    low = max(v[:abs_min], val*v[:rel_min])
-                    hi = min(v[:abs_max], val*v[:rel_max]) + 1e-12
+                    low = max(v[:abs_min], val * v[:rel_min])
+                    hi = min(v[:abs_max], val * v[:rel_max]) + 1.0e-12
 
                     if val < low
                         @warn "$fkey.$k base_value $val is below lower bound $low, capping to $low."
@@ -552,7 +558,7 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         end
         for (i, force) in enumerate(allforces)
             start = opt_config.offsets[i]
-            stop = opt_config.offsets[i+1]-1
+            stop = opt_config.offsets[i + 1] - 1
             X_i = X[start:stop]
             fcfg = opt_config.forces_config[i]
             allforces[i] = devectorize_forces(force, model, X_i, fcfg)
@@ -562,20 +568,22 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
         states, reports = simulate(sim, dt, forces = simforces, extra_timing = false, info_level = -1)
         if !haskey(cache, :storage)
             cache[:storage] = setup_adjoint_forces_storage(
-                    model,
-                    states,
-                    forces,
-                    dt,
-                    G,
-                    state0 = state0,
-                    parameters = parameters
-                )
+                model,
+                states,
+                forces,
+                dt,
+                G,
+                state0 = state0,
+                parameters = parameters
+            )
         end
         force_adj_storage = cache[:storage]
         output_data[:states] = states
         if !isnothing(g)
-            dforces, t_to_f, grad_adj = solve_adjoint_forces!(force_adj_storage, model, states, reports, G, simforces,
-            state0 = state0, parameters = parameters, forces_map = opt_config[:forces_map])
+            dforces, t_to_f, grad_adj = solve_adjoint_forces!(
+                force_adj_storage, model, states, reports, G, simforces,
+                state0 = state0, parameters = parameters, forces_map = opt_config[:forces_map]
+            )
 
             grad_adj = vcat(grad_adj...)
 
@@ -593,7 +601,7 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
             end
             if verbose
                 fmt = x -> @sprintf("%2.4e", x)
-                rel = obj/objective_history[1]
+                rel = obj / objective_history[1]
                 best = output_data[:best_obj]
                 n = length(objective_history)
                 jutul_message("Obj. #$n", "$(fmt(obj)) (best: $(fmt(best)), relative: $(fmt(rel)))")
@@ -605,4 +613,3 @@ function setup_force_optimization(case, G, opt_config; verbose = true)
     g! = (g, x) -> evaluate_forward(x, g)
     return (x0, xmin, xmax, f, g!, output_data)
 end
-

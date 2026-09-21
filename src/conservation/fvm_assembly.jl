@@ -100,7 +100,8 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
     M = global_map(model.domain)
 
     acc = eq_s.accumulation
-    diagonal_alignment!(acc, eq, jac, u, model.context,
+    diagonal_alignment!(
+        acc, eq, jac, u, model.context,
         target_offset = equation_offset,
         source_offset = variable_offset,
         row_offset = row_offset,
@@ -118,10 +119,10 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
     N = eq_s.neighbors
     for face in 1:nf
         l, r = N[face]
-        for fpos in vpos[face]:(vpos[face+1]-1)
+        for fpos in vpos[face]:(vpos[face + 1] - 1)
             cell = vars[fpos]
             for e in 1:ne
-                for d = 1:np
+                for d in 1:np
                     pos = find_jac_position(
                         jac,
                         l, cell,
@@ -171,15 +172,15 @@ function update_equation!(eq_s::ConservationLawFiniteVolumeStorage, law::Conserv
         prepare_equation_in_entity!(i, law, eq_s, state, state0, model, dt)
     end
     @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
-    @tic "fluxes" fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
+    return @tic "fluxes" fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
 end
 
 function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
     disc = law.flow_discretization
     @inline @inbounds function face_disc(face)
         return (
-        kgrad = disc.kgrad[face],
-        upwind = disc.upwind[face]
+            kgrad = disc.kgrad[face],
+            upwind = disc.upwind[face],
         )
     end
     local_disc = (face_disc = face_disc,)
@@ -190,10 +191,10 @@ function fvm_update_face_fluxes!(eq_s, law, storage, model, dt)
     val = @SVector zeros(T, ne)
     local_state = local_ad(evaluation_state(storage), 1, T)
     vars = face_cache.variables
-    fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
+    return fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val)
 end
 
-function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val::T) where T
+function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc, dt, vars, local_state, nu, val::T) where {T}
     for face in 1:nu
         @inbounds for j in vrange(face_cache, face)
             v_i = @views face_cache.entries[:, j]
@@ -207,6 +208,7 @@ function fvm_update_face_fluxes_inner!(face_cache, model, law, disc, local_disc,
             end
         end
     end
+    return
 end
 
 @inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawFiniteVolumeStorage)
@@ -230,7 +232,7 @@ function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, e
             @inbounds for e in 1:ne
                 a = get_entry(acc, i, e)
                 r[e, i] = a.value
-                for d = 1:np
+                for d in 1:np
                     update_jacobian_entry!(nz, acc, i, e, d, a.partials[d])
                 end
             end
@@ -247,16 +249,16 @@ function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, e
 
     nc = number_of_cells(model.domain)::Int
     @assert size(r, 1) == ne
-    @assert vpos[end]-1 == size(face_fluxes, 2)
+    @assert vpos[end] - 1 == size(face_fluxes, 2)
     N = eq_s.neighbors
-    fvm_face_assembly!(r, nz, vpos, face_cache, left_facepos, right_facepos, N, nu, Val(ne), Val(np))
+    return fvm_face_assembly!(r, nz, vpos, face_cache, left_facepos, right_facepos, N, nu, Val(ne), Val(np))
 end
 
 function fvm_face_assembly!(r, nz, vpos, face_cache, left_facepos, right_facepos, N, nu, ::Val{ne}, ::Val{np}) where {ne, np}
-    @inbounds for face in 1:nu
+    return @inbounds for face in 1:nu
         lc, rc = N[face]
         start = vpos[face]
-        stop = vpos[face+1]-1
+        stop = vpos[face + 1] - 1
         if start == stop
             # No sparsity? A bit odd but guard against it.
             continue

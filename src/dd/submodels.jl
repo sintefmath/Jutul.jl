@@ -23,6 +23,7 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
         for k in keys(old)
             new[k] = subvariable(old[k], M)
         end
+        return
     end
     transfer_vars!(new_model.primary_variables, model.primary_variables)
     transfer_vars!(new_model.secondary_variables, model.secondary_variables)
@@ -133,8 +134,10 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     # Cross terms...
     mk = keys(new_submodels)
     sm = convert_to_immutable_storage(new_submodels)
-    new_model = MultiModel(sm, groups = groups, group_execution = execution,
-        reduction = reduction, context = ctx)
+    new_model = MultiModel(
+        sm, groups = groups, group_execution = execution,
+        reduction = reduction, context = ctx
+    )
 
     for ctp in model.cross_terms
         (; target, source) = ctp

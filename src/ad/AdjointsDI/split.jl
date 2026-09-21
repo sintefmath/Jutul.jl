@@ -16,7 +16,7 @@ function map_X_to_Y(F, X, model, parameters_map, state0_map, cache)
     resize!(Y, N)
     if has_state0
         Y_prm = view(Y, 1:N_prm)
-        Y_s0 = view(Y, (N_prm+1):(N_prm+N_s0))
+        Y_s0 = view(Y, (N_prm + 1):(N_prm + N_s0))
         vectorize_variables!(Y_s0, model, case.state0, state0_map)
     else
         Y_prm = Y
@@ -38,7 +38,7 @@ function setup_from_vectorized(Y, case, parameters_map, state0_map, case_no_ad_r
     @assert length(Y) == N "Length of Y ($(length(Y))) does not match expected length ($N)."
     if has_state0
         Y_prm = view(Y, 1:N_prm)
-        Y_s0 = view(Y, (N_prm+1):(N_prm+N_s0))
+        Y_s0 = view(Y, (N_prm + 1):(N_prm + N_s0))
         devectorize_variables!(case.state0, model, Y_s0, state0_map, reference = case_no_ad.state0)
     else
         @assert length(Y) == N_prm

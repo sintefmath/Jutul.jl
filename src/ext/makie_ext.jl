@@ -15,12 +15,12 @@ to set the initial camera preset programmatically.
 """
 function plot_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
-    plot_interactive_impl(arg...; kwarg...)
+    return plot_interactive_impl(arg...; kwarg...)
 end
 
 function plot_interactive_impl
 
-end
+    end
 
 """
     plot_explorer(mesh::JutulMesh)
@@ -39,25 +39,25 @@ the `sens` argument, plotted using a special colormap).
 """
 function plot_explorer(arg...; kwarg...)
     check_plotting_availability(interactive = true)
-    plot_explorer_impl(arg...; kwarg...)
+    return plot_explorer_impl(arg...; kwarg...)
 end
 
 function plot_explorer_impl
 
-end
+    end
 
 function makie_current_backend
 
-end
+    end
 
 function plot_multimodel_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
-    plot_multimodel_interactive_impl(arg...; kwarg...)
+    return plot_multimodel_interactive_impl(arg...; kwarg...)
 end
 
 function plot_multimodel_interactive_impl
 
-end
+    end
 
 """
     plot_mesh(mesh)
@@ -75,12 +75,12 @@ entities.
 """
 function plot_mesh(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_impl(arg...; kwarg...)
+    return plot_mesh_impl(arg...; kwarg...)
 end
 
 function plot_mesh_impl
 
-end
+    end
 
 
 """
@@ -91,12 +91,12 @@ instance.
 """
 function plot_mesh!(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_impl!(arg...; kwarg...)
+    return plot_mesh_impl!(arg...; kwarg...)
 end
 
 function plot_mesh_impl!
 
-end
+    end
 
 export plot_mesh_edges, plot_mesh_edges!
 """
@@ -106,12 +106,12 @@ Plot the edges of all cells on the exterior of a mesh.
 """
 function plot_mesh_edges(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_edges_impl(arg...; kwarg...)
+    return plot_mesh_edges_impl(arg...; kwarg...)
 end
 
 function plot_mesh_edges_impl
 
-end
+    end
 
 """
     plot_mesh_edges!(ax, mesh; kwarg...)
@@ -121,12 +121,12 @@ Plot the edges of all cells on the exterior of a mesh into existing Makie
 """
 function plot_mesh_edges!(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_edges_impl!(arg...; kwarg...)
+    return plot_mesh_edges_impl!(arg...; kwarg...)
 end
 
 function plot_mesh_edges_impl!
 
-end
+    end
 
 """
     plot_cell_data(mesh::JutulMesh, data::Vector; kwarg...)
@@ -142,12 +142,12 @@ selection of entities.
 """
 function plot_cell_data(arg...; kwarg...)
     check_plotting_availability()
-    plot_cell_data_impl(arg...; kwarg...)
+    return plot_cell_data_impl(arg...; kwarg...)
 end
 
 function plot_cell_data_impl
 
-end
+    end
 
 """
     plot_cell_data!(ax, mesh, data; kwarg...)
@@ -156,16 +156,16 @@ Mutating version of `plot_cell_data` that plots into an existing Makie `Axis`
 """
 function plot_cell_data!(arg...; kwarg...)
     check_plotting_availability()
-    plot_cell_data_impl!(arg...; kwarg...)
+    return plot_cell_data_impl!(arg...; kwarg...)
 end
 
 function plot_cell_data_impl!
 
-end
+    end
 
 function plotting_check_interactive
 
-end
+    end
 
 """
     check_plotting_availability(; throw = true, interactive = false)
@@ -202,24 +202,24 @@ end
 
 function check_plotting_availability_impl
 
-end
+    end
 
 function plot_solve_breakdown
 
-end
+    end
 
 function plot_cumulative_solve
 
-end
+    end
 
 function plot_cumulative_solve!
 
-end
+    end
 
 function plot_linear_convergence
 
-end
+    end
 
 function plot_linear_convergence!
 
-end
+    end

@@ -38,7 +38,8 @@ smoother_index_type(state::GaussSeidelState) = eltype(state.matrix.colval)
 smoother_index_type(state) = eltype(state.host_rowptr)
 
 function update_ka_smoother!(state, A::SparseMatrixCSC)
-    matrix = csr_matrix(A;
+    matrix = csr_matrix(
+        A;
         backend = state.backend,
         block_size = state.block_size,
         index_type = smoother_index_type(state)

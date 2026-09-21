@@ -6,19 +6,19 @@ Get entries of autodiff cache. Entries are AD vectors that hold values and deriv
 end
 
 @inline function get_entry(c::CompactAutoDiffCache{I, D}, index, eqNo)::D where {I, D}
-    @inbounds get_entries(c)[eqNo, index]
+    return @inbounds get_entries(c)[eqNo, index]
 end
 
 @inline function get_value(c::CompactAutoDiffCache, arg...)
-    value(get_entry(c, arg...))
+    return value(get_entry(c, arg...))
 end
 
 @inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index, pos) where {I}
-    @inbounds pos[(eqNo-1)*c.npartials + partial_index, index]
+    return @inbounds pos[(eqNo - 1) * c.npartials + partial_index, index]
 end
 
 @inline function get_jacobian_pos(c::CompactAutoDiffCache{I}, index, eqNo, partial_index) where {I}
-    @inbounds c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index]
+    return @inbounds c.jacobian_positions[(eqNo - 1) * c.npartials + partial_index, index]
 end
 
 entity(c::CompactAutoDiffCache) = c.entity

@@ -1,5 +1,5 @@
-
-function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup_fn, objective, x_setup, adj_cache;
+function solve_and_differentiate_for_optimization(
+        x, dopt::DictParameters, setup_fn, objective, x_setup, adj_cache;
         backend_arg = NamedTuple(),
         gradient = true,
         solution_history = false,
@@ -32,7 +32,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     solve_failure = false
     if !isnothing(output_path) && solution_history == :full
         # User requested everything to be stored
-        output_path_sim = joinpath(output_path, "simulation_states_step_$(length(objectives)+1)")
+        output_path_sim = joinpath(output_path, "simulation_states_step_$(length(objectives) + 1)")
         mkpath(output_path_sim)
     else
         output_path_sim = nothing
@@ -124,7 +124,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
     failure_in_evaluation = solve_failure
 
     if failure_in_evaluation
-        f = objectives[1]*100.0
+        f = objectives[1] * 100.0
         if gradient
             g = similar(x)
             if use_gradient_norm_scaling
@@ -133,7 +133,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             else
                 # We don't know if the gradient is large or small, so return a
                 # very large value
-                fill!(g, 1e16)
+                fill!(g, 1.0e16)
             end
         else
             g = missing
@@ -160,7 +160,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
                 ratio_str = ""
             else
                 f0 = objectives[1]
-                ratio_str = " (f/f0=$(fmt_ratio(f/f0)))"
+                ratio_str = " (f/f0=$(fmt_ratio(f / f0)))"
             end
             println("")
             jutul_message("Optimization", "Objective #$num_f: $(fmt(f))$ratio_str$gstr", color = :green)
@@ -171,10 +171,10 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
             else
                 scale_factor = gradient_scaling
             end
-            f = f/scale_factor
+            f = f / scale_factor
             if gradient
                 for (i, gi) in enumerate(g)
-                    g[i] = gi/scale_factor
+                    g[i] = gi / scale_factor
                 end
             end
         end
@@ -239,7 +239,7 @@ function setup_from_vector_optimizer(X, step_info, setup_fn, prm, x_setup)
     return redirect_stdout(F, devnull)
 end
 
-function dict_shallow_copy(x::T) where T<:AbstractDict
+function dict_shallow_copy(x::T) where {T <: AbstractDict}
     new_x = T()
     for (k, v) in pairs(x)
         new_x[k] = dict_shallow_copy(v)
@@ -259,7 +259,8 @@ function forward_simulate_for_optimization(case, adj_cache; extra_timing = false
     end
     config = get(adj_cache, :config, missing)
     if ismissing(config)
-        config = simulator_config(sim,
+        config = simulator_config(
+            sim,
             info_level = adj_cache[:info_level],
             end_report = false,
             output_substates = true
@@ -269,7 +270,8 @@ function forward_simulate_for_optimization(case, adj_cache; extra_timing = false
     if !isnothing(output_path)
         config[:output_path] = output_path
     end
-    out = simulate!(sim, case.dt,
+    out = simulate!(
+        sim, case.dt,
         config = config,
         state0 = case.state0,
         parameters = case.parameters,
@@ -307,15 +309,15 @@ function optimizer_devectorize!(prm, X, x_setup; multipliers = missing, scale = 
         end
         X = X_new
     end
-    @assert length(X) == x_setup.offsets[end]-1
+    @assert length(X) == x_setup.offsets[end] - 1
     # Set the parameters from the vector
     return Jutul.AdjointsDI.devectorize_nested!(prm, X, x_setup, multipliers = multipliers)
 end
 
 function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, minlims, maxlims, stats, lumping, scaler)
     if ismissing(lumping)
-        N = offsets[i+1]-offsets[i]
-        ind = pos+1:pos+N
+        N = offsets[i + 1] - offsets[i]
+        ind = (pos + 1):(pos + N)
         lim_bnds = group_limits(minlims, maxlims, ind)
         for ix in ind
             lim_val = scaler_limits(minlims, maxlims, ix)
@@ -325,7 +327,7 @@ function optimizer_devectorize_scaler!(X_new, X, i, pos, offsets, minlims, maxli
     else
         first_index = lumping.first_index
         N = length(first_index)
-        ind = pos+1:pos+N
+        ind = (pos + 1):(pos + N)
         lim_bnds = group_limits(minlims, maxlims, ind)
         for (i, v) in enumerate(lumping.lumping)
             lim_val = scaler_limits(minlims, maxlims, pos + v)
@@ -371,7 +373,8 @@ function optimization_setup(opt::JutulOptimizationProblem, arg...)
 end
 
 function optimization_setup(dopt::DictParameters, prm = dopt.parameters; include_limits = true)
-    x0, x_setup = Jutul.AdjointsDI.vectorize_nested(prm,
+    x0, x_setup = Jutul.AdjointsDI.vectorize_nested(
+        prm,
         multipliers = dopt.multipliers,
         active = active_keys(dopt),
         active_type = dopt.active_type
@@ -392,13 +395,13 @@ function optimization_setup(dopt::DictParameters, prm = dopt.parameters; include
         pos = 0
         for (i, k) in enumerate(x_setup.names)
             stats = x_setup.statistics[k]
-            x_sub = view(x0, off[i]:(off[i+1]-1))
+            x_sub = view(x0, off[i]:(off[i + 1] - 1))
             if haskey(lumping, k)
                 x_sub = x_sub[lumping[k].first_index]
             end
             scale = get(scalers, k, missing)
             N = length(x_sub)
-            lim_bnds = group_limits(lims.min, lims.max, pos+1:pos+N)
+            lim_bnds = group_limits(lims.min, lims.max, (pos + 1):(pos + N))
             for (j, xi) in enumerate(x_sub)
                 index = pos + j
                 lim_val = scaler_limits(lims.min, lims.max, index)
@@ -445,7 +448,8 @@ function optimization_setup(dopt::DictParameters, prm = dopt.parameters; include
     return (x0 = x0, x_setup = x_setup, limits = lims)
 end
 
-function setup_optimization_cache(dopt::DictParameters;
+function setup_optimization_cache(
+        dopt::DictParameters;
         simulator = missing,
         config = missing,
         info_level = 0

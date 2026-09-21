@@ -1,8 +1,10 @@
 abstract type AbstractSmoother end
 abstract type AbstractSmootherState end
 
-function positive_smoother_parameters(name::AbstractString, steps::Integer,
-                                      damping::Real)
+function positive_smoother_parameters(
+        name::AbstractString, steps::Integer,
+        damping::Real
+    )
     steps > 0 || throw(ArgumentError("$name steps must be positive"))
     damping > 0 || throw(ArgumentError("$name damping must be positive"))
     return Int(steps), Float64(damping)
@@ -12,8 +14,8 @@ end
 struct SPAI0 <: AbstractSmoother
     steps::Int
     damping::Float64
-    function SPAI0(steps::Integer=2, damping::Real=1.0)
-        new(positive_smoother_parameters("SPAI0", steps, damping)...)
+    function SPAI0(steps::Integer = 2, damping::Real = 1.0)
+        return new(positive_smoother_parameters("SPAI0", steps, damping)...)
     end
 end
 
@@ -26,11 +28,14 @@ cycle. This CPU smoother mirrors BoomerAMG's default serial relaxation.
 struct GaussSeidel <: AbstractSmoother
     steps::Int
     damping::Float64
-    function GaussSeidel(steps::Integer=1, damping::Real=1.0)
+    function GaussSeidel(steps::Integer = 1, damping::Real = 1.0)
         steps > 0 || throw(ArgumentError("Gauss-Seidel steps must be positive"))
-        0 < damping <= 1 || throw(ArgumentError(
-            "Gauss-Seidel damping must be in (0, 1]"))
-        new(Int(steps), Float64(damping))
+        0 < damping <= 1 || throw(
+            ArgumentError(
+                "Gauss-Seidel damping must be in (0, 1]"
+            )
+        )
+        return new(Int(steps), Float64(damping))
     end
 end
 
@@ -43,8 +48,8 @@ schedules are retained and reused when matrix coefficients are updated.
 struct ILU0 <: AbstractSmoother
     steps::Int
     damping::Float64
-    function ILU0(steps::Integer=1, damping::Real=1.0)
-        new(positive_smoother_parameters("ILU0", steps, damping)...)
+    function ILU0(steps::Integer = 1, damping::Real = 1.0)
+        return new(positive_smoother_parameters("ILU0", steps, damping)...)
     end
 end
 
@@ -58,12 +63,12 @@ ordering, so host and accelerator backends construct the same preconditioner.
 struct DILU <: AbstractSmoother
     steps::Int
     damping::Float64
-    function DILU(steps::Integer=1, damping::Real=1.0)
-        new(positive_smoother_parameters("DILU", steps, damping)...)
+    function DILU(steps::Integer = 1, damping::Real = 1.0)
+        return new(positive_smoother_parameters("DILU", steps, damping)...)
     end
 end
 
-mutable struct SPAI0State{D,C} <: AbstractSmootherState
+mutable struct SPAI0State{D, C} <: AbstractSmootherState
     diagonal::D
     temporary::Any
     residual::Any
@@ -73,7 +78,7 @@ mutable struct SPAI0State{D,C} <: AbstractSmootherState
     n::Int
 end
 
-mutable struct GaussSeidelState{D,C,B} <: AbstractSmootherState
+mutable struct GaussSeidelState{D, C, B} <: AbstractSmootherState
     # AMG resetup may replace a host matrix wrapper while retaining its CSR
     # arrays. Keeping the wrapper type-erased avoids making reuse depend on
     # incidental type parameters such as the optional backend field.
@@ -87,7 +92,7 @@ mutable struct GaussSeidelState{D,C,B} <: AbstractSmootherState
     n::Int
 end
 
-mutable struct ILU0State{F,D,RP,CV,DP,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmootherState
+mutable struct ILU0State{F, D, RP, CV, DP, FO, FF, UO, UF, HRP, HCV, C} <: AbstractSmootherState
     factors::F
     inverse_diagonal::D
     work::Any
@@ -107,7 +112,7 @@ mutable struct ILU0State{F,D,RP,CV,DP,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmoother
     n::Int
 end
 
-mutable struct DILUState{D,AV,RP,CV,DP,TP,FO,FF,UO,UF,HRP,HCV,C} <: AbstractSmootherState
+mutable struct DILUState{D, AV, RP, CV, DP, TP, FO, FF, UO, UF, HRP, HCV, C} <: AbstractSmootherState
     inverse_diagonal::D
     work::Any
     residual::Any

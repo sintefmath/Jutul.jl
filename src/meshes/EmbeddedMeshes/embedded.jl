@@ -39,7 +39,7 @@ end
 
 function Jutul.plot_primitives(mesh::EmbeddedMesh, plot_type; kwarg...)
     if plot_type == :mesh
-        out = triangulate_mesh(mesh; outer=false, kwarg...)
+        out = triangulate_mesh(mesh; outer = false, kwarg...)
     else
         out = nothing
     end

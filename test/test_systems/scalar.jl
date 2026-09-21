@@ -7,7 +7,7 @@ function test_single(use_manual)
     model = SimulationModel(D, sys)
     source = ScalarTestForce(1.0)
     forces = setup_forces(model, sources = source)
-    state0 = setup_state(model, Dict(:XVar=>0.0))
+    state0 = setup_state(model, Dict(:XVar => 0.0))
     sim = Simulator(model, state0 = state0)
     dt = [1.0]
     states, = simulate!(sim, dt, forces = forces, info_level = -1)
@@ -24,7 +24,8 @@ function test_single(use_manual)
     states, dt, = Jutul.expand_to_ministeps(states, reports)
     @test length(states) == 1
 
-    states, reports = simulate(state0, model, dt,
+    states, reports = simulate(
+        state0, model, dt,
         forces = forces,
         info_level = -1,
         max_timestep = 0.5,
@@ -37,7 +38,7 @@ function test_single(use_manual)
     @test only(X) ≈ 1.0
 
     states, dt, = Jutul.expand_to_ministeps(states, reports)
-    @test length(states) == 2
+    return @test length(states) == 2
 end
 
 @testset "Scalar test system" begin

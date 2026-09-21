@@ -42,10 +42,11 @@ to export raw coordinates instead.
 
 Returns the list of written file paths from `vtk_save`.
 """
-function Jutul.export_mesh_vtu(mesh, filename::AbstractString;
-    folder = ".",
-    flip_z = Jutul.mesh_z_is_depth(mesh),
-    point_data = NamedTuple(), cell_data = NamedTuple()
+function Jutul.export_mesh_vtu(
+        mesh, filename::AbstractString;
+        folder = ".",
+        flip_z = Jutul.mesh_z_is_depth(mesh),
+        point_data = NamedTuple(), cell_data = NamedTuple()
     )
     mesh = UnstructuredMesh(mesh) # Convert to UnstructuredMesh
     points = _points_matrix(mesh, flip_z)
@@ -59,7 +60,7 @@ function Jutul.export_mesh_vtu(mesh, filename::AbstractString;
     if cell_data isa AbstractVector && length(cell_data) > 0 && first(cell_data) isa AbstractDict
         # Vector of states: write a PVD collection.
         pvd = WriteVTK.paraview_collection(base)
-        @showprogress desc="Exporting states to VTK..." for (step, state) in enumerate(cell_data)
+        @showprogress desc = "Exporting states to VTK..." for (step, state) in enumerate(cell_data)
             step_filename = "$(base)_step$(lpad(step, 4, '0'))"
             vtk = _build_vtu(points, cells, nc, step_filename, point_data, state)
             pvd[Float64(step)] = vtk
@@ -83,10 +84,11 @@ function _add_cell_data!(vtk, nc, cell_data)
     for (name, values) in pairs(cell_data)
         _add_cell_field!(vtk, string(name), values, nc)
     end
+    return
 end
 
 function _add_cell_field!(vtk, name, values, nc)
-    if values isa AbstractMatrix && eltype(values) <: Number && size(values, 2) == nc
+    return if values isa AbstractMatrix && eltype(values) <: Number && size(values, 2) == nc
         # Split each row into a separate scalar field to avoid VTK interpreting
         # rows as X/Y/Z vector components (which requires exactly 3 rows).
         nrows = size(values, 1)

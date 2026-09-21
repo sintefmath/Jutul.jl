@@ -40,13 +40,13 @@ macro jutul_secondary(ex)
     args = def[:args]
     # Define filters to strip the type spec (if any)
     function myfilter(x::Symbol)
-        x
+        return x
     end
     function myfilter(x::Expr)
-        x.args[1]
+        return x.args[1]
     end
 
-    deps = tuple(map(myfilter, args[4:end-1])...)
+    deps = tuple(map(myfilter, args[4:(end - 1)])...)
     # Pick variable + model
     variable_sym = args[2]
     model_sym = args[3]
@@ -71,23 +71,24 @@ macro jutul_secondary(ex)
     tmp *= String(myfilter(model_sym))
 
     for s in deps
-        tmp *= ", state."*String(s)
+        tmp *= ", state." * String(s)
     end
     tmp *= ", ix)"
     upd_def[:body] = Meta.parse(tmp)
     ex_upd = combinedef(upd_def)
 
-    quote
+    return quote
         $ex
         $ex_dep
         $ex_upd
-    end |> esc 
+    end |> esc
 end
 
 function update_secondary_variables!(storage, model)
     vars = storage.variable_definitions.secondary_variables
     return update_secondary_variables_state!(
-        evaluation_state(storage), model, vars)
+        evaluation_state(storage), model, vars
+    )
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
@@ -148,6 +149,7 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                     ix = entity_eachindex(v, i, N_batches)
                     update_secondary_variable!(v, var, model, state, ix)
                 end
+                return
             end
             threaded_loop(batch_update, N_batches, ctx)
         end
@@ -160,7 +162,7 @@ function select_secondary_variables!(model)
     svars = model.secondary_variables
     select_secondary_variables!(svars, model.domain, model)
     select_secondary_variables!(svars, model.system, model)
-    select_secondary_variables!(svars, model.formulation, model)
+    return select_secondary_variables!(svars, model.formulation, model)
 end
 
 
@@ -168,21 +170,21 @@ function select_primary_variables!(model::SimulationModel)
     pvars = model.primary_variables
     select_primary_variables!(pvars, model.domain, model)
     select_primary_variables!(pvars, model.system, model)
-    select_primary_variables!(pvars, model.formulation, model)
+    return select_primary_variables!(pvars, model.formulation, model)
 end
 
 function select_parameters!(model::SimulationModel)
     prm = model.parameters
     select_parameters!(prm, model.domain, model)
     select_parameters!(prm, model.system, model)
-    select_parameters!(prm, model.formulation, model)
+    return select_parameters!(prm, model.formulation, model)
 end
 
 function select_equations!(model::SimulationModel)
     eqs = model.equations
     select_equations!(eqs, model.domain, model)
     select_equations!(eqs, model.system, model)
-    select_equations!(eqs, model.formulation, model)
+    return select_equations!(eqs, model.formulation, model)
 end
 
 function select_minimum_output_variables!(model)
@@ -193,7 +195,7 @@ function select_minimum_output_variables!(model)
     end
     select_minimum_output_variables!(outputs, model.domain, model)
     select_minimum_output_variables!(outputs, model.system, model)
-    select_minimum_output_variables!(outputs, model.formulation, model)
+    return select_minimum_output_variables!(outputs, model.formulation, model)
 end
 
 select_minimum_output_variables!(outputs, ::Any, model) = nothing
@@ -237,7 +239,7 @@ end
 function map_level(primary_variables, secondary_variables, output_level)
     pkeys = [i for i in keys(primary_variables)]
     skeys = [i for i in keys(secondary_variables)]
-    if output_level == :all
+    return if output_level == :all
         out = vcat(pkeys, skeys)
     elseif output_level == :primary_variables
         out = pkeys
@@ -253,7 +255,7 @@ function select_output_variables!(model, output_level = :primary_variables)
     outputs = model.output_variables
     if !isnothing(output_level)
         if isa(output_level, Symbol)
-            output_level  = [output_level]
+            output_level = [output_level]
         end
         for levels in output_level
             mapped = map_level(model.primary_variables, model.secondary_variables, levels)
@@ -262,7 +264,7 @@ function select_output_variables!(model, output_level = :primary_variables)
             end
         end
     end
-    unique!(outputs)
+    return unique!(outputs)
 end
 
 function sort_secondary_variables!(model::JutulModel)
@@ -354,6 +356,5 @@ function sort_symbols(symbols, deps)
             add_edge!(graph, i, pos[])
         end
     end
-    reverse(topological_sort_by_dfs(graph))
+    return reverse(topological_sort_by_dfs(graph))
 end
-

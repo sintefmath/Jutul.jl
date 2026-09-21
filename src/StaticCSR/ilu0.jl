@@ -14,7 +14,7 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); 
     cols = colvals(A)
     vals = nonzeros(A)
     n, m = size(A)
-    rowptr = zeros(Ti, n+1)
+    rowptr = zeros(Ti, n + 1)
     offset = 1
     rowptr[1] = offset
     @inbounds for row in 1:n
@@ -28,13 +28,13 @@ function fixed_block(A::StaticSparsityMatrixCSR{Tv, Ti}, active = 1:size(A, 1); 
             end
         end
         offset = offset + ctr
-        rowptr[row+1] = offset
+        rowptr[row + 1] = offset
     end
     # Next, we actually fill in now that we know the sizes
-    sub_cols = zeros(Ti, offset-1)
-    sub_vals = zeros(Tv, offset-1)
+    sub_cols = zeros(Ti, offset - 1)
+    sub_vals = zeros(Tv, offset - 1)
 
-    map = zeros(Ti, offset-1)
+    map = zeros(Ti, offset - 1)
     index = 1
     for row in 1:n
         if insorted(row, active)
@@ -92,16 +92,16 @@ function update_values!(B, A, mapping)
 end
 
 @inline function inner_update!(bvals, vals, mapping)
-    @inbounds for (i, m) in enumerate(mapping)
+    return @inbounds for (i, m) in enumerate(mapping)
         bvals[i] = vals[m]
     end
 end
 
 @inline function process_partial_row!(nz, pos, cols, A, k, A_ik)
-    @inbounds for l_j in pos
+    return @inbounds for l_j in pos
         j = cols[l_j]
         A_kj = A[k, j]
-        nz[l_j] -= A_ik*A_kj
+        nz[l_j] -= A_ik * A_kj
     end
 end
 
@@ -118,12 +118,12 @@ function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
         @inbounds for l_i in l_pos
             k = cols_l[l_i]
             A_kk = D[k]
-            A_ik = nz_l[l_i]*inv(A_kk)
+            A_ik = nz_l[l_i] * inv(A_kk)
             # Put it back as inverted
             nz_l[l_i] = A_ik
             if A_ik != zero(eltype(D))
                 # Do the remainder of the row: First the part inside L, diagonal, and then the part in U
-                rem_l_pos = @view l_pos[l_start+1:end]
+                rem_l_pos = @view l_pos[(l_start + 1):end]
                 # In the following:
                 # k = 1:(i-1)
                 # and we loop over
@@ -132,7 +132,7 @@ function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
                 # then only applied to the upper part of the original
                 # matrix.
                 process_partial_row!(nz_l, rem_l_pos, cols_l, U, k, A_ik)
-                D[i] -= A_ik*U[k, i]
+                D[i] -= A_ik * U[k, i]
                 process_partial_row!(nz_u, u_pos, cols_u, U, k, A_ik)
             end
             l_start += 1
@@ -141,14 +141,15 @@ function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
     for i in active
         @inbounds D[i] = inv(D[i])
     end
+    return
 end
 
 @inline Base.@propagate_inbounds function apply_diagonal_inverse(D::SparseVector, global_index, local_index, v)
-    return nonzeros(D)[local_index]*v
+    return nonzeros(D)[local_index] * v
 end
 
 @inline Base.@propagate_inbounds function apply_diagonal_inverse(D, global_index, local_index, v)
-    return D[global_index]*v
+    return D[global_index] * v
 end
 
 @inline apply_diagonal_inverse(::Nothing, global_index, local_index, v) = v
@@ -160,9 +161,9 @@ end
     @inbounds v = b[row]
     @inbounds for j in nzrange(M, row)
         k = col[j]
-        v -= nz[j]*x[k]
+        v -= nz[j] * x[k]
     end
-    @inbounds x[row] = apply_diagonal_inverse(D, row, local_index, v)
+    return @inbounds x[row] = apply_diagonal_inverse(D, row, local_index, v)
 end
 
 function forward_substitute!(x, M, b, order = 1:length(b), D = nothing)
@@ -206,7 +207,7 @@ function Base.show(io::IO, t::MIME"text/plain", ilu::ILUFactorCSR)
     n, m = size(ilu.L)
     println(io, "$ILUFactorCSR of size ($n, $m) with eltype $(eltype(ilu))")
     println(io, "L: $(nnz(ilu.L)) nonzeros")
-    println(io, "U: $(nnz(ilu.U)) nonzeros")
+    return println(io, "U: $(nnz(ilu.U)) nonzeros")
 end
 
 export ilu0_csr, ilu0_csr!

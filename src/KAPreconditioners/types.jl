@@ -1,13 +1,18 @@
 abstract type AbstractCoarsening end
 abstract type AbstractInterpolation end
 
-function interpolation_parameters(truncation::Real, max_elements::Integer,
-                                  norm_p::Integer; allow_unlimited::Bool)
+function interpolation_parameters(
+        truncation::Real, max_elements::Integer,
+        norm_p::Integer; allow_unlimited::Bool
+    )
     truncation >= 0 || throw(ArgumentError("truncation must be non-negative"))
     valid_maximum = allow_unlimited ? max_elements >= 0 : max_elements > 0
     maximum_requirement = allow_unlimited ? "non-negative" : "positive"
-    valid_maximum || throw(ArgumentError(
-        "max_elements must be $maximum_requirement"))
+    valid_maximum || throw(
+        ArgumentError(
+            "max_elements must be $maximum_requirement"
+        )
+    )
     norm_p > 0 || throw(ArgumentError("norm_p must be positive"))
     return Float64(truncation), Int(max_elements), Int(norm_p)
 end
@@ -16,13 +21,13 @@ end
 struct Aggregation <: AbstractCoarsening
     theta::Float64
 end
-Aggregation(theta::Real=0.25) = Aggregation(Float64(theta))
+Aggregation(theta::Real = 0.25) = Aggregation(Float64(theta))
 
 """Classical Ruge-Stuben C/F splitting."""
 struct RugeStuben <: AbstractCoarsening
     theta::Float64
 end
-RugeStuben(theta::Real=0.25) = RugeStuben(Float64(theta))
+RugeStuben(theta::Real = 0.25) = RugeStuben(Float64(theta))
 
 """Piecewise-constant interpolation for unsmoothed aggregation."""
 struct ConstantInterpolation <: AbstractInterpolation end
@@ -38,11 +43,14 @@ struct ClassicalInterpolation <: AbstractInterpolation
     max_elements::Int
     norm_p::Int
     rescale::Bool
-    function ClassicalInterpolation(truncation::Real=0.0, max_elements::Integer=0,
-                                    norm_p::Integer=2, rescale::Bool=false)
+    function ClassicalInterpolation(
+            truncation::Real = 0.0, max_elements::Integer = 0,
+            norm_p::Integer = 2, rescale::Bool = false
+        )
         parameters = interpolation_parameters(
-            truncation, max_elements, norm_p; allow_unlimited=true)
-        new(parameters..., rescale)
+            truncation, max_elements, norm_p; allow_unlimited = true
+        )
+        return new(parameters..., rescale)
     end
 end
 
@@ -57,11 +65,14 @@ struct ExtendedIInterpolation <: AbstractInterpolation
     max_elements::Int
     norm_p::Int
     rescale::Bool
-    function ExtendedIInterpolation(truncation::Real=0.0, max_elements::Integer=4,
-                                    norm_p::Integer=2, rescale::Bool=true)
+    function ExtendedIInterpolation(
+            truncation::Real = 0.0, max_elements::Integer = 4,
+            norm_p::Integer = 2, rescale::Bool = true
+        )
         parameters = interpolation_parameters(
-            truncation, max_elements, norm_p; allow_unlimited=false)
-        new(parameters..., rescale)
+            truncation, max_elements, norm_p; allow_unlimited = false
+        )
+        return new(parameters..., rescale)
     end
 end
 
@@ -70,7 +81,7 @@ struct HMIS <: AbstractCoarsening
     theta::Float64
 end
 
-HMIS(theta::Real=0.5) = HMIS(Float64(theta))
+HMIS(theta::Real = 0.5) = HMIS(Float64(theta))
 
 default_interpolation(::Aggregation) = ConstantInterpolation()
 default_interpolation(::RugeStuben) = ClassicalInterpolation()
@@ -98,22 +109,25 @@ struct AMGOptions
 end
 
 function AMGOptions(;
-        coarsening::AbstractCoarsening=HMIS(),
-        interpolation::AbstractInterpolation=default_interpolation(coarsening),
-        smoother::AbstractSmoother=SPAI0(1, 1.0),
-        max_levels::Integer=20,
-        coarse_size::Integer=50,
-        coarse_solver::Symbol=:lu,
-        coarse_steps::Integer=8,
-        max_row_sum::Real=0.9,
-        block_size::Integer=128,
-        cycle::Symbol=:V)
-    AMGOptions(coarsening, interpolation, smoother, Int(max_levels),
-               Int(coarse_size), coarse_solver, Int(coarse_steps),
-               Float64(max_row_sum), Int(block_size), cycle)
+        coarsening::AbstractCoarsening = HMIS(),
+        interpolation::AbstractInterpolation = default_interpolation(coarsening),
+        smoother::AbstractSmoother = SPAI0(1, 1.0),
+        max_levels::Integer = 20,
+        coarse_size::Integer = 50,
+        coarse_solver::Symbol = :lu,
+        coarse_steps::Integer = 8,
+        max_row_sum::Real = 0.9,
+        block_size::Integer = 128,
+        cycle::Symbol = :V
+    )
+    return AMGOptions(
+        coarsening, interpolation, smoother, Int(max_levels),
+        Int(coarse_size), coarse_solver, Int(coarse_steps),
+        Float64(max_row_sum), Int(block_size), cycle
+    )
 end
 
-struct Prolongation{Tv,Ti,RP,CV,NZ}
+struct Prolongation{Tv, Ti, RP, CV, NZ}
     rowptr::RP
     colval::CV
     nzval::NZ
@@ -121,14 +135,14 @@ struct Prolongation{Tv,Ti,RP,CV,NZ}
     ncol::Int
 end
 
-struct TransposeMap{Ti,OFF,ROW,IDX}
+struct TransposeMap{Ti, OFF, ROW, IDX}
     offsets::OFF
     fine_rows::ROW
     p_indices::IDX
 end
 
 """Triples grouped by coarse nonzero; enables one kernel item per output."""
-struct GalerkinMap{Ti,OFF,PI,AI,PJ}
+struct GalerkinMap{Ti, OFF, PI, AI, PJ}
     offsets::OFF
     p_left::PI
     a_index::AI
@@ -136,7 +150,7 @@ struct GalerkinMap{Ti,OFF,PI,AI,PJ}
 end
 
 """Cached sparse LU state for a CPU coarse grid."""
-mutable struct CoarseLUState{M,F,Map}
+mutable struct CoarseLUState{M, F, Map}
     matrix::M
     factors::F
     csr_to_csc::Map
@@ -148,7 +162,7 @@ mutable struct DenseLUState{F}
 end
 
 """Standard host LU fallback for backends without a native dense LU overload."""
-mutable struct HostLUState{F,V,RP,CV,B}
+mutable struct HostLUState{F, V, RP, CV, B}
     factorization::F
     values::V
     rowptr::RP
@@ -156,7 +170,7 @@ mutable struct HostLUState{F,V,RP,CV,B}
     rhs::B
 end
 
-mutable struct AMGLevel{Tv,Ti}
+mutable struct AMGLevel{Tv, Ti}
     A::Any
     P::Any
     Pt::Any
@@ -172,7 +186,7 @@ mutable struct AMGLevel{Tv,Ti}
 end
 
 """Host scratch and staging storage retained across symbolic rebuilds."""
-mutable struct SetupWorkspace{Tv,Ti}
+mutable struct SetupWorkspace{Tv, Ti}
     ti1::Vector{Ti}
     ti2::Vector{Ti}
     ti3::Vector{Ti}
@@ -198,9 +212,9 @@ mutable struct SetupWorkspace{Tv,Ti}
     stage_strength::Vector{Bool}
 end
 
-function SetupWorkspace(::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
+function SetupWorkspace(::Type{Tv}, ::Type{Ti}) where {Tv, Ti}
     nt = Threads.maxthreadid()
-    SetupWorkspace{Tv,Ti}(
+    return SetupWorkspace{Tv, Ti}(
         Ti[], Ti[], Ti[], Int[], Int[], Int[], Int[], Int[], Float64[], Tv[], Bool[], Ti[],
         [sizehint!(Ti[], 32) for _ in 1:nt],
         [sizehint!(Tv[], 32) for _ in 1:nt],
@@ -210,9 +224,9 @@ function SetupWorkspace(::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
 end
 
 """Reusable AMG hierarchy and Krylov-compatible left preconditioner."""
-mutable struct AMGHierarchy{Tv,Ti}
-    levels::Vector{AMGLevel{Tv,Ti}}
-    workspace::SetupWorkspace{Tv,Ti}
+mutable struct AMGHierarchy{Tv, Ti}
+    levels::Vector{AMGLevel{Tv, Ti}}
+    workspace::SetupWorkspace{Tv, Ti}
     options::AMGOptions
     backend::Any
     block_size::Int
@@ -225,5 +239,5 @@ end
 
 Base.size(H::AMGHierarchy) = size(H.levels[1].A)
 Base.size(H::AMGHierarchy, d::Integer) = size(H.levels[1].A, d)
-Base.eltype(::Type{<:AMGHierarchy{Tv}}) where Tv = Tv
-Base.eltype(::AMGHierarchy{Tv}) where Tv = Tv
+Base.eltype(::Type{<:AMGHierarchy{Tv}}) where {Tv} = Tv
+Base.eltype(::AMGHierarchy{Tv}) where {Tv} = Tv

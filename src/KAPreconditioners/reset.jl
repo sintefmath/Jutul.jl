@@ -9,30 +9,35 @@ function same_pattern(H::AMGHierarchy, A::StaticSparsityMatrixCSR)
     end
     # Device comparison would force a host synchronization. Length and dimensions
     # are checked here; callers owning mutable device patterns should use :memory.
-    true
+    return true
 end
 
 function galerkin!(coarse::StaticSparsityMatrixCSR, fine::StaticSparsityMatrixCSR, P::Prolongation, G::GalerkinMap)
     number_of_nonzeros = matrix_nonzeros(coarse)
     k! = galerkin_kernel!(
-        matrix_backend(fine), matrix_kernel_block_size(fine))
-    k!(coarse.nzval, fine.nzval, P.nzval, G.offsets, G.p_left, G.a_index,
-       G.p_right, number_of_nonzeros; ndrange=number_of_nonzeros)
-    coarse
+        matrix_backend(fine), matrix_kernel_block_size(fine)
+    )
+    k!(
+        coarse.nzval, fine.nzval, P.nzval, G.offsets, G.p_left, G.a_index,
+        G.p_right, number_of_nonzeros; ndrange = number_of_nonzeros
+    )
+    return coarse
 end
 
-function galerkin!(coarse::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
-                    fine::StaticSparsityMatrixCSR{Tv,Ti,<:Vector,<:Vector,<:Vector},
-                    P::Prolongation, G::GalerkinMap) where {Tv,Ti}
+function galerkin!(
+        coarse::StaticSparsityMatrixCSR{Tv, Ti, <:Vector, <:Vector, <:Vector},
+        fine::StaticSparsityMatrixCSR{Tv, Ti, <:Vector, <:Vector, <:Vector},
+        P::Prolongation, G::GalerkinMap
+    ) where {Tv, Ti}
     foreach_cpu_row(matrix_nonzeros(coarse), matrix_batch_size(coarse)) do k
         value = zero(Tv)
-        @inbounds @simd for t in G.offsets[k]:(G.offsets[k+1]-1)
+        @inbounds @simd for t in G.offsets[k]:(G.offsets[k + 1] - 1)
             value += conj(P.nzval[G.p_left[t]]) * fine.nzval[G.a_index[t]] *
-                     P.nzval[G.p_right[t]]
+                P.nzval[G.p_right[t]]
         end
         @inbounds coarse.nzval[k] = value
     end
-    coarse
+    return coarse
 end
 
 prolongation_update_kernel(::ExtendedIInterpolation) =
@@ -40,17 +45,21 @@ prolongation_update_kernel(::ExtendedIInterpolation) =
 prolongation_update_kernel(::ClassicalInterpolation) =
     update_classical_p_kernel!
 
-function update_prolongation!(level::AMGLevel,
-        interpolation::Union{ExtendedIInterpolation,ClassicalInterpolation})
+function update_prolongation!(
+        level::AMGLevel,
+        interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation}
+    )
     A, P = level.A, level.P
     isnothing(P) && return level
     kernel = prolongation_update_kernel(interpolation)
     n = matrix_nrows(A)
     k! = kernel(matrix_backend(A), matrix_kernel_block_size(A))
-    k!(P.nzval, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval,
-       level.cf, level.coarse_map, level.strength, interpolation.rescale,
-       n; ndrange=n)
-    level
+    k!(
+        P.nzval, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval,
+        level.cf, level.coarse_map, level.strength, interpolation.rescale,
+        n; ndrange = n
+    )
+    return level
 end
 
 update_prolongation!(level::AMGLevel, ::ConstantInterpolation) = level
@@ -61,25 +70,30 @@ function reset_solve_history!(H::AMGHierarchy)
     return H
 end
 
-function numeric_reset!(H::AMGHierarchy, A::StaticSparsityMatrixCSR,
-                        mode::Symbol)
-    mode in (:operators, :sparsity) || throw(ArgumentError(
-        "numeric reset mode must be :operators or :sparsity"))
+function numeric_reset!(
+        H::AMGHierarchy, A::StaticSparsityMatrixCSR,
+        mode::Symbol
+    )
+    mode in (:operators, :sparsity) || throw(
+        ArgumentError(
+            "numeric reset mode must be :operators or :sparsity"
+        )
+    )
     copy_matrix_values!(H.levels[1].A, A)
     update_level_smoother!(H.levels[1].smoother, H.levels[1].A, H.options)
-    for l in 1:(length(H.levels)-1)
+    for l in 1:(length(H.levels) - 1)
         level = H.levels[l]
         if mode == :sparsity
             update_prolongation!(level, H.options.interpolation)
         end
-        next = H.levels[l+1]
+        next = H.levels[l + 1]
         galerkin!(next.A, level.A, level.P, level.galerkin)
         update_level_smoother!(next.smoother, next.A, H.options)
     end
     coarse = H.levels[end]
     isnothing(coarse.coarse_solver) || update_coarse_solver!(coarse.coarse_solver, coarse.A)
     synchronize_backend(H.backend)
-    reset_solve_history!(H)
+    return reset_solve_history!(H)
 end
 
 function replace_hierarchy!(H::AMGHierarchy, fresh::AMGHierarchy)
@@ -91,7 +105,7 @@ function replace_hierarchy!(H::AMGHierarchy, fresh::AMGHierarchy)
     H.pattern_rowptr = fresh.pattern_rowptr
     H.pattern_colval = fresh.pattern_colval
     H.pending_replaced_storage = fresh.pending_replaced_storage
-    reset_solve_history!(H)
+    return reset_solve_history!(H)
 end
 
 """
@@ -108,10 +122,12 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
     # structural arrays and use the supplied host values for symbolic setup.
     finest = H.levels[1].A
     replaced_bytes = Ref(0)
-    H.levels = build_hierarchy(finest, H.options; reuse_levels=H.levels,
-                                workspace=H.workspace, host_finest=host_finest,
-                                reuse_finest_structure=true,
-                                reallocation_tracker=replaced_bytes)
+    H.levels = build_hierarchy(
+        finest, H.options; reuse_levels = H.levels,
+        workspace = H.workspace, host_finest = host_finest,
+        reuse_finest_structure = true,
+        reallocation_tracker = replaced_bytes
+    )
     H.pending_replaced_storage += replaced_bytes[]
     cleanup_threshold = replaced_backend_storage_cleanup_threshold(H.backend)
     if H.pending_replaced_storage > 0 &&
@@ -120,32 +136,42 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
         H.pending_replaced_storage = 0
     end
     H.block_size = matrix_batch_size(H.levels[1].A)
-    reset_solve_history!(H)
+    return reset_solve_history!(H)
 end
 
 const AMG_REUSE_MODES = (:operators, :sparsity, :memory, :none)
 
 function validate_amg_reuse_mode(reuse::Symbol)
-    reuse in AMG_REUSE_MODES || throw(ArgumentError(
-        "reuse must be :operators, :sparsity, :memory, or :none"))
-    reuse
+    reuse in AMG_REUSE_MODES || throw(
+        ArgumentError(
+            "reuse must be :operators, :sparsity, :memory, or :none"
+        )
+    )
+    return reuse
 end
 
 function validate_memory_reuse(H::AMGHierarchy, dimensions, nonzero_count)
-    dimensions == size(H) || throw(DimensionMismatch(
-        "matrix and hierarchy sizes differ"))
-    nonzero_count == matrix_nonzeros(H.levels[1].A) || throw(ArgumentError(
-        "reuse=:memory requires an unchanged finest-level sparsity pattern"))
+    dimensions == size(H) || throw(
+        DimensionMismatch(
+            "matrix and hierarchy sizes differ"
+        )
+    )
+    nonzero_count == matrix_nonzeros(H.levels[1].A) || throw(
+        ArgumentError(
+            "reuse=:memory requires an unchanged finest-level sparsity pattern"
+        )
+    )
     return nothing
 end
 
-function host_value_buffer(H::AMGHierarchy{Tv,Ti}, n::Integer) where {Tv,Ti}
+function host_value_buffer(H::AMGHierarchy{Tv, Ti}, n::Integer) where {Tv, Ti}
     if H.backend isa KernelAbstractions.CPU
         return H.levels[1].A.nzval
     end
     stage = H.workspace.stage_matrix1
     values = if stage isa StaticSparsityMatrixCSR{
-            Tv,Ti,<:Vector,<:Vector,<:Vector}
+            Tv, Ti, <:Vector, <:Vector, <:Vector,
+        }
         stage.nzval
     else
         Tv[]
@@ -154,7 +180,7 @@ function host_value_buffer(H::AMGHierarchy{Tv,Ti}, n::Integer) where {Tv,Ti}
     return values
 end
 
-function memory_reset!(H::AMGHierarchy{Tv,Ti}, A::StaticSparsityMatrixCSR) where {Tv,Ti}
+function memory_reset!(H::AMGHierarchy{Tv, Ti}, A::StaticSparsityMatrixCSR) where {Tv, Ti}
     same_backend(matrix_backend(A), H.backend) ||
         throw(ArgumentError("matrix and hierarchy must use the same backend"))
     validate_memory_reuse(H, size(A), matrix_nonzeros(A))
@@ -167,9 +193,10 @@ function memory_reset!(H::AMGHierarchy{Tv,Ti}, A::StaticSparsityMatrixCSR) where
         copyto!(host_values, 1, A.nzval, 1, matrix_nonzeros(A))
         host_finest = csr_matrix(
             H.pattern_rowptr, H.pattern_colval, host_values,
-            matrix_nrows(A), matrix_ncols(A); block_size = H.block_size)
+            matrix_nrows(A), matrix_ncols(A); block_size = H.block_size
+        )
     end
-    rebuild_memory!(H, host_finest)
+    return rebuild_memory!(H, host_finest)
 end
 
 """
@@ -189,7 +216,7 @@ Refresh a hierarchy for new coefficients.
 
 The first two modes perform no hierarchy-array allocation.
 """
-function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol=:operators)
+function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol = :operators)
     validate_amg_reuse_mode(reuse)
     if reuse == :operators || reuse == :sparsity
         same_pattern(H, A) || throw(ArgumentError("reuse=$reuse requires an unchanged CSR pattern"))
@@ -208,27 +235,32 @@ function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol
     return H
 end
 
-function resetup_amg!(H::AMGHierarchy{Tv,Ti}, A::SparseMatrixCSC,
-                      reuse::Symbol=:operators) where {Tv,Ti}
+function resetup_amg!(
+        H::AMGHierarchy{Tv, Ti}, A::SparseMatrixCSC,
+        reuse::Symbol = :operators
+    ) where {Tv, Ti}
     validate_amg_reuse_mode(reuse)
     eltype(A) === Tv || throw(ArgumentError("matrix value type must match the hierarchy"))
     if reuse == :memory
         validate_memory_reuse(H, size(A), nnz(A))
         finest = H.levels[1].A
         host_values = host_value_buffer(H, nnz(A))
-        copy_csc_values_to_csr!(host_values, A, H.pattern_rowptr,
-                                 H.workspace.ti1)
+        copy_csc_values_to_csr!(
+            host_values, A, H.pattern_rowptr,
+            H.workspace.ti1
+        )
         H.backend isa KernelAbstractions.CPU ||
             copyto!(finest.nzval, 1, host_values, 1, nnz(A))
         host_finest = csr_matrix(
             H.pattern_rowptr, H.pattern_colval, host_values,
-            size(A, 1), size(A, 2); block_size = H.block_size)
+            size(A, 1), size(A, 2); block_size = H.block_size
+        )
         rebuild_memory!(H, host_finest)
     else
-        C = csr_matrix(A; backend=H.backend, block_size=H.block_size, index_type=Ti)
+        C = csr_matrix(A; backend = H.backend, block_size = H.block_size, index_type = Ti)
         resetup_amg!(H, C, reuse)
     end
     return H
 end
 
-resetup_amg!(H::AMGHierarchy, A; reuse::Symbol=:operators) = resetup_amg!(H, A, reuse)
+resetup_amg!(H::AMGHierarchy, A; reuse::Symbol = :operators) = resetup_amg!(H, A, reuse)

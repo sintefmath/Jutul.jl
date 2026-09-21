@@ -3,7 +3,7 @@ function add_next!(faces, remap, tags, numpts, offset)
     for j in 1:numpts
         push!(vals, remap[tags[offset + j]])
     end
-    push!(faces, vals)
+    return push!(faces, vals)
 end
 
 function parse_faces(remaps; verbose = false)
@@ -28,10 +28,10 @@ function parse_faces(remaps; verbose = false)
             else
                 error("Unsupported element type $name for faces.")
             end
-            @assert length(enodetags) == numpts*length(etags)
+            @assert length(enodetags) == numpts * length(etags)
             print_message("Faces: Processing $(length(etags)) tags of type $name", verbose)
             for (i, etag) in enumerate(etags)
-                offset = (i-1)*numpts
+                offset = (i - 1) * numpts
                 add_next!(faces, node_remap, enodetags, numpts, offset)
                 face_remap[etag] = length(faces)
             end
@@ -50,7 +50,7 @@ function get_cell_decomposition(name)
             QUAD_T(0, 1, 5, 4),
             QUAD_T(2, 3, 7, 6),
             QUAD_T(0, 3, 2, 1),
-            QUAD_T(4, 5, 6, 7)
+            QUAD_T(4, 5, 6, 7),
         )
         numpts = 8
     elseif name == "Tetrahedron 4"
@@ -58,7 +58,7 @@ function get_cell_decomposition(name)
             TRI_T(0, 1, 3),
             TRI_T(0, 2, 1),
             TRI_T(0, 3, 2),
-            TRI_T(1, 2, 3)
+            TRI_T(1, 2, 3),
         )
         quads = Tuple{}()
         numpts = 4
@@ -68,7 +68,7 @@ function get_cell_decomposition(name)
             TRI_T(0, 1, 4),
             TRI_T(0, 4, 3),
             TRI_T(3, 4, 2),
-            TRI_T(1, 2, 4)
+            TRI_T(1, 2, 4),
         )
         quads = (QUAD_T(0, 3, 2, 1),)
         numpts = 4
@@ -76,12 +76,12 @@ function get_cell_decomposition(name)
         # TODO: Not really tested.
         tris = (
             TRI_T(0, 2, 1),
-            TRI_T(3, 4, 5)
+            TRI_T(3, 4, 5),
         )
         quads = (
             QUAD_T(0, 1, 4, 3),
             QUAD_T(0, 3, 5, 2),
-            QUAD_T(1, 2, 5, 4)
+            QUAD_T(1, 2, 5, 4),
         )
         numpts = 6
     else
@@ -91,7 +91,7 @@ function get_cell_decomposition(name)
 end
 
 function print_message(msg, verbose)
-    if verbose
+    return if verbose
         println(msg)
     end
 end
@@ -115,17 +115,17 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
             name, dim, _, _, _, _ = gmsh.model.mesh.getElementProperties(etypes)
             tris, quads, numpts = get_cell_decomposition(name)
             print_message("Cells: Processing $(length(etags)) tags of type $name", verbose)
-            @assert length(enodetags) == numpts*length(etags)
+            @assert length(enodetags) == numpts * length(etags)
             nadded = 0
             for (i, etag) in enumerate(etags)
-                offset = (i-1)*numpts
-                pt_range = (offset+1):(offset+numpts)
+                offset = (i - 1) * numpts
+                pt_range = (offset + 1):(offset + numpts)
                 @assert length(pt_range) == numpts
                 pts = map(i -> node_remap[enodetags[i]], pt_range)
                 cell = Tuple{Int, Int}[]
                 for face_t in (tris, quads)
                     for (fno, face) in enumerate(face_t)
-                        face_pts = map(i -> pts[i+1], face)
+                        face_pts = map(i -> pts[i + 1], face)
                         face_pts_sorted = sort(face_pts)
                         faceno = get(face_lookup, face_pts_sorted, 0)
                         if faceno == 0

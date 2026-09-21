@@ -2,35 +2,35 @@ export PArrayBackend, MPI_PArrayBackend
 
 function simulate_parray
 
-end
+    end
 
 function parray_preconditioner_apply!
 
-end
+    end
 
 function parray_update_preconditioners!
 
-end
+    end
 
 function partition_distributed
 
-end
+    end
 
 function parray_linear_system_operator
 
-end
+    end
 
 function parray_synchronize_primary_variables
 
-end
+    end
 
 function mpi_scalar_allreduce
 
-end
+    end
 
 function consolidate_distributed_results_on_disk!
 
-end
+    end
 
 abstract type PArrayBackend <: JutulBackend end
 
@@ -57,7 +57,7 @@ struct PArrayExecutor{T} <: Jutul.JutulExecutor
     to_global::Vector{Int}
 end
 
-function PArrayExecutor(mode, rank, to_global;kwarg...)
+function PArrayExecutor(mode, rank, to_global; kwarg...)
     data = Dict{Symbol, Any}()
     for (k, v) in kwarg
         data[k] = v

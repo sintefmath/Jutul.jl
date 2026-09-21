@@ -94,7 +94,7 @@ function PotentialFlow(N::AbstractMatrix, nc = maximum(N); kgrad = nothing, upwi
     return PotentialFlow(kgrad, upwind, hf, ad = ad)
 end
 
-function subdiscretization(disc::PotentialFlow{ad}, subg, mapper::FiniteVolumeGlobalMap) where ad
+function subdiscretization(disc::PotentialFlow{ad}, subg, mapper::FiniteVolumeGlobalMap) where {ad}
     # kgrad
     # upwind
     # half_face_map -> N -> remap N -> half_face_map
@@ -116,7 +116,7 @@ function subdiscretization(disc::PotentialFlow{ad}, subg, mapper::FiniteVolumeGl
     return PotentialFlow(kgrad, upwind, hf, ad = ad)
 end
 
-function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D<:PotentialFlow, FT, N}
+function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D <: PotentialFlow, FT, N}
     disc = eq.flow_discretization
     face_map = local_half_face_map(disc.half_face_map, i)
     div = (x, F) -> divergence!(x, F, face_map)
@@ -141,7 +141,7 @@ function get_connection(face, cell, N, inc_face_sign)
     return out
 end
 
-function remap_connection(conn::T, self::I, other::I, face::I) where {T, I<:Integer}
+function remap_connection(conn::T, self::I, other::I, face::I) where {T, I <: Integer}
     vals = values(conn)
     i = 1
     for k in keys(conn)
@@ -178,26 +178,26 @@ function TwoPointPotentialFlowHardCoded(N::AbstractMatrix, nc = maximum(N, init 
         el = get_el(1, 1) # Could be junk, we just need eltype
         conn_data = Vector{typeof(el)}(undef, nhf)
         function F(cell)
-            @inbounds for fpos = face_pos[cell]:(face_pos[cell+1]-1)
+            return @inbounds for fpos in face_pos[cell]:(face_pos[cell + 1] - 1)
                 conn_data[fpos] = get_el(faces[fpos], cell)
             end
         end
         threaded_loop_minbatch(F, nc, 1000)
     else
         conn_data = []
-        face_pos = ones(Int64, nc+1)
+        face_pos = ones(Int64, nc + 1)
     end
     return TwoPointPotentialFlowHardCoded{typeof(face_pos), typeof(conn_data)}(true, face_pos, conn_data)
 end
 
-function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D<:TwoPointPotentialFlowHardCoded, FT, N}
+function local_discretization(eq::ConservationLaw{S, D, FT, N}, i) where {S, D <: TwoPointPotentialFlowHardCoded, FT, N}
     disc = eq.flow_discretization
     start = disc.conn_pos[i]
-    stop = disc.conn_pos[i+1]-1
+    stop = disc.conn_pos[i + 1] - 1
     return view(disc.conn_data, start:stop)
 end
 
-function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, state, state0, eq::ConservationLaw{S, D, FT, N}, model, Δt, ldisc = local_discretization(eq, self_cell)) where {T_e, S, D<:TwoPointPotentialFlowHardCoded, FT<:Jutul.FluxType, N}
+function update_equation_in_entity!(eq_buf::AbstractVector{T_e}, self_cell, state, state0, eq::ConservationLaw{S, D, FT, N}, model, Δt, ldisc = local_discretization(eq, self_cell)) where {T_e, S, D <: TwoPointPotentialFlowHardCoded, FT <: Jutul.FluxType, N}
     # This will be called if a local TPFA code is used with some kind of general
     # AD, e.g. in adjoints.
     # Compute accumulation term
@@ -260,11 +260,11 @@ function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_glob
         c_g = global_cell(c, mapper)
         counter = 0
         # Loop over half-faces for this cell
-        for f_p in face_pos[c]:face_pos[c+1]-1
+        for f_p in face_pos[c]:(face_pos[c + 1] - 1)
             f = faces[f_p]
             f_g = global_face(f, mapper)
             # Loop over the corresponding global half-faces
-            for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
+            for f_i in face_pos_global[c_g]:(face_pos_global[c_g + 1] - 1)
                 conn = conn_data_global[f_i]
                 if conn.face == f_g
                     # verify that this is actually the right global cell!
@@ -279,24 +279,24 @@ function compute_counts_subdisc(face_pos, faces, face_pos_global, conn_data_glob
     return counts
 end
 
-function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc) where T
-    conn_data = Vector{T}(undef, next_face_pos[end]-1)
-    touched = BitVector(false for i = 1:length(conn_data))
+function conn_data_subdisc(face_pos, faces, face_pos_global, next_face_pos, conn_data_global::Vector{T}, mapper, nc) where {T}
+    conn_data = Vector{T}(undef, next_face_pos[end] - 1)
+    touched = BitVector(false for i in 1:length(conn_data))
     for local_cell_no in 1:nc
         # Map inner index -> full index
         c = full_cell(local_cell_no, mapper)
         c_g = global_cell(c, mapper)
         counter = 0
         start = face_pos[c]
-        stop = face_pos[c+1]-1
-        hf_offset = next_face_pos[local_cell_no]-1
+        stop = face_pos[c + 1] - 1
+        hf_offset = next_face_pos[local_cell_no] - 1
         # Loop over half-faces for this cell
         for f_p in start:stop
             f = faces[f_p]
             f_g = global_face(f, mapper)
             done = false
             # Loop over the corresponding global half-faces
-            for f_i in face_pos_global[c_g]:face_pos_global[c_g+1]-1
+            for f_i in face_pos_global[c_g]:(face_pos_global[c_g + 1] - 1)
                 conn = conn_data_global[f_i]::T
                 # @info "$f_i" conn.face f_g f
                 if conn.face == f_g
@@ -334,8 +334,8 @@ end
 Two-point potential drop with gravity (generic)
 """
 @inline function two_point_potential_drop(p_self::Real, p_other::Real, gΔz::Real, ρ_self::Real, ρ_other::Real)
-    ρ_avg = 0.5*(ρ_self + ρ_other)
-    return p_self - p_other + gΔz*ρ_avg
+    ρ_avg = 0.5 * (ρ_self + ρ_other)
+    return p_self - p_other + gΔz * ρ_avg
 end
 
 """
@@ -372,7 +372,7 @@ Compute the arithmetic average of `F(left)` and `F(right)` across a face.
 """
 @inline function face_average(F, tpfa)
     l, r = cell_pair(tpfa)
-    return 0.5*(F(r) + F(l))
+    return 0.5 * (F(r) + F(l))
 end
 
 """
@@ -411,7 +411,7 @@ end
 Adjoint pattern tracking overload: touches both cells so the sparsity tracker
 sees the full dependency pattern.
 """
-@inline function upwind(upw::SPU, m::AbstractArray{T}, q) where T<:SCT.Dual
+@inline function upwind(upw::SPU, m::AbstractArray{T}, q) where {T <: SCT.Dual}
     return m[upw.left] + m[upw.right]
 end
 
@@ -426,11 +426,11 @@ function upw_flux(v, l, r)
     return out
 end
 
-function upw_flux(v, l::T, r::T) where {T<:ST.ADval}
+function upw_flux(v, l::T, r::T) where {T <: ST.ADval}
     if v > 0
-        out = l + r*0
+        out = l + r * 0
     else
-        out = r + l*0
+        out = r + l * 0
     end
     return out
 end

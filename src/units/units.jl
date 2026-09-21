@@ -19,14 +19,14 @@ include("interface.jl")
 
 const TIME_UNITS_FOR_PRINTING = (
     (si_unit(:year), :year),
-    (7*si_unit(:day), :week),
+    (7 * si_unit(:day), :week),
     (si_unit(:day), :day),
     (si_unit(:hour), :hour),
     (si_unit(:minute), :minute),
     (si_unit(:second), :second),
-    (si_unit(:milli)*si_unit(:second), :millisecond),
-    (si_unit(:micro)*si_unit(:second), :microsecond),
-    (si_unit(:nano)*si_unit(:second), :nanosecond),
+    (si_unit(:milli) * si_unit(:second), :millisecond),
+    (si_unit(:micro) * si_unit(:second), :microsecond),
+    (si_unit(:nano) * si_unit(:second), :nanosecond),
 )
 
 
@@ -61,4 +61,4 @@ julia> convert_to_si(1.0, "milligram") # Get 1 milligram represented as kilogram
 """
 function convert_to_si
     # Place docs here to avoid docstring duplication
-end
+    end

@@ -1,4 +1,3 @@
-
 function swap_primary_with_parameters!(pmodel::MultiModel, model::MultiModel, targets = parameter_targets(model))
     for k in submodels_symbols(pmodel)
         swap_primary_with_parameters!(pmodel.models[k], model.models[k], targets[k])
@@ -25,9 +24,11 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
     else
         new_context = adjoint(context)
     end
-    return MultiModel(new_models, context = new_context, groups = g,
+    return MultiModel(
+        new_models, context = new_context, groups = g,
         group_execution = execution, cross_terms = ctp,
-        reduction = r)
+        reduction = r
+    )
 end
 
 function convert_state_ad(model::MultiModel, state, tag = nothing)
@@ -52,8 +53,8 @@ function state_gradient_outer!(∂F∂x, obj_eval, model::MultiModel, state; spa
     if has_sparsity
         @. ∂F∂x = 0
     end
-    local_view(F::AbstractVector, offset, n) = view(F, (offset+1):(offset+n))
-    local_view(F::AbstractMatrix, offset, n) = view(F, :, (offset+1):(offset+n))
+    local_view(F::AbstractVector, offset, n) = view(F, (offset + 1):(offset + n))
+    local_view(F::AbstractMatrix, offset, n) = view(F, :, (offset + 1):(offset + n))
 
     for k in submodels_symbols(model)
         m = model[k]
@@ -94,7 +95,7 @@ end
 
 function perturb_parameter!(model::MultiModel, param_i, target, i, j, sz, ϵ)
     t_outer, t_inner = target
-    perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, j, sz, ϵ)
+    return perturb_parameter!(model[t_outer], param_i[t_outer], t_inner, i, j, sz, ϵ)
 end
 
 function parameter_targets(model::MultiModel)
@@ -105,7 +106,8 @@ function parameter_targets(model::MultiModel)
     return targets
 end
 
-function variable_mapper(model::MultiModel, arg...;
+function variable_mapper(
+        model::MultiModel, arg...;
         targets = nothing,
         config = nothing,
         offset_x = 0,
@@ -123,7 +125,8 @@ function variable_mapper(model::MultiModel, arg...;
         else
             c = config[k]
         end
-        out[k], offset_full, offset_x = variable_mapper(model[k], arg...;
+        out[k], offset_full, offset_x = variable_mapper(
+            model[k], arg...;
             targets = t,
             config = c,
             offset_full = offset_full,
@@ -137,6 +140,7 @@ function rescale_sensitivities!(dG, model::MultiModel, parameter_map; renum = no
     for k in submodels_symbols(model)
         rescale_sensitivities!(dG, model[k], parameter_map[k], renum = renum)
     end
+    return
 end
 
 function optimization_config(model::MultiModel, param, active = nothing; kwarg...)
@@ -187,6 +191,7 @@ function print_parameter_optimization_config(targets, config, model::MultiModel)
     for (k, v) in targets
         print_parameter_optimization_config(v, config[k], model[k], title = k)
     end
+    return
 end
 
 function determine_sparsity_simple(F, model::MultiModel, state, state0 = nothing; variant = missing)

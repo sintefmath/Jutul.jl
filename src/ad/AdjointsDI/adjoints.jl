@@ -1,7 +1,8 @@
 import Jutul: AdjointPackedResult, JUTUL_IS_CI
 import ProgressMeter: @showprogress
 
-function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
+function solve_adjoint_generic(
+        X, F, states, reports_or_timesteps, G;
         # n_objective = nothing,
         extra_timing = false,
         extra_output = false,
@@ -17,7 +18,8 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Setting up storage...", color = :blue)
     end
-    t_storage = @elapsed storage = setup_adjoint_storage_generic(X, F, packed_steps, G;
+    t_storage = @elapsed storage = setup_adjoint_storage_generic(
+        X, F, packed_steps, G;
         info_level = info_level,
         state0 = state0,
         kwarg...
@@ -34,7 +36,8 @@ function solve_adjoint_generic(X, F, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
     end
-    solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G,
+    solve_adjoint_generic!(
+        ∇G, X, F, storage, packed_steps, G,
         info_level = info_level,
         state0 = state0,
     )
@@ -51,7 +54,8 @@ function solve_adjoint_generic!(∇G, X, F, storage, states, dt, G; kwarg...)
     return solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G; kwarg...)
 end
 
-function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPackedResult, G;
+function solve_adjoint_generic!(
+        ∇G, X, F, storage, packed_steps::AdjointPackedResult, G;
         info_level = 0,
         state0 = missing,
         extra_timing = false
@@ -86,7 +90,8 @@ function solve_adjoint_generic!(∇G, X, F, storage, packed_steps::AdjointPacked
         if storage[:deps_ad] == :jutul
             @assert !is_fully_dynamic "Fully dynamic dependencies must use :di adjoints."
             dG_dynamic_prm = storage[:dynamic_buffer_parameters]
-            @tic "jutul_adjoint" Jutul.solve_adjoint_sensitivities!(dG_dynamic_prm, storage, packed_steps, G;
+            @tic "jutul_adjoint" Jutul.solve_adjoint_sensitivities!(
+                dG_dynamic_prm, storage, packed_steps, G;
                 info_level = info_level,
                 objective_sparsity_steps = idx_for_sparsity
             )
@@ -148,7 +153,8 @@ function setup_adjoint_storage_generic(x, F, states, dt, objective; kwarg...)
     return setup_adjoint_storage_generic(x, F, packed_steps, objective; kwarg...)
 end
 
-function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, G;
+function setup_adjoint_storage_generic(
+        X, F, packed_steps::AdjointPackedResult, G;
         state0 = missing,
         do_prep = true,
         di_sparse = true,
@@ -188,7 +194,8 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     adj_kwarg = (
         use_sparsity = use_sparsity,
         linear_solver = Jutul.select_linear_solver(
-            execution_model, mode = :adjoint, rtol = 1e-6),
+            execution_model, mode = :adjoint, rtol = 1.0e-6
+        ),
         n_objective = nothing,
         info_level = info_level,
         execution_model = execution_model,
@@ -202,7 +209,8 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
             adj_kwarg...
         )
     else
-        storage = Jutul.setup_adjoint_storage(model;
+        storage = Jutul.setup_adjoint_storage(
+            model;
             state0 = case.state0,
             parameters = case.parameters,
             include_state0 = inc_state0,
@@ -226,7 +234,8 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
         # DifferentiationInterface.jl (DI) for both, or DI for static (X to
         # parameters) and Jutul adjoints for dynamic (parameters to case).
         if use_di
-            parameter_map, = Jutul.variable_mapper(model, :parameters,
+            parameter_map, = Jutul.variable_mapper(
+                model, :parameters,
                 targets = deps_targets,
                 config = nothing
             )
@@ -282,7 +291,7 @@ function setup_adjoint_storage_generic(X, F, packed_steps::AdjointPackedResult, 
     dG_dyn = similar(Y)
     storage[:dynamic_buffer] = dG_dyn
     storage[:dynamic_buffer_parameters] = view(dG_dyn, 1:N_prm)
-    storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm+1):(N_prm+N_state0))
+    storage[:dynamic_buffer_state0] = view(dG_dyn, (N_prm + 1):(N_prm + N_state0))
     H = AdjointObjectiveHelper(F_dynamic, G, packed_steps)
     storage[:adjoint_objective_helper] = H
     if do_prep
@@ -416,7 +425,7 @@ function unpack_setup(step_info, N, case::JutulCase; all = false)
 end
 
 function unpack_setup(step_info, N, out::Tuple; all = false)
-    unpack_setup(step_info, N, out...; all = all)
+    return unpack_setup(step_info, N, out...; all = all)
 end
 
 function unpack_setup(step_info, N, model::Jutul.JutulModel; all = false)
@@ -444,7 +453,7 @@ mutable struct AdjointObjectiveHelper
     cache::Dict{Tuple{DataType, Int64}, Any}
     num_evals::Int64
     function AdjointObjectiveHelper(F, G, packed_steps::AdjointPackedResult)
-        new(F, G, missing, :all, packed_steps, Dict(), 0)
+        return new(F, G, missing, :all, packed_steps, Dict(), 0)
     end
 end
 
@@ -459,7 +468,7 @@ function set_objective_helper_step_index!(H::AdjointObjectiveHelper, model, step
         step_index_for_eval = 1
     end
     H.step_index = step_index
-    H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index_for_eval)
+    return H.objective_evaluator = Jutul.objective_evaluator_from_model_and_state(H.G, model, H.packed_steps, step_index_for_eval)
 end
 
 function (H::AdjointObjectiveHelper)(x)
@@ -469,7 +478,7 @@ function (H::AdjointObjectiveHelper)(x)
         is_sum = H.G isa Jutul.AbstractSumObjective
         H.G::Jutul.AbstractJutulObjective
         H.num_evals += 1
-        evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
+        return evaluate_residual_and_jacobian_for_state_pair(x, s, s0, H.F, H.objective_evaluator, packed, ix, H.cache; is_sum = is_sum)
     end
     if H.step_index isa Symbol
         step_index_sym = H.step_index
@@ -547,9 +556,10 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
         else
             allforces = [forces_for_eval for _ in 1:step_info[:Nstep]]
         end
-        forces_arg = (allforces = allforces, forces = forces_for_eval,)
+        forces_arg = (allforces = allforces, forces = forces_for_eval)
     end
-    model_residual(state, state0, sim,
+    model_residual(
+        state, state0, sim,
         forces = forces_for_eval,
         time = step_info[:time],
         dt = dt
@@ -566,7 +576,8 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
     else
         s = JutulStorage(state)
     end
-    r[end] = objective_eval(case.model, s;
+    r[end] = objective_eval(
+        case.model, s;
         input_data = case.input_data,
         parameters = case.parameters,
         forces_arg...
@@ -579,7 +590,7 @@ function reset_context_and_groups(case::Jutul.JutulCase)
     return JutulCase(model, case.dt, case.forces, case.state0, case.parameters, case.input_data)
 end
 
-function reset_context_and_groups(model::Jutul.MultiModel{label}) where label
+function reset_context_and_groups(model::Jutul.MultiModel{label}) where {label}
     new_models = Jutul.OrderedDict()
     for (k, m) in pairs(model.models)
         new_models[k] = reset_context_and_groups(m)
@@ -589,7 +600,8 @@ end
 
 function reset_context_and_groups(model::Jutul.SimulationModel)
     if model.context != Jutul.DefaultContext()
-        model = SimulationModel(model.domain, model.system,
+        model = SimulationModel(
+            model.domain, model.system,
             formulation = model.formulation,
             data_domain = model.data_domain,
             extra = model.extra,

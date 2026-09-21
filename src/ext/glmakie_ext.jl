@@ -2,12 +2,12 @@ export plot_secondary_variables
 
 function plot_secondary_variables
 
-end
+    end
 
 function plot_jutul_line_data
 
-end
+    end
 
 function independent_figure(fig)
-    display(fig)
+    return display(fig)
 end

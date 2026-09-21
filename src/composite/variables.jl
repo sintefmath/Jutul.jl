@@ -9,12 +9,13 @@ function update_secondary_variables_state!(state, model::CompositeModel, vars = 
         m = models[name]
         update_secondary_variable!(v, var, m, state, ix)
     end
+    return
 end
 
-function update_primary_variable!(state, p::Pair{Symbol, V}, state_symbol, model::CompositeModel, dx, w) where V<:JutulVariables
+function update_primary_variable!(state, p::Pair{Symbol, V}, state_symbol, model::CompositeModel, dx, w) where {V <: JutulVariables}
     label, var = p
     m = composite_submodel(model, label)
-    update_primary_variable!(state, var, state_symbol, m, dx, w)
+    return update_primary_variable!(state, var, state_symbol, m, dx, w)
 end
 
 function set_variable_internal!(vars, model::CompositeModel; kwarg...)
@@ -43,6 +44,7 @@ function set_variable_internal!(vars, model::CompositeModel; kwarg...)
             vars[k] = Pair(oldkey, v)
         end
     end
+    return
 end
 
 function get_dependencies(svar::Pair, model::CompositeModel)

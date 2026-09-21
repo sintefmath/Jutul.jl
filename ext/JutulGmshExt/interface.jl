@@ -1,4 +1,3 @@
-
 """
     Jutul.mesh_from_gmsh("path/to/file.geo", manage_gmsh = true, verbose = false)
 
@@ -24,7 +23,8 @@ projects.
 - `preserve_order::Bool`: Whether to preserve the original cell ordering based
   on the Gmsh tags.
 """
-function Jutul.mesh_from_gmsh(pth;
+function Jutul.mesh_from_gmsh(
+        pth;
         argv = String[],
         manage_gmsh = true,
         verbose = false,
@@ -86,7 +86,7 @@ function Jutul.mesh_from_gmsh(;
             [
                 1.0, 0.0, 0.0, 0.0,
                 0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, -1.0, 0.0
+                0.0, 0.0, -1.0, 0.0,
             ]
         )
         gmsh.model.mesh.generate()
@@ -100,7 +100,7 @@ function Jutul.mesh_from_gmsh(;
     remaps = (
         nodes = node_remap,
         faces = Dict{UInt64, Int}(),
-        cells = Dict{UInt64, Int}()
+        cells = Dict{UInt64, Int}(),
     )
     pts = reshape(pts, Int(dim), :)
     pts_s = collect(vec(reinterpret(SVector{3, Float64}, pts)))
@@ -121,7 +121,7 @@ function Jutul.mesh_from_gmsh(;
         l_bnd = l == 0
         r_bnd = r == 0
 
-        if l_bnd || r_bnd 
+        if l_bnd || r_bnd
             if l_bnd && r_bnd
                 n_bad += 1
             else

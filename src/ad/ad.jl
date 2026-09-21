@@ -9,12 +9,12 @@ Get number of entities a cache is defined on.
 """
 Number of entities for vector stored in state (just the number of elements)
 """
-@inline number_of_entities(c::T) where T<:AbstractVector = length(c)
+@inline number_of_entities(c::T) where {T <: AbstractVector} = length(c)
 
 """
 Number of entities for matrix stored in state (convention is number of columns)
 """
-@inline number_of_entities(c::T) where T<:AbstractArray = size(c, 2)
+@inline number_of_entities(c::T) where {T <: AbstractArray} = size(c, 2)
 
 """
 Get the entries of the main autodiff cache for an equation.
@@ -26,73 +26,75 @@ Note: This only gets the .equation field's entries.
 end
 
 @inline function get_entry(c::JutulAutoDiffCache, index, eqNo)
-    @inbounds get_entries(c)[eqNo, index]
+    return @inbounds get_entries(c)[eqNo, index]
 end
 
 @inline Base.@propagate_inbounds get_entry_impl(x::ForwardDiff.Dual, derNo::Int) = x.partials[derNo]
 @inline Base.@propagate_inbounds get_entry_impl(x::Real, derNo::Int) = x
 
 @inline function get_entry(c::JutulAutoDiffCache, index, eqNo, derNo)
-    @inbounds get_entry_impl(get_entries(c)[eqNo, index], derNo)
+    return @inbounds get_entry_impl(get_entries(c)[eqNo, index], derNo)
 end
 
 @inline function get_entry_val(c::JutulAutoDiffCache, index, eqNo)
-    @inbounds value(get_entries(c)[eqNo, index])
+    return @inbounds value(get_entries(c)[eqNo, index])
 end
 
 include("compact.jl")
 include("generic.jl")
 
 @inline function set_jacobian_pos!(c::JutulAutoDiffCache, index, eqNo, partial_index, pos)
-    set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
+    return set_jacobian_pos!(c.jacobian_positions, index, eqNo, partial_index, c.npartials, pos)
     # c.jacobian_positions[(eqNo-1)*c.npartials + partial_index, index] = pos
 end
 
-@inline function get_jacobian_pos(np::I, index, eqNo, partial_index, pos)::I where {I<:Integer}
-    @inbounds pos[(eqNo-1)*np + partial_index, index]
+@inline function get_jacobian_pos(np::I, index, eqNo, partial_index, pos)::I where {I <: Integer}
+    return @inbounds pos[(eqNo - 1) * np + partial_index, index]
 end
 
 @inline function set_jacobian_pos!(jpos, index, eqNo, partial_index, npartials, pos)
-    jpos[jacobian_cart_ix(index, eqNo, partial_index, npartials)] = pos
+    return jpos[jacobian_cart_ix(index, eqNo, partial_index, npartials)] = pos
 end
 
 
-@inline jacobian_row_ix(eqNo, partial_index, npartials) = (eqNo-1)*npartials + partial_index
-@inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo-1)*npartials + partial_index, index)
+@inline jacobian_row_ix(eqNo, partial_index, npartials) = (eqNo - 1) * npartials + partial_index
+@inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo - 1) * npartials + partial_index, index)
 
 @inline function ad_dims(cache)
     return (number_of_entities(cache), equations_per_entity(cache), number_of_partials(cache))::NTuple
 end
 
-@inline function update_jacobian_entry!(nzval, c::JutulAutoDiffCache, index, eqNo, partial_index, 
-                                                                        new_value,
-                                                                        pos = c.jacobian_positions)
+@inline function update_jacobian_entry!(
+        nzval, c::JutulAutoDiffCache, index, eqNo, partial_index,
+        new_value,
+        pos = c.jacobian_positions
+    )
     ix = get_jacobian_pos(c, index, eqNo, partial_index, pos)
-    update_jacobian_inner!(nzval, ix, new_value)
+    return update_jacobian_inner!(nzval, ix, new_value)
 end
 
 @inline function update_jacobian_inner!(nzval, pos, val)
-    @inbounds nzval[pos] = val
+    return @inbounds nzval[pos] = val
 end
 
 insert_residual_value(::Nothing, ix, v) = nothing
 Base.@propagate_inbounds function insert_residual_value(r, ix, v)
-    r[ix] = v
+    return r[ix] = v
 end
 
 insert_residual_value(::Nothing, ix, e, v) = nothing
 Base.@propagate_inbounds function insert_residual_value(r, ix, e, v)
     # TODO: Occasionally this gets passed the transposed r, figure out where.
-    r[e, ix] = v
+    return r[e, ix] = v
 end
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     function F(i)
-        @inbounds for e in 1:ne
+        return @inbounds for e in 1:ne
             a = get_entry(cache, i, e)
-            insert_residual_value(r, i + nu*(e-1), a.value)
-            for d = 1:np
+            insert_residual_value(r, i + nu * (e - 1), a.value)
+            for d in 1:np
                 update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
             end
         end
@@ -102,23 +104,24 @@ function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
 end
 
 function diagonal_alignment!(cache, arg...; eq_index = 1:cache.number_of_entities, kwarg...)
-    injective_alignment!(cache, arg...; target_index = eq_index, source_index = eq_index, kwarg...)
+    return injective_alignment!(cache, arg...; target_index = eq_index, source_index = eq_index, kwarg...)
 end
 
-function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, context;
-            pos = nothing,
-            row_layout = matrix_layout(context),
-            col_layout = row_layout,
-            target_index = 1:cache.number_of_entities,
-            source_index = 1:cache.number_of_entities,
-            number_of_entities_source = nothing,
-            number_of_entities_target = nothing,
-            number_of_equations_for_entity = missing,
-            dims = ad_dims(cache),
-            row_offset = 0,
-            column_offset = 0,
-            target_offset = 0,
-            source_offset = 0
+function injective_alignment!(
+        cache::JutulAutoDiffCache, eq, jac, _entity, context;
+        pos = nothing,
+        row_layout = matrix_layout(context),
+        col_layout = row_layout,
+        target_index = 1:cache.number_of_entities,
+        source_index = 1:cache.number_of_entities,
+        number_of_entities_source = nothing,
+        number_of_entities_target = nothing,
+        number_of_equations_for_entity = missing,
+        dims = ad_dims(cache),
+        row_offset = 0,
+        column_offset = 0,
+        target_offset = 0,
+        source_offset = 0
     )
     _entity::JutulEntity
     c_entity = entity(cache)
@@ -126,7 +129,7 @@ function injective_alignment!(cache::JutulAutoDiffCache, eq, jac, _entity, conte
     if isnothing(pos)
         pos = cache.jacobian_positions
     end
-    if _entity == c_entity
+    return if _entity == c_entity
         nu_c, ne, np = dims
         if isnothing(number_of_entities_source)
             nu_s = nu_c
@@ -152,7 +155,7 @@ function do_injective_alignment!(jpos, cache, jac, target_index, source_index, n
         target = target_index[index]
         source = source_index[index]
         for e in 1:ne
-            for d = 1:np
+            for d in 1:np
                 jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(
                     jac,
                     target, source,
@@ -167,8 +170,8 @@ function do_injective_alignment!(jpos, cache, jac, target_index, source_index, n
             end
         end
     end
+    return
 end
-
 
 
 # function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, target_offset, source_offset, context::SingleCUDAContext, layout)
@@ -179,21 +182,21 @@ end
 #     dims = (ns, ne, np)
 #     target_index = UnitRange{t}(target_index)
 #     source_index = UnitRange{t}(source_index)
-#     @kernel function cu_injective_align(jpos, 
+#     @kernel function cu_injective_align(jpos,
 #                                     @Const(rows), @Const(cols),
 #                                     @Const(target_index), @Const(source_index),
-#                                     nu_t, nu_s, ne, np, 
+#                                     nu_t, nu_s, ne, np,
 #                                     target_offset, source_offset,
 #                                     layout)
 #         index, e, d = @index(Global, NTuple)
 #         target = target_index[index]
 #         source = source_index[index]
 
-#         row, col = row_col_sparse(target + target_offset, source + source_offset, e, d, 
+#         row, col = row_col_sparse(target + target_offset, source + source_offset, e, d,
 #         nu_t, nu_s,
 #         ne, np,
 #         layout)
-        
+
 #         # ix = find_sparse_position_CSC(rows, cols, row, col)
 
 #         T = eltype(cols)
@@ -208,7 +211,7 @@ end
 #         jpos[j_ix, index] = ix
 #     end
 #     kernel = cu_injective_align(context.device, context.block_size)
-    
+
 #     rows = jac.rowVal
 #     cols = jac.colPtr
 #     event_jac = kernel(jpos, rows, cols, target_index, source_index, nu_t, nu_s, ne, np, t(target_offset), t(source_offset), layout, ndrange = dims)
@@ -244,7 +247,7 @@ function convert_state_ad(model, state, tag = nothing)
         n_partials = degrees_of_freedom_per_entity(model, u)
         if last_entity != u
             n_entities = count_entities(model.domain, u)
-            outstr *= "Variable group:\n\t$(n_entities) $(typeof(u)) with $n_partials partial derivatives each ($(n_partials*n_entities) total).\n"
+            outstr *= "Variable group:\n\t$(n_entities) $(typeof(u)) with $n_partials partial derivatives each ($(n_partials * n_entities) total).\n"
             # Note: We assume that the variables are sorted by entities.
             # This is asserted for in the model constructor.
             last_entity = u
@@ -255,7 +258,7 @@ function convert_state_ad(model, state, tag = nothing)
         # Number of partials this primary variable contributes
         n_local = degrees_of_freedom_per_entity(model, pvar)
         t = get_entity_tag(tag, u)
-        outstr *= "→ $pkey:\n\t$n_local of $n_partials partials on all $(typeof(u)), covers $(offset+1) → $(offset + n_local)\n"
+        outstr *= "→ $pkey:\n\t$n_local of $n_partials partials on all $(typeof(u)), covers $(offset + 1) → $(offset + n_local)\n"
         stateAD = initialize_primary_variable_ad!(stateAD, model, pvar, pkey, n_partials, tag = t, offset = offset, context = context)
         offset += n_local
         total_number_of_partials += n_local
@@ -315,7 +318,7 @@ julia> allocate_array_ad(2, 2, diag_pos = [1, 2], npartials = 2)
  Dual{nothing}(0.0,0.0,1.0)  Dual{nothing}(0.0,0.0,1.0)
 ```
 """
-function allocate_array_ad(n::R...; context::JutulContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R<:Integer}
+function allocate_array_ad(n::R...; context::JutulContext = DefaultContext(), diag_pos = nothing, npartials = 1, kwarg...) where {R <: Integer}
     # allocate a n length zero vector with space for derivatives
     T = float_type(context)
     z_val = zero(T)
@@ -342,7 +345,7 @@ function allocate_array_ad(v::AbstractVector; kwarg...)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(length(v); kwarg...)
     update_values!(v_AD, v)
-    v_AD
+    return v_AD
 end
 
 """
@@ -352,7 +355,7 @@ Convert matrix to AD matrix.
 function allocate_array_ad(v::AbstractMatrix; kwarg...)
     # create a copy of a vector as AD
     v_AD = allocate_array_ad(size(v)...; kwarg...)
-    update_values!(v_AD, v)
+    return update_values!(v_AD, v)
 end
 
 """
@@ -368,10 +371,10 @@ Get scalar with partial derivatives as AD instance.
 # Keyword arguments
 - `tag = nothing`: Tag for AD instance. Two AD values of the different tag cannot interoperate to avoid perturbation confusion (see ForwardDiff documentation).
 """
-function get_ad_entity_scalar(v::T, npartials, diag_pos = nothing; diag_value = 1.0, tag = nothing) where {T<:Real}
+function get_ad_entity_scalar(v::T, npartials, diag_pos = nothing; diag_value = 1.0, tag = nothing) where {T <: Real}
     # Get a scalar, with a given number of zero derivatives. A single entry can be specified to be non-zero
     if npartials > 0
-        D = diag_value.*ntuple(x -> T.(x == diag_pos), npartials)
+        D = diag_value .* ntuple(x -> T.(x == diag_pos), npartials)
         partials = ForwardDiff.Partials{npartials, T}(D)
         if isnothing(tag)
             fd_tag = ForwardDiff.Tag(nothing, NoEntity)
@@ -391,7 +394,7 @@ end
 
 Replace values of `x` in-place by `y`, leaving `x` with the values of y and the partials of `x`.
 """
-@inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual{Tag}}, next::AbstractArray{<:Real}) where Tag
+@inline function update_values!(v::AbstractArray{<:ForwardDiff.Dual{Tag}}, next::AbstractArray{<:Real}) where {Tag}
     if unpack_tag(v) isa JutulEntity
         # The ForwardDiff type is immutable, so to preserve the derivatives we
         # do this little trick if we are working with a Jutul entity tag. This
@@ -414,10 +417,10 @@ end
 Replace values (for non-Real types, direct assignment)
 """
 @inline function update_values!(v::AbstractArray{<:Any}, next::AbstractArray{<:Any})
-    @. v = next
+    return @. v = next
 end
 
-@inline function update_values!(v::AbstractArray{<:AbstractFloat}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where Tag
+@inline function update_values!(v::AbstractArray{<:AbstractFloat}, next::AbstractArray{<:ForwardDiff.Dual{Tag}}) where {Tag}
     unpack_tag(next)::JutulEntity
     @inbounds for i in eachindex(v, next)
         next_val = next[i]
@@ -430,8 +433,8 @@ end
 #     @. v = next
 # end
 
-function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where {Tag, T<:(ForwardDiff.Dual{Tag})}
-    @. v = next
+function update_values!(v::AbstractArray{T}, next::AbstractArray{T}) where {Tag, T <: (ForwardDiff.Dual{Tag})}
+    return @. v = next
 end
 
 @inline updated_state_value(old, new, ::Val{false}, ::Val{false}) = new
@@ -439,19 +442,25 @@ end
     old - value(old) + value(new)
 @inline updated_state_value(old, new, ::Val{false}, ::Val{true}) = value(new)
 
-function update_values!(v::AbstractArray{T}, next::AbstractArray{S},
-        context::JutulContext) where {T<:Real, S<:Real}
-    preserve_partials = Val(eltype(v) <: ForwardDiff.Dual &&
-        eltype(next) <: Real && eltype(v) !== eltype(next) &&
-        unpack_tag(v) isa JutulEntity)
-    strip_partials = Val(eltype(v) <: AbstractFloat &&
-        eltype(next) <: ForwardDiff.Dual)
+function update_values!(
+        v::AbstractArray{T}, next::AbstractArray{S},
+        context::JutulContext
+    ) where {T <: Real, S <: Real}
+    preserve_partials = Val(
+        eltype(v) <: ForwardDiff.Dual &&
+            eltype(next) <: Real && eltype(v) !== eltype(next) &&
+            unpack_tag(v) isa JutulEntity
+    )
+    strip_partials = Val(
+        eltype(v) <: AbstractFloat &&
+            eltype(next) <: ForwardDiff.Dual
+    )
     strip_partials isa Val{true} && (unpack_tag(next)::JutulEntity)
     function update(i)
         @inbounds old = v[i]
         @inbounds new = next[i]
         new = updated_state_value(old, new, preserve_partials, strip_partials)
-        @inbounds v[i] = new
+        return @inbounds v[i] = new
     end
     threaded_loop_minbatch(update, length(v), context)
     return v
@@ -472,7 +481,7 @@ Take value of AD.
 end
 
 function is_jutul_ad_tag(::ForwardDiff.Tag{F, V}) where {F, V}
-    return V<:JutulEntity
+    return V <: JutulEntity
 end
 
 function is_jutul_ad_tag(::Any)
@@ -508,7 +517,7 @@ Only useful for AD arrays, otherwise it does nothing.
     return mappedarray(value, x)
 end
 
-@inline function as_value(x::AbstractArray{X}) where X<:AbstractFloat
+@inline function as_value(x::AbstractArray{X}) where {X <: AbstractFloat}
     return x
 end
 

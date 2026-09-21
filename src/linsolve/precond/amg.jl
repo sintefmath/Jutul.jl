@@ -47,7 +47,8 @@ function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
     end
 end
 
-function AMGPreconditioner(method = :hmis;
+function AMGPreconditioner(
+        method = :hmis;
         smoother_type::Symbol = :ilu0,
         smoother = nothing,
         cycle = :V,
@@ -60,9 +61,13 @@ function AMGPreconditioner(method = :hmis;
         reuse::Symbol = :memory,
         reuse_partial::Symbol = :operators,
         damping = 1.0,
-        kwarg...)
-    npre == npost || throw(ArgumentError(
-        "KAPreconditioners currently requires equal pre- and post-smoothing steps"))
+        kwarg...
+    )
+    npre == npost || throw(
+        ArgumentError(
+            "KAPreconditioners currently requires equal pre- and post-smoothing steps"
+        )
+    )
     if isnothing(smoother)
         smoother = ka_smoother(smoother_type; steps = npre, damping = damping)
     end
@@ -96,8 +101,10 @@ function update_preconditioner!(amg::AMGPreconditioner, A, b, context, executor)
     return amg
 end
 
-function partial_update_preconditioner!(amg::AMGPreconditioner,
-        A, b, context, executor)
+function partial_update_preconditioner!(
+        amg::AMGPreconditioner,
+        A, b, context, executor
+    )
     isnothing(amg.factor) &&
         return update_preconditioner!(amg, A, b, context, executor)
     update_ka_amg!(amg.factor, A, amg.reuse_partial)
@@ -116,7 +123,7 @@ function apply!(x, amg::AMGPreconditioner, y, alpha = 1.0, beta = 0.0)
     else
         previous = copy(x)
         apply_ka_amg!(x, amg.factor, y)
-        @. x = alpha*x + beta*previous
+        @. x = alpha * x + beta * previous
     end
     return x
 end
@@ -142,8 +149,10 @@ function KASmootherPreconditioner(method::Symbol; steps = 1, damping = 1.0)
     return KASmootherPreconditioner(config)
 end
 
-function update_preconditioner!(smoother::KASmootherPreconditioner,
-        A, b, context, executor)
+function update_preconditioner!(
+        smoother::KASmootherPreconditioner,
+        A, b, context, executor
+    )
     if isnothing(smoother.factor)
         smoother.factor = setup_ka_smoother(A, smoother.config)
         factor_type = eltype(smoother.factor)
@@ -152,7 +161,7 @@ function update_preconditioner!(smoother::KASmootherPreconditioner,
         else
             degrees_per_row = 1
         end
-        n = degrees_per_row*size(A, 1)
+        n = degrees_per_row * size(A, 1)
         smoother.dim = (n, n)
     else
         update_ka_smoother!(smoother.factor, A)
@@ -160,8 +169,10 @@ function update_preconditioner!(smoother::KASmootherPreconditioner,
     return smoother
 end
 
-function partial_update_preconditioner!(smoother::KASmootherPreconditioner,
-        A, b, context, executor)
+function partial_update_preconditioner!(
+        smoother::KASmootherPreconditioner,
+        A, b, context, executor
+    )
     return update_preconditioner!(smoother, A, b, context, executor)
 end
 
@@ -171,10 +182,16 @@ function ka_smoother_vectors(smoother, x, y)
     factor_type = eltype(smoother.factor)
     if factor_type <: StaticMatrix && eltype(x) <: Real
         block_size = size(factor_type, 1)
-        length(x) % block_size == 0 || throw(DimensionMismatch(
-            "output length is not divisible by the smoother block size"))
-        length(y) == length(x) || throw(DimensionMismatch(
-            "right-hand side and output must have equal lengths"))
+        length(x) % block_size == 0 || throw(
+            DimensionMismatch(
+                "output length is not divisible by the smoother block size"
+            )
+        )
+        length(y) == length(x) || throw(
+            DimensionMismatch(
+                "right-hand side and output must have equal lengths"
+            )
+        )
         scalar_type = eltype(factor_type)
         vector_type = SVector{block_size, scalar_type}
         x = unsafe_reinterpret(vector_type, x, length(x) ÷ block_size)
@@ -183,8 +200,10 @@ function ka_smoother_vectors(smoother, x, y)
     return x, y
 end
 
-function apply!(x, smoother::KASmootherPreconditioner,
-        y, alpha = 1.0, beta = 0.0)
+function apply!(
+        x, smoother::KASmootherPreconditioner,
+        y, alpha = 1.0, beta = 0.0
+    )
     T = KAPreconditioners.matrix_scalar_type(eltype(x))
     alpha = convert(T, alpha)
     beta = convert(T, beta)
@@ -195,7 +214,7 @@ function apply!(x, smoother::KASmootherPreconditioner,
     else
         previous = copy(x)
         apply_ka_smoother!(smoother_x, smoother.factor, smoother_y)
-        @. x = alpha*x + beta*previous
+        @. x = alpha * x + beta * previous
     end
     return x
 end

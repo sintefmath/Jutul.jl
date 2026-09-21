@@ -59,21 +59,23 @@ within max_it iterations, the best evaluation found so far is returned.
   and gradients, but this can be investigated further
 """
 
-function inexact_line_search(u0, v0, g0, d, f;
-                max_it = 5,
-                wolfe1 = 1e-4, 
-                wolfe2 = 0.9,
-                max_step_increase = 10.0,
-                max_step = 1.0,
-                step_diff_tol = 1e-3,
-                value_diff_tol = sqrt(eps()),
-                reduction_factor_failure = 0.25,
-                verbosity = 1)
-    @assert d'*g0 < 0 "Line-search: Search direction is not a descent direction"
+function inexact_line_search(
+        u0, v0, g0, d, f;
+        max_it = 5,
+        wolfe1 = 1.0e-4,
+        wolfe2 = 0.9,
+        max_step_increase = 10.0,
+        max_step = 1.0,
+        step_diff_tol = 1.0e-3,
+        value_diff_tol = sqrt(eps()),
+        reduction_factor_failure = 0.25,
+        verbosity = 1
+    )
+    @assert d' * g0 < 0 "Line-search: Search direction is not a descent direction"
     # assign points
-    p0 = (a=0.0, v=v0, g=d'*g0)
+    p0 = (a = 0.0, v = v0, g = d' * g0)
     print_iteration(verbosity, 0, p0)
-    p_max = (a=max_step, v=NaN, g=NaN)
+    p_max = (a = max_step, v = NaN, g = NaN)
     p1, p2 = p0, p_max
     # Wolfe conditions
     w1 = (p) -> p.v <= p0.v + wolfe1 * p.a * p0.g
@@ -86,7 +88,7 @@ function inexact_line_search(u0, v0, g0, d, f;
     ls_done, wolfe_ok, at_max_step = false, false, false
     # tolerance for considering function values equal
     equal_value_tol = v0 * value_diff_tol
-    it, msg, values = 0, "", [] 
+    it, msg, values = 0, "", []
 
     while !ls_done && it < max_it
         it += 1
@@ -96,7 +98,7 @@ function inexact_line_search(u0, v0, g0, d, f;
             # function evaluation failed, we return if improvement already has been obtained,
             # otherwise reduce step size by reduction_factor_failure
             a, p2, p_max, ls_done = handle_failed_evaluation!(a, p0, p1, p2, p_max, best_eval, step_diff_tol, reduction_factor_failure, equal_value_tol)
-            msg = print_warning_failed(a, ls_done) 
+            msg = print_warning_failed(a, ls_done)
             continue
         end
         # update values/best point
@@ -105,7 +107,7 @@ function inexact_line_search(u0, v0, g0, d, f;
             best_eval = (u = u, v = v, g = g, a = a)
         end
         # new current point
-        p = (a=a, v=v, g=d'*g)
+        p = (a = a, v = v, g = d' * g)
         at_max_step = abs(a - p_max.a) < step_diff_tol
         if at_max_step
             # update p_max with v, g
@@ -150,7 +152,7 @@ function inexact_line_search(u0, v0, g0, d, f;
         if verbosity > 1 && msg != ""
             @printf("---  Line-search info: %s\n", msg)
         end
-        
+
         if !isfinite(a)
             @warn("Line-search: returning, step selection failed with message: $msg.")
             ls_done = true
@@ -174,19 +176,21 @@ function next_step(p1, p2, p_max, step_diff_tol)
     # we scale to O(1):
     # g(s) = (f(a1 + s*(a2-a1)) - f(a1)) / ((a2-a1)|g1|), s in [0,1]
     # ps1 = (a = 0.0, v = 0.0, g = -1.0)
-    ps2 = (a = 1.0, 
-           v = ((p2.v - p1.v) / (p2.a - p1.a)) / abs(p1.g), 
-           g = p2.g / abs(p1.g))
+    ps2 = (
+        a = 1.0,
+        v = ((p2.v - p1.v) / (p2.a - p1.a)) / abs(p1.g),
+        g = p2.g / abs(p1.g),
+    )
     unscale_arg = (a_scaled) -> p1.a + a_scaled * (p2.a - p1.a)
     a, msg = NaN, ""
     if ps2.v >= 0 || ps2.g >= 0
         # interpolation within p1 and p2
-        if ps2.v >= 0 
-            a = unscale_arg( max(cubicmin(ps2), quadmin1(ps2)) )
+        if ps2.v >= 0
+            a = unscale_arg(max(cubicmin(ps2), quadmin1(ps2)))
         else #ps2.g >= 0 && ps2.v < 0
-            a = unscale_arg( max(cubicmin(ps2), quadmin2(ps2)) )
+            a = unscale_arg(max(cubicmin(ps2), quadmin2(ps2)))
         end
-        # check that we're not too close to p1 or p2 
+        # check that we're not too close to p1 or p2
         if a < p1.a + step_diff_tol ||  a > p2.a - step_diff_tol || !isfinite(a)
             a, msg = ad_hoc_step(p1, p2, step_diff_tol)
             if !isfinite(a)
@@ -198,7 +202,7 @@ function next_step(p1, p2, p_max, step_diff_tol)
         if ps2.g > -1 + sqrt(eps())
             # flattening out, might have cubic minimum, but choose to trust quadratic more
             a = unscale_arg(quadmin2(ps2))
-        else 
+        else
             # gradient is getting steeper, try maximal allowed step
             a = p_max.a
         end
@@ -214,7 +218,7 @@ function next_step(p1, p2, p_max, step_diff_tol)
                 a = p_max.a
             end
         else
-            # check that we're not too close to p2 
+            # check that we're not too close to p2
             if a < p2.a + step_diff_tol
                 a, msg = ad_hoc_step(p2, p_max, step_diff_tol)
                 if !isfinite(a)
@@ -227,19 +231,19 @@ function next_step(p1, p2, p_max, step_diff_tol)
 end
 
 function cubicmin(p2)
-    # step corresponding to minimum of scaled/shifted cubic polynomial 
+    # step corresponding to minimum of scaled/shifted cubic polynomial
     # using values and derivatives at 0 and 1
     # c0 = 0, c1 = -1
-    c2 = 3*p2.v - p2.g + 2
-    c3 = -2*p2.v + p2.g - 1
+    c2 = 3 * p2.v - p2.g + 2
+    c3 = -2 * p2.v + p2.g - 1
     if abs(c3) < sqrt(eps())
         return quadmin1(p2)
     end
-    r = c2^2 + 3*c3
+    r = c2^2 + 3 * c3
     if r < sqrt(eps())
         return NaN
     end
-    return (-c2 + sqrt(r)) / (3*c3)
+    return (-c2 + sqrt(r)) / (3 * c3)
 end
 
 function quadmin1(p2)
@@ -257,7 +261,7 @@ function quadmin2(p2)
     # step corresponding to minimum of scaled/shifted quadratic polynomial
     # using values at 0, 1 and derivative at 1
     # c0 = 0
-    c1 = 2*p2.v - p2.g
+    c1 = 2 * p2.v - p2.g
     c2 = -p2.v + p2.g
     if c2 <= sqrt(eps())
         return NaN
@@ -274,9 +278,9 @@ function ad_hoc_step(p1, p2, step_diff_tol)
         return NaN, msg
     end
     if p1.v < p2.v
-        a = 2*low/3 + high/3
+        a = 2 * low / 3 + high / 3
     else
-        a = low/3 + 2*high/3
+        a = low / 3 + 2 * high / 3
     end
     msg = @sprintf("Step too close to interval boundary [%4.4f, %4.4f], re-setting to %4.4f.", p1.a, p2.a, a)
     return a, msg
@@ -312,7 +316,7 @@ function print_iteration(verbosity, it, p; wolfe = [nothing, nothing])
     if verbosity == 0 || (it < 2 && verbosity == 1)
         return
     end
-    if isnothing(wolfe[1]) || isnothing(wolfe[2])
+    return if isnothing(wolfe[1]) || isnothing(wolfe[2])
         @printf("  Line-search - %2d | step = %6.3e | v = %11.3e | dvdd = %11.3e \n", it, p.a, p.v, p.g)
     else
         @printf("  Line-search - %2d | step = %6.3e | v = %11.3e | dvdd = %11.3e | wolfe ( %1d, %1d)\n", it, p.a, p.v, p.g, wolfe[1], wolfe[2])
@@ -321,10 +325,10 @@ end
 
 
 function print_end_message(verbosity, it, best, wolfe_ok, at_max, ls_max_iter, msg)
-    if verbosity <= 1 
+    if verbosity <= 1
         return
     end
-    if wolfe_ok
+    return if wolfe_ok
         @printf("Line-search succeeded in %d iterations, step = %6.3f, v = %11.3e\n", it, best.a, best.v)
     elseif it >= ls_max_iter
         @printf("Line-search reached maximum iterations (%d), step = %6.3f, v = %11.3e\n", it, best.a, best.v)

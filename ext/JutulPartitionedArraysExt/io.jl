@@ -2,7 +2,7 @@ function Jutul.consolidate_distributed_results_on_disk!(pth, np, steps; cleanup 
     @assert isdir(pth)
     partitions = []
     function print_msg(x)
-        if verbose
+        return if verbose
             jutul_message("IO", x)
         end
     end
@@ -23,7 +23,7 @@ function Jutul.consolidate_distributed_results_on_disk!(pth, np, steps; cleanup 
         push!(allpaths, paths)
         GC.gc()
     end
-    if cleanup
+    return if cleanup
         print_msg("Cleaning up files...")
         # Delete the parallel results after consolidation.
         for paths in allpaths
@@ -47,7 +47,7 @@ function read_step(pth, step, np)
 end
 
 function rank_folder(pth, rank)
-    joinpath(pth, "proc_$rank")
+    return joinpath(pth, "proc_$rank")
 end
 
 function consolidate_distributed_results(states, reports, partitions)
@@ -76,17 +76,19 @@ function consolidate_distributed_results(states, reports, partitions)
 end
 
 function consolidate_cell_values!(state, states, partitions)
-    function replace_values!(nval::T, dval::T, p) where T<:AbstractVector
+    function replace_values!(nval::T, dval::T, p) where {T <: AbstractVector}
         for (v, g) in zip(dval, p)
             nval[g] = v
         end
+        return
     end
-    function replace_values!(nval::T, dval::T, p) where T<:AbstractMatrix
+    function replace_values!(nval::T, dval::T, p) where {T <: AbstractMatrix}
         for (i, g) in enumerate(p)
             for j in axes(nval, 1)
                 nval[j, g] = dval[j, i]
             end
         end
+        return
     end
     for (k, v) in first(states)
         partition = first(partitions)
@@ -105,6 +107,7 @@ function consolidate_cell_values!(state, states, partitions)
             replace_values!(state[k], v, p)
         end
     end
+    return
 end
 
 function consolidate_report!(report, reports, partitions)
@@ -114,4 +117,5 @@ function consolidate_report!(report, reports, partitions)
         # might be ok enough for most uses.
         report[k] = v
     end
+    return
 end

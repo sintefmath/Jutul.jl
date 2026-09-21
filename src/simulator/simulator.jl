@@ -13,7 +13,8 @@ include("optimization.jl")
 include("relaxation.jl")
 include("helper.jl")
 
-function simulator_storage(model;
+function simulator_storage(
+        model;
         state0 = nothing,
         parameters = setup_parameters(model),
         copy_state = true,
@@ -132,11 +133,13 @@ end
 
 function simulate(case::JutulCase; kwarg...)
     sim = Simulator(case)
-    return simulate!(sim, case.dt;
+    return simulate!(
+        sim, case.dt;
         forces = case.forces,
         termination_criterion = case.termination_criterion,
         start_date = case.start_date,
-        kwarg...)
+        kwarg...
+    )
 end
 
 """
@@ -173,7 +176,8 @@ Non-allocating (or perhaps less allocating) version of [`simulate!`](@ref).
 
 See also [`simulate`](@ref) for additional supported input arguments.
 """
-function simulate!(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
+function simulate!(
+        sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
         forces = setup_forces(sim.model),
         config = nothing,
         initialize = true,
@@ -236,7 +240,7 @@ function simulate!(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
     end
     n_solved = no_steps
     t_elapsed = 0.0
-    for step_no = first_step:no_steps
+    for step_no in first_step:no_steps
         dT = timesteps[step_no]
         forces_step = forces_for_timestep(sim, forces, timesteps, step_no, per_step = forces_per_step)
         recorder_start_step!(rec, dT, :global)
@@ -246,7 +250,8 @@ function simulate!(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
         else
             substates = missing
         end
-        t_step = @elapsed step_done, rep, dt = solve_timestep!(sim, dT, forces_step, max_its, config;
+        t_step = @elapsed step_done, rep, dt = solve_timestep!(
+            sim, dT, forces_step, max_its, config;
             dt = dt,
             states = states,
             reports = reports,
@@ -276,7 +281,7 @@ function simulate!(sim::JutulSimulator, timesteps::JUTUL_TSTEP_VECTOR_TYPE;
         t_elapsed += t_step + subrep[:output_time]
 
         if early_termination
-            n_solved = step_no-1
+            n_solved = step_no - 1
             break
         end
 
@@ -305,7 +310,8 @@ Internal function for solving a single time-step with fixed driving forces.
 Note: This function is exported for fine-grained simulation workflows. The general [`simulate`](@ref) interface is
 both easier to use and performs additional validation.
 """
-function solve_timestep!(sim, dT, forces, max_its, config;
+function solve_timestep!(
+        sim, dT, forces, max_its, config;
         dt = dT,
         states = missing,
         reports = nothing,
@@ -342,7 +348,7 @@ function solve_timestep!(sim, dT, forces, max_its, config;
                 break
             end
             if 2 > info_level > 1
-                jutul_message("Convergence", "Ministep #$n_so_far of $(get_tstr(dt, 1)) ($(round(100.0*dt/dT, digits=1))% of report step) converged.", color = :green)
+                jutul_message("Convergence", "Ministep #$n_so_far of $(get_tstr(dt, 1)) ($(round(100.0 * dt / dT, digits = 1))% of report step) converged.", color = :green)
             end
             t_local += dt
             if t_local >= dT
@@ -379,7 +385,7 @@ function solve_timestep!(sim, dT, forces, max_its, config;
             else
                 cut_count += 1
                 if info_level > 1
-                    t_format = t -> @sprintf "%1.2f" 100*t/dT
+                    t_format = t -> @sprintf "%1.2f" 100 * t / dT
                     @warn "Cutting mini-step. Step $(t_format(t_local)) % complete.\nΔt reduced to $(get_tstr(dt)) ($(t_format(dt))% of full time-step).\nThis is cut #$cut_count for time-step #$step_no."
                 end
             end
@@ -390,10 +396,11 @@ function solve_timestep!(sim, dT, forces, max_its, config;
 end
 
 function perform_step!(simulator::JutulSimulator, dt, forces, config; vararg...)
-    perform_step!(simulator.storage, simulator.model, dt, forces, config; executor = simulator.executor, vararg...)
+    return perform_step!(simulator.storage, simulator.model, dt, forces, config; executor = simulator.executor, vararg...)
 end
 
-function perform_step!(storage, model, dt, forces, config;
+function perform_step!(
+        storage, model, dt, forces, config;
         executor = default_executor(),
         iteration::Int = 0,
         relaxation::Float64 = 1.0,
@@ -418,7 +425,8 @@ function perform_step!(storage, model, dt, forces, config;
         else
             t_secondary = 0.0
         end
-        t_prep = @elapsed prep, forces = prepare_step!(prep_storage, prep,
+        t_prep = @elapsed prep, forces = prepare_step!(
+            prep_storage, prep,
             storage, model, dt, forces, config;
             executor = executor,
             iteration = iteration,
@@ -462,7 +470,7 @@ function perform_step_check_convergence_impl!(report, prev_report, storage, mode
     converged = false
     e = NaN
     t_conv = @elapsed begin
-        if iteration == config[:max_nonlinear_iterations]+1
+        if iteration == config[:max_nonlinear_iterations] + 1
             tf = config[:tol_factor_final_iteration]
         else
             tf = 1
@@ -480,7 +488,8 @@ function perform_step_check_convergence_impl!(report, prev_report, storage, mode
             dt = dt,
             tol_factor = tf,
             extra_out = true,
-            update_report = update_report)
+            update_report = update_report
+        )
         il = config[:info_level]
         if il > 1.5
             get_convergence_table(errors, il, iteration, config)
@@ -496,15 +505,15 @@ end
 function perform_step_solve_impl!(report, storage, model, config, dt, iteration, rec, relaxation, executor)
     lsolve = config[:linear_solver]
     check = config[:safe_mode]
-    try
+    return try
         t_solve, t_update, n_iter, rep_lsolve, rep_update = solve_and_update!(
-                storage, model, dt,
-                linear_solver = lsolve,
-                check = check,
-                recorder = rec,
-                relaxation = relaxation,
-                executor = executor
-            )
+            storage, model, dt,
+            linear_solver = lsolve,
+            check = check,
+            recorder = rec,
+            relaxation = relaxation,
+            executor = executor
+        )
         report[:update] = rep_update
         report[:linear_solver] = rep_lsolve
         report[:linear_iterations] = n_iter
@@ -526,7 +535,8 @@ function perform_step_per_process_initial_update!(sim::JutulSimulator, dt, force
     return perform_step_per_process_initial_update!(sim.storage, sim.model, dt, forces, config; kwarg...)
 end
 
-function perform_step_per_process_initial_update!(storage, model, dt, forces, config;
+function perform_step_per_process_initial_update!(
+        storage, model, dt, forces, config;
         executor = default_executor(),
         update_secondary = nothing,
         iteration = 0,
@@ -556,7 +566,8 @@ function setup_ministep_report(; kwarg...)
     return report
 end
 
-function solve_ministep(sim, dt, forces, max_iter, cfg;
+function solve_ministep(
+        sim, dt, forces, max_iter, cfg;
         finalize = true,
         prepare = true,
         relaxation = 1.0,
@@ -572,14 +583,15 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
         update_before_step!(sim, dt, forces, time = cur_time, recorder = rec, update_explicit = update_explicit)
     end
     step_report = missing
-    for it = 1:(max_iter+1)
+    for it in 1:(max_iter + 1)
         do_solve = it <= max_iter
-        e, done, step_report = perform_step!(sim, dt, forces, cfg,
-                    iteration = it,
-                    relaxation = relaxation,
-                    solve = do_solve,
-                    executor = simulator_executor(sim),
-                    prev_report = step_report
+        e, done, step_report = perform_step!(
+            sim, dt, forces, cfg,
+            iteration = it,
+            relaxation = relaxation,
+            solve = do_solve,
+            executor = simulator_executor(sim),
+            prev_report = step_report
         )
         push!(step_reports, step_report)
         if haskey(step_report, :failure_exception)
@@ -621,12 +633,13 @@ function solve_ministep(sim, dt, forces, max_iter, cfg;
 end
 
 function initialize_before_first_timestep!(sim, first_dT; kwarg...)
-    @tic "solve" begin
+    return @tic "solve" begin
         @tic "secondary variables" update_secondary_variables!(sim.storage, sim.model)
     end
 end
 
-function initial_setup!(sim, config, timesteps;
+function initial_setup!(
+        sim, config, timesteps;
         restart = nothing,
         parameters = nothing,
         state0 = nothing,
@@ -648,7 +661,7 @@ function initial_setup!(sim, config, timesteps;
     if has_restart
         state0, dt, first_step = deserialize_restart(pth, state0, dt, restart, states, reports, config, nsteps)
         msg = "Restarting from step $first_step."
-        simulation_is_done = first_step == nsteps+1
+        simulation_is_done = first_step == nsteps + 1
         state0_has_changed = first_step != 1 && !simulation_is_done
     else
         state0_has_changed = !isnothing(state0)
@@ -691,22 +704,22 @@ function deserialize_restart(pth, state0, dt, restart, states, reports, config, 
             restart = maximum(restart_ix) + 1
         end
         if nsteps isa Integer
-            restart = min(restart, nsteps+1)
+            restart = min(restart, nsteps + 1)
         end
     end
     if nsteps isa Integer
-        @assert restart <= nsteps+1 "Restart was $restart but schedule contains $nsteps steps."
+        @assert restart <= nsteps + 1 "Restart was $restart but schedule contains $nsteps steps."
     end
     first_step = restart
     if first_step > 1
-        prev_step = restart - 1;
+        prev_step = restart - 1
         state0, report0 = read_restart(pth, prev_step)
         kept_reports = config[:in_memory_reports]
-        rep_start = max(prev_step-kept_reports+1, 1)
-        for i in 1:(rep_start-1)
+        rep_start = max(prev_step - kept_reports + 1, 1)
+        for i in 1:(rep_start - 1)
             push!(reports, missing)
         end
-        read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = rep_start:prev_step);
+        read_results(pth, read_reports = true, read_states = false, states = states, reports = reports, range = rep_start:prev_step)
         dt = report0[:ministeps][end][:dt]
     end
     return (state0, dt, first_step)
@@ -715,31 +728,31 @@ end
 function reset_variables!(sim, vars; kwarg...)
     s = get_simulator_storage(sim)
     m = get_simulator_model(sim)
-    reset_variables!(s, m, vars; kwarg...)
+    return reset_variables!(s, m, vars; kwarg...)
 end
 
 function reset_state_to_previous_state!(sim)
     s = get_simulator_storage(sim)
     m = get_simulator_model(sim)
-    reset_state_to_previous_state!(s, m)
+    return reset_state_to_previous_state!(s, m)
 end
 
 function reset_previous_state!(sim, state0)
     s = get_simulator_storage(sim)
     m = get_simulator_model(sim)
-    reset_previous_state!(s, m, state0)
+    return reset_previous_state!(s, m, state0)
 end
 
 function update_before_step!(sim, dt, forces; kwarg...)
     s = get_simulator_storage(sim)
     m = get_simulator_model(sim)
-    update_before_step!(s, m, dt, forces; kwarg...)
+    return update_before_step!(s, m, dt, forces; kwarg...)
 end
 
 function update_after_step!(sim, dt, forces; kwarg...)
     s = get_simulator_storage(sim)
     m = get_simulator_model(sim)
-    update_after_step!(s, m, dt, forces; kwarg...)
+    return update_after_step!(s, m, dt, forces; kwarg...)
 end
 
 function preprocess_forces(sim, forces)
@@ -757,11 +770,11 @@ preprocess_forces(sim, ::JutulContext, forces) = forces
 
 # Forces - one for the entire sim
 function check_forces(sim, forces, timesteps; per_step = false)
-    nothing
+    return nothing
 end
 
 function forces_for_timestep(sim, f::Union{AbstractDict, Nothing, NamedTuple}, timesteps, step_index; per_step = false)
-    f
+    return f
 end
 
 function forces_for_timestep(sim, f::Vector, timesteps, step_index; per_step = true)
@@ -776,7 +789,7 @@ end
 function check_forces(sim::Simulator, f::Vector, timesteps; per_step = true)
     nf = length(f)
     nt = length(timesteps)
-    if nf != nt && per_step
+    return if nf != nt && per_step
         error("Number of forces must match the number of timesteps ($nt timesteps, $nf forces)")
     end
 end
@@ -823,10 +836,10 @@ Add extra debug output to report during a nonlinear iteration.
 """
 function extra_debug_output!(report, storage, model, config, iteration, dt)
     level = config[:debug_level]
-    if level > 0
+    return if level > 0
         debug_report = Dict{Symbol, Any}()
         report[:debug] = debug_report
-        for i = 1:level
+        for i in 1:level
             extra_debug_output!(debug_report, report, storage, model, config, iteration, dt, Val(i))
         end
     end
@@ -838,7 +851,7 @@ function extra_debug_output!(debug_report, report, storage, model, config, itera
 end
 
 function extra_debug_output!(debug_report, report, storage, model::Union{SimulationModel, MultiModel}, config, iteration, dt, level::Val{10})
-    if haskey(storage, :LinearizedSystem)
+    return if haskey(storage, :LinearizedSystem)
         lsys = storage.LinearizedSystem
         r = vector_residual(lsys)
         debug_report[:linearized_system_norm] = (L1 = norm(r, 1), L2 = norm(r, 2), LInf = norm(r, Inf))
@@ -846,7 +859,7 @@ function extra_debug_output!(debug_report, report, storage, model::Union{Simulat
 end
 
 function check_for_inner_exception(dt, s)
-    if isnan(dt) && length(s[:steps]) > 0
+    return if isnan(dt) && length(s[:steps]) > 0
         last_step = s[:steps][end]
         if haskey(last_step, :failure_exception)
             @error "Exception caught in perform_step and cannot cut time-step any further."
@@ -855,7 +868,8 @@ function check_for_inner_exception(dt, s)
     end
 end
 
-function prepare_step!(storage, model, dt, forces, config, ::Missing;
+function prepare_step!(
+        storage, model, dt, forces, config, ::Missing;
         executor = DefaultExecutor(),
         iteration = 0,
         relaxation = 1.0

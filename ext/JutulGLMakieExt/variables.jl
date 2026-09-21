@@ -1,5 +1,5 @@
 function Jutul.plot_secondary_variables(model::SimulationModel; kwarg...)
-    Jutul.plot_secondary_variables(MultiModel((model = model, )); kwarg...)
+    return Jutul.plot_secondary_variables(MultiModel((model = model,)); kwarg...)
 end
 
 function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 2, kwarg...)
@@ -51,7 +51,7 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 2, kwarg.
         reg = m2.selection[]
         begin
             function plot_by_reg(regions)
-                Jutul.plot_jutul_line_data(d; regions = regions, linewidth = s.value[])
+                return Jutul.plot_jutul_line_data(d; regions = regions, linewidth = s.value[])
             end
             if reg == "All"
                 plot_by_reg(axes(d, 2))
@@ -69,7 +69,7 @@ function Jutul.plot_secondary_variables(model::MultiModel; linewidth = 2, kwarg.
 end
 
 function Jutul.plot_jutul_line_data(data::JutulLinePlotData; kwarg...)
-    Jutul.plot_jutul_line_data([data]; kwarg...)
+    return Jutul.plot_jutul_line_data([data]; kwarg...)
 end
 
 function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, regions = axes(data, 2), link = false, kwarg...)
@@ -93,5 +93,5 @@ function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, reg
     if link
         linkaxes!(all_axes...)
     end
-    display(GLMakie.Screen(), fig)
+    return display(GLMakie.Screen(), fig)
 end

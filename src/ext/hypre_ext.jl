@@ -7,30 +7,31 @@ end
 
 function setup_hypre_precond
 
-end
+    end
 
 function set_hypre_threads
 
-end
+    end
 
 export BoomerAMGPreconditioner
 
 function BoomerAMGPreconditioner(;
-    CoarsenType = 10,      # HMIS
-    StrongThreshold = 0.5, # For 3D
-    AggNumLevels = 1,      # Aggressive coarsening for first levels
-    AggTruncFactor = 0.3,  # Remove weak connections
-    InterpType = 6,        # ext+i
-    PrintLevel = 0,
-    Tol = 0.0,
-    MaxIter = 1,
-    kwarg...
+        CoarsenType = 10,      # HMIS
+        StrongThreshold = 0.5, # For 3D
+        AggNumLevels = 1,      # Aggressive coarsening for first levels
+        AggTruncFactor = 0.3,  # Remove weak connections
+        InterpType = 6,        # ext+i
+        PrintLevel = 0,
+        Tol = 0.0,
+        MaxIter = 1,
+        kwarg...
     )
     # Default settings inspired by
     # https://mooseframework.inl.gov/releases/moose/2021-05-18/application_development/hypre.html
     prec = missing
     try
-        prec = setup_hypre_precond(:boomeramg;
+        prec = setup_hypre_precond(
+            :boomeramg;
             CoarsenType = CoarsenType,
             StrongThreshold = StrongThreshold,
             AggNumLevels = AggNumLevels,
@@ -50,11 +51,11 @@ end
 
 function generate_hypre_assembly_helper
 
-end
+    end
 
 function local_hypre_copy!
 
-end
+    end
 
 function check_hypre_availability(; throw = true)
     ok = true
@@ -76,4 +77,4 @@ end
 
 function check_hypre_availability_impl
 
-end
+    end

@@ -4,7 +4,7 @@ include("utils.jl")
 include("geometry.jl")
 include("plotting.jl")
 
-dim(t::UnstructuredMesh{D}) where D = D::Int
+dim(t::UnstructuredMesh{D}) where {D} = D::Int
 
 function get_neighborship(G::UnstructuredMesh; internal = true)
     if internal
@@ -26,7 +26,7 @@ function grid_dims_ijk(g::UnstructuredMesh)
     return (ncells, 1, 1)
 end
 
-function grid_dims_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}) where D
+function grid_dims_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}) where {D}
     dims = Tuple(g.structure)
     if D == 1
         nx, = dims
@@ -45,10 +45,10 @@ function cell_ijk(g)
     return i -> cell_ijk(g, i)
 end
 
-function cell_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}, index::Integer) where D
+function cell_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}, index::Integer) where {D}
     nx, ny, nz = grid_dims_ijk(g)
     if isnothing(g.cell_map)
-        @assert number_of_cells(g) == nx*ny*nz
+        @assert number_of_cells(g) == nx * ny * nz
         t = index
     else
         t = g.cell_map[index]
@@ -56,8 +56,8 @@ function cell_ijk(g::UnstructuredMesh{D, CartesianIndex{D}}, index::Integer) whe
     # (z-1)*nx*ny + (y-1)*nx + x
     x = mod(t - 1, nx) + 1
     y = mod((t - x) ÷ nx, ny) + 1
-    leftover = (t - x - (y-1)*nx)
-    z = (leftover ÷ (nx*ny)) + 1
+    leftover = (t - x - (y - 1) * nx)
+    z = (leftover ÷ (nx * ny)) + 1
     return (x, y, z)
 end
 
@@ -67,9 +67,9 @@ function cell_index(g::UnstructuredMesh, pos::Tuple; throw = true)
     @assert x > 0 && x <= nx
     @assert y > 0 && y <= ny
     @assert z > 0 && z <= nz
-    index = (z-1)*nx*ny + (y-1)*nx + x
+    index = (z - 1) * nx * ny + (y - 1) * nx + x
     if isnothing(g.cell_map)
-        @assert number_of_cells(g) == nx*ny*nz
+        @assert number_of_cells(g) == nx * ny * nz
         t = index
     else
         t = findfirst(isequal(index), g.cell_map)

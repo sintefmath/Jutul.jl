@@ -7,13 +7,17 @@ import Adapt
 
 @testset "KA CSR multiplication with zero beta" begin
     for T in (Float32, Float64)
-        context = KernelAbstractionsContext(KernelAbstractions.CPU();
-            float_type = T, index_type = Int32)
+        context = KernelAbstractionsContext(
+            KernelAbstractions.CPU();
+            float_type = T, index_type = Int32
+        )
         @test Jutul.linear_float_type(context) === T
         @test Jutul.linear_index_type(context) === Int32
         matrix = sparse([1, 2], [1, 2], T[2, 3], 2, 2)
-        csr = Adapt.adapt(context,
-            Jutul.StaticSparsityMatrixCSR(copy(matrix')))
+        csr = Adapt.adapt(
+            context,
+            Jutul.StaticSparsityMatrixCSR(copy(matrix'))
+        )
         result = fill(T(NaN), 2)
         mul!(result, csr, T[1, 2], one(T), zero(T))
         @test result == T[2, 6]
@@ -23,18 +27,23 @@ import Adapt
         mul!(result, csr, T[1, 2], 1.0, 0.0)
         @test result == T[2, 6]
     end
-    mixed_context = KernelAbstractionsContext(KernelAbstractions.CPU();
+    mixed_context = KernelAbstractionsContext(
+        KernelAbstractions.CPU();
         float_type = Float32, index_type = Int32,
-        linear_float_type = Float64, linear_index_type = Int64)
+        linear_float_type = Float64, linear_index_type = Int64
+    )
     @test Jutul.linear_float_type(mixed_context) === Float64
     @test Jutul.linear_index_type(mixed_context) === Int64
 end
 
 @testset "KA interpolation lookup precision" begin
-    context = KernelAbstractionsContext(KernelAbstractions.CPU();
-        float_type = Float32, index_type = Int32)
+    context = KernelAbstractionsContext(
+        KernelAbstractions.CPU();
+        float_type = Float32, index_type = Int32
+    )
     linear = Jutul.get_1d_interpolator(
-        Float64[0, 1, 2], Float64[0, 0.5, 1])
+        Float64[0, 1, 2], Float64[0, 0.5, 1]
+    )
     linear = Adapt.adapt(context, linear)
     @test eltype(linear.X) === Float32
     @test eltype(linear.F) === Float32
@@ -43,7 +52,8 @@ end
     @test typeof(linear(0.5f0)) === Float32
 
     bilinear = Jutul.BilinearInterpolant(
-        Float64[0, 1], Float64[0, 1], Float64[0 1; 1 2])
+        Float64[0, 1], Float64[0, 1], Float64[0 1; 1 2]
+    )
     bilinear = Adapt.adapt(context, bilinear)
     @test typeof(bilinear.lookup_x.x0) === Float32
     @test typeof(bilinear.lookup_x.dx) === Float32
@@ -65,15 +75,23 @@ end
 Jutul.synchronize(context::SynchronizationCountingContext) =
     (context.count += 1; context)
 Jutul.matrix_layout(::SynchronizationCountingContext) = EquationMajorLayout()
-Jutul.update_equations!(storage, model::SynchronizationBoundaryModel, dt;
-    kwarg...) = nothing
-Jutul.apply_forces!(storage, model::SynchronizationBoundaryModel, dt, forces;
-    time = NaN, kwarg...) = nothing
-Jutul.apply_boundary_conditions!(storage,
-    model::SynchronizationBoundaryModel; kwarg...) = nothing
+Jutul.update_equations!(
+    storage, model::SynchronizationBoundaryModel, dt;
+    kwarg...
+) = nothing
+Jutul.apply_forces!(
+    storage, model::SynchronizationBoundaryModel, dt, forces;
+    time = NaN, kwarg...
+) = nothing
+Jutul.apply_boundary_conditions!(
+    storage,
+    model::SynchronizationBoundaryModel; kwarg...
+) = nothing
 
-function Jutul.prepare_backend_transfer!(storage,
-        model::SimulationModel{<:ScalarTestDomain})
+function Jutul.prepare_backend_transfer!(
+        storage,
+        model::SimulationModel{<:ScalarTestDomain}
+    )
     mixed_cross_term_prepare_count[] += 1
     return storage
 end
@@ -85,7 +103,7 @@ struct KernelArgumentTestAdaptor end
 struct KernelArgumentArray{T}
     length::Int
 end
-Base.eltype(::KernelArgumentArray{T}) where T = T
+Base.eltype(::KernelArgumentArray{T}) where {T} = T
 Adapt.adapt_storage(::KernelArgumentTestAdaptor, array::AbstractArray) =
     KernelArgumentArray{eltype(array)}(length(array))
 
@@ -93,10 +111,12 @@ Adapt.adapt_storage(::KernelArgumentTestAdaptor, array::AbstractArray) =
     context = SynchronizationCountingContext(0)
     model = SynchronizationBoundaryModel(context)
     Jutul.update_equations_and_apply_forces!(
-        nothing, model, 1.0, :force; do_sync = false)
+        nothing, model, 1.0, :force; do_sync = false
+    )
     @test context.count == 0
     Jutul.update_equations_and_apply_forces!(
-        nothing, model, 1.0, :force)
+        nothing, model, 1.0, :force
+    )
     @test context.count == 1
 
     multimodel = MultiModel((A = model,); context = context)
@@ -129,9 +149,11 @@ end
 
 @testset "Kernel argument interpolation adaptation" begin
     interpolant = Jutul.BilinearInterpolant(
-        [0.0, 1.0], [0.0, 1.0], [1.0 2.0; 3.0 4.0])
+        [0.0, 1.0], [0.0, 1.0], [1.0 2.0; 3.0 4.0]
+    )
     kernel_interpolant = Adapt.adapt(
-        KernelArgumentTestAdaptor(), interpolant)
+        KernelArgumentTestAdaptor(), interpolant
+    )
     @test kernel_interpolant.X isa KernelArgumentArray{Float64}
     @test kernel_interpolant.Y isa KernelArgumentArray{Float64}
     @test kernel_interpolant.F isa KernelArgumentArray{Float64}
@@ -139,16 +161,20 @@ end
 end
 
 @testset "KernelAbstractions context" begin
-    threshold_context = KernelAbstractionsContext(CPU();
-        minbatch = 4, workgroupsize = 2)
+    threshold_context = KernelAbstractionsContext(
+        CPU();
+        minbatch = 4, workgroupsize = 2
+    )
     @test threshold_context.reduce_memory
     @test !threshold_context.use_kernels_for_secondary
     @test minbatch(threshold_context) == 4
     @test minbatch(adjoint(threshold_context)) == 4
     @test !adjoint(threshold_context).use_kernels_for_secondary
     @test adjoint(threshold_context).reduce_memory
-    kernel_context = KernelAbstractionsContext(CPU();
-        use_kernels_for_secondary = true)
+    kernel_context = KernelAbstractionsContext(
+        CPU();
+        use_kernels_for_secondary = true
+    )
     @test kernel_context.use_kernels_for_secondary
     @test adjoint(kernel_context).use_kernels_for_secondary
     @test !KernelAbstractionsContext(CPU(); reduce_memory = false).reduce_memory
@@ -156,7 +182,8 @@ end
 
     small_result = zeros(Int, 4)
     small_event = Jutul.KernelExecution.launch_threaded_loop(
-        i -> (small_result[i] = i), length(small_result), threshold_context)
+        i -> (small_result[i] = i), length(small_result), threshold_context
+    )
     @test isnothing(small_event)
     @test small_result == 1:4
 
@@ -223,25 +250,31 @@ end
     @test isnothing(simulator.model.domain.representation.tags)
 
     states, = simulate!(simulator, [0.1]; info_level = -1)
-    @test states[end][:T] ≈ reference[end][:T] rtol = 1e-10
+    @test states[end][:T] ≈ reference[end][:T] rtol = 1.0e-10
 end
 
 @testset "KernelAbstractions grouped multimodel" begin
     system = ScalarTestSystem()
     model_a = SimulationModel(ScalarTestDomain(), system)
     model_b = SimulationModel(ScalarTestDomain(), system)
-    set_parameters!(model_b;
-        KernelTransferParameter = KernelTransferParameter())
+    set_parameters!(
+        model_b;
+        KernelTransferParameter = KernelTransferParameter()
+    )
     model = MultiModel((A = model_a, B = model_b))
-    add_cross_term!(model, ScalarTestCrossTerm();
-        target = :A, source = :B, equation = :test_equation)
+    add_cross_term!(
+        model, ScalarTestCrossTerm();
+        target = :A, source = :B, equation = :test_equation
+    )
 
     state_a = setup_state(model_a, Dict(:XVar => 0.0))
     state_b = setup_state(model_b, Dict(:XVar => 0.0))
     state0 = setup_state(model; A = state_a, B = state_b)
-    forces = setup_forces(model;
+    forces = setup_forces(
+        model;
         A = setup_forces(model_a, sources = ScalarTestForce(1.0)),
-        B = setup_forces(model_b, sources = ScalarTestForce(-1.0)))
+        B = setup_forces(model_b, sources = ScalarTestForce(-1.0))
+    )
 
     function group_execution(key, submodel)
         if key == :A
@@ -252,7 +285,8 @@ end
     end
     simulator = transfer_to_backend(
         Simulator(model; state0 = state0), CPU();
-        group_execution = group_execution)
+        group_execution = group_execution
+    )
     @test isnothing(simulator.model.groups)
     @test collect(simulator.model.group_execution) ==
         [SolveFullyOnDevice, AssembleOnDevice]
@@ -281,8 +315,10 @@ end
     host.storage.A.state.XVar .= -5.0
     host.storage.A.state0.XVar .= 8.0
     simulator.storage.A.state0.XVar .= -8.0
-    Jutul.maybe_synchronize_device_host!(simulator.storage, simulator.model;
-        state = true, state0 = false, parameters = false)
+    Jutul.maybe_synchronize_device_host!(
+        simulator.storage, simulator.model;
+        state = true, state0 = false, parameters = false
+    )
     Jutul.update_cross_terms!(simulator.storage, simulator.model, 1.0)
     @test only(simulator.storage.B.state.XVar) == -10.0
     @test only(host.storage.A.state.XVar) == 5.0
@@ -297,7 +333,8 @@ end
     device_mixed_simulator = transfer_to_backend(
         Simulator(model; state0 = state0), CPU();
         group_execution = group_execution,
-        mixed_cross_terms_on_host = false)
+        mixed_cross_terms_on_host = false
+    )
     device_host = device_mixed_simulator.storage.host_evaluation
     @test isempty(device_host.cross_term_evaluation.host)
     @test device_host.cross_term_evaluation.mixed == [1]
@@ -313,9 +350,12 @@ end
     device_mixed_simulator.storage.B.state0.KernelTransferParameter .= -3.0
     Jutul.maybe_synchronize_device_host!(
         device_mixed_simulator.storage, device_mixed_simulator.model;
-        state = true, state0 = false, parameters = false)
-    Jutul.update_cross_terms!(device_mixed_simulator.storage,
-        device_mixed_simulator.model, 1.0)
+        state = true, state0 = false, parameters = false
+    )
+    Jutul.update_cross_terms!(
+        device_mixed_simulator.storage,
+        device_mixed_simulator.model, 1.0
+    )
     @test only(device_mixed_simulator.storage.B.state.XVar) == 2.0
     @test only(device_mixed_simulator.storage.B.state0.XVar) == -8.0
     @test only(device_mixed_simulator.storage.B.parameters.KernelTransferParameter) == -3.0
@@ -324,11 +364,13 @@ end
     @test Jutul.value(only(device_entries)) == 3.0
     Jutul.maybe_synchronize_device_host!(
         device_mixed_simulator.storage, device_mixed_simulator.model;
-        state = false, state0 = true, parameters = false)
+        state = false, state0 = true, parameters = false
+    )
     @test only(device_mixed_simulator.storage.B.state0.XVar) == 8.0
     Jutul.maybe_synchronize_device_host!(
         device_mixed_simulator.storage, device_mixed_simulator.model;
-        state = false, state0 = false, parameters = true)
+        state = false, state0 = false, parameters = true
+    )
     @test only(device_mixed_simulator.storage.B.parameters.KernelTransferParameter) == 9.0
     @test only(device_mixed_simulator.storage.B.state0.KernelTransferParameter) == 9.0
 
@@ -340,32 +382,42 @@ end
     simulator.storage.A.state.XVar .= 0.0
 
     reverse_mixed = MultiModel((A = model_a, B = model_b))
-    add_cross_term!(reverse_mixed, ScalarTestCrossTerm();
-        target = :B, source = :A, equation = :test_equation)
+    add_cross_term!(
+        reverse_mixed, ScalarTestCrossTerm();
+        target = :B, source = :A, equation = :test_equation
+    )
     reverse_mixed_simulator = transfer_to_backend(
         Simulator(reverse_mixed; state0 = state0), CPU();
-        group_execution = group_execution)
+        group_execution = group_execution
+    )
     reverse_host = reverse_mixed_simulator.storage.host_evaluation
     reverse_host.storage.B.state.XVar .= 2.0
     reverse_mixed_simulator.storage.A.state.XVar .= 5.0
     Jutul.maybe_synchronize_device_host!(
-        reverse_mixed_simulator.storage, reverse_mixed_simulator.model)
-    Jutul.update_cross_terms!(reverse_mixed_simulator.storage,
-        reverse_mixed_simulator.model, 1.0)
+        reverse_mixed_simulator.storage, reverse_mixed_simulator.model
+    )
+    Jutul.update_cross_terms!(
+        reverse_mixed_simulator.storage,
+        reverse_mixed_simulator.model, 1.0
+    )
     Jutul.transfer_cross_term_evaluation!(
-        reverse_mixed_simulator.storage, reverse_mixed_simulator.model)
+        reverse_mixed_simulator.storage, reverse_mixed_simulator.model
+    )
     reverse_entries =
         reverse_mixed_simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(reverse_entries)) == -3.0
 
     overlapping_mixed = MultiModel((A = model_a, B = model_b))
     for _ in 1:2
-        add_cross_term!(overlapping_mixed, ScalarTestCrossTerm();
-            target = :A, source = :B, equation = :test_equation)
+        add_cross_term!(
+            overlapping_mixed, ScalarTestCrossTerm();
+            target = :A, source = :B, equation = :test_equation
+        )
     end
     overlapping_mixed_simulator = transfer_to_backend(
         Simulator(overlapping_mixed; state0 = state0), CPU();
-        group_execution = group_execution)
+        group_execution = group_execution
+    )
     overlapping_host = overlapping_mixed_simulator.storage.host_evaluation
     @test overlapping_host.cross_term_evaluation.host == [1, 2]
     @test overlapping_host.cross_term_evaluation.mixed == [1, 2]
@@ -374,12 +426,15 @@ end
     Jutul.update_equations_and_apply_forces!(
         overlapping_mixed_simulator.storage,
         overlapping_mixed_simulator.model, 1.0, forces;
-        do_sync = false)
+        do_sync = false
+    )
     Jutul.synchronize(overlapping_mixed_simulator.model.context)
     @test mixed_cross_term_prepare_count[] == 1
 
-    adjoint_source = MultiModel((A = model_a, B = model_b), groups = [1, 2],
-        group_execution = [SolveFullyOnDevice, AssembleOnDevice])
+    adjoint_source = MultiModel(
+        (A = model_a, B = model_b), groups = [1, 2],
+        group_execution = [SolveFullyOnDevice, AssembleOnDevice]
+    )
     adjoint_model = Jutul.adjoint_model_copy(
         adjoint_source;
         context = DefaultContext()
@@ -387,37 +442,52 @@ end
     @test isnothing(adjoint_model.groups)
     @test all(==(SolveFullyOnDevice), adjoint_model.group_execution)
 
-    @test_throws ArgumentError MultiModel((A = model_a, B = model_b),
-        group_execution = [NothingOnDevice, SolveFullyOnDevice])
-    mixed_groups = MultiModel((A = model_a, B = model_b), groups = [1, 2],
-        group_execution = [NothingOnDevice, SolveFullyOnDevice])
+    @test_throws ArgumentError MultiModel(
+        (A = model_a, B = model_b),
+        group_execution = [NothingOnDevice, SolveFullyOnDevice]
+    )
+    mixed_groups = MultiModel(
+        (A = model_a, B = model_b), groups = [1, 2],
+        group_execution = [NothingOnDevice, SolveFullyOnDevice]
+    )
     @test mixed_groups.groups == [1, 2]
 
     dt = 1.0
     Jutul.update_before_step!(simulator, dt, forces; time = 0.0)
-    Jutul.update_state_dependents!(simulator.storage, simulator.model, dt, forces;
-        time = dt)
+    Jutul.update_state_dependents!(
+        simulator.storage, simulator.model, dt, forces;
+        time = dt
+    )
     Jutul.update_linearized_system!(simulator.storage, simulator.model)
 
     linearized_system = simulator.storage.LinearizedSystem
     @test linearized_system isa Jutul.LinearizedSystem
     @test all(isfinite, linearized_system.r_buffer)
     @test all(isfinite, nonzeros(linearized_system.jac))
-    @test all(cross_term ->
-            cross_term.target_impact_map.entries isa AbstractVector,
-        simulator.storage.cross_terms)
+    @test all(
+        cross_term ->
+        cross_term.target_impact_map.entries isa AbstractVector,
+        simulator.storage.cross_terms
+    )
 
-    cpu_only = MultiModel((A = model_a, B = model_b), groups = [1, 2],
-        group_execution = NothingOnDevice)
+    cpu_only = MultiModel(
+        (A = model_a, B = model_b), groups = [1, 2],
+        group_execution = NothingOnDevice
+    )
     cpu_only_simulator = Simulator(cpu_only; state0 = state0)
     @test transfer_to_backend(cpu_only_simulator, CPU()) === cpu_only_simulator
 
-    host_only = MultiModel((A = model_a, B = model_b),
-        group_execution = AssembleOnDevice)
-    add_cross_term!(host_only, ScalarTestCrossTerm();
-        target = :A, source = :B, equation = :test_equation)
+    host_only = MultiModel(
+        (A = model_a, B = model_b),
+        group_execution = AssembleOnDevice
+    )
+    add_cross_term!(
+        host_only, ScalarTestCrossTerm();
+        target = :A, source = :B, equation = :test_equation
+    )
     host_only_simulator = transfer_to_backend(
-        Simulator(host_only; state0 = state0), CPU())
+        Simulator(host_only; state0 = state0), CPU()
+    )
     host_only_storage = host_only_simulator.storage.host_evaluation
     @test host_only_storage.keys == (:A, :B)
     @test host_only_storage.cross_term_evaluation.host == [1]
@@ -428,27 +498,38 @@ end
     host_only_storage.storage.A.state.XVar .= 7.0
     host_only_storage.storage.B.state.XVar .= 4.0
     Jutul.maybe_synchronize_device_host!(
-        host_only_simulator.storage, host_only_simulator.model)
-    Jutul.update_cross_terms!(host_only_simulator.storage,
-        host_only_simulator.model, 1.0)
+        host_only_simulator.storage, host_only_simulator.model
+    )
+    Jutul.update_cross_terms!(
+        host_only_simulator.storage,
+        host_only_simulator.model, 1.0
+    )
     Jutul.transfer_cross_term_evaluation!(
-        host_only_simulator.storage, host_only_simulator.model)
+        host_only_simulator.storage, host_only_simulator.model
+    )
     host_entries = host_only_storage.storage.cross_terms[1].target.Cells.entries
     device_entries = host_only_simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(host_entries)) == 3.0
     @test Jutul.value(only(device_entries)) == 3.0
 
-    device_only = MultiModel((A = model_a, B = model_b),
-        group_execution = SolveFullyOnDevice)
-    add_cross_term!(device_only, ScalarTestCrossTerm();
-        target = :A, source = :B, equation = :test_equation)
+    device_only = MultiModel(
+        (A = model_a, B = model_b),
+        group_execution = SolveFullyOnDevice
+    )
+    add_cross_term!(
+        device_only, ScalarTestCrossTerm();
+        target = :A, source = :B, equation = :test_equation
+    )
     device_only_simulator = transfer_to_backend(
-        Simulator(device_only; state0 = state0), CPU())
+        Simulator(device_only; state0 = state0), CPU()
+    )
     @test !haskey(device_only_simulator.storage, :host_evaluation)
     device_only_simulator.storage.A.state.XVar .= 7.0
     device_only_simulator.storage.B.state.XVar .= 4.0
-    Jutul.update_cross_terms!(device_only_simulator.storage,
-        device_only_simulator.model, 1.0)
+    Jutul.update_cross_terms!(
+        device_only_simulator.storage,
+        device_only_simulator.model, 1.0
+    )
     device_only_entries =
         device_only_simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(device_only_entries)) == 3.0

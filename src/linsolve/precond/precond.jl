@@ -12,4 +12,3 @@ include("ilu.jl")
 include("spai.jl")
 include("jacobi.jl")
 include("various.jl")
-

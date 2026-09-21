@@ -2,7 +2,7 @@ using Jutul, Test, LBFGSB
 
 function poisson_test_objective(model, state)
     U = state[:U]
-    return 2.5*(U[end] - U[1])
+    return 2.5 * (U[end] - U[1])
 end
 
 function poisson_test_objective_vec(model, state)
@@ -14,10 +14,10 @@ function setup_poisson_test_case(dx, dy, U0, k_val, srcval; dim = (2, 2), dt = [
     # Unit square
     g = CartesianMesh(dim, (dx, dy))
     # Set up a model with the grid and system
-    discretization = (poisson = Jutul.PoissonDiscretization(g), )
+    discretization = (poisson = Jutul.PoissonDiscretization(g),)
     D = DiscretizedDomain(g, discretization)
     model = SimulationModel(D, sys)
-    state0 = setup_state(model, Dict(:U=>U0))
+    state0 = setup_state(model, Dict(:U => U0))
     K = compute_face_trans(g, k_val)
     param = setup_parameters(model, K = K)
 
@@ -32,7 +32,7 @@ end
 function solve_adjoint_forward_test_system(dim, dt)
     case = setup_poisson_test_case(1.0, 1.0, 1.0, 1.0, 1.0, dim = dim, dt = dt)
     (; state0, forces, model, parameters, dt) = case
-    states, reports = simulate(state0, model, parameters = parameters, dt, info_level = -1, forces = forces);
+    states, reports = simulate(state0, model, parameters = parameters, dt, info_level = -1, forces = forces)
     return (model, state0, states, reports, parameters, forces)
 end
 ##
@@ -40,7 +40,7 @@ function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = fa
     model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
     K = param[:K]
     n_grad = length(K)
-    if scalar_obj
+    return if scalar_obj
         # Scalar mode - we test the gradient of the scalar objective against the numerical version
         # Define objective
         G = (model, state, dt, step_no, forces) -> poisson_test_objective(model, state)
@@ -52,9 +52,11 @@ function test_basic_adjoint(; nx = 3, ny = 1, dt = [1.0, 2.0, π], in_place = fa
             grad_adj = solve_out_of_place(model, state0, states, param, reports, G, forces)
         end
         # Check against numerical gradient
-        grad_num = Jutul.solve_numerical_sensitivities(model, states, reports, G, :K,
-                                forces = forces, state0 = state0, parameters = param)
-        @test isapprox(grad_num, grad_adj, atol = 1e-4)
+        grad_num = Jutul.solve_numerical_sensitivities(
+            model, states, reports, G, :K,
+            forces = forces, state0 = state0, parameters = param
+        )
+        @test isapprox(grad_num, grad_adj, atol = 1.0e-4)
     else
         # Test vector objective
         G = (model, state, dt, step_info, forces) -> poisson_test_objective_vec(model, state)
@@ -72,8 +74,8 @@ end
 
 function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_scaling = true, use_log = false)
     model, state0, states, reports, param, forces = solve_adjoint_forward_test_system((nx, ny), dt)
-    ϵ = 1e-6
-    num_tol = 1e-4
+    ϵ = 1.0e-6
+    num_tol = 1.0e-4
 
     K = param[:K]
     G = (model, state, dt, step_info, forces) -> poisson_test_objective(model, state)
@@ -92,8 +94,9 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
             x = copy(x0)
             x[i] += ϵ
             F_perturbed = F_o(x)
-            dF_num[i] = (F_perturbed - F_initial)/ϵ
+            dF_num[i] = (F_perturbed - F_initial) / ϵ
         end
+        return
     end
 
     for (objtype, obj) in [(:local, G), (:global, G_global)]
@@ -107,7 +110,7 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
         if use_log
             cfg[:K][:scaler] = :log
         end
-        tmp = setup_parameter_optimization(model, state0, param, dt, forces, obj, cfg, param_obj = true, print = false);
+        tmp = setup_parameter_optimization(model, state0, param, dt, forces, obj, cfg, param_obj = true, print = false)
         F_o, dF_o, F_and_dF, x0, lims, data = tmp
         # Evaluate gradient first to initialize
         F0 = F_o(x0)
@@ -123,23 +126,26 @@ function test_optimization_gradient(; nx = 3, ny = 1, dt = [1.0, 2.0, π], use_s
         # the gradients there too. Use the F_and_dF interface, that
         # computes gradients together with the objective
         for delta in [1.05, 0.85, 0.325, 1.55]
-            x_mod = delta.*x0
+            x_mod = delta .* x0
             dF_mod = similar(dF_initial)
             F_and_dF(NaN, dF_mod, x_mod)
             num_grad!(dF_num, x_mod, ϵ, F_o)
             @test isapprox(dF_num, dF_mod, rtol = num_tol)
         end
     end
+    return
 end
 
 function solve_in_place!(grad_adj, model, state0, states, param, dt, G, forces; kwarg...)
     storage = setup_adjoint_storage(model; state0 = state0, parameters = param, kwarg...)
-    grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G, forces = forces)
+    return grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt, G, forces = forces)
 end
 
 function solve_out_of_place(model, state0, states, param, reports, G, forces; kwarg...)
-    grad_adj = solve_adjoint_sensitivities(model, states, reports, G, 
-    forces = forces, state0 = state0, parameters = param, raw_output = true; kwarg...)
+    grad_adj = solve_adjoint_sensitivities(
+        model, states, reports, G,
+        forces = forces, state0 = state0, parameters = param, raw_output = true; kwarg...
+    )
     return grad_adj
 end
 
@@ -193,7 +199,7 @@ end
 
 function num_grad_generic(F, G, x0)
     out = similar(x0)
-    ϵ = 1e-12
+    ϵ = 1.0e-12
     function objective_from_x(xi)
         case = F(xi, missing)
         r = simulate(case, info_level = -1)
@@ -204,12 +210,12 @@ function num_grad_generic(F, G, x0)
         x = copy(x0)
         x[i] += ϵ
         Gi = objective_from_x(x)
-        out[i] = (Gi - G0)/ϵ
+        out[i] = (Gi - G0) / ϵ
     end
     return out
 end
 
-function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objective = false, deps = :case, deps_ad = :jutul, kwarg...)
+function test_for_timesteps(timesteps; atol = 5.0e-3, fmt = :case, global_objective = false, deps = :case, deps_ad = :jutul, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)
@@ -235,7 +241,8 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objectiv
         G = G_local
     end
     dGdx_num = num_grad_generic(F_num, G, x)
-    dGdx_adj = solve_adjoint_generic(x, F, states, reports, G;
+    dGdx_adj = solve_adjoint_generic(
+        x, F, states, reports, G;
         state0 = case.state0,
         forces = case.forces,
         deps_ad = deps_ad,
@@ -256,7 +263,7 @@ function test_for_timesteps(timesteps; atol = 5e-3, fmt = :case, global_objectiv
         dGdx_adj = dGdx_adj[ix]
         dGdx_num = dGdx_num[ix]
     end
-    @test dGdx_adj ≈ dGdx_num atol = atol
+    return @test dGdx_adj ≈ dGdx_num atol = atol
 end
 
 @testset "AdjointDI.solve_adjoint_generic" begin
@@ -370,8 +377,8 @@ import Jutul.DictOptimization as DictOptimization
             step = step_info[:step]
             U = s[:U]
             U_ref = states[step][:U]
-            v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
-            return dt*v
+            v = sum(i -> (U[i] - U_ref[i]) .^ 2, eachindex(U))
+            return dt * v
         end
         # Perturb a parameter
         prm = default_poisson_dict()
@@ -383,7 +390,7 @@ import Jutul.DictOptimization as DictOptimization
         free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1)
 
         # Test with base optimizer
-        prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, solution_history = true);
+        prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, solution_history = true)
 
         @test length(dprm.history.solutions) > 0
         @test haskey(dprm.history.solutions[1], :x)
@@ -403,7 +410,7 @@ import Jutul.DictOptimization as DictOptimization
         @test length(p) == 2
         for (i, dobj) in enumerate(grad_vec)
             dobj_num = Jutul.DictOptimization.finite_difference_gradient_entry(p, index = i)
-            @test isapprox(dobj, dobj_num; atol = 1e-3)
+            @test isapprox(dobj, dobj_num; atol = 1.0e-3)
         end
 
         obj1, grad_vec1 = p(prm; dict_out = false)
@@ -415,13 +422,14 @@ import Jutul.DictOptimization as DictOptimization
 
         # Test with lbfgsb_qp optimizer
         outpth = tempname()
-        prm_opt = optimize(dprm, poisson_mismatch_objective,
+        prm_opt = optimize(
+            dprm, poisson_mismatch_objective,
             max_it = 25,
             info_level = -1,
             solution_history = :full,
             optimizer = :lbfgsb_qp,
             output_path = outpth
-        );
+        )
 
         @test isdir(outpth)
         @test length(readdir(outpth)) > 0
@@ -437,14 +445,14 @@ import Jutul.DictOptimization as DictOptimization
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
 
         # Test with LBFGSB.jl optimizer
-        prm_opt2 = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb);
+        prm_opt2 = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb)
 
         @test prm_opt2["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt2["U0"] ≈ prm_truth["U0"] atol = 0.01
 
         grad = parameters_gradient(dprm, poisson_mismatch_objective, setup_poisson_test_case_from_dict)
         @test grad["k_val"] ≈ 0.0276189 atol = 0.01
-        @test grad["U0"] ≈ 0.00 atol = 1e-8
+        @test grad["U0"] ≈ 0.0 atol = 1.0e-8
         @test !haskey(grad, "dx")
         @test !haskey(grad, "dy")
         @test !haskey(grad, "srcval")
@@ -454,9 +462,9 @@ import Jutul.DictOptimization as DictOptimization
         # Test the version without explicitly passing the setup function
         grad_all = parameters_gradient(dprm, poisson_mismatch_objective)
         @test grad_all["k_val"] ≈ 0.0276189 atol = 0.01
-        @test grad_all["U0"] ≈ 0.00 atol = 1e-8
-        @test grad_all["dx"] ≈ 0.0 atol = 1e-8
-        @test grad_all["dy"] ≈ 0.0 atol = 1e-8
+        @test grad_all["U0"] ≈ 0.0 atol = 1.0e-8
+        @test grad_all["dx"] ≈ 0.0 atol = 1.0e-8
+        @test grad_all["dy"] ≈ 0.0 atol = 1.0e-8
         @test grad_all["srcval"] ≈ -0.105863 atol = 0.01
 
         @testset "multiplier" begin
@@ -470,10 +478,10 @@ import Jutul.DictOptimization as DictOptimization
             dprm = DictParameters(prm, setup_poisson_test_case_from_dict, verbose = false)
             add_optimization_multiplier!(dprm, "k_val", "U0", abs_min = 0.1, abs_max = 10.0)
 
-            prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1);
+            prm_opt = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1)
             @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.001
             @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.001
-            @test only(dprm.multipliers_optimized["multiplier_1"].value) ≈ 1.0/multval atol = 1e-3
+            @test only(dprm.multipliers_optimized["multiplier_1"].value) ≈ 1.0 / multval atol = 1.0e-3
         end
     end
 end;
@@ -499,7 +507,7 @@ end
 @testset "DictOptimization with vectors, scalars and lumping" begin
     function poisson_test_objective(model, state)
         U = state[:U]
-        return 2.5*(U[end] - U[1])
+        return 2.5 * (U[end] - U[1])
     end
 
     function poisson_test_objective_vec(model, state)
@@ -511,10 +519,10 @@ end
         # Unit square
         g = CartesianMesh(dim, (dx, dy))
         # Set up a model with the grid and system
-        discretization = (poisson = Jutul.PoissonDiscretization(g), )
+        discretization = (poisson = Jutul.PoissonDiscretization(g),)
         D = DiscretizedDomain(g, discretization)
         model = SimulationModel(D, sys)
-        state0 = setup_state(model, Dict(:U=>U0))
+        state0 = setup_state(model, Dict(:U => U0))
         K = compute_face_trans(g, k_val)
         param = setup_parameters(model, K = K)
 
@@ -548,8 +556,8 @@ end
             step = step_info[:step]
             U = s[:U]
             U_ref = states[step][:U]
-            v = sum(i -> (U[i] - U_ref[i]).^2, eachindex(U))
-            return dt*v
+            v = sum(i -> (U[i] - U_ref[i]) .^ 2, eachindex(U))
+            return dt * v
         end
         # Perturb a parameter
         prm = default_poisson_dict_vec(4)
@@ -561,8 +569,8 @@ end
         free_optimization_parameter!(dprm, "U0", rel_max = 10.0, rel_min = 0.1, scaler = scaler, lumping = lumping)
 
         # Test with base optimizer
-        prm_opt = optimize(dprm, poisson_mismatch_objective; max_it = 25, info_level = -1, optimizer = :lbfgsb, kwarg...);
-        @test dprm.history.objectives[end]/dprm.history.objectives[1] < 1e-6
+        prm_opt = optimize(dprm, poisson_mismatch_objective; max_it = 25, info_level = -1, optimizer = :lbfgsb, kwarg...)
+        @test dprm.history.objectives[end] / dprm.history.objectives[1] < 1.0e-6
 
         if test_vals
             @test all(isapprox.(prm_opt["k_val"], prm_truth["k_val"], atol = 0.01))
@@ -591,7 +599,7 @@ end
             :log10,
             :reciprocal,
             baselog,
-            baselog_trunc
+            baselog_trunc,
         ]
         for val in [0.1, 1.0, 10.0, 12.0]
             # @info "Testing scaler $scaler with value $val"
@@ -601,12 +609,12 @@ end
                 mean = 10.0,
                 std = 5.0,
                 max = 100.0,
-                min = 0.01
+                min = 0.01,
             )
-            bnds = Jutul.DictOptimization.LimitBounds(lower_limit, upper_limit, 0.1*lower_limit, 10*upper_limit)
+            bnds = Jutul.DictOptimization.LimitBounds(lower_limit, upper_limit, 0.1 * lower_limit, 10 * upper_limit)
             scaled = Jutul.DictOptimization.apply_scaler(val, bnds, stats, scaler)
             recovered = Jutul.DictOptimization.undo_scaler(scaled, bnds, stats, scaler)
-            @test isapprox(recovered, val; rtol = 1e-8)
+            @test isapprox(recovered, val; rtol = 1.0e-8)
         end
     end
     low = 0.09999999999999998

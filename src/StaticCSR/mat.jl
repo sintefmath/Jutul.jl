@@ -1,4 +1,4 @@
-struct StaticSparsityMatrixCSR{Tv,Ti<:Integer,V,I,R,B} <: SparseArrays.AbstractSparseMatrix{Tv,Ti}
+struct StaticSparsityMatrixCSR{Tv, Ti <: Integer, V, I, R, B} <: SparseArrays.AbstractSparseMatrix{Tv, Ti}
     nzval::V
     colval::I
     rowptr::R
@@ -27,8 +27,10 @@ struct StaticSparsityMatrixCSR{Tv,Ti<:Integer,V,I,R,B} <: SparseArrays.AbstractS
             nthreads = 1,
             minbatch = 1,
             thread_type = :serial
-        ) where {Tv, Ti<:Integer, V<:AbstractVector{Tv},
-            I<:AbstractVector{Ti}, R<:AbstractVector{Ti}, B}
+        ) where {
+            Tv, Ti <: Integer, V <: AbstractVector{Tv},
+            I <: AbstractVector{Ti}, R <: AbstractVector{Ti}, B,
+        }
         return new{Tv, Ti, V, I, R, B}(
             nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, backend
         )
@@ -84,10 +86,10 @@ function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::Ab
 end
 
 function csr_mul_add!(y::AbstractVector{Ty}, nzval, rowval, colptr, x, n, mb, α, ::Val{do_increment}) where {do_increment, Ty}
-    @batch minbatch = mb for row in 1:n
+    return @batch minbatch = mb for row in 1:n
         v = zero(Ty)
         @inbounds start = colptr[row]
-        @inbounds stop = colptr[row+1]-1
+        @inbounds stop = colptr[row + 1] - 1
         @inbounds for nz in start:stop
             col = rowval[nz]
             A_ij = nzval[nz]
@@ -95,15 +97,15 @@ function csr_mul_add!(y::AbstractVector{Ty}, nzval, rowval, colptr, x, n, mb, α
             v = internal_muladd(A_ij, x_j, v)
         end
         if do_increment
-            @inbounds y[row] += α*v
+            @inbounds y[row] += α * v
         else
-            @inbounds y[row] = α*v
+            @inbounds y[row] = α * v
         end
     end
 end
 
 @inline function internal_muladd(A_ij, x_j, v)
-    return v + A_ij*x_j
+    return v + A_ij * x_j
 end
 @inline function internal_muladd(A_ij, x_j::SVector, v::SVector)
     return muladd(A_ij, x_j, v)
@@ -125,12 +127,12 @@ function StaticSparsityMatrixCSR(m, n, rowptr, cols, nzval; kwarg...)
 end
 
 
-function in_place_mat_mat_mul!(M::CSR, A::CSR, B::CSC) where {CSR<:StaticSparsityMatrixCSR, CSC<:SparseMatrixCSC}
+function in_place_mat_mat_mul!(M::CSR, A::CSR, B::CSC) where {CSR <: StaticSparsityMatrixCSR, CSC <: SparseMatrixCSC}
     columns = colvals(M)
     nz = nonzeros(M)
     n = size(M, 1)
     mb = max(n ÷ nthreads(A), minbatch(A))
-    @batch minbatch = mb for row in 1:n
+    return @batch minbatch = mb for row in 1:n
         for pos in nzrange(M, row)
             @inbounds col = columns[pos]
             @inbounds nz[pos] = rowcol_prod(A, B, row, col)
@@ -138,12 +140,12 @@ function in_place_mat_mat_mul!(M::CSR, A::CSR, B::CSC) where {CSR<:StaticSparsit
     end
 end
 
-function in_place_mat_mat_mul!(M::CSC, A::CSR, B::CSC) where {CSR<:StaticSparsityMatrixCSR, CSC<:SparseMatrixCSC}
+function in_place_mat_mat_mul!(M::CSC, A::CSR, B::CSC) where {CSR <: StaticSparsityMatrixCSR, CSC <: SparseMatrixCSC}
     rows = rowvals(M)
     nz = nonzeros(M)
     n = size(M, 2)
     mb = max(n ÷ nthreads(A), minbatch(A))
-    @batch minbatch = mb for col in 1:n
+    return @batch minbatch = mb for col in 1:n
         for pos in nzrange(M, col)
             @inbounds row = rows[pos]
             @inbounds nz[pos] = rowcol_prod(A, B, row, col)
@@ -177,7 +179,7 @@ end
         if delta == 0
             @inbounds rv = nz_A[A_idx]
             @inbounds cv = nz_B[B_idx]
-            v += rv*cv
+            v += rv * cv
             entries_remain = pos_A < n_col && pos_B < n_row
             if entries_remain
                 pos_A += 1

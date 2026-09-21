@@ -17,7 +17,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
             SVector{3, Float64}(0.0, 0.0, 0.5),
             SVector{3, Float64}(1.0, 0.0, 0.5),
             SVector{3, Float64}(1.0, 1.0, 0.5),
-            SVector{3, Float64}(0.0, 1.0, 0.5)
+            SVector{3, Float64}(0.0, 1.0, 0.5),
         ]
         surface = PolygonalSurface([poly])
         @test length(surface.polygons) == 1
@@ -37,7 +37,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test all(geo.volumes .> 0)
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         total_vol_cut = sum(geo.volumes)
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-10
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-10
     end
 
     @testset "Axis-aligned X cut" begin
@@ -53,7 +53,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test all(geo.volumes .> 0)
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         total_vol_cut = sum(geo.volumes)
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-10
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-10
     end
 
     @testset "Diagonal plane cut" begin
@@ -69,7 +69,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test all(geo.volumes .> 0)
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         total_vol_cut = sum(geo.volumes)
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-8
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-8
     end
 
     @testset "No-cut plane outside mesh" begin
@@ -130,7 +130,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
             SVector{3, Float64}(-1.0, -1.0, 0.5),
             SVector{3, Float64}(2.0, -1.0, 0.5),
             SVector{3, Float64}(2.0, 2.0, 0.5),
-            SVector{3, Float64}(-1.0, 2.0, 0.5)
+            SVector{3, Float64}(-1.0, 2.0, 0.5),
         ]
         surface = PolygonalSurface([poly])
         cut = cut_mesh(mesh, surface; min_cut_fraction = 0.01)
@@ -158,7 +158,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
 
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         total_vol_cut = sum(geo.volumes)
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-8
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-8
     end
 
     @testset "Min cut fraction threshold" begin
@@ -191,7 +191,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @testset "total volume conserved" begin
             total_vol_orig = sum(tpfv_geometry(mesh).volumes)
             total_vol_cut = sum(geo.volumes)
-            @test total_vol_orig ≈ total_vol_cut rtol=1e-10
+            @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-10
         end
 
         @testset "interior normals" begin
@@ -218,7 +218,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test all(geo.volumes .> 0)
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         total_vol_cut = sum(geo.volumes)
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-8
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-8
     end
 
     @testset "Performance: 10000+ cells" begin
@@ -234,7 +234,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test all(geo.volumes .> 0)
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         total_vol_cut = sum(geo.volumes)
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-8
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-8
         @test t < 30.0  # Should complete in reasonable time
     end
 
@@ -364,7 +364,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
             SVector{3, Float64}(0.0, 0.0, 0.5),
             SVector{3, Float64}(0.25, 0.0, 0.5),
             SVector{3, Float64}(0.25, 0.25, 0.5),
-            SVector{3, Float64}(0.0, 0.25, 0.5)
+            SVector{3, Float64}(0.0, 0.25, 0.5),
         ]
 
         cut_bounded = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly)
@@ -378,7 +378,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         @test all(geo.volumes .> 0)
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         total_vol_cut = sum(geo.volumes)
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-10
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-10
     end
 
     @testset "Bounding polygon - clip_to_polygon mode" begin
@@ -392,18 +392,18 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
         # some nodes from additional cells when clip_to_polygon=true
         bpoly = [
             SVector{3, Float64}(-0.01, -0.01, 0.5),
-            SVector{3, Float64}(0.20, -0.01, 0.5),
-            SVector{3, Float64}(0.20, 0.20, 0.5),
-            SVector{3, Float64}(-0.01, 0.20, 0.5)
+            SVector{3, Float64}(0.2, -0.01, 0.5),
+            SVector{3, Float64}(0.2, 0.2, 0.5),
+            SVector{3, Float64}(-0.01, 0.2, 0.5),
         ]
 
         cut_centroid = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly)
         # A larger polygon that includes nodes from neighboring cells
         bpoly_large = [
             SVector{3, Float64}(-0.01, -0.01, 0.5),
-            SVector{3, Float64}(0.40, -0.01, 0.5),
-            SVector{3, Float64}(0.40, 0.40, 0.5),
-            SVector{3, Float64}(-0.01, 0.40, 0.5)
+            SVector{3, Float64}(0.4, -0.01, 0.5),
+            SVector{3, Float64}(0.4, 0.4, 0.5),
+            SVector{3, Float64}(-0.01, 0.4, 0.5),
         ]
         cut_centroid_large = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly_large)
         cut_clip_large = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly_large, clip_to_polygon = true)
@@ -427,7 +427,7 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
             SVector{3, Float64}(5.0, 5.0, 0.5),
             SVector{3, Float64}(6.0, 5.0, 0.5),
             SVector{3, Float64}(6.0, 6.0, 0.5),
-            SVector{3, Float64}(5.0, 6.0, 0.5)
+            SVector{3, Float64}(5.0, 6.0, 0.5),
         ]
 
         cut = cut_mesh(mesh, plane; min_cut_fraction = 0.01, bounding_polygon = bpoly)
@@ -443,11 +443,13 @@ import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
             SVector{3, Float64}(0.0, 0.0, 0.5),
             SVector{3, Float64}(0.25, 0.0, 0.5),
             SVector{3, Float64}(0.25, 0.25, 0.5),
-            SVector{3, Float64}(0.0, 0.25, 0.5)
+            SVector{3, Float64}(0.0, 0.25, 0.5),
         ]
 
-        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01,
-            bounding_polygon = bpoly, extra_out = true)
+        cut, info = cut_mesh(
+            mesh, plane; min_cut_fraction = 0.01,
+            bounding_polygon = bpoly, extra_out = true
+        )
 
         @test length(info[:cell_index]) == number_of_cells(cut)
         @test length(info[:face_index]) == number_of_faces(cut)
@@ -465,41 +467,41 @@ end
         # Define two perpendicular cuts
         cuts = [
             PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0]),
-            PlaneCut([0.5, 0.0, 0.0], [1.0, 0.0, 0.0])
+            PlaneCut([0.5, 0.0, 0.0], [1.0, 0.0, 0.0]),
         ]
 
         # Test without extra_out
         cut_mesh_multi = cut_mesh(mesh, cuts; min_cut_fraction = 0.01)
         @test number_of_cells(cut_mesh_multi) > nc_orig
-        
+
         geo = tpfv_geometry(cut_mesh_multi)
         @test all(geo.volumes .> 0)
-        
+
         # Test with extra_out
         cut_mesh_info, info = cut_mesh(mesh, cuts; min_cut_fraction = 0.01, extra_out = true)
         # @test cut_mesh_info === cut_mesh_multi  # Should be same mesh
-        
+
         # Check that info dict has all required keys
         @test haskey(info, :cell_index)
-        @test haskey(info, :face_index) 
+        @test haskey(info, :face_index)
         @test haskey(info, :boundary_face_index)
         @test haskey(info, :new_faces)
         @test haskey(info, :cut_no)
-        
+
         # Check that all arrays have correct lengths
         @test length(info[:cell_index]) == number_of_cells(cut_mesh_info)
         @test length(info[:face_index]) == number_of_faces(cut_mesh_info)
         @test length(info[:boundary_face_index]) == number_of_boundary_faces(cut_mesh_info)
         @test length(info[:cut_no]) == number_of_faces(cut_mesh_info)
-        
+
         # Check cut_no array: should have 0 for original faces and positive numbers for new faces
         @test all(info[:cut_no] .>= 0)
         @test maximum(info[:cut_no]) <= length(cuts)
-        
+
         # Original faces should map to original indices
         orig_faces = findall(f -> info[:face_index][f] > 0 && info[:face_index][f] <= number_of_faces(mesh), 1:length(info[:face_index]))
         @test all(info[:cut_no][orig_faces] .== 0)
-        
+
         # New faces should have positive cut numbers
         new_faces = findall(f -> info[:face_index][f] == 0, 1:length(info[:face_index]))
         @test all(info[:cut_no][new_faces] .> 0)
@@ -509,27 +511,27 @@ end
     @testset "Mixed PlaneCut and PolygonalSurface" begin
         g = CartesianMesh((2, 2, 2))
         mesh = UnstructuredMesh(g)
-        
+
         # Define a plane cut and a polygonal surface
         plane = PlaneCut([0.25, 0.0, 0.0], [1.0, 0.0, 0.0])
-        
+
         poly = [
             SVector{3, Float64}(0.0, 0.0, 0.25),
             SVector{3, Float64}(1.0, 0.0, 0.25),
             SVector{3, Float64}(1.0, 1.0, 0.25),
-            SVector{3, Float64}(0.0, 1.0, 0.25)
+            SVector{3, Float64}(0.0, 1.0, 0.25),
         ]
         surface = PolygonalSurface([poly])
-        
+
         cuts = [plane, surface]
-        
+
         cut_mesh_seq, info = cut_mesh(mesh, cuts; min_cut_fraction = 0.01, extra_out = true)
-        
+
         # Verify basic properties
         @test number_of_cells(cut_mesh_seq) > number_of_cells(mesh)
         geo = tpfv_geometry(cut_mesh_seq)
         @test all(geo.volumes .> 0)
-        
+
         # Check that we have faces from both cuts
         cut1_faces = count(==(1), info[:cut_no])
         cut2_faces = count(==(2), info[:cut_no])
@@ -540,17 +542,17 @@ end
     @testset "Empty cuts vector" begin
         g = CartesianMesh((2, 2, 2))
         mesh = UnstructuredMesh(g)
-        
+
         cuts = Union{PlaneCut, PolygonalSurface}[]
-        
+
         # Without extra_out
         result = cut_mesh(mesh, cuts)
         @test result === mesh
-        
-        # With extra_out  
+
+        # With extra_out
         result_info, info = cut_mesh(mesh, cuts; extra_out = true)
         @test result_info === mesh
-        
+
         @test info[:cell_index] == collect(1:number_of_cells(mesh))
         @test info[:face_index] == collect(1:number_of_faces(mesh))
         @test info[:boundary_face_index] == collect(1:number_of_boundary_faces(mesh))
@@ -561,33 +563,33 @@ end
     @testset "Volume conservation with multiple cuts" begin
         g = CartesianMesh((2, 2, 2))
         mesh = UnstructuredMesh(g)
-        
+
         cuts = [
             PlaneCut([0.5, 0.0, 0.0], [1.0, 0.0, 0.0]),
             PlaneCut([0.0, 0.5, 0.0], [0.0, 1.0, 0.0]),
-            PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
+            PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0]),
         ]
-        
+
         total_vol_orig = sum(tpfv_geometry(mesh).volumes)
         cut_mesh_result = cut_mesh(mesh, cuts; min_cut_fraction = 0.01)
         total_vol_cut = sum(tpfv_geometry(cut_mesh_result).volumes)
-        
-        @test total_vol_orig ≈ total_vol_cut rtol=1e-10
+
+        @test total_vol_orig ≈ total_vol_cut rtol = 1.0e-10
     end
 
     @testset "Verify cut numbers" begin
         g = CartesianMesh((2, 2, 2))
         mesh = UnstructuredMesh(g)
-        
+
         cuts = [
             PlaneCut([0.25, 0.0, 0.0], [1.0, 0.0, 0.0]),
             PlaneCut([0.0, 0.25, 0.0], [0.0, 1.0, 0.0]),
-            PlaneCut([0.0, 0.0, 0.25], [0.0, 0.0, 1.0])
+            PlaneCut([0.0, 0.0, 0.25], [0.0, 0.0, 1.0]),
         ]
-        
+
         mesh, info = cut_mesh(mesh, cuts; min_cut_fraction = 0.0, extra_out = true)
         geo = tpfv_geometry(mesh)
-        for d = 1:3
+        for d in 1:3
             faces = isapprox.(geo.face_centroids[d, :], 0.25)
             @test all(info[:cut_no][faces] .== d)
         end
@@ -608,7 +610,7 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
         vol_cut = sum(geo.volumes)
         @test vol_cut < vol_orig
-        @test vol_cut ≈ 0.5 rtol=1e-8
+        @test vol_cut ≈ 0.5 rtol = 1.0e-8
     end
 
     @testset "partial_cut positive" begin
@@ -626,7 +628,7 @@ end
         @test all(geo_pos.volumes .> 0)
         @test all(geo_neg.volumes .> 0)
         # Volumes of positive and negative sides should sum to original
-        @test sum(geo_pos.volumes) + sum(geo_neg.volumes) ≈ vol_orig rtol=1e-8
+        @test sum(geo_pos.volumes) + sum(geo_neg.volumes) ≈ vol_orig rtol = 1.0e-8
     end
 
     @testset "partial_cut geometry consistency" begin
@@ -664,8 +666,10 @@ end
         mesh = UnstructuredMesh(g)
         plane = PlaneCut([0.0, 0.0, 0.5], [0.0, 0.0, 1.0])
 
-        cut, info = cut_mesh(mesh, plane; min_cut_fraction = 0.01,
-            partial_cut = :negative, extra_out = true)
+        cut, info = cut_mesh(
+            mesh, plane; min_cut_fraction = 0.01,
+            partial_cut = :negative, extra_out = true
+        )
 
         @test length(info[:cell_index]) == number_of_cells(cut)
         @test length(info[:face_index]) == number_of_faces(cut)
@@ -704,7 +708,7 @@ end
         vol_cut = sum(geo.volumes)
 
         @test all(geo.volumes .> 0)
-        @test vol_cut ≈ vol_orig rtol=1e-10
+        @test vol_cut ≈ vol_orig rtol = 1.0e-10
 
         # Interior normals consistency
         for f in 1:number_of_faces(cut)
@@ -737,7 +741,7 @@ end
         vol_cut = sum(geo.volumes)
 
         @test all(geo.volumes .> 0)
-        @test vol_cut ≈ vol_orig rtol=1e-10
+        @test vol_cut ≈ vol_orig rtol = 1.0e-10
     end
 
     @testset "merge_faces with PolygonalSurface" begin
@@ -748,7 +752,7 @@ end
             SVector{3, Float64}(-1.0, -1.0, 0.5),
             SVector{3, Float64}(2.0, -1.0, 0.5),
             SVector{3, Float64}(2.0, 2.0, 0.5),
-            SVector{3, Float64}(-1.0, 2.0, 0.5)
+            SVector{3, Float64}(-1.0, 2.0, 0.5),
         ]
         surface = PolygonalSurface([poly])
 
@@ -783,7 +787,7 @@ end
         # Verify geometry is preserved
         geo_orig = tpfv_geometry(mesh)
         geo_merged = tpfv_geometry(merged)
-        @test sum(geo_orig.volumes) ≈ sum(geo_merged.volumes) rtol=1e-10
+        @test sum(geo_orig.volumes) ≈ sum(geo_merged.volumes) rtol = 1.0e-10
     end
 
     @testset "merge_coplanar_faces reduces boundary face count" begin
@@ -813,7 +817,7 @@ end
         geo_yes = tpfv_geometry(cut_yes)
         @test all(geo_no.volumes .> 0)
         @test all(geo_yes.volumes .> 0)
-        @test sum(geo_no.volumes) ≈ sum(geo_yes.volumes) rtol=1e-10
+        @test sum(geo_no.volumes) ≈ sum(geo_yes.volumes) rtol = 1.0e-10
     end
 
     @testset "merge_coplanar_faces orientation" begin
@@ -882,7 +886,7 @@ end
         vol_result = sum(geo.volumes)
 
         # Volume conservation
-        @test vol_result ≈ vol_a rtol=1e-8
+        @test vol_result ≈ vol_a rtol = 1.0e-8
 
         # All volumes positive
         @test all(geo.volumes .> 0)
@@ -927,7 +931,7 @@ end
         vol_result = sum(geo.volumes)
 
         # Volume conservation
-        @test vol_result ≈ vol_a rtol=1e-6
+        @test vol_result ≈ vol_a rtol = 1.0e-6
 
         # All volumes positive
         @test all(geo.volumes .> 0)
@@ -972,7 +976,7 @@ end
 
         # Volume should be A + part of B outside A
         expected_vol = vol_a + vol_b / 2
-        @test vol_result ≈ expected_vol rtol=1e-6
+        @test vol_result ≈ expected_vol rtol = 1.0e-6
 
         # All volumes positive
         @test all(geo.volumes .> 0)
@@ -1000,7 +1004,7 @@ end
 
         vol_a = sum(tpfv_geometry(mesh_a).volumes)
         vol_result = sum(tpfv_geometry(result).volumes)
-        @test vol_result ≈ vol_a rtol=1e-6
+        @test vol_result ≈ vol_a rtol = 1.0e-6
     end
 
     @testset "embed_mesh B fully outside A" begin
@@ -1024,7 +1028,7 @@ end
         vol_a = sum(tpfv_geometry(mesh_a).volumes)
         vol_b = sum(tpfv_geometry(mesh_b).volumes)
         vol_result = sum(tpfv_geometry(result).volumes)
-        @test vol_result ≈ vol_a + vol_b rtol=1e-8
+        @test vol_result ≈ vol_a + vol_b rtol = 1.0e-8
     end
 
     # ==================================================================
@@ -1039,7 +1043,7 @@ end
             SVector{3, Float64}(0.0, 0.0, 0.0),
             SVector{3, Float64}(1.0, 0.0, 0.0),
             SVector{3, Float64}(1.0, 1.0, 0.0),
-            SVector{3, Float64}(0.0, 1.0, 0.0)
+            SVector{3, Float64}(0.0, 1.0, 0.0),
         ]
         @test _is_convex_polygon(pts_convex, SVector{3, Float64}(0.0, 0.0, 1.0))
 
@@ -1050,7 +1054,7 @@ end
             SVector{3, Float64}(2.0, 1.0, 0.0),
             SVector{3, Float64}(1.0, 1.0, 0.0),
             SVector{3, Float64}(1.0, 2.0, 0.0),
-            SVector{3, Float64}(0.0, 2.0, 0.0)
+            SVector{3, Float64}(0.0, 2.0, 0.0),
         ]
         @test !_is_convex_polygon(pts_nonconvex, SVector{3, Float64}(0.0, 0.0, 1.0))
 
@@ -1058,7 +1062,7 @@ end
         pts_tri = [
             SVector{3, Float64}(0.0, 0.0, 0.0),
             SVector{3, Float64}(1.0, 0.0, 0.0),
-            SVector{3, Float64}(0.5, 1.0, 0.0)
+            SVector{3, Float64}(0.5, 1.0, 0.0),
         ]
         @test _is_convex_polygon(pts_tri, SVector{3, Float64}(0.0, 0.0, 1.0))
     end

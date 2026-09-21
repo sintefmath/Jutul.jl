@@ -8,5 +8,5 @@ function si_unit(::Union{Val{:ampere}, Val{:amp}, Val{:A}})
 end
 
 function si_unit(::Union{Val{:watt}, Val{:W}})
-    return si_unit(:joule)/si_unit(:second)
+    return si_unit(:joule) / si_unit(:second)
 end

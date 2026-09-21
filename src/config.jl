@@ -57,7 +57,7 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
     olim = 25
     Vlim = 8
     remainder = max(sz - olim - Vlim - 15, 1)
-    vlim = Int(floor(remainder/3))
+    vlim = Int(floor(remainder / 3))
     dlim = remainder - vlim
     header = ["Option", "Value", "Description", "Values"]
     vals = options.values
@@ -72,7 +72,7 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
         # Name in header
         out[i, 1] = "$k\n[$(opt.valid_types)]"
         vstr = String("$v")
-        if length(vstr) > vlim-1
+        if length(vstr) > vlim - 1
             ix = prevind(vstr, vlim)
             vstr = "$(vstr[1:ix])⋯"
         end
@@ -99,7 +99,8 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
     cw[2] = vlim
     cw[3] = dlim
     cw[4] = Vlim
-    pretty_table(io,
+    return pretty_table(
+        io,
         out,
         title = "$(options.name)",
         title_alignment = :l,
@@ -111,7 +112,7 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
         fixed_data_column_widths = cw,
         fit_table_in_display_horizontally = false,
         fit_table_in_display_vertically = false
-        )
+    )
 end
 
 Base.iterate(opts::JutulConfig, arg...) = Base.iterate(opts.values, arg...)

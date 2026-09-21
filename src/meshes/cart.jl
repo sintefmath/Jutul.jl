@@ -51,10 +51,10 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
         end
         function generate_deltas(deltas_or_size)
             deltas = Vector(undef, dim)
-            for (i, D) = enumerate(deltas_or_size)
+            for (i, D) in enumerate(deltas_or_size)
                 if isa(D, Real)
                     # Deltas are actually size of domain in each direction
-                    deltas[i] = D/dims[i]
+                    deltas[i] = D / dims[i]
                 else
                     # Deltas are the actual cell widths
                     @assert length(D) == dims[i]
@@ -67,7 +67,8 @@ struct CartesianMesh{D, Δ, O, T} <: FiniteVolumeMesh
         deltas = generate_deltas(deltas_or_size)
         tags = MeshEntityTags()
         g = new{typeof(dims), typeof(deltas), typeof(origin), typeof(tags)}(
-            dims, deltas, origin, tags)
+            dims, deltas, origin, tags
+        )
         initialize_entity_tags!(g)
         return g
     end
@@ -76,16 +77,16 @@ Base.show(io::IO, g::CartesianMesh) = print(io, "CartesianMesh ($(dim(g))D) with
 
 function CartesianMesh(v::Int, d = 1.0; kwarg...)
     if d isa Float64
-        d = (d, )
+        d = (d,)
     end
-    return CartesianMesh((v, ), d; kwarg...)
+    return CartesianMesh((v,), d; kwarg...)
 end
 
 dim(t::CartesianMesh) = length(t.dims)
 number_of_cells(t::CartesianMesh) = prod(t.dims)
 function number_of_faces(t::CartesianMesh)
     nx, ny, nz = grid_dims_ijk(t)
-    return (nx-1)*ny*nz + (ny-1)*nx*nz + (nz-1)*ny*nx
+    return (nx - 1) * ny * nz + (ny - 1) * nx * nz + (nz - 1) * ny * nx
 end
 
 export number_of_boundary_faces
@@ -95,10 +96,10 @@ function number_of_boundary_faces(G::CartesianMesh)
     if D == 1
         nbnd = 2
     elseif D == 2
-        nbnd = 2*(nx + ny)
+        nbnd = 2 * (nx + ny)
     else
         @assert D == 3
-        nbnd = 2*(nx*ny + ny*nz + nz*nx)
+        nbnd = 2 * (nx * ny + ny * nz + nz * nx)
     end
     return nbnd
 end
@@ -106,8 +107,8 @@ end
 """
 Lower corner for one dimension, without any transforms applied
 """
-coord_offset(pos, δ::Real) = (pos-1)*δ
-coord_offset(pos, δ::Union{AbstractVector, Tuple}) = sum(δ[1:(pos-1)], init = 0.0)
+coord_offset(pos, δ::Real) = (pos - 1) * δ
+coord_offset(pos, δ::Union{AbstractVector, Tuple}) = sum(δ[1:(pos - 1)], init = 0.0)
 
 """
     cell_index(g, pos)
@@ -117,7 +118,7 @@ Get linear (scalar) index of mesh cell from provided IJK tuple `pos`.
 function cell_index(g, pos::Tuple; throw = true)
     nx, ny, nz = grid_dims_ijk(g)
     x, y, z = cell_ijk(g, pos)
-    return (z-1)*nx*ny + (y-1)*nx + x
+    return (z - 1) * nx * ny + (y - 1) * nx + x
 end
 
 function cell_index(g, pos::Integer; throw = true)
@@ -155,19 +156,19 @@ function tpfv_geometry(g::CartesianMesh)
     nx, ny, nz = grid_dims_ijk(g)
 
     # Cell data first - volumes and centroids
-    nc = nx*ny*nz
+    nc = nx * ny * nz
     V = zeros(T, nc)
     cell_centroids = zeros(T, d, nc)
     for x in 1:nx
         for y in 1:ny
-            for z = 1:nz
+            for z in 1:nz
                 pos = (x, y, z)
                 c = cell_index(g, pos)
-                cdim  = cell_dims(g, pos)
+                cdim = cell_dims(g, pos)
                 V[c] = prod(cdim)
 
                 for i in 1:d
-                    cell_centroids[i, c] = coord_offset(pos[i], Δ[i]) + cdim[i]/2 + g.origin[i]
+                    cell_centroids[i, c] = coord_offset(pos[i], Δ[i]) + cdim[i] / 2 + g.origin[i]
                 end
             end
         end
@@ -185,7 +186,7 @@ function tpfv_geometry(g::CartesianMesh)
         index = cell_index(g, t)
         N[1, pos] = index
         N[2, pos] = cell_index(g, (x + (D == 1), y + (D == 2), z + (D == 3)))
-        Δ  = cell_dims(g, t)
+        Δ = cell_dims(g, t)
         # Face area
         A = 1
         for i in setdiff(1:3, D)
@@ -196,22 +197,22 @@ function tpfv_geometry(g::CartesianMesh)
 
         face_centroids[:, pos] = cell_centroids[:, index]
         # Offset by the grid size
-        face_centroids[D, pos] += Δ[D]/2.0
+        return face_centroids[D, pos] += Δ[D] / 2.0
     end
     # Note: The following loops are arranged to reproduce the MRST ordering.
     pos = 1
     # Faces with X-normal > 0
-    for z = 1:nz
+    for z in 1:nz
         for y in 1:ny
-            for x in 1:(nx-1)
+            for x in 1:(nx - 1)
                 add_face!(N, face_areas, face_normals, face_centroids, x, y, z, 1, pos)
                 pos += 1
             end
         end
     end
     # Faces with Y-normal > 0
-    for y in 1:(ny-1)
-        for z = 1:nz
+    for y in 1:(ny - 1)
+        for z in 1:nz
             for x in 1:nx
                 add_face!(N, face_areas, face_normals, face_centroids, x, y, z, 2, pos)
                 pos += 1
@@ -219,7 +220,7 @@ function tpfv_geometry(g::CartesianMesh)
         end
     end
     # Faces with Z-normal > 0
-    for z = 1:(nz-1)
+    for z in 1:(nz - 1)
         for y in 1:ny
             for x in 1:nx
                 add_face!(N, face_areas, face_normals, face_centroids, x, y, z, 3, pos)
@@ -240,7 +241,7 @@ function tpfv_geometry(g::CartesianMesh)
         t = (x, y, z)
         index = cell_index(g, t)
         N[pos] = index
-        Δ  = cell_dims(g, t)
+        Δ = cell_dims(g, t)
         # Face area
         A = 1
         for i in setdiff(1:3, D)
@@ -255,13 +256,13 @@ function tpfv_geometry(g::CartesianMesh)
         face_normals[D, pos] = sgn
         face_centroids[:, pos] = cell_centroids[:, index]
         # Offset by the grid size
-        face_centroids[D, pos] += sgn*Δ[D]/2.0
+        return face_centroids[D, pos] += sgn * Δ[D] / 2.0
     end
 
     pos = 1
     # x varies, z, y fixed
     for y in 1:ny
-        for z = 1:nz
+        for z in 1:nz
             for (x, is_start) in [(1, true), (nx, false)]
                 add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 1, pos, is_start)
                 pos += 1
@@ -270,7 +271,7 @@ function tpfv_geometry(g::CartesianMesh)
     end
     if d > 1
         # y varies, x, z fixed
-        for x = 1:nx
+        for x in 1:nx
             for z in 1:nz
                 for (y, is_start) in [(1, true), (ny, false)]
                     add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 2, pos, is_start)
@@ -280,7 +281,7 @@ function tpfv_geometry(g::CartesianMesh)
         end
         if d > 2
             # z varies, x, y fixed
-            for x = 1:nx
+            for x in 1:nx
                 for y in 1:ny
                     for (z, is_start) in [(1, true), (nz, false)]
                         add_boundary_face!(boundary_neighbors, boundary_areas, boundary_normals, boundary_centroids, x, y, z, 3, pos, is_start)
@@ -302,7 +303,7 @@ function tpfv_geometry(g::CartesianMesh)
         boundary_normals = boundary_normals,
         boundary_centroids = boundary_centroids,
         boundary_neighbors = boundary_neighbors
-        )
+    )
 end
 
 function get_neighborship(g::CartesianMesh; internal = true)
@@ -351,8 +352,8 @@ function cell_ijk(g, t::Integer)
     # (z-1)*nx*ny + (y-1)*nx + x
     x = mod(t - 1, nx) + 1
     y = mod((t - x) ÷ nx, ny) + 1
-    leftover = (t - x - (y-1)*nx)
-    z = (leftover ÷ (nx*ny)) + 1
+    leftover = (t - x - (y - 1) * nx)
+    z = (leftover ÷ (nx * ny)) + 1
     return (x, y, z)
 end
 
@@ -400,17 +401,19 @@ function triangulate_mesh(m::CartesianMesh; outer = false)
     if d == 2
         nx, ny, = m.dims
         Δ = m.deltas
-        for x = 1:nx
-            for y = 1:ny
+        for x in 1:nx
+            for y in 1:ny
                 t = (x, y, 1)
-                dx, dy,  = cell_dims(m, t)
+                dx, dy, = cell_dims(m, t)
                 x0 = coord_offset(x, Δ[1])
                 y0 = coord_offset(y, Δ[2])
 
-                local_pts = [x0      y0;
-                             x0 + dx y0;
-                             x0 + dx y0 + dy;
-                             x0      y0 + dy]
+                local_pts = [
+                    x0      y0;
+                    x0 + dx y0;
+                    x0 + dx y0 + dy;
+                    x0      y0 + dy
+                ]
                 local_tri = [1 2 3; 3 4 1]
                 push!(pts, local_pts)
                 push!(tri, local_tri .+ offset)
@@ -430,28 +433,34 @@ function triangulate_mesh(m::CartesianMesh; outer = false)
                 if is_end
                     x += dx
                 end
-                local_pts = [x y0      z0;
-                             x y0      z0 + dz
-                             x y0 + dy z0 + dz;
-                             x y0 + dy z0]
+                local_pts = [
+                    x y0      z0;
+                    x y0      z0 + dz
+                    x y0 + dy z0 + dz;
+                    x y0 + dy z0
+                ]
             elseif planar_dim == 2
                 y = y0
                 if is_end
                     y += dy
                 end
-                local_pts = [x0      y z0;
-                             x0 + dx y z0
-                             x0 + dx y z0 + dz;
-                             x0      y z0 + dz]
+                local_pts = [
+                    x0      y z0;
+                    x0 + dx y z0
+                    x0 + dx y z0 + dz;
+                    x0      y z0 + dz
+                ]
             else
                 z = z0
                 if is_end
                     z += dz
                 end
-                local_pts = [x0      y0      z;
-                             x0 + dx y0      z
-                             x0 + dx y0 + dy z;
-                             x0      y0 + dy z]
+                local_pts = [
+                    x0      y0      z;
+                    x0 + dx y0      z
+                    x0 + dx y0 + dy z;
+                    x0      y0 + dy z
+                ]
             end
             local_tri = [1 2 3; 3 4 1]
             return (local_pts, local_tri)
@@ -467,11 +476,11 @@ function triangulate_mesh(m::CartesianMesh; outer = false)
                         end
                         if y == 1 || y == ny || include_all
                             v = get_surface(t, 2, y == ny)
-                            offset += append_face!(pts, tri, cell_ix, t, v, offset)    
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)
                         end
                         if z == 1 || z == nz || include_all
                             v = get_surface(t, 3, z == nz)
-                            offset += append_face!(pts, tri, cell_ix, t, v, offset)    
+                            offset += append_face!(pts, tri, cell_ix, t, v, offset)
                         end
                     end
                 end
@@ -496,7 +505,7 @@ function triangulate_mesh(m::CartesianMesh; outer = false)
     end
 
     o = hcat(m.origin...)
-    for i = 1:length(pts)
+    for i in 1:length(pts)
         pts[i] .+= o
     end
 
@@ -507,9 +516,9 @@ function triangulate_mesh(m::CartesianMesh; outer = false)
     face_index = vcat(face_index...)
 
     mapper = (
-                Cells = (cell_data) -> cell_data[cell_ix],
-                Faces = (face_data) -> face_data[face_index],
-                indices = (Cells = cell_ix, Faces = face_index)
-              )
+        Cells = (cell_data) -> cell_data[cell_ix],
+        Faces = (face_data) -> face_data[face_index],
+        indices = (Cells = cell_ix, Faces = face_index),
+    )
     return (points = pts, triangulation = tri, mapper = mapper)
 end

@@ -18,7 +18,8 @@ struct ParallelCSRContext <: CPUJutulContext
     nthreads::Integer
     partitioner::JutulPartitioner
     thread_type::Symbol
-    function ParallelCSRContext(nthreads = Threads.nthreads();
+    function ParallelCSRContext(
+            nthreads = Threads.nthreads();
             partitioner = MetisPartitioner(),
             matrix_layout = EquationMajorLayout(),
             minbatch = minbatch(nothing),
@@ -36,7 +37,7 @@ end
 
 matrix_layout(c::ParallelCSRContext) = c.matrix_layout
 function initialize_context!(context::ParallelCSRContext, domain, system, formulation)
-    context
+    return context
 end
 
 nthreads(ctx::ParallelCSRContext) = ctx.nthreads

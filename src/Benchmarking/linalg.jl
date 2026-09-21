@@ -1,4 +1,5 @@
-function benchmark_linear_operators(sim::Jutul.JutulSimulator, config = missing;
+function benchmark_linear_operators(
+        sim::Jutul.JutulSimulator, config = missing;
         n = 100,
         n_update = ceil(Int, n / 20),
         verbose = false,
@@ -24,7 +25,8 @@ function benchmark_linear_operators(sim::Jutul.JutulSimulator, config = missing;
         @timeit loc "mul!" mul!(x, op, r)
         return x
     end
-    update_state_dependents!(storage, model, dt,
+    update_state_dependents!(
+        storage, model, dt,
         forces,
         time = 0.0,
         update_secondary = true

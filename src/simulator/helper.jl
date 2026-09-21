@@ -13,7 +13,8 @@ Construct a helper simulator that can be used to compute the residuals and/or
 accumulation terms for a given type T. Useful for coupling Jutul to other
 solvers and types of automatic differentiation.
 """
-function HelperSimulator(model::M, T = Float64;
+function HelperSimulator(
+        model::M, T = Float64;
         executor::E = Jutul.default_executor(),
         cache = missing,
         n_extra = 0,
@@ -33,7 +34,8 @@ function HelperSimulator(model::M, T = Float64;
         @assert eltype(storage[:r]) == T "Expected cached storage to have eltype $T"
     else
         storage = JutulStorage()
-        Jutul.setup_storage!(storage, model;
+        Jutul.setup_storage!(
+            storage, model;
             setup_linearized_system = false,
             state0_ad = false,
             state_ad = false,
@@ -65,7 +67,8 @@ function HelperSimulator(model::M, T = Float64;
 end
 
 function HelperSimulator(case::JutulCase, arg...; kwarg...)
-    return HelperSimulator(case.model, arg...;
+    return HelperSimulator(
+        case.model, arg...;
         parameters = case.parameters,
         state0 = case.state0,
         kwarg...
@@ -77,7 +80,7 @@ end
 
 Out of place version of `model_residual!`
 """
-function model_residual(sim::HelperSimulator{<:Any, <:Any, <:Any, T}, x, arg...; kwarg...) where T
+function model_residual(sim::HelperSimulator{<:Any, <:Any, <:Any, T}, x, arg...; kwarg...) where {T}
     model = Jutul.get_simulator_model(sim)
     n = Jutul.number_of_degrees_of_freedom(model)
     @assert length(x) == n "Expected state vector to have $n values, was $(length(x))"
@@ -94,7 +97,8 @@ end
 
 Fill in the model residual into Vector r.
 """
-function model_residual!(r, sim::HelperSimulator, x, x0 = missing, dt = 1.0;
+function model_residual!(
+        r, sim::HelperSimulator, x, x0 = missing, dt = 1.0;
         forces = setup_forces(sim.model),
         update_secondary = true,
         time = 0.0,
@@ -123,7 +127,8 @@ function model_residual!(r, sim::HelperSimulator, x, x0 = missing, dt = 1.0;
     return r
 end
 
-function model_residual(sim::HelperSimulator;
+function model_residual(
+        sim::HelperSimulator;
         dt = 1.0,
         forces = setup_forces(sim.model),
         update_secondary = true,
@@ -144,7 +149,8 @@ function model_residual(sim::HelperSimulator;
     return storage.r
 end
 
-function model_residual!(r, sim::HelperSimulator;
+function model_residual!(
+        r, sim::HelperSimulator;
         kwarg...
     )
     r_internal = model_residual(sim; kwarg...)
@@ -152,7 +158,8 @@ function model_residual!(r, sim::HelperSimulator;
     return r
 end
 
-function model_residual(state, state0, sim::HelperSimulator;
+function model_residual(
+        state, state0, sim::HelperSimulator;
         dt = 1.0,
         forces = setup_forces(sim.model),
         time = 0.0,
@@ -200,7 +207,8 @@ function model_residual(state, state0, sim::HelperSimulator;
     return r
 end
 
-function model_residual!(r, state, state0, sim::HelperSimulator;
+function model_residual!(
+        r, state, state0, sim::HelperSimulator;
         kwarg...
     )
     r_internal = model_residual(state, state0, sim; kwarg...)
@@ -213,7 +221,7 @@ function model_accumulation(sim::HelperSimulator, x, arg...; kwarg...)
     n = Jutul.number_of_degrees_of_freedom(model)
     @assert length(x) == n
     acc = similar(x)
-    model_accumulation!(acc, sim, x, arg...; kwarg...)
+    return model_accumulation!(acc, sim, x, arg...; kwarg...)
 end
 
 """
@@ -225,7 +233,8 @@ end
 
 Compute the accumulation term into Vector acc.
 """
-function model_accumulation!(acc, sim::HelperSimulator, x, dt = 1.0;
+function model_accumulation!(
+        acc, sim::HelperSimulator, x, dt = 1.0;
         forces = setup_forces(sim.model),
         update_secondary = true,
         kwarg...
@@ -248,7 +257,7 @@ function model_accumulation_internal!(acc, storage, model; offset = 0)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
 
-        loc_indices = (offset+1):(offset+N)
+        loc_indices = (offset + 1):(offset + N)
         acc_i = view(acc, loc_indices)
         if is_cm
             # The equations are always in cell major. We grab a residual view
@@ -269,7 +278,7 @@ function setup_helper_equation_storage!(storage, r, model; offset = 0)
         N = Jutul.number_of_equations(model, eq)
         m = Jutul.number_of_equations_per_entity(model, eq)
         n = N ÷ m
-        loc_indices = (offset+1):(offset+N)
+        loc_indices = (offset + 1):(offset + N)
         r_i = view(r, loc_indices)
         if is_cm
             # The equations are always in cell major. We grab a residual view
