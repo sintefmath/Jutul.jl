@@ -744,14 +744,14 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt,
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
     @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
-    maybe_synchronize_device_host!(storage, model;
+    @tic "host_synchronize" maybe_synchronize_device_host!(storage, model;
         state = true, state0 = false, parameters = false)
     @tic "crossterm update" update_cross_terms!(storage, model, dt;
         do_sync = false, kwarg...)
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
-    transfer_cross_term_evaluation!(storage, model)
+    @tic "crossterm transfer" transfer_cross_term_evaluation!(storage, model)
     if do_sync
-        synchronize(model.context)
+        @tic "synchronize" synchronize(model.context)
     end
     return nothing
 end
