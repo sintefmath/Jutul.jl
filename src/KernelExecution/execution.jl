@@ -796,26 +796,21 @@ function backend_copyto!(destination::AbstractArray, source::AbstractArray)
     end
     backend = KernelAbstractions.get_backend(destination)
     source_backend = KernelAbstractions.get_backend(source)
-    if backend isa KernelAbstractions.CPU &&
-            !(source_backend isa KernelAbstractions.CPU)
-        if eltype(destination) != eltype(source)
-            # Backend transfer hooks copy raw elements and require matching
-            # element types. Convert on the host after copying device data.
-            copyto!(destination, Adapt.adapt(Array, source))
-        elseif applicable(KernelAbstractions.copyto!,
-                source_backend, destination, source)
+    backend_is_cpu = backend isa KernelAbstractions.CPU
+    source_backend_is_cpu = source_backend isa KernelAbstractions.CPU
+    same_eltype = eltype(destination) == eltype(source)
+    if backend_is_cpu && !source_backend_is_cpu
+        has_native_transfer = applicable(KernelAbstractions.copyto!, source_backend, destination, source)
+        if same_eltype && has_native_transfer
             # Repeated host mirrors are pinned during backend transfer. Queue
             # the device-to-host copy directly into that storage instead of
             # allocating a temporary host array for every state field.
-            KernelAbstractions.copyto!(
-                source_backend, destination, source)
+            KernelAbstractions.copyto!(source_backend, destination, source)
         else
             # Avoid scalar iteration for backends without a direct copy hook.
             copyto!(destination, Adapt.adapt(Array, source))
         end
-    elseif !(backend isa KernelAbstractions.CPU) &&
-            source_backend isa KernelAbstractions.CPU &&
-            eltype(destination) != eltype(source)
+    elseif !backend_is_cpu && source_backend_is_cpu && !same_eltype
         converted = convert.(eltype(destination), source)
         KernelAbstractions.copyto!(backend, destination, converted)
         # The backend copy may be queued asynchronously. Keep the temporary

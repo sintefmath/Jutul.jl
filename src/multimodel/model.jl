@@ -744,14 +744,14 @@ function update_equations_and_apply_forces!(storage, model::MultiModel, dt,
     @tic "equations" update_equations!(storage, model, dt; kwarg...)
     @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
     @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
-    maybe_synchronize_device_host!(storage, model;
+    @tic "host_synchronize" maybe_synchronize_device_host!(storage, model;
         state = true, state0 = false, parameters = false)
     @tic "crossterm update" update_cross_terms!(storage, model, dt;
         do_sync = false, kwarg...)
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
-    transfer_cross_term_evaluation!(storage, model)
+    @tic "crossterm transfer" transfer_cross_term_evaluation!(storage, model)
     if do_sync
-        synchronize(model.context)
+        @tic "synchronize" synchronize(model.context)
     end
     return nothing
 end
@@ -824,13 +824,7 @@ end
     maybe_synchronize_device_host!(storage, model; state, state0, parameters)
 
 Transfer host-evaluated equations and the inputs required by mixed
-`AssembleOnDevice` and `SolveFullyOnDevice` cross terms. By default mixed cross
-terms execute on the host, so only the current state of their device-side model
-is copied back. With `mixed_cross_terms_on_host=false` at backend transfer, the
-host-side state is instead copied to the backend as before. All copies are
-queued before the backend is synchronized when device state must be available
-to host-side cross-term evaluation. Other transfers remain asynchronous until
-the next evaluation boundary.
+`AssembleOnDevice` and `SolveFullyOnDevice` cross terms.
 """
 function maybe_synchronize_device_host!(storage, model::MultiModel;
         state::Bool = true,
@@ -840,6 +834,7 @@ function maybe_synchronize_device_host!(storage, model::MultiModel;
         return storage
     end
     host = storage.host_evaluation
+    mixed_on_host = host.cross_term_evaluation.mixed_on_host
     for key in host.keys
         host_storage = host.storage[key]
         host_model = host.model[key]
@@ -849,7 +844,7 @@ function maybe_synchronize_device_host!(storage, model::MultiModel;
     for key in host.cross_term_evaluation.mixed_models
         host_storage = host.storage[key]
         backend_storage = storage[key]
-        if host.cross_term_evaluation.mixed_on_host
+        if mixed_on_host
             if state
                 backend_copy_state_without_parameters!(
                     host_storage.state, backend_storage.state,
@@ -871,8 +866,8 @@ function maybe_synchronize_device_host!(storage, model::MultiModel;
             end
         end
     end
-    needs_host_state = host.cross_term_evaluation.mixed_on_host && state &&
-        !isempty(host.cross_term_evaluation.mixed_models)
+    has_mixed_models = !isempty(host.cross_term_evaluation.mixed_models)
+    needs_host_state = mixed_on_host && state && has_mixed_models
     if needs_host_state
         synchronize(model.context)
     end

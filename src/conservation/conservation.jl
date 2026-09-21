@@ -320,9 +320,6 @@ function update_linearized_system_equation!(nz, r, model, law::ConservationLaw, 
     cpos = law.flow_discretization.conn_pos
     ctx = model.context
     update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc, cell_flux, cpos, ctx)
-    if use_sparse_sources(law)
-        update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
-    end
     if !isnothing(face_flux)
         conn_data = law.flow_discretization.conn_data
         update_linearized_system_subset_face_flux!(nz, model, face_flux, cpos, conn_data)
@@ -354,10 +351,6 @@ function update_linearized_system_equation!(nz, r, model,
     update_linearized_system_subset_conservation_fused!(
         nz, r, model, law, acc, eq_s.fused_equation_assembly,
         evaluation_state(storage))
-    if use_sparse_sources(law)
-        update_linearized_system_subset_conservation_sources!(
-            nz, r, model, acc, eq_s.sources)
-    end
 end
 
 function update_linearized_system_subset_conservation_fused!(
@@ -462,52 +455,6 @@ function fill_conservation_eq_fused!(nz, r, cell, acc, positions,
     return nothing
 end
 
-# function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context::SingleCUDAContext)
-#     nc, ne, np = ad_dims(acc)
-#     dims = (nc, ne, np)
-#     CUDA.synchronize()
-#     # kdims = dims .+ (0, 0, 1)
-
-#     centries = acc.entries
-#     fentries = cell_flux.entries
-#     cp = acc.jacobian_positions
-#     fp = cell_flux.jacobian_positions
-
-#     @kernel function cu_fill(nz, @Const(r), @Const(conn_pos), @Const(centries), @Const(fentries), cp, fp, np)
-#         cell, e, d = @index(Global, NTuple)
-#         # diag_entry = get_entry(acc, cell, e, centries)
-#         diag_entry = centries[e, cell].partials[d]
-#         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-#             # q = get_entry(cell_flux, i, e, fentries)
-#             @inbounds q = fentries[e, i].partials[d]
-#             fpos = get_jacobian_pos(np, i, e, d, fp)
-#             @inbounds nz[fpos] = q
-#             diag_entry -= q
-#         end
-    
-#         apos = get_jacobian_pos(np, cell, e, d, cp)
-#         @inbounds nz[apos] = diag_entry
-#     end
-#     kernel = cu_fill(context.device, context.block_size)
-#     event_jac = kernel(nz, r, conn_pos, centries, fentries, cp, fp, np, ndrange = dims)
-
-#     @kernel function cu_fill_r(r, @Const(conn_pos), @Const(centries), @Const(fentries))
-#         cell, e = @index(Global, NTuple)
-
-#         @inbounds diag_entry = centries[e, cell].value
-#         @inbounds for i = conn_pos[cell]:(conn_pos[cell + 1] - 1)
-#             @inbounds diag_entry -= fentries[e, i].value
-#         end
-#         @inbounds r[e, cell] = diag_entry
-#     end
-#     rdims = (nc, ne)
-#     kernel_r = cu_fill_r(context.device, context.block_size)
-#     event_r = kernel_r(r, conn_pos, centries, fentries, ndrange = rdims)
-#     wait(event_r)
-#     wait(event_jac)
-#     CUDA.synchronize()
-# end
-
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
     nc, ne, np = ad_dims(acc)
     threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, conn_pos, nc, Val(ne), Val(np))
@@ -576,33 +523,6 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
             Jutul.update_jacobian_inner!(nz, apos, ∂)
         end
     end
-end
-
-function update_linearized_system_subset_conservation_sources!(nz, r, model, acc, src)
-    dims = ad_dims(acc)
-    rv_src = rowvals(src)
-    nz_src = nonzeros(src)
-    cp = acc.jacobian_positions
-    update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, model.context, dims)
-end
-
-function update_lsys_sources_theaded!(nz, r, acc, src, rv_src, nz_src, cp, context, dims)
-    nc, _, np = dims
-    function F(cell)
-        @inbounds for rp in nzrange(src, cell)
-            e = rv_src[rp]
-            v = nz_src[rp]
-            # Value
-            r[e, cell] += v.value
-            # Partials
-            for d = 1:np
-                pos = get_jacobian_pos(acc, cell, e, d, cp)
-                @inbounds nz[pos] += v.partials[d]
-            end
-        end
-    end
-    threaded_loop_minbatch(F, nc, context)
-    return nz
 end
 
 function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_pos, conn_data)
@@ -729,8 +649,6 @@ end
 export update_half_face_flux!, update_accumulation!, update_equation!, get_diagonal_entries
 
 function update_equation!(eq_s::ConservationLawTPFAStorage, law::ConservationLaw, storage, model, dt)
-    # Zero out any sparse indices
-    reset_sources!(eq_s)
     # Next, update accumulation, "intrinsic" sources and fluxes
     @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
     @tic "fluxes" update_half_face_flux!(eq_s, law, storage, model, dt)
@@ -741,7 +659,6 @@ function update_equation!(
             A, Missing, Nothing, S, F}, law::ConservationLaw,
         storage, model, dt) where {
             A, S, F<:FusedEquationAssemblyStorage}
-    reset_sources!(eq_s)
     @tic "accumulation" update_accumulation!(eq_s, law, storage, model, dt)
     fill!(eq_s.fused_equation_assembly.timestep, dt)
 end
@@ -845,20 +762,6 @@ end
     return face_flux!(out, face, eq, state, model, dt, disc, ldisc)::V_t
 end
 
-function reset_sources!(eq_s::ConservationLawTPFAStorage)
-    if use_sparse_sources(eq_s)
-        @. eq_s.sources = 0
-    end
-end
-
 @inline function get_diagonal_entries(eq::ConservationLaw, eq_s::ConservationLawTPFAStorage)
-    if use_sparse_sources(eq_s)
-        return eq_s.sources
-    else
-        # Hack.
-        return eq_s.accumulation.entries
-    end
+    return eq_s.accumulation.entries
 end
-
-# is_cuda_eq(eq::ConservationLawTPFAStorage) = isa(eq.accumulation.entries, CuArray)
-use_sparse_sources(eq) = false#!is_cuda_eq(eq)
