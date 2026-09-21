@@ -11,6 +11,8 @@ struct PlotExplorerOutput
 end
 
 Base.display(pe::PlotExplorerOutput) = display(pe.fig)
+Base.show(io::IO, pe::PlotExplorerOutput) = show(io, pe.fig)
+Base.show(io::IO, ::MIME"text/plain", pe::PlotExplorerOutput) = print(io, "PlotExplorerOutput()")
 
 function Jutul.plot_explorer_impl(
         m::Union{JutulMesh, DataDomain};
