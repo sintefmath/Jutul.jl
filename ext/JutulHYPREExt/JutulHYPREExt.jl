@@ -81,9 +81,7 @@ module JutulHYPREExt
 
     function Jutul.partial_update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
         # BoomerAMG does not expose an operator-only refresh that leaves its
-        # coarse hierarchy consistent. Reassembling the fine matrix without a
-        # setup produces a stale preconditioner and substantially increases
-        # CPR iterations.
+        # coarse hierarchy consistent, so this is just a resetup.
         rebuild_boomeramg!(preconditioner, J, r, ctx, executor)
         return preconditioner
     end
