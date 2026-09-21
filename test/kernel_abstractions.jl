@@ -315,10 +315,20 @@ end
     host.storage.A.state.XVar .= -5.0
     host.storage.A.state0.XVar .= 8.0
     simulator.storage.A.state0.XVar .= -8.0
-    Jutul.maybe_synchronize_device_host!(
+    host_equations = host.storage.B.equations.test_equation.entries
+    backend_equations = simulator.storage.B.equations.test_equation.entries
+    @test !isempty(host_equations)
+    fill!(host_equations, zero(eltype(host_equations)))
+    fill!(backend_equations, one(eltype(backend_equations)))
+    @test Jutul.synchronize_cross_term_states!(
         simulator.storage, simulator.model;
         state = true, state0 = false, parameters = false
     )
+    Jutul.synchronize(simulator.model.context)
+    @test backend_equations != host_equations
+    Jutul.synchronize_host_equations!(simulator.storage, simulator.model)
+    Jutul.synchronize(simulator.model.context)
+    @test backend_equations == host_equations
     Jutul.update_cross_terms!(simulator.storage, simulator.model, 1.0)
     @test only(simulator.storage.B.state.XVar) == -10.0
     @test only(host.storage.A.state.XVar) == 5.0
@@ -348,7 +358,7 @@ end
     device_host.storage.B.parameters.KernelTransferParameter .= 9.0
     device_mixed_simulator.storage.B.parameters.KernelTransferParameter .= -2.0
     device_mixed_simulator.storage.B.state0.KernelTransferParameter .= -3.0
-    Jutul.maybe_synchronize_device_host!(
+    @test !Jutul.synchronize_cross_term_states!(
         device_mixed_simulator.storage, device_mixed_simulator.model;
         state = true, state0 = false, parameters = false
     )
@@ -362,12 +372,12 @@ end
     device_entries =
         device_mixed_simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(device_entries)) == 3.0
-    Jutul.maybe_synchronize_device_host!(
+    Jutul.synchronize_cross_term_states!(
         device_mixed_simulator.storage, device_mixed_simulator.model;
         state = false, state0 = true, parameters = false
     )
     @test only(device_mixed_simulator.storage.B.state0.XVar) == 8.0
-    Jutul.maybe_synchronize_device_host!(
+    Jutul.synchronize_cross_term_states!(
         device_mixed_simulator.storage, device_mixed_simulator.model;
         state = false, state0 = false, parameters = true
     )
@@ -377,7 +387,10 @@ end
     host.storage.B.state.XVar .= 0.0
     host.storage.B.state0.XVar .= 0.0
     host.storage.B.parameters.KernelTransferParameter .= 1.0
-    Jutul.maybe_synchronize_device_host!(simulator.storage, simulator.model)
+    @test Jutul.synchronize_cross_term_states!(
+        simulator.storage, simulator.model
+    )
+    Jutul.synchronize(simulator.model.context)
     simulator.storage.B.state.XVar .= 0.0
     simulator.storage.A.state.XVar .= 0.0
 
@@ -393,9 +406,10 @@ end
     reverse_host = reverse_mixed_simulator.storage.host_evaluation
     reverse_host.storage.B.state.XVar .= 2.0
     reverse_mixed_simulator.storage.A.state.XVar .= 5.0
-    Jutul.maybe_synchronize_device_host!(
+    @test Jutul.synchronize_cross_term_states!(
         reverse_mixed_simulator.storage, reverse_mixed_simulator.model
     )
+    Jutul.synchronize(reverse_mixed_simulator.model.context)
     Jutul.update_cross_terms!(
         reverse_mixed_simulator.storage,
         reverse_mixed_simulator.model, 1.0
@@ -430,6 +444,8 @@ end
     )
     Jutul.synchronize(overlapping_mixed_simulator.model.context)
     @test mixed_cross_term_prepare_count[] == 1
+    @test overlapping_mixed_simulator.storage.B.equations.test_equation.entries ==
+        overlapping_host.storage.B.equations.test_equation.entries
 
     adjoint_source = MultiModel(
         (A = model_a, B = model_b), groups = [1, 2],
@@ -497,20 +513,20 @@ end
         host_only_simulator.storage.cross_terms[1]
     host_only_storage.storage.A.state.XVar .= 7.0
     host_only_storage.storage.B.state.XVar .= 4.0
-    Jutul.maybe_synchronize_device_host!(
+    @test !Jutul.synchronize_cross_term_states!(
         host_only_simulator.storage, host_only_simulator.model
     )
-    Jutul.update_cross_terms!(
-        host_only_simulator.storage,
-        host_only_simulator.model, 1.0
+    Jutul.update_equations_and_apply_forces!(
+        host_only_simulator.storage, host_only_simulator.model, 1.0,
+        forces; do_sync = false
     )
-    Jutul.transfer_cross_term_evaluation!(
-        host_only_simulator.storage, host_only_simulator.model
-    )
+    Jutul.synchronize(host_only_simulator.model.context)
     host_entries = host_only_storage.storage.cross_terms[1].target.Cells.entries
     device_entries = host_only_simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(host_entries)) == 3.0
     @test Jutul.value(only(device_entries)) == 3.0
+    @test host_only_simulator.storage.A.equations.test_equation.entries ==
+        host_only_storage.storage.A.equations.test_equation.entries
 
     device_only = MultiModel(
         (A = model_a, B = model_b),
@@ -526,10 +542,14 @@ end
     @test !haskey(device_only_simulator.storage, :host_evaluation)
     device_only_simulator.storage.A.state.XVar .= 7.0
     device_only_simulator.storage.B.state.XVar .= 4.0
-    Jutul.update_cross_terms!(
-        device_only_simulator.storage,
-        device_only_simulator.model, 1.0
+    @test !Jutul.synchronize_cross_term_states!(
+        device_only_simulator.storage, device_only_simulator.model
     )
+    Jutul.update_equations_and_apply_forces!(
+        device_only_simulator.storage, device_only_simulator.model, 1.0,
+        forces; do_sync = false
+    )
+    Jutul.synchronize(device_only_simulator.model.context)
     device_only_entries =
         device_only_simulator.storage.cross_terms[1].target.Cells.entries
     @test Jutul.value(only(device_only_entries)) == 3.0

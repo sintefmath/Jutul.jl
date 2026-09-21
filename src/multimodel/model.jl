@@ -761,19 +761,25 @@ function update_equations_and_apply_forces!(
         storage, model::MultiModel, dt,
         forces; time = NaN, do_sync::Bool = true, kwarg...
     )
-    @tic "equations" update_equations!(storage, model, dt; kwarg...)
-    @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
-    @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
-    @tic "host_synchronize" maybe_synchronize_device_host!(
+    # Queue mixed cross-term state copies before the equation work.
+    needs_host_state = @tic "host state transfer" synchronize_cross_term_states!(
         storage, model;
         state = true, state0 = false, parameters = false
     )
+    @tic "equations" update_equations!(storage, model, dt; kwarg...)
+    @tic "forces" apply_forces!(storage, model, dt, forces; time = time, kwarg...)
+    @tic "boundary conditions" apply_boundary_conditions!(storage, model; kwarg...)
+    if needs_host_state
+        # Host cross terms may now read the copied device state.
+        @tic "host state wait" synchronize(model.context)
+    end
     @tic "crossterm update" update_cross_terms!(
         storage, model, dt;
         do_sync = false, kwarg...
     )
     @tic "crossterm forces" apply_forces_to_cross_terms!(storage, model, dt, forces; time = time, kwarg...)
     @tic "crossterm transfer" transfer_cross_term_evaluation!(storage, model)
+    @tic "host equations transfer" synchronize_host_equations!(storage, model)
     if do_sync
         @tic "synchronize" synchronize(model.context)
     end
@@ -849,28 +855,23 @@ function host_cross_term_evaluation(storage, index)
 end
 
 """
-    maybe_synchronize_device_host!(storage, model; state, state0, parameters)
+    synchronize_cross_term_states!(storage, model; state, state0, parameters)
 
-Transfer host-evaluated equations and the inputs required by mixed
-`AssembleOnDevice` and `SolveFullyOnDevice` cross terms.
+Queue the state required by mixed `AssembleOnDevice` and
+`SolveFullyOnDevice` cross terms. Returns `true` when a device-to-host
+copy must finish before evaluating host cross terms.
 """
-function maybe_synchronize_device_host!(
+function synchronize_cross_term_states!(
         storage, model::MultiModel;
         state::Bool = true,
         state0::Bool = true,
         parameters::Bool = true
     )
     if !haskey(storage, :host_evaluation)
-        return storage
+        return false
     end
     host = storage.host_evaluation
     mixed_on_host = host.cross_term_evaluation.mixed_on_host
-    for key in host.keys
-        host_storage = host.storage[key]
-        host_model = host.model[key]
-        prepare_backend_transfer!(host_storage, host_model)
-        backend_copyto!(storage[key].equations, host_storage.equations)
-    end
     for key in host.cross_term_evaluation.mixed_models
         host_storage = host.storage[key]
         backend_storage = storage[key]
@@ -899,10 +900,25 @@ function maybe_synchronize_device_host!(
             end
         end
     end
-    has_mixed_models = !isempty(host.cross_term_evaluation.mixed_models)
-    needs_host_state = mixed_on_host && state && has_mixed_models
-    if needs_host_state
-        synchronize(model.context)
+    return mixed_on_host && state &&
+        !isempty(host.cross_term_evaluation.mixed_models)
+end
+
+"""
+    synchronize_host_equations!(storage, model)
+
+Queue host-evaluated equations for backend assembly after host equation
+updates, forces, and boundary conditions have completed.
+"""
+function synchronize_host_equations!(storage, model::MultiModel)
+    if !haskey(storage, :host_evaluation)
+        return storage
+    end
+    host = storage.host_evaluation
+    for key in host.keys
+        host_storage = host.storage[key]
+        prepare_backend_transfer!(host_storage, host.model[key])
+        backend_copyto!(storage[key].equations, host_storage.equations)
     end
     return storage
 end
@@ -918,9 +934,7 @@ function transfer_cross_term_evaluation!(storage, model::MultiModel)
         return storage
     end
     host = storage.host_evaluation
-    if !isempty(host.cross_term_evaluation.host)
-        synchronize(model.context)
-    end
+    # Backend cross-term work and these copies are ordered on the same stream.
     for index in host.cross_term_evaluation.host
         destination = storage.cross_terms[index]
         source = host.storage.cross_terms[index]
