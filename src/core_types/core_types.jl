@@ -640,10 +640,23 @@ kernel argument. Return `nothing` when the ordinary state can be used directly.
 maybe_convert_evaluation_state(
     state::ImmutableJutulStorage, context) = nothing
 
+
+export evaluation_state, evaluation_state0
+"""
+    state = evaluation_state(storage)
+
+Get the evaluation state (at the end of the current timestep) from the simulator
+storage.
+"""
 @inline function evaluation_state(storage)
     return get(storage, :evaluation_state, storage.state)
 end
 
+"""
+    state = evaluation_state0(storage)
+
+Get the evaluation state at the previous timestep from the simulator storage.
+"""
 @inline function evaluation_state0(storage)
     return get(storage, :evaluation_state0, storage.state0)
 end
