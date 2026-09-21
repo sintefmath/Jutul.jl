@@ -1,13 +1,15 @@
-function simulator_config!(cfg, sim; output_unused = false, nonlinear_tolerance = 1e-3, kwarg...)
+function simulator_config!(cfg, sim; output_unused = false, nonlinear_tolerance = 1.0e-3, kwarg...)
     # Printing, etc
-    add_option!(cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Union{Int, Float64},
-    description = "
+    add_option!(
+        cfg, :info_level, 0, "Info level determines the amount of runtime output to the terminal during simulation.", types = Union{Int, Float64},
+        description = "
 0 - gives minimal output (just a progress bar by default, and a final report)
 1 - gives some more details, printing at the start of each step
 2 - as 1, but also printing the current worst residual at each iteration
 3 - as 1, but prints a table of all non-converged residuals at each iteration
 4 - as 3, but all residuals are printed (even converged values)
-Negative values disable output. The interpretation of this number is subject to change.")
+Negative values disable output. The interpretation of this number is subject to change."
+    )
     add_option!(cfg, :debug_level, 0, "Define the amount of debug output in the reports. Higher values means more output.", types = Int)
     add_option!(cfg, :end_report, nothing, "Output a final report that includes timings etc. If nothing, depends on info_level instead.", types = Union{Bool, Nothing})
     add_option!(cfg, :id, "", "String identifier for simulator that is prefixed to some verbose output.", types = String)
@@ -25,15 +27,19 @@ Negative values disable output. The interpretation of this number is subject to 
     # Boolean options
     add_option!(cfg, :always_update_secondary, false, "Always update secondary variables (even when they can be reused from end of previous step). Only useful for nested solvers", types = Bool)
     add_option!(cfg, :error_on_incomplete, false, "Throw an error if the simulation could not complete. If `false` emit a message and return.", types = Bool)
-    add_option!(cfg, :output_states, true, "Return states in-memory as output.",
-    description = "For larger models with many time-steps, using `output_path` might be better to avoid filling up your memory.", types = Bool)
+    add_option!(
+        cfg, :output_states, true, "Return states in-memory as output.",
+        description = "For larger models with many time-steps, using `output_path` might be better to avoid filling up your memory.", types = Bool
+    )
     add_option!(cfg, :output_reports, true, "Return reports in-memory as output.", types = Bool)
     add_option!(cfg, :safe_mode, true, "Add extra checks in simulator that have a small extra cost.", types = Bool)
 
     env_extra_timing = get(ENV, "JUTUL_EXTRA_TIMING", "false")
     env_extra_timing = env_extra_timing == "true" || env_extra_timing == "1"
-    add_option!(cfg, :extra_timing, env_extra_timing, "Output extra, highly detailed performance report at simulation end. Can be enabled by default by setting ENV[\"JUTUL_EXTRA_TIMING\"] = \"true\".",
-    description = " This uses TimerOutputs.jl's @timeit_debug macro. You may have to call the function twice with this option the first time you use it.", types = Bool)
+    add_option!(
+        cfg, :extra_timing, env_extra_timing, "Output extra, highly detailed performance report at simulation end. Can be enabled by default by setting ENV[\"JUTUL_EXTRA_TIMING\"] = \"true\".",
+        description = " This uses TimerOutputs.jl's @timeit_debug macro. You may have to call the function twice with this option the first time you use it.", types = Bool
+    )
     add_option!(cfg, :ascii_terminal, false, "Avoid unicode (if possible) in terminal output.", types = Bool)
 
     # Linear, nonlinear solver
@@ -41,7 +47,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :timestep_selectors, [TimestepSelector()], "Time-step selectors that pick mini steps.")
     add_option!(cfg, :timestep_max_increase, 10.0, "Max allowable factor to increase time-step by. Overrides step selectors.", types = Float64)
     add_option!(cfg, :timestep_max_decrease, 0.1, "Max allowable factor to decrease time-step by. Overrides step selectors.", types = Float64)
-    add_option!(cfg, :max_residual, 1e20, "Maximum value allowed for a residual before simulation is terminated.", types = Float64)
+    add_option!(cfg, :max_residual, 1.0e20, "Maximum value allowed for a residual before simulation is terminated.", types = Float64)
     add_option!(cfg, :relaxation, NoRelaxation(), "Non-Linear relaxation used. Currently supports `NoRelaxation()` and `SimpleRelaxation()`.", types = NonLinearRelaxation)
     add_option!(cfg, :cutting_criterion, nothing, "Criterion to use for early cutting of time-steps. Default value of nothing means cutting when max_nonlinear_iterations is reached.")
 

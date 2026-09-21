@@ -1,11 +1,10 @@
-
 "Default context"
 struct DefaultContext <: CPUJutulContext
     matrix_layout
     minbatch::Int64
     nthreads::Int64
     function DefaultContext(; matrix_layout = EquationMajorLayout(), minbatch = minbatch(nothing), nthreads = Threads.nthreads())
-        new(matrix_layout, minbatch, nthreads)
+        return new(matrix_layout, minbatch, nthreads)
     end
 end
 

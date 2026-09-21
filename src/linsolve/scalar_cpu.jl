@@ -1,4 +1,3 @@
-
 """
     LUSolver(; reuse_memory = true, check = true, max_size = 50000)
 
@@ -11,11 +10,11 @@ mutable struct LUSolver
     check::Bool
     max_size
     function LUSolver(; reuse_memory = true, check = true, max_size = 50000)
-        new(nothing, reuse_memory, check, max_size)
+        return new(nothing, reuse_memory, check, max_size)
     end
 end
 
-function linear_solve!(sys, solver::LUSolver, arg...;dx = sys.dx, r = sys.r, kwargs...)
+function linear_solve!(sys, solver::LUSolver, arg...; dx = sys.dx, r = sys.r, kwargs...)
     if length(sys.dx) > solver.max_size
         error("System too big for LU solver. You can increase max_size at your own peril.")
     end
@@ -32,7 +31,7 @@ function linear_solve!(sys, solver::LUSolver, arg...;dx = sys.dx, r = sys.r, kwa
         F = solver.F
     end
 
-    dx .= -(F\r)
+    dx .= -(F \ r)
     @assert all(isfinite, sys.dx) "Linear solve resulted in non-finite values."
     return linear_solve_return()
 end

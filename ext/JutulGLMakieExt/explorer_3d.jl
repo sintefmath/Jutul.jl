@@ -12,7 +12,8 @@ end
 
 Base.display(pe::PlotExplorerOutput) = display(pe.fig)
 
-function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain};
+function Jutul.plot_explorer_impl(
+        m::Union{JutulMesh, DataDomain};
         static = missing,
         dynamic = missing,
         kwarg...
@@ -39,7 +40,8 @@ function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain};
     return Jutul.plot_explorer_impl(m, static, dynamic; kwarg...)
 end
 
-function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing;
+function Jutul.plot_explorer_impl(
+        m::Union{JutulMesh, DataDomain}, plot_data::AbstractDict, dynamic::Union{Missing, Vector} = missing;
         verbose = false,
         triangulate_arg = NamedTuple(),
         kwarg...
@@ -49,7 +51,7 @@ function Jutul.plot_explorer_impl(m::Union{JutulMesh, DataDomain}, plot_data::Ab
     end
     t_static = @elapsed points, ttri, tri = mesh_as_static(m; triangulate_arg...)
     if verbose
-        jutul_message("plot_explorer", "Mesh triangulation complete in $(round(t_static, sigdigits=3)) seconds. Setting up plot...")
+        jutul_message("plot_explorer", "Mesh triangulation complete in $(round(t_static, sigdigits = 3)) seconds. Setting up plot...")
     end
     m = physical_representation(m)
     return Jutul.plot_explorer_impl(m, points, ttri, tri, plot_data, dynamic; verbose = verbose, kwarg...)
@@ -111,7 +113,7 @@ function preset_colors(name::Symbol)
     end
     if Jutul.makie_current_backend(string = true) == "WGLMakie" && ismissing(background_color)
         cm = to_colormap(background_colormap)
-        background_color = cm[Int(floor(length(cm)/2))]
+        background_color = cm[Int(floor(length(cm) / 2))]
     end
     if ismissing(hist_colormap)
         hist_colormap = colormap
@@ -121,11 +123,12 @@ function preset_colors(name::Symbol)
         background_colormap = background_colormap,
         hist_colormap = hist_colormap,
         textcolor = textcolor,
-        backgroundcolor = background_color
+        backgroundcolor = background_color,
     )
 end
 
-function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, dynamic_data;
+function Jutul.plot_explorer_impl(
+        m::JutulMesh, points, ttri, indices, static, dynamic_data;
         preset = :viridis_dark,
         textcolor = missing,
         background_colormap = missing,
@@ -142,7 +145,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         aspect = missing,
         step::Int = 1,
         key = missing,
-        plot_pause = 1.0/30.0,
+        plot_pause = 1.0 / 30.0,
         verbose = false,
         sens = missing,
         sens_normalization = :none,
@@ -178,7 +181,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         background_colormap = background_colormap,
         hist_colormap = hist_colormap,
         textcolor = textcolor,
-        backgroundcolor = backgroundcolor
+        backgroundcolor = backgroundcolor,
     )
 
     # Setup for sens
@@ -293,7 +296,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
 
     fig = Figure(size = (1650, 1000), figure_padding = 0.0)
     lscene = LScene(fig[1:N, 1:N], scenekw = scene_arg, show_axis = show_axis)
-    mesh_scene = Scene(lscene.scene, scenekw = (clear = false, ))
+    mesh_scene = Scene(lscene.scene, scenekw = (clear = false,))
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
 
@@ -302,16 +305,17 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         Label(mid_grid[1, 1], title, color = main_color, fontsize = 28)
     end
 
-    right_grid_layout_outer = GridLayout(fig[2:N-2, N-4:N-1], 3, 1)
+    right_grid_layout_outer = GridLayout(fig[2:(N - 2), (N - 4):(N - 1)], 3, 1)
     right_grid_layout = GridLayout(right_grid_layout_outer[1:2, 1])
     idx_right_gl = 2
     # Middle box for stepping
-    step_grid_layout = GridLayout(fig[N-3:N, 6:16])
+    step_grid_layout = GridLayout(fig[(N - 3):N, 6:16])
     idx_stepgl = 1
 
     histrng = 3
     hist_grid_layout = GridLayout(right_grid_layout_outer[histrng, 1])
-    ax_hist = Axis(hist_grid_layout[1, 1],
+    ax_hist = Axis(
+        hist_grid_layout[1, 1],
         titlecolor = main_color,
         ygridvisible = false,
         xgridvisible = false,
@@ -334,14 +338,15 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         else
             error("Unknown toggle type: $type")
         end
-        idx_right_gl +=1
+        idx_right_gl += 1
         return tog
     end
 
     function add_menu!(options, title = "", pos = nothing)
         options = collect(options)
         labels = options
-        Label(right_grid_layout[idx_right_gl, 5], title,
+        Label(
+            right_grid_layout[idx_right_gl, 5], title,
             justification = :left,
             halign = :left,
             color = main_color
@@ -351,7 +356,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             options = options[idx]
             labels = labels[idx]
         end
-        new_menu = Menu(right_grid_layout[idx_right_gl, 1:4],
+        new_menu = Menu(
+            right_grid_layout[idx_right_gl, 1:4],
             options = zip(labels, options),
             selection_cell_color_inactive = RGBAf(1, 1, 1, menu_alpha),
             textcolor = main_color,
@@ -393,7 +399,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         if Nstep > 1
             lpos_tstep = idx_stepgl
             idx_stepgl += 1
-            step_slider = Slider(step_grid_layout[idx_stepgl, 1:5],
+            step_slider = Slider(
+                step_grid_layout[idx_stepgl, 1:5],
                 range = 1:Nstep,
                 startvalue = step,
                 horizontal = true
@@ -438,13 +445,14 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 for _ in start:Nstep
                     current = step_idx.val
                     newindex = current + 1
-                    if newindex > Nstep || previndex != newindex-1 || !is_playing[]
+                    if newindex > Nstep || previndex != newindex - 1 || !is_playing[]
                         break
                     end
                     plot_time = @elapsed step_idx[] = newindex
                     previndex = newindex
                     sleep(max(0, plot_pause - plot_time))
                 end
+                return
             end
             on(play.clicks) do _
                 if is_playing[]
@@ -527,13 +535,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             lo_s, hi_s = sens_lims[sens_key].extrema
             if false
                 # Use absolute value for sensitivities
-                lo_s = 0f0
+                lo_s = 0.0f0
                 # lo_s = Float32(F(lo_s))
                 hi_s = Float32(F(hi_s))
                 rng = (hi_s - lo_s)
                 unit_lower_bnd, unit_upper_bnd = bounds_sens
-                lower_bnd = Float32(unit_lower_bnd)*rng + lo_s
-                upper_bnd = Float32(unit_upper_bnd)*rng + lo_s
+                lower_bnd = Float32(unit_lower_bnd) * rng + lo_s
+                upper_bnd = Float32(unit_upper_bnd) * rng + lo_s
                 @. vertex_values_sens = F(sens_val[cell_to_vertex])
                 for (i, v_s) in enumerate(vertex_values_sens)
                     out_of_bounds = abs(v_s) < lower_bnd || abs(v_s) > upper_bnd
@@ -546,8 +554,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 quantiles = sens_lims[sens_key].quantiles
                 nq = length(quantiles)
                 unit_lower_bnd, unit_upper_bnd = bounds_sens
-                low_idx = clamp(floor(Int, unit_lower_bnd*nq), 1, nq)
-                hi_idx = clamp(ceil(Int, unit_upper_bnd*nq), 1, nq)
+                low_idx = clamp(floor(Int, unit_lower_bnd * nq), 1, nq)
+                hi_idx = clamp(ceil(Int, unit_upper_bnd * nq), 1, nq)
                 if unit_upper_bnd ≈ 1.0
                     upper_bnd = Float32(Inf)
                 else
@@ -589,11 +597,12 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     cdata_cells = @lift update_cell_values($sel, $sel_dyn, $sel_sens, $step_idx, $value_static, $value_dynamic, $value_sens, $is_dynamic, $is_independent, $is_global_limit, $use_symlog)
     lims = @lift get_limits(static_lims, dynamic_lims, $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit, $use_symlog)
     if use_highclip
-        mesh_arg = (highclip = :transparent, )
+        mesh_arg = (highclip = :transparent,)
     else
         mesh_arg = NamedTuple()
     end
-    mplt = mesh!(lscene, points, ttri;
+    mplt = mesh!(
+        lscene, points, ttri;
         colormap = cmap,
         color = vertex_val_buffer,
         visible = toggle_mesh.checked,
@@ -606,7 +615,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
     # plot_faults!(lscene, m, colormap = cmap)
 
 
-    Colorbar(hist_grid_layout[2, 1], mplt,
+    Colorbar(
+        hist_grid_layout[2, 1], mplt,
         vertical = false,
         ticklabelsize = 12,
         flipaxis = false,
@@ -623,7 +633,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             end
             return (ll, ul)
         end
-        mplt_sens = mesh!(lscene, points, ttri;
+        mplt_sens = mesh!(
+            lscene, points, ttri;
             colormap = sens_colormap,
             color = vertex_val_buffer_sens,
             visible = toggle_sens.checked,
@@ -632,7 +643,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             mesh_arg...,
             sens_kwarg...
         )
-        Colorbar(hist_grid_layout[3, 1], mplt_sens,
+        Colorbar(
+            hist_grid_layout[3, 1], mplt_sens,
             vertical = false,
             ticklabelsize = 12,
             flipaxis = false,
@@ -645,10 +657,11 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
         mplt_sens = nothing
     end
 
-    bins = @lift range($lims[1], $lims[2], length = nbins+1)
-    bin_centers = @lift [($lims[1] + bin_idx*($lims[2] - $lims[1])/(2*nbins)) for bin_idx in 1:nbins]
+    bins = @lift range($lims[1], $lims[2], length = nbins + 1)
+    bin_centers = @lift [($lims[1] + bin_idx * ($lims[2] - $lims[1]) / (2 * nbins)) for bin_idx in 1:nbins]
 
-    hist!(ax_hist, cdata_cells,
+    hist!(
+        ax_hist, cdata_cells,
         color = bin_centers,
         colorrange = lims,
         colormap = hist_colormap,
@@ -688,8 +701,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             toggle_sens.checked[] = true
         end
     end
-    upvector = Vec3f(0, 0, 1.0 - 2.0*zreversed)
-    center = sum(points)./length(points)
+    upvector = Vec3f(0, 0, 1.0 - 2.0 * zreversed)
+    center = sum(points) ./ length(points)
     cam = Makie.cam3d!(lscene.scene; upvector = upvector, lookat = center, camarg...)
     # w, h = size(scene_outer)
     # nearplane = 0.1f0
@@ -753,7 +766,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                             end
                         end
                         if length(new_tri) > 0
-                            pp = mesh!(lscene.scene, points, new_tri)#, color = colors_clicks[i], alpha = 0.5, transparency = true)
+                            pp = mesh!(lscene.scene, points, new_tri) #, color = colors_clicks[i], alpha = 0.5, transparency = true)
                             push!(cell_outline, pp)
                         end
                     else
@@ -780,7 +793,7 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 str *= " IJK=[$(ijk[1]),$(ijk[2]),$(ijk[3])]"
             catch
             end
-            fmt_flt(v) = round(v, sigdigits=4)
+            fmt_flt(v) = round(v, sigdigits = 4)
             if haskey(plot_data, "X") && haskey(plot_data, "Y") && haskey(plot_data, "Z")
                 x = plot_data["X"][cell]
                 y = plot_data["Y"][cell]
@@ -788,15 +801,15 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
                 str *= "\nCoordinates: [$(fmt_flt(x)),$(fmt_flt(y)),$(fmt_flt(z))]"
             end
             value = plot_data[static][cell]
-            str *= "\n$static = $(round(value, sigdigits=4))"
+            str *= "\n$static = $(round(value, sigdigits = 4))"
 
             if !ismissing(dynamic_data)
                 dyn_val = dynamic_data[step_idx][dynamic][cell]
-                str *= "\n$dynamic = $(round(dyn_val, sigdigits=4))"
+                str *= "\n$dynamic = $(round(dyn_val, sigdigits = 4))"
             end
             if HAS_SENS
                 sens_val = sens[sensk][cell]
-                str *= "\nsensitivity with respect to $(sensk) = $(round(sens_val, sigdigits=4))"
+                str *= "\nsensitivity with respect to $(sensk) = $(round(sens_val, sigdigits = 4))"
             end
         else
             str = "Cells:\n" * join(cells, ",\n")
@@ -817,7 +830,8 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             side_axis = missing
         end
         if is_dyn && length(selected_c) > 0 && !ismissing(dynamic_data)
-            side_axis = Axis(left_grid_layout[7:9, 1:5],
+            side_axis = Axis(
+                left_grid_layout[7:9, 1:5],
                 backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0),
                 xtickcolor = main_color,
                 ytickcolor = main_color,
@@ -859,12 +873,13 @@ function Jutul.plot_explorer_impl(m::JutulMesh, points, ttri, indices, static, d
             campixel!(bgscene)
             w, h = size(bgscene) # get the size of the scene in pixels
             # this draws a line at the scene window boundary
-            bg = [sin(i/w) + cos(j/h) for i in 1:w, j in 1:h]
-            bg_plt = image!(bgscene, [0.5*i/w + (1.0 - (j/h)^1.5) for i in 1:w, j in 1:h],
+            bg = [sin(i / w) + cos(j / h) for i in 1:w, j in 1:h]
+            bg_plt = image!(
+                bgscene, [0.5 * i / w + (1.0 - (j / h)^1.5) for i in 1:w, j in 1:h],
                 colormap = bgcmap,
                 colorrange = (minimum(bg), maximum(bg))
             )
-            translate!(bg_plt, 0, 0, -10000)
+            return translate!(bg_plt, 0, 0, -10000)
         end
         draw_bg()
 
@@ -971,7 +986,7 @@ end
 function normalize_sensitivities(sens::AbstractDict, snorm)
     new_sens = Dict{String, Any}()
     for (k, v) in pairs(sens)
-        if v isa AbstractArray && eltype(v)<:Number
+        if v isa AbstractArray && eltype(v) <: Number
             new_sens[String(k)] = v
         end
     end
@@ -993,7 +1008,7 @@ function normalize_sensitivities(sens::AbstractDict, snorm)
             maxval = maximum(abs, v)
             minval = minimum(abs, v)
             rng = maxval - minval
-            new_sens[k] = v ./ max(rng, 1e-20)
+            new_sens[k] = v ./ max(rng, 1.0e-20)
         end
     else
         snorm == :none || error("Unknown sens_normalization: $snorm. Options: :largest, :norm, :unit, :none")
@@ -1002,17 +1017,17 @@ function normalize_sensitivities(sens::AbstractDict, snorm)
 end
 
 function sensitivities_limits(sens, maxscale)
-    p = range(0, 1, length=101)
+    p = range(0, 1, length = 101)
     out = Dict()
     if !ismissing(sens)
         for (k, v) in sens
             minv, maxv = extrema(v)
-            maxv = maxscale*max(abs(minv), abs(maxv))
+            maxv = maxscale * max(abs(minv), abs(maxv))
             vabs = abs.(v)
             if maxscale != 1.0
                 @. vabs = min(vabs, maxv)
             end
-            q = quantile(vabs, p; sorted=false)
+            q = quantile(vabs, p; sorted = false)
             out[k] = (extrema = (-maxv, maxv), quantiles = q)
         end
     end
@@ -1037,8 +1052,8 @@ function get_limits(static, dynamic, key_static, key_dynamic, is_dynamic, step, 
     end
     if !ismissing(lims)
         # Make sure limits are not identical
-        ϵ = 1e-3
-        low_delta = max(lims[1] + ϵ, lims[1]*(1+ϵ))
+        ϵ = 1.0e-3
+        low_delta = max(lims[1] + ϵ, lims[1] * (1 + ϵ))
         lims = (lims[1], max(low_delta, lims[2]))
         if to_symlog
             lims = (symlog10(lims[1]), symlog10(lims[2]))
@@ -1050,7 +1065,7 @@ end
 function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cell_vals, cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, limiter_dynamic, limiter_static, is_dyn, is_indep, use_highclip, F, verbose)
     # map_to_face_buffer_with_truncation!(face_val_buffer, cell_to_vertex
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
-    ϵ = 1e-6
+    ϵ = 1.0e-6
     has_dynamic = !ismissing(dyn_values)
     if ismissing(bnd_dyn)
         @assert !has_dynamic
@@ -1060,7 +1075,7 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
     end
     bnd_static = (bnd_static[1], max(bnd_static[2], bnd_static[1] + ϵ))
     is_outside(x, rng) = x < rng[1] || x > rng[2]
-    to_inner(x, bnds) = (F(x) - bnds[1])/(bnds[2] - bnds[1])
+    to_inner(x, bnds) = (F(x) - bnds[1]) / (bnds[2] - bnds[1])
     for cell_no in eachindex(cell_vals)
         if has_dynamic
             dyn_norm = to_inner(dyn_values[cell_no], bnd_dyn)
@@ -1078,9 +1093,9 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
         if skip
             if use_highclip
                 if is_dyn
-                    cell_vals[cell_no] = (1.0 + ϵ)*bnd_dyn[2] + ϵ
+                    cell_vals[cell_no] = (1.0 + ϵ) * bnd_dyn[2] + ϵ
                 else
-                    cell_vals[cell_no] = (1.0 + ϵ)*bnd_static[2] + ϵ
+                    cell_vals[cell_no] = (1.0 + ϵ) * bnd_static[2] + ϵ
                 end
             else
                 cell_vals[cell_no] = NaN
@@ -1091,7 +1106,7 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
     n = length(vertex_vals)
     t_update = @elapsed vertex_val_buffer[1:n] = vertex_vals
     if verbose
-        jutul_message("plot_explorer", "Updated vertex buffer in $(round(t_update, sigdigits=3)) seconds")
+        jutul_message("plot_explorer", "Updated vertex buffer in $(round(t_update, sigdigits = 3)) seconds")
     end
     return vertex_val_buffer
 end
@@ -1102,7 +1117,7 @@ function symlog10(x)
     if x < 1.0 && x > -1.0
         transformed_val = x
     else
-        transformed_val = sign(x)*(log10(abs(x))+1)
+        transformed_val = sign(x) * (log10(abs(x)) + 1)
     end
     return transformed_val
 end

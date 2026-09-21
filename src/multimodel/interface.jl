@@ -1,26 +1,28 @@
 function update_cross_term_in_entity!
 
-end
+    end
 
 function cross_term_entities_source
 
-end
+    end
 
 function cross_term_entities
 
-end
+    end
 
 function has_symmetry
 
-end
+    end
 
 
-function prepare_cross_term_in_entity!(i,
-    state_target, state0_target,
-    state_source, state0_source,
-    target_model, source_model,
-    ct::CrossTerm, eq, dt, ldisc = local_discretization(ct, i))
-    nothing
+function prepare_cross_term_in_entity!(
+        i,
+        state_target, state0_target,
+        state_source, state0_source,
+        target_model, source_model,
+        ct::CrossTerm, eq, dt, ldisc = local_discretization(ct, i)
+    )
+    return nothing
 end
 
 export subcrossterm

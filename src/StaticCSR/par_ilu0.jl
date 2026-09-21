@@ -1,4 +1,3 @@
-
 struct ParallelILUFactorCSR{N, T, A} <: AbstractILUFactorization
     factors::NTuple{N, T}
     active::NTuple{N, A}
@@ -15,7 +14,7 @@ function Base.show(io::IO, t::MIME"text/plain", ilu::ParallelILUFactorCSR)
         na = length(act)
         print(io, "Subdomain $i: $na elements: [")
         lim = 25
-        for i = 1:(lim-1)
+        for i in 1:(lim - 1)
             print(io, "$(act[i]), ")
         end
         print(io, act[lim])
@@ -25,6 +24,7 @@ function Base.show(io::IO, t::MIME"text/plain", ilu::ParallelILUFactorCSR)
             println(io, "]")
         end
     end
+    return
 end
 
 function ParallelILUFactorCSR(A::StaticSparsityMatrixCSR{Tv, Ti}, active::Tuple) where {Tv, Ti}
@@ -42,7 +42,7 @@ function ParallelILUFactorCSR(A::StaticSparsityMatrixCSR{Tv, Ti}, active::Tuple)
     return ParallelILUFactorCSR{N, T, VT}(F, active, A.thread_type)
 end
 
-function ilu0_csr(A::StaticSparsityMatrixCSR, partition::V) where {V<:AbstractVector}
+function ilu0_csr(A::StaticSparsityMatrixCSR, partition::V) where {V <: AbstractVector}
     N = maximum(partition)
     @assert minimum(partition) > 0
     @assert length(partition) == size(A, 1)
@@ -58,7 +58,7 @@ function ilu_initial_setup_par!(factors, A, active, indices)
         i = indices[local_index]
         f = ilu0_csr(A, active = active[i])
         f::eltype(factors)
-        factors[i] = f
+        return factors[i] = f
     end
     threaded_loop(F, length(indices), A.thread_type)
     return factors
@@ -89,4 +89,3 @@ function ldiv!(x::AbstractVector, LU::ParallelILUFactorCSR{N, T, A}, b::Abstract
     threaded_loop(F, N, LU.threads)
     return x
 end
-

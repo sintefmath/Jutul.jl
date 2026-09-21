@@ -1,8 +1,10 @@
 using Jutul
 using Test
 
-function test_heat_2d(nx = 3, ny = nx;
-        context = DefaultContext(), kwarg...)
+function test_heat_2d(
+        nx = 3, ny = nx;
+        context = DefaultContext(), kwarg...
+    )
     sys = SimpleHeatSystem()
     # Unit square
     g = CartesianMesh((nx, ny), (1.0, 1.0))
@@ -12,7 +14,7 @@ function test_heat_2d(nx = 3, ny = nx;
     # Initial condition is random values
     nc = number_of_cells(g)
     T0 = rand(nc)
-    state0 = setup_state(model, Dict(:T=>T0))
+    state0 = setup_state(model, Dict(:T => T0))
     sim = Simulator(model, state0 = state0)
     states, = simulate(sim, [1.0]; info_level = -1, kwarg...)
     return states
@@ -37,9 +39,13 @@ using HYPRE
 
     # Exercise the bulk StaticCSR assembly path through HYPRE.jl's public
     # matrix and assembly lifecycle.
-    csr_lsolve = GenericKrylov(:bicgstab,
-        preconditioner = Jutul.BoomerAMGPreconditioner())
-    states = test_heat_2d(4, 4,
-        context = ParallelCSRContext(1), linear_solver = csr_lsolve)
+    csr_lsolve = GenericKrylov(
+        :bicgstab,
+        preconditioner = Jutul.BoomerAMGPreconditioner()
+    )
+    states = test_heat_2d(
+        4, 4,
+        context = ParallelCSRContext(1), linear_solver = csr_lsolve
+    )
     @test length(states) == 1
 end

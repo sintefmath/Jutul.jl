@@ -99,7 +99,8 @@ This interface is dependent on the model supporting use of
 `vectorize_variables!` and `devectorize_variables!` for `state0/parameters`,
 which should be the case for most Jutul models.
 """
-function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
+function optimize(
+        dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         backend_arg = missing,
         info_level = 0,
         deps::Symbol = :case,
@@ -117,7 +118,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     if ismissing(setup_fn)
         error("Setup function was not found in DictParameters struct or as last positional argument.")
     end
-    problem = JutulOptimizationProblem(dopt, objective, setup_fn;
+    problem = JutulOptimizationProblem(
+        dopt, objective, setup_fn;
         simulator = simulator,
         config = config,
         info_level = info_level,
@@ -134,9 +136,10 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     return optimize!(problem; kwarg...)
 end
 
-function optimize!(problem::JutulOptimizationProblem, prm0 = missing;
-        grad_tol = 1e-6,
-        obj_change_tol = 1e-6,
+function optimize!(
+        problem::JutulOptimizationProblem, prm0 = missing;
+        grad_tol = 1.0e-6,
+        obj_change_tol = 1.0e-6,
         max_it = 25,
         opt_fun = missing,
         optimizer = :lbfgs,
@@ -154,7 +157,8 @@ function optimize!(problem::JutulOptimizationProblem, prm0 = missing;
         jutul_message("Optimization", "Starting calibration of $(length(problem.x0)) parameters.", color = :green)
     end
     t_opt = @elapsed if ismissing(opt_fun)
-        x, solver_history = optimize_implementation(problem, Val(optimizer); 
+        x, solver_history = optimize_implementation(
+            problem, Val(optimizer);
             grad_tol = grad_tol,
             obj_change_tol = obj_change_tol,
             max_it = max_it,
@@ -209,7 +213,8 @@ function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
         error("Standard lbfgs optimization without scaling is not supported.")
     end
     verbose = optimizer_verbose(problem)
-    v, x, history = Jutul.LBFGS.box_bfgs(problem;
+    v, x, history = Jutul.LBFGS.box_bfgs(
+        problem;
         print = Int(verbose),
         kwarg...
     )
@@ -219,14 +224,15 @@ end
 function optimize_implementation(problem::JutulOptimizationProblem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
     verbose = optimizer_verbose(problem)
     F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
-    _, x, history = Jutul.LBFGS.optimize_bound_constrained(F.x0, F.g_both, F.min, F.max;
+    _, x, history = Jutul.LBFGS.optimize_bound_constrained(
+        F.x0, F.g_both, F.min, F.max;
         print = Int(verbose),
         kwarg...
     )
     return (F.descale(x), history)
 end
 
-function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
+function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where {optimizer}
     error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb_qp, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
@@ -340,7 +346,7 @@ function setup_optimization_functions(problem::JutulOptimizationProblem; maximiz
         max = ub_scaled,
         x0 = x_to_u(x0),
         scale = x_to_u,
-        descale = u_to_x
+        descale = u_to_x,
     )
 end
 
@@ -362,7 +368,8 @@ f, dfdx, cache = parameters_gradient(dopt, objective)
 f, dfdx = parameters_gradient(dopt, objective, cache = cache)
 ```
 """
-function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
+function parameters_gradient(
+        dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         simulator = missing,
         config = missing,
         cache = missing,
@@ -373,7 +380,8 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
     )
     x0, x_setup, = optimization_setup(dopt, include_limits = false)
     if ismissing(cache)
-        cache = JutulOptimizationProblem(dopt, objective, setup_fn;
+        cache = JutulOptimizationProblem(
+            dopt, objective, setup_fn;
             simulator = simulator,
             config = config,
             backend_arg = backend_arg,
@@ -447,7 +455,7 @@ function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, va
     if !ismissing(val)
         set_optimization_parameter!(dopt, parameter_name, val)
     end
-    delete!(dopt.parameter_targets, parameter_name)
+    return delete!(dopt.parameter_targets, parameter_name)
 end
 
 """
@@ -509,7 +517,8 @@ are set for all parameters.
   should have the same value in the initial parameter, otherwise an error will
   be thrown.
 """
-function free_optimization_parameter!(dopt::DictParameters, parameter_name;
+function free_optimization_parameter!(
+        dopt::DictParameters, parameter_name;
         initial = missing,
         abs_min = -Inf,
         abs_max = Inf,
@@ -600,7 +609,7 @@ Set a specific optimization parameter in the `DictParameters` object. This
 function will update the value of the parameter in the `dopt.parameters` dictionary.
 """
 function set_optimization_parameter!(dopt::DictParameters, parameter_name, value)
-    set_nested_dict_value!(dopt.parameters, parameter_name, value)
+    return set_nested_dict_value!(dopt.parameters, parameter_name, value)
 end
 
 """
@@ -612,7 +621,8 @@ Add an optimization multiplier that acts on one or more targets to the
 optimization process. All parameters with the same multiplier must have the same
 dimensions.
 """
-function add_optimization_multiplier!(dprm::DictParameters, targets...;
+function add_optimization_multiplier!(
+        dprm::DictParameters, targets...;
         initial = missing,
         lumping = missing,
         name = missing,
@@ -623,7 +633,7 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     targets = map(t -> convert_key(t, dprm.parameters), targets)
     if ismissing(name)
         nmult = length(keys(dprm.multipliers))
-        name = "multiplier_$(nmult+1)"
+        name = "multiplier_$(nmult + 1)"
     end
     if haskey(dprm.multipliers, name)
         @warn "Multiplier with name $name already exists, overwriting."

@@ -74,7 +74,7 @@ function optimize_bound_constrained(
         step_init = NaN,
         max_initial_update = 0.1,
         obj_tol = -Inf,
-        obj_rel_tol = 1e-4,
+        obj_rel_tol = 1.0e-4,
         grad_tol = -Inf,
         grad_rel_tol = 1.0e-4,
         obj_change_tol = -Inf,
@@ -153,7 +153,7 @@ function optimize_bound_constrained(
             r_trust = max_initial_update
         end
         # Initialize Hessian approximation with scaling based on initial step
-        H = LimitedMemoryHessian(init_scale = 1/step, m = lbfgs_num, init_strategy = lbfgs_strategy)
+        H = LimitedMemoryHessian(init_scale = 1 / step, m = lbfgs_num, init_strategy = lbfgs_strategy)
         H_prev = deepcopy(H)
         it = 0
     else # starting from previous optimization
@@ -175,10 +175,14 @@ function optimize_bound_constrained(
     v, u, g = v0, copy(u0), copy(g0)
     n_active = 0
     success = false
-    stop_flags = Dict(:grad => false, :obj_change => false, :obj => false,
-                      :ls_fail => false, :maxit => false)
-    stop_tols = (grad = grad_tol, obj_change = obj_change_tol, obj = obj_tol, 
-                 ls_fail = true, maxit = max_it)
+    stop_flags = Dict(
+        :grad => false, :obj_change => false, :obj => false,
+        :ls_fail => false, :maxit => false
+    )
+    stop_tols = (
+        grad = grad_tol, obj_change = obj_change_tol, obj = obj_tol,
+        ls_fail = true, maxit = max_it,
+    )
     while !any(values(stop_flags))
         it += 1
         # Determine current bounds based on trust region
@@ -202,22 +206,22 @@ function optimize_bound_constrained(
                     wolfe2 = ls_wolfe2,
                     safeguardFac = ls_safeguard_fac,
                     stepIncreaseTol = ls_max_step_increase,
-                    line_searchmax_it  = ls_max_it,
+                    line_searchmax_it = ls_max_it,
                     maxStep = ls_max_step
                 )
-                ls_success = v < v0*(1 - 100*eps()) # somewhat ad-hoc
+                ls_success = v < v0 * (1 - 100 * eps()) # somewhat ad-hoc
             else
                 # Perform line-search (from inexact_line_search.jl)
                 ls_success, u, v, g, lsinfo = inexact_line_search(
-                        u0, v0, g0, d, f!;
-                        max_it = ls_max_it,
-                        wolfe1 = ls_wolfe1,
-                        wolfe2 = ls_wolfe2,
-                        max_step_increase = ls_max_step_increase,
-                        max_step = ls_max_step,
-                        step_diff_tol = ls_step_diff_tol,
-                        verbosity = ls_verbosity,
-                        reduction_factor_failure = ls_reduction_factor_failure
+                    u0, v0, g0, d, f!;
+                    max_it = ls_max_it,
+                    wolfe1 = ls_wolfe1,
+                    wolfe2 = ls_wolfe2,
+                    max_step_increase = ls_max_step_increase,
+                    max_step = ls_max_step,
+                    step_diff_tol = ls_step_diff_tol,
+                    verbosity = ls_verbosity,
+                    reduction_factor_failure = ls_reduction_factor_failure
                 )
             end
             if !ls_success
@@ -231,14 +235,16 @@ function optimize_bound_constrained(
                 continue
             end
             # predicted reduction in objective
-            dobj_est = (u-u0)' * g0 + 0.5 * (u-u0)' * (H * (u-u0))
+            dobj_est = (u - u0)' * g0 + 0.5 * (u - u0)' * (H * (u - u0))
             dobj_true = v - v0
             # Compute trust region ratio (quadratic model fit)
             rho = dobj_true / dobj_est
             # Update trust region radius
             if use_trust_region
-                r_trust = update_trust_region!(r_trust, rho, norm(u - u0, Inf), lsinfo.step, 
-                                               radius_increase, radius_decrease, ratio_thresholds)
+                r_trust = update_trust_region!(
+                    r_trust, rho, norm(u - u0, Inf), lsinfo.step,
+                    radius_increase, radius_decrease, ratio_thresholds
+                )
             else
                 r_trust = NaN
             end
@@ -247,7 +253,7 @@ function optimize_bound_constrained(
             do_update = du' * dg > sqrt(eps()) * norm(du) * norm(dg)
             # According to some textbooks one should use the condition
             #   du' * dg >  sqrt(eps()) * norm(dg)^2
-            # but this is not a good idea for badly scaled problems (e.g., u << g) 
+            # but this is not a good idea for badly scaled problems (e.g., u << g)
             if lbfgs_require_wolfe
                 do_update = do_update && lsinfo.flag > 0
             end
@@ -334,7 +340,7 @@ function get_search_direction_qp!(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, 
             d_qp, g_qp, success, active_set_info = solve_active_set_qp(u .+ d, g_rough, H, lb, ub, max_it_qp, active_chunk_tol)
             d = d .+ d_qp
         else
-            active_set_info  = (nits = 0, conv = true, nactive = rough_solve_info.nactive, nrelease = 0)
+            active_set_info = (nits = 0, conv = true, nactive = rough_solve_info.nactive, nrelease = 0)
         end
         if !success
             @warn "Unable to solve local QP-problem in $max_it_qp iterations."
@@ -343,7 +349,7 @@ function get_search_direction_qp!(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, 
         d = max.(lb, min.(ub, u .+ d)) .- u
         # Find max step size before hitting next bound
         _, max_step = find_next_bounds(u, d, falses(size(u)), lb, ub, 0.0)
-        
+
         if max_step < 1 - sqrt(eps())
             @warn @sprintf("Problematic search direction, maximum step: %f < 1\n", max_step)
         end
@@ -380,9 +386,9 @@ function solve_active_set_qp(u0, g0, H, lb, ub, max_it, active_chunk_tol)
         it += 1
         dr = -apply_reduced_hessian_inverse(H, g, active)
         if norm(dr, Inf) < sqrt(eps())
-            # We have a solution candidate but need to check the gradient sign at the suggested active bounds. 
+            # We have a solution candidate but need to check the gradient sign at the suggested active bounds.
             # Find index of worst offender if it exists:
-            rix =  get_index_worst_active_bound_candidate(u .+ d, g, active, lb, ub)
+            rix = get_index_worst_active_bound_candidate(u .+ d, g, active, lb, ub)
             if isnothing(rix)
                 conv = true
             else
@@ -453,7 +459,7 @@ function solve_rough_qp(u0, g0, H, lb, ub, max_it)
         d = -apply_reduced_hessian_inverse(H, g, active)
         # new approximation
         u = max.(lb, min.(ub, u .+ d))
-        # gradient at new point 
+        # gradient at new point
         g = g0 .+ H * (u .- u0)
         active = get_active_bounds(u, -g, lb, ub)
         conv = all(active) || norm(g[.!active], Inf) < sqrt(eps())
@@ -464,7 +470,7 @@ end
 
 function proj_q(v, active)
     # project to null space of active bounds
-    w = copy(v);
+    w = copy(v)
     w[active] .= 0.0
     return w
 end
@@ -482,11 +488,11 @@ function find_next_bounds(u, d, active, lb, ub, tol)
     # Find next bounds that will be hit along direction d
     # filter out zero components (almost zero is fine since s -> ±Inf)
     dnz = copy(d)
-    dnz[d .== 0] .= 1.0 
+    dnz[d .== 0] .= 1.0
     sl = (lb .- u) ./ dnz
     su = (ub .- u) ./ dnz
     # pick whichever is positive (positive step along d)
-    s = max.(sl, su) 
+    s = max.(sl, su)
     # Disregard d = 0 / already active bounds
     s[active .| (d .== 0)] .= Inf
     # Find maximum step size before hitting next bound
@@ -546,26 +552,31 @@ function update_trust_region!(r, rho, update, step, radius_increase, radius_decr
     return r
 end
 
-function update_info!(info; obj_info = nothing, qp_info = nothing,
-                     ls_info = nothing, tr_info = nothing
-                    )
+function update_info!(
+        info; obj_info = nothing, qp_info = nothing,
+        ls_info = nothing, tr_info = nothing
+    )
     if isnothing(obj_info)
         obj_info = (v = NaN, pg = NaN, n_active = 0)
     end
     if isnothing(qp_info)
-        qp_info = (rough_solve = (nits = 0, conv = true, nactive = 0),
-                   active_set  = (nits = 0, conv = true, nactive = 0, nrelease = 0),
-                   success = true)
+        qp_info = (
+            rough_solve = (nits = 0, conv = true, nactive = 0),
+            active_set = (nits = 0, conv = true, nactive = 0, nrelease = 0),
+            success = true,
+        )
     end
     if isnothing(ls_info)
-        ls_info  = ( flag = 1, step = NaN, nits = 0, objVals = [])
+        ls_info = (flag = 1, step = NaN, nits = 0, objVals = [])
     end
     if isnothing(tr_info)
-        tr_info  = (r_trust = NaN, rho = NaN)
+        tr_info = (r_trust = NaN, rho = NaN)
     end
-    
-    info_step = (obj_info = obj_info, qp_info  = qp_info,
-                 ls_info  = ls_info,  tr_info  = tr_info)
+
+    info_step = (
+        obj_info = obj_info, qp_info = qp_info,
+        ls_info = ls_info, tr_info = tr_info,
+    )
     if isnothing(info)
         info = [info_step]
     else
@@ -574,36 +585,44 @@ function update_info!(info; obj_info = nothing, qp_info = nothing,
     return info
 end
 
-function print_info_step(info; it = length(info)-1)
-    obj_info = info[it+1].obj_info
-    qp_info  = info[it+1].qp_info
-    ls_info  = info[it+1].ls_info
-    tr_info  = info[it+1].tr_info
-    
-    @printf("It: %2d | v: %4.3e | ls-its: %2d | pg: %4.2e | ρ: %9.2e | qp-its: %2d +%3d | n-active: %3d\n",
-            it, obj_info.v, isnan(ls_info.nits) ? 0 : Int(ls_info.nits),
-            obj_info.pg, tr_info.rho, qp_info.rough_solve.nits, qp_info.active_set.nits , obj_info.n_active)
+function print_info_step(info; it = length(info) - 1)
+    obj_info = info[it + 1].obj_info
+    qp_info = info[it + 1].qp_info
+    ls_info = info[it + 1].ls_info
+    tr_info = info[it + 1].tr_info
+
+    return @printf(
+        "It: %2d | v: %4.3e | ls-its: %2d | pg: %4.2e | ρ: %9.2e | qp-its: %2d +%3d | n-active: %3d\n",
+        it, obj_info.v, isnan(ls_info.nits) ? 0 : Int(ls_info.nits),
+        obj_info.pg, tr_info.rho, qp_info.rough_solve.nits, qp_info.active_set.nits, obj_info.n_active
+    )
 end
 
 function print_end_message(stop_flags, stop_tols, info)
     @printf("\n*** Optimization stopped: ")
-    if stop_flags[:maxit]
+    return if stop_flags[:maxit]
         @printf("maximum iterations (%d) reached. ***\n\n", stop_tols.maxit)
     elseif stop_flags[:grad]
         pg = info[end].obj_info.pg
         pg0 = info[1].obj_info.pg
-        @printf("projected gradient norm %.2e < %.2e (relative %.2e < %.2e). ***\n\n", 
-                pg, stop_tols.grad, pg/pg0, stop_tols.grad/pg0)
+        @printf(
+            "projected gradient norm %.2e < %.2e (relative %.2e < %.2e). ***\n\n",
+            pg, stop_tols.grad, pg / pg0, stop_tols.grad / pg0
+        )
     elseif stop_flags[:obj_change]
-        dobj = abs(info[end].obj_info.v - info[end-1].obj_info.v)
+        dobj = abs(info[end].obj_info.v - info[end - 1].obj_info.v)
         obj0 = info[1].obj_info.v
-        @printf("objective change %.2e < %.2e (relative %.2e < %.2e). ***\n\n", 
-                dobj, stop_tols.obj_change, dobj/obj0, stop_tols.obj_change/obj0    )
+        @printf(
+            "objective change %.2e < %.2e (relative %.2e < %.2e). ***\n\n",
+            dobj, stop_tols.obj_change, dobj / obj0, stop_tols.obj_change / obj0
+        )
     elseif stop_flags[:obj]
         obj0 = info[1].obj_info.v
         obj = info[end].obj_info.v
-        @printf("objective value %.2e < %.2e (relative %.2e < %.2e). ***\n\n", 
-                obj, stop_tols.obj, obj/obj0, stop_tols.obj/obj0)
+        @printf(
+            "objective value %.2e < %.2e (relative %.2e < %.2e). ***\n\n",
+            obj, stop_tols.obj, obj / obj0, stop_tols.obj / obj0
+        )
     elseif stop_flags[:ls_fail]
         @printf("line search failed to find improvement in objective. ***\n\n")
     else

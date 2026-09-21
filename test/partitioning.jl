@@ -20,7 +20,7 @@ import Jutul: process_partition
     A = sprand(100, 100, 0.2) + I
     A = A + A'
 
-    for np = 1:10
+    for np in 1:10
         p = Jutul.partition(LinearPartitioner(), A, np)
         test_basic_partition_features(p, np)
         p = Jutul.partition(MetisPartitioner(), A, np)
@@ -81,7 +81,8 @@ import Jutul: process_partition
 
         grps = [[1, 2]]
 
-        G = setup_partitioner_hypergraph(N,
+        G = setup_partitioner_hypergraph(
+            N,
             groups = grps,
             num_nodes = nn,
             num_edges = ne
@@ -97,7 +98,8 @@ import Jutul: process_partition
 
         w_n = [5, 7, 13]
         w_e = [1, 5, 3, 7]
-        G = setup_partitioner_hypergraph(N,
+        G = setup_partitioner_hypergraph(
+            N,
             edge_weights = w_e,
             node_weights = w_n,
             groups = grps,

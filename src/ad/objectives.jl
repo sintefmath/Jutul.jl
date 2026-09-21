@@ -57,7 +57,8 @@ function objective_evaluator_from_model_and_state(G::AbstractGlobalObjective, mo
     else
         allstates = Vector{Any}(copy(packed_steps.states))
     end
-    function obj_eval(model, state;
+    function obj_eval(
+            model, state;
             parameters = missing, # Parameters - if not in state.
             allforces = missing, # Forces for all steps
             forces = packed_steps.forces[current_step], # Forces for current step - not used in global solve

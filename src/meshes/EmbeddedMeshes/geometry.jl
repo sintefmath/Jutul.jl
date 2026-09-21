@@ -15,7 +15,7 @@ function Jutul.compute_centroid_and_measure(mesh::EmbeddedMesh, ::Jutul.Cells, i
 
     if i ∈ mesh.intersection_cells
         faces = mesh.unstructured_mesh.faces.cells_to_faces[i]
-        centroid, area =  Jutul.compute_centroid_and_measure(mesh, Jutul.Faces(), faces[1])
+        centroid, area = Jutul.compute_centroid_and_measure(mesh, Jutul.Faces(), faces[1])
         return (centroid, area)
     end
 
@@ -33,6 +33,7 @@ function Jutul.compute_centroid_and_measure(mesh::EmbeddedMesh, ::Jutul.Cells, i
             nodes = faces.faces_to_nodes[face]
             push!(unique_faces, sort(nodes))
         end
+        return
     end
 
     collect_faces!(unique_faces, umesh.faces, i)
@@ -56,12 +57,12 @@ function Jutul.compute_centroid_and_measure(mesh::EmbeddedMesh, ::Jutul.Cells, i
         r_node = pts[r]
         A = l_node - c_node
         B = r_node - c_node
-        local_volume = LinearAlgebra.norm(cross(A, B)/2.0, 2)
-        local_centroid = (l_node + r_node + c_node)/3.0
+        local_volume = LinearAlgebra.norm(cross(A, B) / 2.0, 2)
+        local_centroid = (l_node + r_node + c_node) / 3.0
         vol += local_volume
-        centroid += local_centroid*local_volume
+        centroid += local_centroid * local_volume
     end
-    return (centroid./vol, vol)
+    return (centroid ./ vol, vol)
 
 end
 
@@ -87,7 +88,7 @@ function face_centroid_and_measure(mesh::EmbeddedMesh, nodes, pts::Vector{SVecto
 
     @assert length(nodes) == 2
     l, r = nodes
-    centroid = (pts[l] + pts[r])/2.0
+    centroid = (pts[l] + pts[r]) / 2.0
     area = LinearAlgebra.norm(pts[l] - pts[r], 2)
     return (centroid, area)
 

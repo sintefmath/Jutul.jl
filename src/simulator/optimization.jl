@@ -1,4 +1,3 @@
-
 export update_objective_new_parameters!, setup_parameter_optimization, optimization_config
 
 function update_objective_new_parameters!(param_serialized, sim, state0, param, forces, dt, G; log_obj = false, config = nothing, kwarg...)
@@ -42,7 +41,8 @@ function setup_parameter_optimization(model, state0, param, dt, forces, G, arg..
     return setup_parameter_optimization(case, G, arg...; kwarg...)
 end
 
-function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization_config(case.model, case.parameters);
+function setup_parameter_optimization(
+        case::JutulCase, G, opt_cfg = optimization_config(case.model, case.parameters);
         grad_type = :adjoint,
         config = nothing,
         simulator = nothing,
@@ -88,7 +88,8 @@ function setup_parameter_optimization(case::JutulCase, G, opt_cfg = optimization
     data = Dict()
 
     if grad_type == :adjoint
-        adj_storage = setup_adjoint_storage(model,
+        adj_storage = setup_adjoint_storage(
+            model,
             state0 = state0,
             parameters = variables,
             targets = targets,
@@ -175,7 +176,7 @@ function gradient_opt!(dFdx, x, data)
             debug_time = false
             set_global_timer!(debug_time)
             # try
-                grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt_current, G, forces = forces)
+            grad_adj = solve_adjoint_sensitivities!(grad_adj, storage, states, state0, dt_current, G, forces = forces)
             # catch excpt
             #     if excpt isa InterruptException
             #         rehtrow(excpt)
@@ -187,7 +188,7 @@ function gradient_opt!(dFdx, x, data)
             print_global_timer(debug_time; text = "Adjoint solve detailed timing")
         else
             @warn "Mismatch in states and timesteps for adjoints."
-            @. grad_adj = 1e10
+            @. grad_adj = 1.0e10
         end
     else
         grad_adj = Jutul.solve_numerical_sensitivities(
@@ -221,7 +222,8 @@ function objective_opt!(x, data, print_frequency = 1)
         push!(data[:intermediate_parameters], deepcopy(variables))
     end
     config = data[:sim_config]
-    states, reports = simulate!(sim, dt,
+    states, reports = simulate!(
+        sim, dt,
         parameters = parameters,
         state0 = state0,
         forces = forces,
@@ -229,7 +231,7 @@ function objective_opt!(x, data, print_frequency = 1)
     )
     data[:states] = states
     data[:reports] = reports
-    bad_obj = 10*data[:last_obj]
+    bad_obj = 10 * data[:last_obj]
     if length(states) == 0
         obj = bad_obj
         @warn "Partial data passed, objective set to large value $bad_obj."
@@ -250,7 +252,7 @@ function objective_opt!(x, data, print_frequency = 1)
     push!(data[:obj_hist], obj)
     if print_frequency > 0 && mod(n, print_frequency) == 0
         fmt = x -> @sprintf("%2.4e", x)
-        rel = obj/data[:obj_hist][1]
+        rel = obj / data[:obj_hist][1]
         best = data[:best_obj]
         jutul_message("Obj. #$n", "$(fmt(obj)) (best: $(fmt(best)), relative: $(fmt(rel)))")
     end
@@ -298,7 +300,7 @@ struct OptimizationConfig
     config::Dict{Symbol, Any}
     include_state0::Bool
     function OptimizationConfig(config::Dict{Symbol, Any} = Dict{Symbol, Any}(); include_state0 = false)
-        new(config, include_state0)
+        return new(config, include_state0)
     end
 end
 # Convenience functions for easy access to the config data field
@@ -316,7 +318,8 @@ function state0_active(cfg::OptimizationConfig)
     return cfg.include_state0
 end
 
-function optimization_config(model::SimulationModel, param, active = parameter_targets(model);
+function optimization_config(
+        model::SimulationModel, param, active = parameter_targets(model);
         rel_min = nothing,
         rel_max = nothing,
         use_scaling = false,
@@ -387,13 +390,13 @@ function opt_scaler_function(config, key; inv = false)
         F = F_inv = identity
 
         if scale_type == :log || scale_type == :exp
-            if x_max ≈ x_min || x_min < 1e-12
+            if x_max ≈ x_min || x_min < 1.0e-12
                 base = 10000
             else
-                base = abs(x_max)/abs(x_min)
+                base = abs(x_max) / abs(x_min)
             end
-            myexp = x -> (base^x - 1)/(base - 1)
-            mylog = x -> log((base-1)*x + 1)/log(base)
+            myexp = x -> (base^x - 1) / (base - 1)
+            mylog = x -> log((base - 1) * x + 1) / log(base)
             if scale_type == :log
                 F_inv, F = myexp, mylog
             else
@@ -403,9 +406,9 @@ function opt_scaler_function(config, key; inv = false)
             @assert scale_type == :default "Unknown scaler $scale_type"
         end
         if inv
-            scaler = x -> F_inv(x)*Δ + x_min
+            scaler = x -> F_inv(x) * Δ + x_min
         else
-            scaler = x -> F((x - x_min)/Δ)
+            scaler = x -> F((x - x_min) / Δ)
         end
     else
         if scale_type == :default
@@ -451,9 +454,9 @@ function optimization_limits!(lims, config, mapper, param, model)
                 low = abs_min
             else
                 if val < 0
-                    rel_min_actual = val/rel_min
+                    rel_min_actual = val / rel_min
                 else
-                    rel_min_actual = val*rel_min
+                    rel_min_actual = val * rel_min
                 end
                 low = max(abs_min, rel_min_actual)
             end
@@ -461,9 +464,9 @@ function optimization_limits!(lims, config, mapper, param, model)
                 hi = abs_max
             else
                 if val < 0
-                    rel_max_actual = val/rel_max
+                    rel_max_actual = val / rel_max
                 else
-                    rel_max_actual = val*rel_max
+                    rel_max_actual = val * rel_max
                 end
                 hi = min(abs_max, rel_max_actual)
             end
@@ -476,7 +479,7 @@ function optimization_limits!(lims, config, mapper, param, model)
             high_group = max(high_group, hi)
         end
         if high_group != Inf
-            high_group = max(high_group, low_group + 1e-8*(low_group + high_group) + 1e-18)
+            high_group = max(high_group, low_group + 1.0e-8 * (low_group + high_group) + 1.0e-18)
         end
         @assert !isnan(low_group)
         @assert !isnan(high_group)
@@ -548,7 +551,7 @@ function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
             m_x = n_x ÷ n_row
             m_full = n_full ÷ n_row
             @assert m_x == maximum(lumping) "Lumping group $varname has $m_x groups, but $n_x variables"
-            indx(j, lump) = offset_x + m_x*(j-1) + lump
+            indx(j, lump) = offset_x + m_x * (j - 1) + lump
             for lump in 1:m_x
                 for j in 1:n_row
                     dGdy[indx(j, lump)] = 0.0
@@ -558,7 +561,7 @@ function transfer_gradient!(dGdy, dGdx, y, mapper, config, model)
                 for j in 1:n_row
                     ix = indx(j, lump)
                     # Note: Gradients follow canonical order (equation major)
-                    ix_full = offset_full + (j - 1)*m_full + i
+                    ix_full = offset_full + (j - 1) * m_full + i
                     dGdy[ix] += objective_gradient_chain_rule(x_to_y, y_to_x, y[ix], dGdx[ix_full])
                 end
             end
@@ -575,13 +578,13 @@ function objective_gradient_chain_rule(x_to_y, y_to_x, y, dGdx)
     # dG(y(x))/dx = dG/dy * dy/dx
     # -> dG/dy = dG/dx / dy/dx
     # The following is fine as dydx should never be zero
-    dGdy = dGdx/dydx
+    dGdy = dGdx / dydx
     return dGdy
 end
 
 function print_parameter_optimization_config(targets, config, model; title = :model)
     nt = length(targets)
-    if nt > 0
+    return if nt > 0
         data = Matrix{Any}(undef, nt, 9)
         parameter_names = keys(get_variables_by_type(model, :parameters))
         state_names = keys(get_variables_by_type(model, :primary))
@@ -592,18 +595,18 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
             m = degrees_of_freedom_per_entity(model, variable)
             v = config[target]
             data[i, 1] = target
-            data[i, 2] = "$e"[1:end-2]
+            data[i, 2] = "$e"[1:(end - 2)]
             if m == 1
                 s = "$n"
             else
-                s = "$n×$m=$(n*m)"
+                s = "$n×$m=$(n * m)"
             end
             lumping = get_lumping(v)
             if isnothing(lumping)
                 lstr = "-"
             else
                 n = length(unique(lumping))
-                estr = "($n×$m=$(n*m) dof)"
+                estr = "($n×$m=$(n * m) dof)"
                 if n == 1
                     lstr = "1 group $estr"
                 else
@@ -617,7 +620,7 @@ function print_parameter_optimization_config(targets, config, model; title = :mo
                 if isnothing(u)
                     u = Inf
                 end
-                @sprintf "[%1.3g, %1.3g]" l u
+                return @sprintf "[%1.3g, %1.3g]" l u
             end
             data[i, 3] = s
             data[i, 4] = v[:scaler]

@@ -10,7 +10,7 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
 
     T_hf = zeros(eltype(face_areas), length(faces))
     Nn_hf = Vector{SVector{dim, Float64}}(undef, length(faces))
-    nc = length(facepos)-1
+    nc = length(facepos) - 1
     if isa(perm, AbstractFloat)
         perm = repeat([perm], 1, nc)
     else
@@ -44,12 +44,12 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
     fc = zeros(eltype(face_centroids), dim)
     ix_cells = Set(mesh.intersection_cells)
     N = get_neighborship(mesh)
-    for cell = 1:nc
+    for cell in 1:nc
         if cell in ix_cells
             continue
         end
         cn = cell_normal(mesh, cell)
-        for fpos = facepos[cell]:(facepos[cell+1]-1)
+        for fpos in facepos[cell]:(facepos[cell + 1] - 1)
             face = faces[fpos]
             @. cc = cell_centroids[:, cell]
             @. fc = face_centroids[:, face]
@@ -66,16 +66,16 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
     # For intersection cells, copy the half-face trans from the neighbor on each shared face
     if !isempty(mesh.intersection_cells)
         for ix_cell in mesh.intersection_cells
-            for fpos = facepos[ix_cell]:(facepos[ix_cell+1]-1)
+            for fpos in facepos[ix_cell]:(facepos[ix_cell + 1] - 1)
                 face = faces[fpos]
                 l, r = N[:, face]
                 neighbor = (l == ix_cell) ? r : l
                 # Find the neighbor's half-face position for this face
-                for npos = facepos[neighbor]:(facepos[neighbor+1]-1)
+                for npos in facepos[neighbor]:(facepos[neighbor + 1] - 1)
                     if faces[npos] == face
                         A = face_areas[face]
                         Nn = Nn_hf[npos]
-                        C = Nn.*aperture[neighbor]/2
+                        C = Nn .* aperture[neighbor] / 2
                         K = Jutul.expand_perm(perm[:, neighbor], vdim)
                         T_hf[fpos] = Jutul.half_face_trans(A, K, C, Nn)
                         break
@@ -89,7 +89,7 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
 end
 
 function cell_normal(mesh::EmbeddedMesh, c)
-    # TODO: check that faces are not paralell, consider using 
+    # TODO: check that faces are not paralell, consider using
 
     function get_face_vectors(mesh, face_u, entity_u, face_v, entity_v, cell)
         nodes_u = get_face_nodes(mesh, face_u, entity_u, cell, true)
@@ -98,16 +98,16 @@ function cell_normal(mesh::EmbeddedMesh, c)
         u = pts[nodes_u[2]] - pts[nodes_u[1]]
         nodes_v = setdiff(nodes_v, nodes_u)
         if !isempty(nodes_v)
-            v = pts[nodes_v[1]] - pts[nodes_u[1]] 
+            v = pts[nodes_v[1]] - pts[nodes_u[1]]
         else
             v = missing
         end
 
-        return u,v
+        return u, v
 
     end
 
-    function get_face_nodes(mesh, face, entity::Faces, cell, check_dir=false)
+    function get_face_nodes(mesh, face, entity::Faces, cell, check_dir = false)
         nodes = mesh.faces.faces_to_nodes[face]
         if check_dir
             flip = mesh.faces.neighbors[face][1] != cell
@@ -116,7 +116,7 @@ function cell_normal(mesh::EmbeddedMesh, c)
         return nodes
     end
 
-    function get_face_nodes(mesh, face, entity::BoundaryFaces, cell, check_dir=false)
+    function get_face_nodes(mesh, face, entity::BoundaryFaces, cell, check_dir = false)
         nodes = mesh.boundary_faces.faces_to_nodes[face]
         if check_dir
             flip = mesh.boundary_faces.neighbors[face][1] != cell
@@ -133,21 +133,22 @@ function cell_normal(mesh::EmbeddedMesh, c)
     entities = vcat(fill(Faces(), length(faces)), fill(BoundaryFaces(), length(bfaces)))
     faces = vcat(faces, bfaces)
     num_faces = length(faces)
-    for i = 1:num_faces
-        for j = 1:num_faces
-            k = mod(i+j-1, num_faces) + 1
+    for i in 1:num_faces
+        for j in 1:num_faces
+            k = mod(i + j - 1, num_faces) + 1
             i == k && continue
-            u,v = get_face_vectors(umesh, faces[i], entities[i], faces[k], entities[k], c)
+            u, v = get_face_vectors(umesh, faces[i], entities[i], faces[k], entities[k], c)
             if ismissing(v)
                 continue
             end
             normal = cross(u, v)
             if norm(normal, 2) > 0
-                return normal/norm(normal, 2)
+                return normal / norm(normal, 2)
             end
         end
     end
 
+    return
 end
 
 function half_face_normal(mesh::EmbeddedMesh, face, cell, cn)
@@ -204,7 +205,7 @@ function compute_intersection_trans_dfm(T_hf, N, intersections)
             jj = faces .== f .&& cells .== cj
             @assert sum(ii) == 1 && sum(jj) == 1
             ii, jj = findfirst(ii), findfirst(jj)
-            T_ix[fno] = T_hf[ii]*T_hf[jj]
+            T_ix[fno] = T_hf[ii] * T_hf[jj]
             if !(ci in counted)
                 den += T_hf[ii]
                 push!(counted, ci)

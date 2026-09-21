@@ -24,11 +24,11 @@ function select_equations!(eqs, system::VariablePoissonSystem, model::Simulation
     else
         eq = VariablePoissonEquation(model.domain.discretizations.poisson)
     end
-    eqs[:poisson] = eq
+    return eqs[:poisson] = eq
 end
 
 function select_primary_variables!(S, system::VariablePoissonSystem, model::SimulationModel)
-    S[:U] = UVar()
+    return S[:U] = UVar()
 end
 
 struct PoissonDiscretization{T} <: JutulDiscretization
@@ -45,14 +45,14 @@ end
 function (D::PoissonDiscretization)(i, ::Cells)
     face_map = local_half_face_map(D.half_face_map, i)
     div = F -> local_divergence(F, face_map)
-    return (div = div, )
+    return (div = div,)
 end
 
 struct PoissonFaceCoefficient <: ScalarVariable end
 
 function discretize_domain(d::DataDomain, system::VariablePoissonSystem, ::Val{:default}; kwarg...)
     g = physical_representation(d)
-    discretization = (poisson = Jutul.PoissonDiscretization(g), )
+    discretization = (poisson = Jutul.PoissonDiscretization(g),)
     return DiscretizedDomain(g, discretization; kwarg...)
 end
 
@@ -67,7 +67,7 @@ function default_parameter_values(data_domain, model, param::PoissonFaceCoeffici
 end
 
 function select_parameters!(S, system::VariablePoissonSystem, model)
-    S[:K] = PoissonFaceCoefficient()
+    return S[:K] = PoissonFaceCoefficient()
 end
 
 struct PoissonSource{T} <: JutulForce
@@ -75,16 +75,17 @@ struct PoissonSource{T} <: JutulForce
     value::T
 end
 
-function apply_forces_to_equation!(d, storage, model, eq::AbstractPoissonEquation, eq_s, force::Vector{PoissonSource{T}}, time) where T
+function apply_forces_to_equation!(d, storage, model, eq::AbstractPoissonEquation, eq_s, force::Vector{PoissonSource{T}}, time) where {T}
     U = storage.state.U
     for f in force
         c = f.cell
         d[c] += f.value
     end
+    return
 end
 
 function setup_forces(model::PoissonModel; sources = nothing)
-    return (sources = sources, )
+    return (sources = sources,)
 end
 
 function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::VariablePoissonEquation, model, dt, ldisc = local_discretization(eq, self_cell))
@@ -94,15 +95,15 @@ function update_equation_in_entity!(eq_buf, self_cell, state, state0, eq::Variab
     U_self = state.U[self_cell]
     function flux(other_cell, face, sgn)
         U_other = U[other_cell]
-        return -K[face]*(U_other - U_self)
+        return -K[face] * (U_other - U_self)
     end
     # Equation is just -∇⋅K∇p = 0, or ∇⋅V where V = -K∇p
     d = div(flux)
     if self_cell == 1
         # Regularization for singular system
-        d = d + 1e-10*U_self
+        d = d + 1.0e-10 * U_self
     end
-    eq_buf[] = d
+    return eq_buf[] = d
 end
 
 function update_equation_in_entity!(
@@ -125,9 +126,9 @@ function update_equation_in_entity!(
     # Define flux
     function flux(other_cell, face, sgn)
         U_other = U[other_cell]
-        return -K[face]*(U_other - U_self)
+        return -K[face] * (U_other - U_self)
     end
     # Define equation
-    ∂U∂t = (U_self - U0[self_cell])/Δt
-    eq_buf[] = ∂U∂t + div(flux)
+    ∂U∂t = (U_self - U0[self_cell]) / Δt
+    return eq_buf[] = ∂U∂t + div(flux)
 end

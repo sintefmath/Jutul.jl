@@ -4,7 +4,7 @@ function trajectory_to_points(trajectory::Matrix{Float64})
     return collect(vec(reinterpret(SVector{N, Float64}, collect(trajectory'))))
 end
 
-function trajectory_to_points(x::AbstractVector{SVector{N, Float64}}) where N
+function trajectory_to_points(x::AbstractVector{SVector{N, Float64}}) where {N}
     return x
 end
 
@@ -40,7 +40,8 @@ default all cells are used. If `limit_box` is true, the function searches among
 the cells in intersect(cells, cells inside bounding box).
 
 """
-function find_enclosing_cells(G, traj;
+function find_enclosing_cells(
+        G, traj;
         geometry = missing,
         n = 25,
         use_boundary = false,
@@ -58,9 +59,9 @@ function find_enclosing_cells(G, traj;
     T = eltype(pts)
     # Refine the segments
     new_pts = T[]
-    for i in 1:(length(pts)-1)
+    for i in 1:(length(pts) - 1)
         pt_start = pts[i]
-        pt_end = pts[i+1]
+        pt_end = pts[i + 1]
         for pt in range(pt_start, pt_end, n)
             push!(new_pts, pt)
         end
@@ -132,12 +133,12 @@ function find_enclosing_cells(G, traj;
         norm_direction = zeros(T, n)
         for (cellno, cell) in enumerate(unique_cells)
             for ptno in 2:length(pts)
-                prev_c = intersected_cells[ptno-1]
+                prev_c = intersected_cells[ptno - 1]
                 curr_c = intersected_cells[ptno]
                 is_prev = prev_c == cell
                 is_curr = curr_c == cell
                 if is_prev || is_curr
-                    pt_start = pts[ptno-1]
+                    pt_start = pts[ptno - 1]
                     pt_end = pts[ptno]
                     dir = (pt_end - pt_start)
                     seg_d = norm(dir, 2)
@@ -148,11 +149,11 @@ function find_enclosing_cells(G, traj;
                         # This segment is partially inside the cell
                         fctr = 0.5
                     end
-                    direction[cellno] += dir*fctr
-                    lengths[cellno] += seg_d*fctr
+                    direction[cellno] += dir * fctr
+                    lengths[cellno] += seg_d * fctr
                 end
             end
-            norm_direction[cellno] = direction[cellno]./cell_dims(G, cellno)
+            norm_direction[cellno] = direction[cellno] ./ cell_dims(G, cellno)
             direction[cellno] /= lengths[cellno]
         end
         extra[:lengths] = lengths
@@ -192,7 +193,8 @@ end
 Find enclosing cell of a point. This can be a bit expensive for larger meshes.
 Recommended to use the more high level `find_enclosing_cells` instead.
 """
-function find_enclosing_cell(G::UnstructuredMesh{D}, pt::SVector{D, T},
+function find_enclosing_cell(
+        G::UnstructuredMesh{D}, pt::SVector{D, T},
         normals::AbstractVector{SVector{D, T}},
         face_centroids::AbstractVector{SVector{D, T}},
         boundary_normals::AbstractVector{SVector{D, T}},
@@ -209,7 +211,7 @@ function find_enclosing_cell(G::UnstructuredMesh{D}, pt::SVector{D, T},
             else
                 sgn = -1
             end
-            normal = sgn*normals[face]
+            normal = sgn * normals[face]
             center = face_centroids[face]
             inside = inside && inside_normal(pt, normal, center)
             if !inside

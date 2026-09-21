@@ -60,7 +60,7 @@ physical_representation(x::DiscretizedDomain) = x.representation
 function Base.show(io::IO, d::DiscretizedDomain)
     disc = d.discretizations
     p = physical_representation(d)
-    if isnothing(disc)
+    return if isnothing(disc)
         print(io, "DiscretizedDomain with $p\n")
     else
         print(io, "DiscretizedDomain with $p and discretizations for $(join(keys(d.discretizations), ", "))\n")
@@ -131,7 +131,7 @@ function Base.show(io::IO, t::MIME"text/plain", d::DataDomain)
     data = d.data
     k = keys(data)
     n = length(k)
-    if n == 0
+    return if n == 0
         print(io, " with no additional data.\n")
     else
         print(io, " with $n data fields added:\n")

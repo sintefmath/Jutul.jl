@@ -52,11 +52,11 @@ function transfer(context, t::AbstractDict)
 end
 
 function transfer(context, t::AbstractFloat)
-    convert(float_type(context), t)
+    return convert(float_type(context), t)
 end
 
 function transfer(context, t::Integer)
-    convert(index_type(context), t)
+    return convert(index_type(context), t)
 end
 
 """
@@ -93,12 +93,14 @@ function index_type(c::SingleCUDAContext)
     return c.index_t
 end
 
-function select_contexts(ctype = :csc;
-                    main_context = nothing,
-                    context = nothing,
-                    block_backend = true,
-                    nthreads = Threads.nthreads(),
-                    minbatch = 1000)
+function select_contexts(
+        ctype = :csc;
+        main_context = nothing,
+        context = nothing,
+        block_backend = true,
+        nthreads = Threads.nthreads(),
+        minbatch = 1000
+    )
     if block_backend
         matrix_layout = BlockMajorLayout()
     else

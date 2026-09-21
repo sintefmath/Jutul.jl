@@ -5,7 +5,7 @@ abstract type DictOptimizationScaler end
 
 Base.@kwdef struct BaseLogScaler <: DictOptimizationScaler
     base_max::Float64 = Inf
-    epsilon::Float64 = 1e-12
+    epsilon::Float64 = 1.0e-12
 end
 
 Base.@kwdef mutable struct KeyLimits
@@ -98,27 +98,28 @@ the case for each evaluation of the objective function during optimization.
     (and entries in nested dictionaries) of the `parameters` dictionary must
     be of this type or an array with this type as element type.
 """
-function DictParameters(parameters::AbstractDict, setup_function = missing;
-            strict = true,
-            verbose = true,
-            active_type = Float64
-        )
-        possible_targets = Jutul.AdjointsDI.setup_vectorize_nested(parameters; active_type = active_type)
-        pkeys = possible_targets.names
-        length(pkeys) > 0 || error("No targets found.")
-        return DictParameters(
-            deepcopy(parameters),
-            missing,
-            Jutul.OrderedDict{Vector{KEYTYPE}, KeyLimits}(),
-            pkeys,
-            Jutul.OrderedDict{KEYTYPE, OptimizationMultiplier}(),
-            Jutul.OrderedDict{KEYTYPE, Any}(),
-            strict,
-            verbose,
-            active_type,
-            setup_function, missing
-        )
-    end
+function DictParameters(
+        parameters::AbstractDict, setup_function = missing;
+        strict = true,
+        verbose = true,
+        active_type = Float64
+    )
+    possible_targets = Jutul.AdjointsDI.setup_vectorize_nested(parameters; active_type = active_type)
+    pkeys = possible_targets.names
+    length(pkeys) > 0 || error("No targets found.")
+    return DictParameters(
+        deepcopy(parameters),
+        missing,
+        Jutul.OrderedDict{Vector{KEYTYPE}, KeyLimits}(),
+        pkeys,
+        Jutul.OrderedDict{KEYTYPE, OptimizationMultiplier}(),
+        Jutul.OrderedDict{KEYTYPE, Any}(),
+        strict,
+        verbose,
+        active_type,
+        setup_function, missing
+    )
+end
 
 function Base.show(io::IO, t::MIME"text/plain", dopt::DictParameters)
     active_names = active_keys(dopt)
@@ -126,8 +127,8 @@ function Base.show(io::IO, t::MIME"text/plain", dopt::DictParameters)
     nmult = length(keys(dopt.multipliers))
     nact = length(active_names)
     ninact = length(inactive_names)
-    println(io, "DictParameters with $(nact+ninact) parameters ($nact active), and $nmult multipliers:")
-    print_optimization_overview(dopt; io = io, print_inactive = true)
+    println(io, "DictParameters with $(nact + ninact) parameters ($nact active), and $nmult multipliers:")
+    return print_optimization_overview(dopt; io = io, print_inactive = true)
 end
 
 struct DictParametersSampler
@@ -140,7 +141,8 @@ struct DictParametersSampler
     setup
 end
 
-function DictParametersSampler(dopt::DictParameters, output_function = (case, result) -> result;
+function DictParametersSampler(
+        dopt::DictParameters, output_function = (case, result) -> result;
         simulator = missing,
         config = missing,
         objective = missing
@@ -171,7 +173,8 @@ struct JutulOptimizationProblem
     allow_errors::Bool
     gradient_scaling::Union{Bool, Float64}
     output_path::Union{Nothing, String}
-    function JutulOptimizationProblem(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
+    function JutulOptimizationProblem(
+            dopt::DictParameters, objective, setup_fn = dopt.setup_function;
             backend_arg = missing,
             info_level = 0,
             deps::Symbol = :case,
@@ -197,7 +200,7 @@ struct JutulOptimizationProblem
             for i in eachindex(x0, limits.min, limits.max)
                 mx = limits.max[i]
                 mn = limits.min[i]
-                x0[i] = rand()*(mx - mn) + mn
+                x0[i] = rand() * (mx - mn) + mn
             end
         end
 
@@ -286,7 +289,8 @@ with the same structure as `x`.
   above). If true, the gradient is returned as a `Dict` with the same structure
   as `x`, otherwise it will be a vector.
 """
-function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
+function evaluate(
+        opt::JutulOptimizationProblem, x = opt.x0;
         gradient = true,
         extra_timing = false,
         dict_out::Bool = false
@@ -297,7 +301,8 @@ function evaluate(opt::JutulOptimizationProblem, x = opt.x0;
     x_setup = opt.x_setup
     adj_cache = opt.cache
     backend_arg = opt.backend_arg
-    obj, dobj_dx = solve_and_differentiate_for_optimization(x, dopt, setup_fn, objective, x_setup, adj_cache;
+    obj, dobj_dx = solve_and_differentiate_for_optimization(
+        x, dopt, setup_fn, objective, x_setup, adj_cache;
         backend_arg = backend_arg,
         gradient = gradient,
         print_parameters = opt.print_parameters,
@@ -327,7 +332,7 @@ Take a finite difference approximation of the gradient of the objective function
 at the given index in the optimization parameters. This is useful for testing
 and verifying the correctness of the gradient computed by the adjoint method.
 """
-function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; lumping = missing, index = 1, eps = 1e-6)
+function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0; lumping = missing, index = 1, eps = 1.0e-6)
     f0, _ = I(x; gradient = false)
     xd = copy(x)
     if ismissing(lumping)
@@ -338,10 +343,10 @@ function finite_difference_gradient_entry(I::JutulOptimizationProblem, x = I.x0;
         end
     end
     fd, _ = I(xd; gradient = false)
-    return (fd - f0)/eps
+    return (fd - f0) / eps
 end
 
-function finite_difference_gradient(I::JutulOptimizationProblem, x = I.x0; eps = 1e-6)
+function finite_difference_gradient(I::JutulOptimizationProblem, x = I.x0; eps = 1.0e-6)
     n = length(x)
     f0, _ = I(x; gradient = false)
     grad_fd = zeros(n)
@@ -350,7 +355,7 @@ function finite_difference_gradient(I::JutulOptimizationProblem, x = I.x0; eps =
         xd .= x
         xd[i] += eps
         fd, _ = I(xd; gradient = false)
-        grad_fd[i] = (fd - f0)/eps
+        grad_fd[i] = (fd - f0) / eps
     end
     return grad_fd
 end

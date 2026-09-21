@@ -18,5 +18,5 @@ function update_equation!(eq_s::CompactAutoDiffCache, eq::ScalarTestEquation{Man
     X = evaluation_state(storage).XVar
     X0 = evaluation_state0(storage).XVar
     equation = get_entries(eq_s)
-    @. equation = (X - X0)/dt
+    return @. equation = (X - X0) / dt
 end

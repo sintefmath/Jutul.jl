@@ -1,11 +1,11 @@
-
 function benchmark_secondary_variables(sim::JutulSimulator; kwarg...)
     state = evaluation_state(sim)
     model = get_simulator_model(sim)
     return benchmark_secondary_variables(model, state; kwarg...)
 end
 
-function benchmark_secondary_variables(model::SimulationModel, state;
+function benchmark_secondary_variables(
+        model::SimulationModel, state;
         warm = true,
         n = 100,
         verbose = false,
@@ -23,7 +23,8 @@ function benchmark_secondary_variables(model::SimulationModel, state;
             @timeit local_timer "$k" if use_kernel || fake_kernel
                 function update(batch)
                     Jutul.update_secondary_variable!(
-                        target, var, model, state, batch)
+                        target, var, model, state, batch
+                    )
                     return nothing
                 end
                 if use_kernel
@@ -37,6 +38,7 @@ function benchmark_secondary_variables(model::SimulationModel, state;
                 Jutul.synchronize(model.context)
             end
         end
+        return
     end
     if verbose
         jutul_message("Benchmark", "Starting benchmark of secondary variables...")
@@ -60,7 +62,8 @@ function benchmark_secondary_variables(model::SimulationModel, state;
 end
 
 
-function benchmark_secondary_variables(model::MultiModel, state;
+function benchmark_secondary_variables(
+        model::MultiModel, state;
         verbose = false,
         warm = true,
         n = 20

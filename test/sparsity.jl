@@ -10,16 +10,16 @@ using StaticArrays
     @test Matrix(csr) == Matrix(matrix)
     rows, columns, values = findnz(csr)
     @test sparse(rows, columns, values, size(csr)...) == matrix
-    @test csr*[1.0, 2.0, 3.0] == matrix*[1.0, 2.0, 3.0]
+    @test csr * [1.0, 2.0, 3.0] == matrix * [1.0, 2.0, 3.0]
 end
 
 @testset "Parallel ILU CSR storage type" begin
     n = 6
     diagonal = @SMatrix [4.0 0.2; 0.1 3.0]
     off_diagonal = @SMatrix [-1.0 0.0; 0.0 -1.0]
-    rows = vcat(1:n, 1:(n-1), 2:n)
-    columns = vcat(1:n, 2:n, 1:(n-1))
-    values = vcat(fill(diagonal, n), fill(off_diagonal, 2*n-2))
+    rows = vcat(1:n, 1:(n - 1), 2:n)
+    columns = vcat(1:n, 2:n, 1:(n - 1))
+    values = vcat(fill(diagonal, n), fill(off_diagonal, 2 * n - 2))
     matrix = sparse(rows, columns, values, n, n)
     csr = Jutul.StaticSparsityMatrixCSR(
         copy(matrix');
@@ -48,7 +48,7 @@ end
     for i in 1:n
         test_vec[i] = i
         for j in 1:m
-            test_mat[j, i] = i + (j-1)*n
+            test_mat[j, i] = i + (j - 1) * n
         end
     end
 

@@ -19,7 +19,7 @@ function SimplePartition(p; entity = Cells(), subsets = missing)
         subsets = map(
             index -> findall(isequal(index), p),
             1:np
-            )
+        )
     else
         @assert length(subsets) == np
         for (i, subset) in enumerate(subsets)
@@ -42,7 +42,7 @@ struct SimpleMultiModelPartition <: AbstractDomainPartition
     partition::Dict{Symbol, Any}
     main_symbol::Symbol
     function SimpleMultiModelPartition(p, m)
-        new(p, m)
+        return new(p, m)
     end
 end
 main_partition(mp::SimpleMultiModelPartition) = mp.partition[mp.main_symbol]
@@ -53,7 +53,7 @@ subdiscretization(disc, ::TrivialGlobalMap) = disc
 
 function subgrid
 
-end
+    end
 
 function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_always_active = false, kwarg...)
     grid = physical_representation(d)
@@ -89,23 +89,23 @@ function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = 
     end
     facelist, facepos = facepos
     nf = size(N, 2)
-    cell_active = BitArray(false for x = 1:nc)
-    cell_is_bnd = BitArray(false for x = 1:nc)
-    face_active = BitArray(false for x = 1:nf)
+    cell_active = BitArray(false for x in 1:nc)
+    cell_is_bnd = BitArray(false for x in 1:nc)
+    face_active = BitArray(false for x in 1:nf)
 
-    interior_cells = BitArray(false for x = 1:nc)
+    interior_cells = BitArray(false for x in 1:nc)
     interior_cells[indices] .= true
 
     insert_face!(f) = face_active[f] = true
     function insert_cell!(gc, is_bnd)
         cell_active[gc] = true
-        cell_is_bnd[gc] = is_bnd
+        return cell_is_bnd[gc] = is_bnd
     end
     # Loop over all cells and add them to the global list
     for gc in indices
         # Include global cell
         partition_boundary = false
-        for fi in facepos[gc]:facepos[gc+1]-1
+        for fi in facepos[gc]:(facepos[gc + 1] - 1)
             face = facelist[fi]
             l, r = N[1, face], N[2, face]
             # If both cells are in the interior, we add the face to the list
@@ -124,7 +124,7 @@ function submap_cells(gmap, N, indices; nc = maximum(N), buffer = 0, excluded = 
     if has_buffer_zone
         for gc in indices
             # Also add the neighbors, if not already present
-            for fi in facepos[gc]:facepos[gc+1]-1
+            for fi in facepos[gc]:(facepos[gc + 1] - 1)
                 face = facelist[fi]
                 l, r = N[1, face], N[2, face]
                 if l == gc
@@ -201,7 +201,7 @@ function subforces(forces::NamedTuple, submodel)
     end
 end
 
-function subforces(forces::Vector{T}, submodel::MultiModel) where T<:AbstractDict
+function subforces(forces::Vector{T}, submodel::MultiModel) where {T <: AbstractDict}
     return map(f -> subforces(f, submodel), forces)
 end
 

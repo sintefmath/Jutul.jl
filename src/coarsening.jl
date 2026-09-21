@@ -4,20 +4,20 @@ struct CoarsenByVolumeAverage <: AbstractCoarseningFunction end
 
 function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByVolumeAverage, coarse, fine, row, name, entity)
     subvols = fine[:volumes][fine_indices]
-    return sum(finevals.*subvols)/sum(subvols)
+    return sum(finevals .* subvols) / sum(subvols)
 end
 
 struct CoarsenByHarmonicAverage <: AbstractCoarseningFunction end
 
 function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByHarmonicAverage, coarse, fine, row, name, entity)
-    invvals = 1.0./finevals
-    return length(invvals)/sum(invvals)
+    invvals = 1.0 ./ finevals
+    return length(invvals) / sum(invvals)
 end
 
 struct CoarsenByArithmeticAverage <: AbstractCoarseningFunction end
 
 function inner_apply_coarsening_function(finevals, fine_indices, op::CoarsenByArithmeticAverage, coarse, fine, row, name, entity)
-    return sum(finevals)/length(finevals)
+    return sum(finevals) / length(finevals)
 end
 
 struct CoarsenByFirstValue <: AbstractCoarseningFunction end
@@ -90,7 +90,8 @@ function apply_coarsening_function!(coarsevals, finevals, op, coarse::DataDomain
     return coarsevals
 end
 
-function coarsen_data_domain(D::DataDomain, partition;
+function coarsen_data_domain(
+        D::DataDomain, partition;
         functions = Dict(),
         default = CoarsenByArithmeticAverage(),
         default_other = CoarsenByLargestCount(),
@@ -123,7 +124,7 @@ function coarsen_data_domain(D::DataDomain, partition;
                 else
                     coarseval = zeros(Te, size(val, 1), ne)
                 end
-                if eltype(Te)<:AbstractFloat
+                if eltype(Te) <: AbstractFloat
                     f = get(functions, name, default)
                 else
                     f = get(functions, name, default_other)

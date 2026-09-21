@@ -9,8 +9,8 @@ function spiral_mesh(n_angular_sections = 10, nrotations = 5; spacing = 0, start
     # to get the correct number of cells in the radial direction.
     nrotations += 1
     spacing = spiral_spacing(spacing)
-    spacing_width = length(spacing)-1
-    dr = 2π/n_angular_sections
+    spacing_width = length(spacing) - 1
+    dr = 2π / n_angular_sections
     angular_ranges = range(0.0, 2π - dr, length = n_angular_sections)
     # Define all points first
     Pt_t = SVector{2, Float64}
@@ -24,8 +24,8 @@ function spiral_mesh(n_angular_sections = 10, nrotations = 5; spacing = 0, start
             num_active_rot = nrotations - 1
         end
         for rot in 1:num_active_rot
-            ϕ0 = (rot-1)*2π + start + r
-            ϕ1 = rot*2π + start + r
+            ϕ0 = (rot - 1) * 2π + start + r
+            ϕ1 = rot * 2π + start + r
             x0, y0 = spiral_coord(ϕ0, A, C)
             x1, y1 = spiral_coord(ϕ1, A, C)
             δx = x1 - x0
@@ -43,12 +43,12 @@ function spiral_mesh(n_angular_sections = 10, nrotations = 5; spacing = 0, start
         end
         push!(point_list, local_point_list)
     end
-    num_cells_per_angular_section = spacing_width*(nrotations - 1)
-    num_cells = n_angular_sections*num_cells_per_angular_section
+    num_cells_per_angular_section = spacing_width * (nrotations - 1)
+    num_cells = n_angular_sections * num_cells_per_angular_section
     function get_cell_index(radial_index, angular_index)
         @assert radial_index > 0 && radial_index <= num_cells_per_angular_section "radial_index $radial_index out of bounds (1 to $num_cells_per_angular_section for angular = $angular_index)"
         @assert angular_index > 0 && angular_index <= n_angular_sections "angular_index $angular_index out of bounds (1 to $n_angular_sections for radial = $radial_index)"
-        cix = num_cells_per_angular_section*(angular_index - 1) + radial_index
+        cix = num_cells_per_angular_section * (angular_index - 1) + radial_index
         return min(cix, num_cells)
     end
 
@@ -78,7 +78,7 @@ function spiral_mesh(n_angular_sections = 10, nrotations = 5; spacing = 0, start
             node2 = local_point_list[radial_ix + 1]
             if is_displaced_angle
                 is_start = radial_ix <= spacing_width
-                is_end = radial_ix > (nrotations-1)*spacing_width
+                is_end = radial_ix > (nrotations - 1) * spacing_width
             else
                 is_start = is_end = false
             end
@@ -121,13 +121,13 @@ function spiral_mesh(n_angular_sections = 10, nrotations = 5; spacing = 0, start
     end
     # Faces with constant radius (i.e. connecting two radial lines)
     for right in 1:n_angular_sections
-        base_range = 1:(spacing_width*(nrotations-1) + 1)
+        base_range = 1:(spacing_width * (nrotations - 1) + 1)
         lrange = base_range
         rrange = base_range
         if right == 1
             left = right + 1
         elseif right == n_angular_sections
-            lrange = (spacing_width+1):(spacing_width*nrotations + 1)
+            lrange = (spacing_width + 1):(spacing_width * nrotations + 1)
             left = 1
         else
             left = right + 1
@@ -149,14 +149,14 @@ function spiral_mesh(n_angular_sections = 10, nrotations = 5; spacing = 0, start
                 else
                     @assert il == lrange[end]
                     push!(bnd_nodes, r_node, l_node)
-                    cell = get_cell_index(pointno-1, right)
+                    cell = get_cell_index(pointno - 1, right)
                 end
                 bfaceno = length(bnd_node_pos)
                 push!(cells_to_boundary[cell], bfaceno)
                 push!(bnd_cells, cell)
                 push!(bnd_node_pos, bnd_node_pos[end] + 2)
             else
-                c1 = get_cell_index(pointno-1, right)
+                c1 = get_cell_index(pointno - 1, right)
                 c2 = get_cell_index(pointno, right)
                 faceno = length(face_node_pos)
                 push!(cells_to_faces[c1], faceno)
@@ -192,17 +192,17 @@ function spiral_mesh(n_angular_sections = 10, nrotations = 5; spacing = 0, start
 end
 
 function spiral_coord(ϕ, a, c)
-    r = a*ϕ + c
+    r = a * ϕ + c
     x = r * cos(ϕ)
     y = r * sin(ϕ)
     return (x, y)
 end
 
-function spiral_spacing(spacing::Int; tol = 1e-10)
+function spiral_spacing(spacing::Int; tol = 1.0e-10)
     return spacing = range(0.0, 1.0, length = spacing + 2)
 end
 
-function spiral_spacing(spacing::AbstractVector; tol = 1e-10)
+function spiral_spacing(spacing::AbstractVector; tol = 1.0e-10)
     if length(spacing) == 0
         spacing = [0.0, 1.0]
     else
@@ -218,11 +218,10 @@ function spiral_spacing(spacing::AbstractVector; tol = 1e-10)
             throw(ArgumentError("Spacing entries must be in range [0, 1]"))
         end
         for i in 2:length(spacing)
-            δ = spacing[i] - spacing[i-1]
+            δ = spacing[i] - spacing[i - 1]
             δ > 0 || throw(ArgumentError("Spacing entries must be in increasing order with entries between 0 and 1"))
             abs(δ) > tol || throw(ArgumentError("Difference between entries below tolerance $tol for entry $i ($(abs(δ)))."))
         end
     end
     return spacing
 end
-

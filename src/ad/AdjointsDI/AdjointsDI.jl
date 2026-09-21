@@ -1,16 +1,16 @@
 module AdjointsDI
-    using Jutul
-    import Jutul: @tic
-    using LinearAlgebra
-    using DifferentiationInterface
-    using SparseConnectivityTracer
-    using SparseMatrixColorings
-    using ProgressMeter
+using Jutul
+import Jutul: @tic
+using LinearAlgebra
+using DifferentiationInterface
+using SparseConnectivityTracer
+using SparseMatrixColorings
+using ProgressMeter
 
-    timeit_debug_enabled() = Jutul.timeit_debug_enabled()
+timeit_debug_enabled() = Jutul.timeit_debug_enabled()
 
-    include("adjoints.jl")
-    include("utils.jl")
-    # Utilities to handle "split" generic adjoints for performance
-    include("split.jl")
+include("adjoints.jl")
+include("utils.jl")
+# Utilities to handle "split" generic adjoints for performance
+include("split.jl")
 end

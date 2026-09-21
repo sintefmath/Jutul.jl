@@ -1,7 +1,8 @@
 export allocate_array_ad, get_ad_entity_scalar, update_values!, update_linearized_system_equation!
 export value, find_sparse_position
 
-function find_jac_position(A,
+function find_jac_position(
+        A,
         target_entity_index, source_entity_index, # Typically row and column - global index
         row_offset, column_offset,
         target_entity_offset, source_entity_offset,
@@ -15,16 +16,17 @@ function find_jac_position(A,
     return find_jac_position(
         A, target_entity_index, source_entity_index,
         row_offset, column_offset,
-        target_entity_offset,source_entity_offset,
+        target_entity_offset, source_entity_offset,
         equation_index, partial_index,
         nentities_target, nentities_source,
         eqs_per_entity, partials_per_entity,
         layout, layout,
         number_of_equations_for_entity = number_of_equations_for_entity
-        )
+    )
 end
 
-function find_jac_position(A,
+function find_jac_position(
+        A,
         target_entity_index, source_entity_index,
         row_offset, column_offset,
         target_entity_offset, source_entity_offset,
@@ -73,7 +75,7 @@ function find_jac_position(
         eqs_per_entity, partials_per_entity,
         row_layout::T, col_layout::T;
         number_of_equations_for_entity = eqs_per_entity
-    ) where T<:BlockMajorLayout
+    ) where {T <: BlockMajorLayout}
 
     N = partials_per_entity
     if eqs_per_entity < partials_per_entity
@@ -100,17 +102,17 @@ function find_jac_position(
 
     adjoint_layout = represented_as_adjoint(row_layout)
     inner_layout = EntityMajorLayout(adjoint_layout)
-    block_matrix_length = N*N
+    block_matrix_length = N * N
     if adjoint_layout
         @assert represented_as_adjoint(col_layout)
         pos = find_sparse_position(A, row, col, inner_layout)
-        base_ix = (pos-1)*block_matrix_length
+        base_ix = (pos - 1) * block_matrix_length
         # TODO: Check this.
-        ix = base_ix + N*(equation_index-1) + partial_index# + offset
+        ix = base_ix + N * (equation_index - 1) + partial_index # + offset
     else
         pos = find_sparse_position(A, row, col, inner_layout)
-        base_ix = (pos-1)*block_matrix_length
-        ix = base_ix + N*(partial_index-1) + equation_index# + offset
+        base_ix = (pos - 1) * block_matrix_length
+        ix = base_ix + N * (partial_index - 1) + equation_index # + offset
     end
 
     return ix
@@ -130,11 +132,11 @@ function row_col_sparse(
 end
 
 function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::EquationMajorLayout)
-    return n_outer*(index_inner-1) + index_outer
+    return n_outer * (index_inner - 1) + index_outer
 end
 
 function alignment_linear_index(index_outer, index_inner, n_outer, n_inner, ::Union{EntityMajorLayout, BlockMajorLayout})
-    return n_inner*(index_outer-1) + index_inner
+    return n_inner * (index_outer - 1) + index_inner
 end
 
 function find_sparse_position(A::AbstractSparseMatrix, row, col, layout::JutulMatrixLayout)
@@ -205,7 +207,8 @@ function setup_equation_storage(model, eq, storage; tag = nothing, kwarg...)
     return create_equation_caches(model, n, N, storage, F!, nt; self_entity = e, kwarg...)
 end
 
-function create_equation_caches(model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0;
+function create_equation_caches(
+        model, equations_per_entity, number_of_entities, storage, F!, number_of_entities_total::Integer = 0;
         global_map = global_map(model),
         self_entity = nothing,
         extra_sparsity = nothing,
@@ -247,7 +250,7 @@ function create_equation_caches(model, equations_per_entity, number_of_entities,
     return convert_to_immutable_storage(caches)
 end
 
-@inline function entity_as_symbol(::T) where T<:JutulEntity
+@inline function entity_as_symbol(::T) where {T <: JutulEntity}
     return Symbol(T.name.name)::Symbol
 end
 
@@ -310,7 +313,7 @@ end
 Get the total number of equations on the domain of model.
 """
 function number_of_equations(model, e::JutulEquation)
-    return number_of_equations_per_entity(model, e)*number_of_entities(model, e)
+    return number_of_equations_per_entity(model, e) * number_of_entities(model, e)
 end
 
 function number_of_equations(model)
@@ -359,14 +362,14 @@ function column_expansion(I, J, model, e, entity, col_layout)
     ncol_blocks = number_of_partials_per_entity(model, entity)
     n_entity = count_active_entities(model.domain, entity, for_variables = false)
     # (switched order)
-    m = n_entity*ncol_blocks
+    m = n_entity * ncol_blocks
     J, I = expand_block_indices(J, I, n_entity, ncol_blocks, col_layout)
     return (I, J, m)
 end
 
 function expand_block_indices(I, J, ntotal, neqs, layout::EquationMajorLayout; equation_offset = 0, block_size = neqs)
     if neqs > 1
-        I = vcat(map((x) -> (x-1)*ntotal .+ I, 1:neqs)...)
+        I = vcat(map((x) -> (x - 1) * ntotal .+ I, 1:neqs)...)
         J = repeat(J, neqs)
     end
     return (I, J)
@@ -380,7 +383,7 @@ function expand_block_indices(I, J, ntotal, neqs, layout::EntityMajorLayout; equ
     J_expand = T[]
     for (i, j) in zip(I, J)
         for eq in 1:neqs
-            ii = block_size*(i - 1) + equation_offset + eq
+            ii = block_size * (i - 1) + equation_offset + eq
             push!(I_expand, ii)
             push!(J_expand, j)
         end
@@ -392,7 +395,7 @@ function expand_block_indices(I, J, ntotal, neqs, layout::EntityMajorLayout; equ
 end
 
 
-function declare_sparsity(model, e, eq_storage, entity, row_layout::T, col_layout::T = row_layout) where T<:BlockMajorLayout
+function declare_sparsity(model, e, eq_storage, entity, row_layout::T, col_layout::T = row_layout) where {T <: BlockMajorLayout}
     primitive = declare_pattern(model, e, eq_storage, entity)
     if isnothing(primitive)
         out = nothing
@@ -452,11 +455,12 @@ function align_to_jacobian!(eq_s, eq, jac, model; variable_offset = 0, kwarg...)
         align_to_jacobian!(eq_s, eq, jac, model, u, variable_offset = variable_offset; kwarg...)
         variable_offset += number_of_degrees_of_freedom(model, u)
     end
-    variable_offset
+    return variable_offset
 end
 
 
-function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
+function align_to_jacobian!(
+        eq_s, eq, jac, model, entity, arg...;
         context = model.context,
         positions = nothing,
         row_offset = 0,
@@ -469,7 +473,7 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
     # Use generic version
     k = entity_as_symbol(entity)
     has_pos = !isnothing(positions)
-    if haskey(eq_s, k)
+    return if haskey(eq_s, k)
         cache = eq_s[k]
         if has_pos
             # Align against other positions that is provided
@@ -485,7 +489,8 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
             nt = number_of_entities_target
         end
         I, J = generic_cache_declare_pattern(cache, arg...)
-        injective_alignment!(cache, eq, jac, entity, context,
+        injective_alignment!(
+            cache, eq, jac, entity, context,
             pos = pos,
             target_index = I,
             source_index = J,
@@ -495,14 +500,15 @@ function align_to_jacobian!(eq_s, eq, jac, model, entity, arg...;
             column_offset = column_offset,
             target_offset = equation_offset,
             source_offset = variable_offset
-            ; kwarg...)
+            ; kwarg...
+        )
     else
         @warn "Did not find $k in $(keys(eq_s))"
     end
 end
 
 function align_to_jacobian!(eq_s::CompactAutoDiffCache, eq, jac, model, entity; equation_offset = 0, variable_offset = 0, kwarg...)
-    if entity == associated_entity(eq)
+    return if entity == associated_entity(eq)
         # By default we perform a diagonal alignment if we match the associated entity.
         # A diagonal alignment means that the equation for some entity depends only on the values inside that entity.
         # For instance, an equation defined on all Cells will have each entry depend on all values in that Cell.
@@ -515,7 +521,7 @@ Update a linearized system based on the values and derivatives in the equation.
 """
 function update_linearized_system_equation!(nz::AbstractArray, r, model, equation::JutulEquation, diag_cache::CompactAutoDiffCache)
     # NOTE: Default only updates diagonal part
-    fill_equation_entries!(nz, r, model, diag_cache)
+    return fill_equation_entries!(nz, r, model, diag_cache)
 end
 
 function update_linearized_system_equation!(nz, r, model, equation::JutulEquation, caches)
@@ -525,6 +531,7 @@ function update_linearized_system_equation!(nz, r, model, equation::JutulEquatio
         end
         fill_equation_entries!(nz, r, model, caches[k])
     end
+    return
 end
 
 function update_linearized_system_equation!(nz::Missing, r, model, equation::JutulEquation, cache)
@@ -536,7 +543,8 @@ function update_linearized_system_equation!(nz::Missing, r, model, equation::Jut
 end
 
 function update_linearized_system_equation!(
-        nz, r, model, equation, cache, storage)
+        nz, r, model, equation, cache, storage
+    )
     return update_linearized_system_equation!(nz, r, model, equation, cache)
 end
 
@@ -568,7 +576,7 @@ function update_equation_for_entity!(cache, eq, state, state0, model, dt)
     T = eltype(cache.entries)
     local_state = local_ad(state, 1, T)
     local_state0 = local_ad(state0, 1, T)
-    inner_update_equation_for_entity(cache, eq, local_state, local_state0, model, dt)
+    return inner_update_equation_for_entity(cache, eq, local_state, local_state0, model, dt)
 end
 
 function update_equation_for_entity!(cache::AbstractMatrix, eq, state, state0, model, dt)
@@ -586,7 +594,7 @@ function inner_update_equation_for_entity(cache, eq, state, state0, model, dt)
     ne = number_of_entities(cache)
     function F(i)
         ldisc = local_discretization(eq, i)
-        @inbounds for j in vrange(cache, i)
+        return @inbounds for j in vrange(cache, i)
             v_i = @views v[:, j]
             var = vars[j]
             state_i = new_entity_index(state, var)
@@ -606,7 +614,7 @@ for any force we do not know about is to assume that the force does
 not impact this particular equation.
 """
 function apply_forces_to_equation!(diag_part, storage, model, eq, eq_s, force, time)
-    nothing
+    return nothing
 end
 
 """
@@ -632,7 +640,7 @@ function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 
     else
         names = map(i -> "R_$i", 1:n)
     end
-    R = (AbsMax = (errors = e, names = names), )
+    R = (AbsMax = (errors = e, names = names),)
     return R
 end
 
@@ -672,9 +680,9 @@ end
 
 function transfer_accumulation!(acc, eq::ConservationLaw, state)
     s = Jutul.conserved_symbol(eq)
-    @. acc = state[s]
+    return @. acc = state[s]
 end
 
 function transfer_accumulation!(acc, eq::JutulEquation, state)
-    @. acc = zero(eltype(acc))
+    return @. acc = zero(eltype(acc))
 end

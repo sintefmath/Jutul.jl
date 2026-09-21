@@ -15,9 +15,9 @@ function vectorize_forces(forces, model::MultiModel, targets = force_targets(mod
         sublengths = vectorization_lengths(forces[k], submodel, target)
         config[k] = (
             lengths = sublengths,
-            offsets = [offset+1],
+            offsets = [offset + 1],
             meta = OrderedDict{Symbol, Any}(),
-            targets = target
+            targets = target,
         )
         offset += sum(sublengths)
     end
@@ -42,7 +42,7 @@ function devectorize_forces(forces, model::MultiModel, X, config; offset = 0)
         subforces = forces[k]
         subconfig = config[k]
         n = sum(subconfig.lengths)
-        subX = X[(offset+1):(offset+n)]
+        subX = X[(offset + 1):(offset + n)]
         nf = devectorize_forces(subforces, submodel, subX, subconfig)
         new_forces[k] = setup_forces(submodel; nf...)
         offset += n

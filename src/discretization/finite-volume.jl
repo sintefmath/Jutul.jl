@@ -43,7 +43,8 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
 end
 
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns;
+function compute_half_face_trans(
+        cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns;
         version = :xyz,
         face_dir = missing,
         half_face_centroids = missing
@@ -51,7 +52,7 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
-    nc = length(facepos)-1
+    nc = length(facepos) - 1
     if isa(perm, Real)
         perm = repeat([perm], 1, nc)
     else
@@ -151,7 +152,7 @@ function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_cen
         dim = length(cell_centroids[1])
         # T = eltype(eltype(cell_centroids))
         for cell in eachindex(cell_centroids)
-            @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
+            @inbounds for fpos in facepos[cell]:(facepos[cell + 1] - 1)
                 face = faces[fpos]
                 sgn = facesigns[fpos]
                 fc = face_centroids[face]
@@ -162,7 +163,7 @@ function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_cen
                 end
                 A = face_areas[face]
                 C = fc - cc
-                Nn = sgn*face_normals[face]
+                Nn = sgn * face_normals[face]
                 if is_xyz
                     perm_c = view(perm, :, cell)
                     K = expand_perm(perm_c, Val(dim))
@@ -204,7 +205,7 @@ function expand_perm(K, ::Val{2})
     K_e = @SMatrix [
         K_xx K_xy;
         K_xy K_yy
-        ]
+    ]
     return K_e
 end
 
@@ -233,15 +234,16 @@ function expand_perm(K, ::Val{3})
     else
         error("Permeability for three-dimensional meshes must have 1/3/6 entries per cell, had $n")
     end
-    K_e =  @SMatrix[
+    K_e = @SMatrix[
         K_xx K_xy K_xz;
         K_xy K_yy K_yz;
-        K_xz K_yz K_zz]
+        K_xz K_yz K_zz
+    ]
     return K_e
 end
 
 function half_face_trans(A, K, C, N)
-    return A*(dot(K*C, N))/dot(C, C)
+    return A * (dot(K * C, N)) / dot(C, C)
 end
 
 function compute_face_trans(T_hf, N, faces = first(get_facepos(N)))
@@ -249,7 +251,7 @@ function compute_face_trans(T_hf, N, faces = first(get_facepos(N)))
     nf = size(N, 2)
     T = zeros(eltype(T_hf), nf)
     for i in eachindex(faces)
-        T[faces[i]] += 1.0/T_hf[i]
+        T[faces[i]] += 1.0 / T_hf[i]
     end
     @. T = 1.0 / T
     return T
@@ -306,7 +308,7 @@ function compute_boundary_trans(d::DataDomain, perm; kwarg...)
     nc = length(cells)
     @assert nf == nc "$nf != $nc"
     faces = collect(1:nf)
-    facepos = collect(1:(nc+1))
+    facepos = collect(1:(nc + 1))
     facesigns = ones(nf)
     return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
 end
@@ -330,7 +332,7 @@ function compute_face_gdz(N, z; g = gravity_constant)
     for i in 1:nf
         l = N[1, i]
         r = N[2, i]
-        gdz[i] = -g*(z[r] - z[l])
+        gdz[i] = -g * (z[r] - z[l])
     end
     return gdz
 end

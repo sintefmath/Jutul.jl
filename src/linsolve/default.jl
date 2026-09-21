@@ -5,7 +5,7 @@ export LinearizedSystem, MultiLinearizedSystem, linear_solve!, transfer, LUSolve
 mutable struct FactorStore
     factor
     function FactorStore()
-        new(nothing)
+        return new(nothing)
     end
 end
 
@@ -47,11 +47,13 @@ struct LinearizedBlock{R, C, J, B} <: JutulLinearSystem
     rowcol_block_size::NTuple{2, Int}
     function LinearizedBlock(sparse_arg, context, layout_row, layout_col, rowcol_dim)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout_row, layout_col)
-        new{typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, rowcol_dim)
+        return new{typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, rowcol_dim)
     end
-    function LinearizedBlock(jac::J, jac_buffer::B, rowcol_dim,
-            layout_row::R, layout_col::C, ::Val{:assembled}) where {R, C, J, B}
-        new{R, C, J, B}(jac, jac_buffer, rowcol_dim)
+    function LinearizedBlock(
+            jac::J, jac_buffer::B, rowcol_dim,
+            layout_row::R, layout_col::C, ::Val{:assembled}
+        ) where {R, C, J, B}
+        return new{R, C, J, B}(jac, jac_buffer, rowcol_dim)
     end
 end
 
@@ -98,7 +100,7 @@ function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = no
             bz = size(e, 1)
         end
         # Match the subsystem residual's scalar type and storage backend.
-        buffer = similar(vec(subsystems[i, i].r_buffer), ni*bz)
+        buffer = similar(vec(subsystems[i, i].r_buffer), ni * bz)
         fill!(buffer, zero(eltype(buffer)))
         if i == 1
             push!(schur_buffer, buffer)
@@ -193,7 +195,7 @@ function build_jacobian(sparse_arg, context, layout_row, layout_col = layout_row
         V_buf = nzval
     else
         N = size(Jt, 1)^2
-        V_buf = unsafe_reinterpret(Ft, nzval, length(nzval)*N)
+        V_buf = unsafe_reinterpret(Ft, nzval, length(nzval) * N)
     end
     return (jac, V_buf, bz)
 end
@@ -215,7 +217,7 @@ function get_jacobian_vector(n, context, layout, v = nothing, bz = 1)
         else
             # Vector (of floats) was given. Use as buffer, reinterpret.
             v::AbstractVector{<:Ft}
-            expected_length = n*bz
+            expected_length = n * bz
             length(v) == expected_length || error("Expected buffer size $n*$bz=$expected_length, was $(length(v)).")
             unsafe = true
             if unsafe
@@ -273,9 +275,9 @@ function apply_left_diagonal_scaling!(M::SparseMatrixCSC{SMatrix{N, N, T, NN}, I
             row = rows[pos]
             M_ij = nzval[pos]
             for k in 1:N
-                D_mat[k, k] = D[(row-1)*N + k]
+                D_mat[k, k] = D[(row - 1) * N + k]
             end
-            nzval[pos] = D_mat*nzval[pos]
+            nzval[pos] = D_mat * nzval[pos]
         end
     end
     return M
@@ -290,12 +292,12 @@ function apply_left_diagonal_scaling!(M::StaticSparsityMatrixCSR{SMatrix{N, N, T
     D_mat = MMatrix{N, N, T, NN}(I)
     for row in 1:nrow
         for k in 1:N
-            D_mat[k, k] = D[(row-1)*N + k]
+            D_mat[k, k] = D[(row - 1) * N + k]
         end
         for pos in nzrange(M, row)
             col = cols[pos]
             M_ij = nzval[pos]
-            nzval[pos] = D_mat*nzval[pos]
+            nzval[pos] = D_mat * nzval[pos]
         end
     end
     return M
@@ -309,7 +311,7 @@ function apply_left_diagonal_scaling!(M::SparseMatrixCSC, D::AbstractVector)
     for col in 1:ncol
         for pos in nzrange(M, col)
             row = rows[pos]
-            nzval[pos] = D[row]*nzval[pos]
+            nzval[pos] = D[row] * nzval[pos]
         end
     end
     return M
@@ -318,14 +320,14 @@ end
 function apply_left_diagonal_scaling!(M::AbstractVector, D::AbstractVector)
     @assert length(M) == length(D)
     for i in eachindex(M)
-        M[i] = D[i]*M[i]
+        M[i] = D[i] * M[i]
     end
     return M
 end
 
 function apply_scalar_scaling!(M::AbstractVector, w::Real)
     for i in eachindex(M)
-        M[i] = w*M[i]
+        M[i] = w * M[i]
     end
     return M
 end
@@ -369,7 +371,7 @@ function diagonal_inverse_scaling!(lsys::LinearizedSystem, F)
     return diagonal_inverse_scaling!(J, F)
 end
 
-function diagonal_inverse_scaling!(A::AbstractSparseMatrix{T, Int}, F) where T<:StaticMatrix
+function diagonal_inverse_scaling!(A::AbstractSparseMatrix{T, Int}, F) where {T <: StaticMatrix}
     n = size(A, 1)
     m = length(F)
     bz = m ÷ n
@@ -377,7 +379,7 @@ function diagonal_inverse_scaling!(A::AbstractSparseMatrix{T, Int}, F) where T<:
     for i in 1:n
         A_ii = A[i, i]
         for j in 1:bz
-            F[(i-1)*bz + j] = 1.0/abs(A_ii[j, j])
+            F[(i - 1) * bz + j] = 1.0 / abs(A_ii[j, j])
         end
     end
     return F
@@ -390,7 +392,7 @@ function diagonal_inverse_scaling!(A::AbstractSparseMatrix, F)
         if A_ii ≈ 0
             A_ii = 1.0
         else
-            A_ii = 1.0/abs(A_ii)
+            A_ii = 1.0 / abs(A_ii)
         end
         F[i] = A_ii
     end
@@ -455,25 +457,26 @@ function vector_residual(sys)
 end
 
 function update_dx_from_vector!(sys, dx_from_solver; dx = sys.dx)
-    dx .= -dx_from_solver
+    return dx .= -dx_from_solver
 end
 
 block_size(lsys::LSystem) = 1
 
-function linear_solve_return(ok = true, iterations = 1, stats = nothing;
+function linear_solve_return(
+        ok = true, iterations = 1, stats = nothing;
         prepare = 0.0,
         precond = 0.0,
         precond_count = 0
-        )
-    (
+    )
+    return (
         ok = ok,
         iterations = iterations,
         stats = (
             stats = deepcopy(stats),
             prepare = prepare,
             precond = precond,
-            precond_count = precond_count
-        )
+            precond_count = precond_count,
+        ),
     )
 end
 
@@ -483,8 +486,7 @@ function linear_solve!(sys, ::Nothing, arg...; dx = sys.dx, r = sys.r, atol = no
     if n > limit
         error("System too big for default direct solver. (Limit is $limit, system was $n by $n.")
     end
-    dx .= -(sys.jac\r)
+    dx .= -(sys.jac \ r)
     @assert all(isfinite, dx) "Linear solve resulted in non-finite values."
     return linear_solve_return()
 end
-

@@ -1,4 +1,3 @@
-
 """
     extrude_mesh(m2d::UnstructuredMesh, nlayers)
     extrude_mesh(m2d::UnstructuredMesh, [1, 2, 5, 10])
@@ -38,7 +37,7 @@ function extrude_mesh(m2d::UnstructuredMesh, depths; kwarg...)
         end
     end
 
-    nc3d = nz*nc2d
+    nc3d = nz * nc2d
     # Make life easier by these intermediate arrays
     cells_to_faces = Vector{Int}[]
     cells_to_boundary = Vector{Int}[]
@@ -110,7 +109,7 @@ function extrude_mesh(m2d::UnstructuredMesh, depths; kwarg...)
             push!(neighbors, (c_below, c_above))
         end
     end
-    for layer in [1, nz+1]
+    for layer in [1, nz + 1]
         is_first = layer == 1
         if is_first
             offset = 0

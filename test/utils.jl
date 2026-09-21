@@ -25,11 +25,11 @@ end
             count = 0
             for i in 1:m
                 # Test each block
-                start = Jutul.load_balanced_endpoint(i-1, n, m)
+                start = Jutul.load_balanced_endpoint(i - 1, n, m)
                 stop = Jutul.load_balanced_endpoint(i, n, m)
                 @test start < stop
                 delta = stop - start
-                @test delta == floor(n/m) || delta == ceil(n/m)
+                @test delta == floor(n / m) || delta == ceil(n / m)
                 count += delta
             end
             # Check that the interval was partitioned
@@ -83,7 +83,7 @@ end
     g = CartesianMesh((nx, ny))
     n = number_of_cells(g)
     d = DataDomain(g)
-    @test count_entities(d, Cells()) == nx*ny
+    @test count_entities(d, Cells()) == nx * ny
     ## Setting entity
     v = rand(n)
     d[:cell_vector] = v
@@ -137,8 +137,8 @@ end
         :face_vector,
         :scalar,
         :data_2d,
-        :data_3d
-        )
+        :data_3d,
+    )
 end
 
 struct PropagateEntitiesTestTag <: JutulEntity end
@@ -165,13 +165,13 @@ end
         # Test scalar interpolation
         x = collect(0:0.1:4)
         I = get_1d_interpolator(x, sin.(x), constant_dx = constant_dx)
-        @test isapprox(I(π/2), 1.0, atol = 1e-2)
+        @test isapprox(I(π / 2), 1.0, atol = 1.0e-2)
         x = [0.0, 0.5, 1.0]
-        Fx = x.^2
+        Fx = x .^ 2
 
         F_approx = get_1d_interpolator(x, Fx, constant_dx = constant_dx)
         @test F_approx(0.5) ≈ 0.25
-        @test F_approx(0.25) ≈ 0.25/2
+        @test F_approx(0.25) ≈ 0.25 / 2
         # Test block interpolation
         x1 = @SVector [0.0, 0.1]
         x2 = @SVector [0.25, 0.35]
@@ -179,7 +179,7 @@ end
         Fx_b = [x1, x2, x3]
         F_approx_b = get_1d_interpolator(x, Fx_b, constant_dx = constant_dx)
         @test F_approx_b(0.5) ≈ x2
-        @test F_approx_b(0.25) ≈ (x1 + x2)/2
+        @test F_approx_b(0.25) ≈ (x1 + x2) / 2
         # Check that default is to not extrapolate.
         @test F_approx_b(-1.0) ≈ x1
         @test F_approx_b(1.5) ≈ x3
@@ -189,7 +189,7 @@ end
 @testset "get_2d_interpolator" begin
     for constant_dx in [true, false, missing]
         for constant_dy in [true, false, missing]
-            f(x, y) = sin(x) + cos(y) + 0.5*x
+            f(x, y) = sin(x) + cos(y) + 0.5 * x
             xs = range(0.0, 4.0, 10)
             ys = range(0.0, 5.0, 8)
             xs = collect(xs)
@@ -202,8 +202,10 @@ end
                     fs[i, j] = f(x, y)
                 end
             end
-            I = get_2d_interpolator(xs, ys, fs,
-                constant_dx = constant_dx, constant_dy = constant_dy)
+            I = get_2d_interpolator(
+                xs, ys, fs,
+                constant_dx = constant_dx, constant_dy = constant_dy
+            )
             for (i, x) in enumerate(xs)
                 for (j, y) in enumerate(ys)
                     @test I(x, y) ≈ f(x, y)
@@ -215,22 +217,22 @@ end
             using ForwardDiff, Test
             F(X) = I(first(X), last(X))
             function F_num(X)
-                ϵ = 1e-6
+                ϵ = 1.0e-6
                 x = X[1]
                 y = X[2]
                 v0 = I(x, y)
                 vx = I(x + ϵ, y)
                 vy = I(x, y + ϵ)
-                dx = (vx - v0)/ϵ
-                dy = (vy - v0)/ϵ
+                dx = (vx - v0) / ϵ
+                dy = (vy - v0) / ϵ
                 return (dx, dy)
             end
             for (i, x) in enumerate(xfine)
                 for (j, y) in enumerate(yfine)
                     dx_i, dy_i = ForwardDiff.gradient(F, [x, y])
                     dx_num, dy_num = F_num([x, y])
-                    @test dx_num ≈ dx_i rtol=1e-3 atol=1e-8
-                    @test dy_num ≈ dy_i rtol=1e-3 atol=1e-8
+                    @test dx_num ≈ dx_i rtol = 1.0e-3 atol = 1.0e-8
+                    @test dy_num ≈ dy_i rtol = 1.0e-3 atol = 1.0e-8
                 end
             end
         end
@@ -239,18 +241,18 @@ end
 
 @testset "first_lower fast lookup" begin
     for nstep in 2:100
-        for t in [(1.5, 3.9), (-100.0, 53.0), (-1e-3, 1e-3)]
+        for t in [(1.5, 3.9), (-100.0, 53.0), (-1.0e-3, 1.0e-3)]
             start, stop = t
             dx = collect(range(start, stop, length = nstep))
             lookup = Jutul.interpolation_constant_lookup(dx)
-            @test lookup.dx ≈ (stop - start)/(nstep-1)
-            wd = 0.1*(stop-start)
-            for x in range(start - wd, stop + wd, length = 3*nstep)
+            @test lookup.dx ≈ (stop - start) / (nstep - 1)
+            wd = 0.1 * (stop - start)
+            for x in range(start - wd, stop + wd, length = 3 * nstep)
                 pos = Jutul.first_lower(dx, x)
                 pos_l = Jutul.first_lower(dx, x, lookup)
-                bnd = start + pos*lookup.dx
-                bnd_l = start + pos_l*lookup.dx
-                at_boundary = isapprox(x, bnd, atol = 1e-10) || isapprox(x, bnd_l, atol = 1e-10)
+                bnd = start + pos * lookup.dx
+                bnd_l = start + pos_l * lookup.dx
+                at_boundary = isapprox(x, bnd, atol = 1.0e-10) || isapprox(x, bnd_l, atol = 1.0e-10)
                 @test pos == pos_l || at_boundary
             end
         end
@@ -259,8 +261,8 @@ end
 
 @testset "compress_timesteps" begin
     # Two test forces
-    f1 = (f = 1, )
-    f2 = (f = 2, )
+    f1 = (f = 1,)
+    f2 = (f = 2,)
     @test compress_timesteps([1.0, 2.0, 3.0]) == ([6.0], nothing)
     @test compress_timesteps([1.0, 2.0, 3.0], nothing) == ([6.0], nothing)
     @test compress_timesteps([1.0, 2.0, 3.0], f1) == ([6.0], f1)
@@ -358,7 +360,7 @@ end
 end
 @testset "mesh tags" begin
     for i in 1:2
-        g = CartesianMesh((10,1,1))
+        g = CartesianMesh((10, 1, 1))
         if i == 2
             g = UnstructuredMesh(g)
         end
@@ -400,14 +402,14 @@ import Jutul: BlendingParameter, BlendingVariable
     mock_state = (
         A = repeat([1.0, 2, 3], 1, 5),
         B = repeat([10.0, 20, 30], 1, 5),
-        BlendingParameter = range(1.0, 2.0, length = 5)
+        BlendingParameter = range(1.0, 2.0, length = 5),
     )
 
     V = similar(mock_state.A)
     bvar = BlendingVariable([:A, :B], 3)
     V = Jutul.update_secondary_variable!(V, bvar, nothing, mock_state)
-    @test V[:, 1] ≈ [1, 2, 3] atol = 1e-2
-    @test V[:, end] ≈ [10, 20, 30] atol = 1e-2
+    @test V[:, 1] ≈ [1, 2, 3] atol = 1.0e-2
+    @test V[:, end] ≈ [10, 20, 30] atol = 1.0e-2
     @test all(V[:, 3] .< [10, 20, 30])
     @test all(V[:, 3] .> [1, 2, 3])
 end

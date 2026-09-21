@@ -1,7 +1,7 @@
 abstract type JutulSimulator end
 
 function set_default_tolerances(sim::JutulSimulator; kwarg...)
-    set_default_tolerances(sim.model; kwarg...)
+    return set_default_tolerances(sim.model; kwarg...)
 end
 
 abstract type JutulBackend end
@@ -94,7 +94,7 @@ mutable struct SolveRecorder
     iteration::Int  # Current iteration (if applicable)
     dt::Float64     # Current timestep
     function SolveRecorder()
-        new(0, 0, 0, 0.0, 0, NaN)
+        return new(0, 0, 0, 0.0, 0, NaN)
     end
 end
 
@@ -102,7 +102,7 @@ struct ProgressRecorder
     recorder::SolveRecorder
     subrecorder::SolveRecorder
     function ProgressRecorder()
-        new(SolveRecorder(), SolveRecorder())
+        return new(SolveRecorder(), SolveRecorder())
     end
 end
 

@@ -9,12 +9,12 @@
     # Target number of nonlinear iterations for the timestep
     target_iterations = 8
     # Max number of estimated iterations left for iterate to be classified as ok
-    max_iterations_left = 2*target_iterations
+    max_iterations_left = 2 * target_iterations
     # Contraction factor parameters
     slow = 0.99
     fast = 0.1
     # Violation counter and limit for timestep cut
-    num_violations::Int     = 0
+    num_violations::Int = 0
     num_violations_cut::Int = 3
 
 end
@@ -35,10 +35,11 @@ function set_convergence_monitor_cutting_criterion!(config; max_nonlinear_iterat
             break
         end
     end
-    cc = ConvergenceMonitorCuttingCriterion(; 
-    target_iterations = target_iterations, kwargs...)
+    cc = ConvergenceMonitorCuttingCriterion(;
+        target_iterations = target_iterations, kwargs...
+    )
     config[:cutting_criterion] = cc
-    config[:max_nonlinear_iterations] = max_nonlinear_iterations
+    return config[:max_nonlinear_iterations] = max_nonlinear_iterations
 
 end
 
@@ -55,7 +56,7 @@ accordingly (+1 for "bad", -1 for "good"). The timestep is aborted if the number
 of violations exceeds a user-defined limit.
 """
 function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
-    
+
     # Maximum number of iterations left if we should converge in
     # target_iterations iterations
     N = max(cc.target_iterations - it + 1, 2)
@@ -80,7 +81,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     oscillating_it = oscillation(cc.history[:contraction_factor][1:it])
     cc.history[:oscillation][it] = oscillating_it
     is_oscillating = any(cc.history[:oscillation][it0:it])
-    
+
     # Determine if current rate of convergence is adequate
     good = all(θ .<= max(θ_target, cc.fast)) && !is_oscillating
     ok = all(θ .<= cc.slow) && its_left <= cc.max_iterations_left
@@ -109,7 +110,7 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     # Check if the number of violations exceeds the limit, in which case the
     # timstep should be aborted
     early_cut = cc.num_violations > cc.num_violations_cut
-    
+
     # Generate convergence monitor report and store in step report
     cm_report = make_report(θ, θ_target, is_oscillating, status)
     step_reports[end][:convergence_monitor] = cm_report
@@ -132,7 +133,7 @@ function reset!(cc::ConvergenceMonitorCuttingCriterion, template, max_iter)
     nc = max_iter + 1
 
     history = Dict()
-    
+
     history[:distance] = Array{typeof(template[1])}(undef, nc, length(template))
     history[:contraction_factor] = Array{typeof(template[1])}(undef, nc, length(template))
     history[:contraction_factor_target] = Array{typeof(template[1])}(undef, nc, length(template))
@@ -145,8 +146,8 @@ function reset!(cc::ConvergenceMonitorCuttingCriterion, template, max_iter)
     history[:iterations_left][1] = NaN
     history[:status][1] = :none
     history[:oscillation][1] = false
-    
-    cc.history = history
+
+    return cc.history = history
 
 end
 
@@ -187,7 +188,7 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
     θ_target = round_local(θ_target)
     θ_slow = round_local(θ_slow)
     θ_fast = round_local(θ_fast)
-    
+
     if status == :none
         inequality, sym, color, reason = "", "", :white, ""
     elseif status == :good
@@ -215,16 +216,16 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, it
         error("Unknown status: $status")
     end
 
-    if status != :none        
+    if status != :none
         reason = "\n\t\t Reason: " * inequality
         reason *= oscillation ? " (oscillation)" : ""
     end
 
-    msg = "(It. $(it-1)): "
+    msg = "(It. $(it - 1)): "
     msg *= "status = $(cc.history[:status][it]), "
     msg *= "violations = $(cc.num_violations)" * sym
     msg *= reason
     msg *= "."
-    Jutul.jutul_message("\tConvergence monitor", msg, color = color)
+    return Jutul.jutul_message("\tConvergence monitor", msg, color = color)
 
 end

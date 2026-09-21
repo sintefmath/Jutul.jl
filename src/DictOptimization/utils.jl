@@ -80,7 +80,7 @@ function realize_limit_inner(initial::Array, rel, abs, name; is_max::Bool, stric
 end
 
 function realize_limit_inner(initial::Number, rel_lim::Number, abs_lim::Number, name; is_max::Bool, strict::Bool = true)
-    rel_delta = abs(initial*(rel_lim-1.0))
+    rel_delta = abs(initial * (rel_lim - 1.0))
     if is_max
         if isfinite(rel_lim)
             l = min(abs_lim, initial + rel_delta)
@@ -115,7 +115,7 @@ function realize_limits(dopt::DictParameters, x_setup::NamedTuple)
     for (pos, parameter_name) in enumerate(x_setup.names)
         lims = realize_limits(dopt, parameter_name)
         if lims.min isa Number
-            n = x_setup.offsets[pos+1] - x_setup.offsets[pos]
+            n = x_setup.offsets[pos + 1] - x_setup.offsets[pos]
             lims.max::Number
             for _ in 1:n
                 push!(lb, lims.min)
@@ -157,7 +157,7 @@ end
 
 function print_optimization_overview(dopt::DictParameters; io = Base.stdout, print_inactive = false)
     function fmt(x::Number)
-        return "$(round(x, sigdigits=3))"
+        return "$(round(x, sigdigits = 3))"
     end
 
     function fmt_lim(x; is_max)
@@ -184,7 +184,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
     end
 
     function avg(x::AbstractArray)
-        return sum(x)/length(x)
+        return sum(x) / length(x)
     end
 
     function format_value(x)
@@ -197,7 +197,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             a = avg(x)
             minval, maxval = extrema(x)
             maxdiff = max(abs(a - minval), abs(maxval - a))
-            str = "$(round(a, sigdigits=3)) ± $(round(maxdiff, sigdigits=3))"
+            str = "$(round(a, sigdigits = 3)) ± $(round(maxdiff, sigdigits = 3))"
         else
             str = join(map(fmt, x), ", ")
         end
@@ -235,12 +235,12 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             if is_optimized && print_opt
                 v = get_parameter_value(dopt, k, optimized = true)
                 v_avg = avg(v)
-                perc = round(100*(v_avg-v0_avg)/max(v0_avg, 1e-20), sigdigits = 2)
+                perc = round(100 * (v_avg - v0_avg) / max(v0_avg, 1.0e-20), sigdigits = 2)
                 tab[i, 6] = format_value(v)
                 tab[i, 7] = "$perc%"
             end
         end
-        PrettyTables.pretty_table(io, tab, column_labels=header, title = t, title_alignment = :l, alignment = alignment, fit_table_in_display_vertically = false)
+        return PrettyTables.pretty_table(io, tab, column_labels = header, title = t, title_alignment = :l, alignment = alignment, fit_table_in_display_vertically = false)
     end
 
     pkeys = active_keys(dopt)
@@ -259,7 +259,7 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
     end
     multkeys = keys(dopt.multipliers)
     nmult = length(multkeys)
-    if nmult == 0
+    return if nmult == 0
         println(io, "No multipliers set.")
     else
         header = ["Name", "Targets", "Initial value", "Count", "Min", "Max"]
@@ -282,11 +282,11 @@ function print_optimization_overview(dopt::DictParameters; io = Base.stdout, pri
             if is_optimized && !ismissing(dopt.multipliers_optimized)
                 optval = dopt.multipliers_optimized[k].value
                 tab[i, 7] = format_value(optval)
-                perc = round(100*(avg(optval)-avg(mval))/max(avg(mval), 1e-20), sigdigits = 2)
+                perc = round(100 * (avg(optval) - avg(mval)) / max(avg(mval), 1.0e-20), sigdigits = 2)
                 tab[i, 8] = "$perc%"
             end
         end
-        pretty_table(io, tab, column_labels=header, title = "Optimization multipliers", title_alignment = :l, alignment = alignment, fit_table_in_display_vertically = false)
+        pretty_table(io, tab, column_labels = header, title = "Optimization multipliers", title_alignment = :l, alignment = alignment, fit_table_in_display_vertically = false)
     end
 end
 
@@ -336,7 +336,7 @@ end
 
 function set_nested_dict_value!(x::AbstractDict, key, value)
     key = convert_key(key, x)
-    for k in key[1:end-1]
+    for k in key[1:(end - 1)]
         x = x[k]
     end
     if x[key[end]] isa Number
@@ -375,7 +375,7 @@ function convert_key(x::String, d::AbstractDict)
 end
 
 function convert_key(x::Vector, d::AbstractDict)
-    eltype(x)<:KEYTYPE
+    eltype(x) <: KEYTYPE
     return x
 end
 

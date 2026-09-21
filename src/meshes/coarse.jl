@@ -61,7 +61,7 @@ function CoarseMesh(G, p)
     coarse_boundary_cells = p[G.boundary_faces.neighbors]
     nbf_fine = number_of_boundary_faces(G)
     bval = collect(1:nbf_fine)
-    bpos = collect(1:(nbf_fine+1))
+    bpos = collect(1:(nbf_fine + 1))
     cboundary = IndirectionMap(bval, bpos)
 
     function to_indir_facemap(coarse_faces)
@@ -75,7 +75,7 @@ function CoarseMesh(G, p)
                 push!(fmap, face)
             end
             n_added = length(v)
-            push!(pos, pos[end]+n_added)
+            push!(pos, pos[end] + n_added)
         end
         return (IndirectionMap(fmap, pos), neigh)
     end
@@ -92,7 +92,7 @@ function Base.show(io::IO, t::MIME"text/plain", g::CoarseMesh)
     nb = number_of_boundary_faces(g)
     print(io, "CoarseMesh with $nc cells, $nf faces and $nb boundary faces (on ")
     Base.show(io, t, g.parent)
-    print(io, ")")
+    return print(io, ")")
 end
 
 function float_type(G::CoarseMesh)
@@ -126,10 +126,10 @@ function compute_centroid_and_measure(CG::CoarseMesh, e::Cells, i)
 
     for cell in CG.partition_lookup[i]
         subcentroid, subvol = compute_centroid_and_measure(CG.parent, e, cell)
-        centroid += subvol.*subcentroid
+        centroid += subvol .* subcentroid
         vol += subvol
     end
-    return (centroid./vol, vol)
+    return (centroid ./ vol, vol)
 end
 
 function compute_centroid_and_measure(CG::CoarseMesh, e::Union{BoundaryFaces, Faces}, i)
@@ -141,10 +141,10 @@ function compute_centroid_and_measure(CG::CoarseMesh, e::Union{BoundaryFaces, Fa
 
     for face in get_map(e)[i]
         subcentroid, subarea = compute_centroid_and_measure(CG.parent, e, face)
-        centroid += subarea.*subcentroid
+        centroid += subarea .* subcentroid
         area += subarea
     end
-    return (centroid./area, area)
+    return (centroid ./ area, area)
 end
 
 function face_normal(G::CoarseMesh, coarse_face, e = Faces())
@@ -166,9 +166,9 @@ function face_normal(G::CoarseMesh, coarse_face, e = Faces())
         else
             sgn = -1
         end
-        normal += sgn*face_normal(G.parent, face, e)
+        normal += sgn * face_normal(G.parent, face, e)
     end
-    return normal./norm(normal, 2)
+    return normal ./ norm(normal, 2)
 end
 
 function get_neighborship(CG::CoarseMesh; internal = true)
@@ -195,7 +195,7 @@ function triangulate_mesh(m::CoarseMesh; kwarg...)
     mapper = (
         Cells = (cell_data) -> cell_data[cell_ix],
         Faces = (face_data) -> face_data[face_index],
-        indices = (Cells = cell_ix, Faces = face_index)
+        indices = (Cells = cell_ix, Faces = face_index),
     )
     return (points = points, triangulation = triangulation, mapper = mapper)
 end

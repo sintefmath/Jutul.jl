@@ -1,32 +1,32 @@
 using Jutul
 using Documenter
 
-DocMeta.setdocmeta!(Jutul, :DocTestSetup, :(using Jutul); recursive=true)
+DocMeta.setdocmeta!(Jutul, :DocTestSetup, :(using Jutul); recursive = true)
 
 makedocs(;
-    modules=[Jutul],
+    modules = [Jutul],
     warnonly = [:missing_docs],
-    authors="Olav Møyner <olav.moyner@sintef.no> and contributors",
-    repo="https://github.com/sintefmath/Jutul.jl/blob/{commit}{path}#{line}",
-    sitename="Jutul.jl",
-    format=Documenter.HTML(;
-        prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://sintefmath.github.io/Jutul.jl",
-        edit_link="main",
-        assets=String[],
+    authors = "Olav Møyner <olav.moyner@sintef.no> and contributors",
+    repo = "https://github.com/sintefmath/Jutul.jl/blob/{commit}{path}#{line}",
+    sitename = "Jutul.jl",
+    format = Documenter.HTML(;
+        prettyurls = get(ENV, "CI", "false") == "true",
+        canonical = "https://sintefmath.github.io/Jutul.jl",
+        edit_link = "main",
+        assets = String[],
     ),
-    pages=[
+    pages = [
         "Home" => "index.md",
         "Usage" => "usage.md",
         "optimization.md",
         "mesh.md",
         "units.md",
         "Internals" => "internals.md",
-        "Docstrings" => "docstrings.md"
+        "Docstrings" => "docstrings.md",
     ],
 )
 
 deploydocs(;
-    repo="github.com/sintefmath/Jutul.jl",
-    devbranch="main",
+    repo = "github.com/sintefmath/Jutul.jl",
+    devbranch = "main",
 )

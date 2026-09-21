@@ -11,7 +11,7 @@ function minbatch(x::Any)
 end
 
 function nthreads(::Any)
-    Threads.nthreads()
+    return Threads.nthreads()
 end
 
 minbatch(x, n) = max(n ÷ nthreads(x), minbatch(x))
@@ -26,7 +26,7 @@ function threaded_loop(F, N, context::JutulContext; do_wait = true)
 end
 
 function threaded_loop(F, N, threads::Symbol; do_wait = true)
-    if N == 1
+    return if N == 1
         F(1)
     elseif threads == :threads
         Threads.@threads for i in 1:N
@@ -53,7 +53,7 @@ function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = min
     N_threads = nthreads(context)
     N_batches = clamp(N_threads ÷ minbatch, 1, N)
     threads = thread_type(context)
-    if N_batches == 1 || threads == :serial
+    return if N_batches == 1 || threads == :serial
         for i in 1:N
             F(i)
         end
@@ -118,4 +118,3 @@ end
 function build_sparse_matrix(context, I, J, V, n, m)
     return sparse(I, J, V, n, m)
 end
-

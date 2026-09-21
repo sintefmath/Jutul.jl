@@ -93,13 +93,13 @@ function TwoPointFiniteVolumeGeometry(
         half_face_faces, facepos = get_facepos(neighbors, nc)
         half_face_cells = similar(half_face_faces)
         for i in 1:nc
-            for j in facepos[i]:(facepos[i+1]-1)
+            for j in facepos[i]:(facepos[i + 1] - 1)
                 half_face_cells[j] = i
             end
         end
     end
     # Call full constructor
-    TwoPointFiniteVolumeGeometry(
+    return TwoPointFiniteVolumeGeometry(
         neighbors,
         areas,
         volumes,
@@ -161,7 +161,7 @@ Get the number of boundary/exterior faces in a mesh.
 """
 function number_of_boundary_faces
 
-end
+    end
 
 function faces(G)
     return 1:number_of_faces(G)
@@ -189,7 +189,7 @@ function meshscatter_primitives(g; line = false, kwarg...)
             pts[i, 3] *= -1
         end
     end
-    mapper = (Cells = identity, )
+    mapper = (Cells = identity,)
     vol = tp.volumes
     sizes = meshscatter_primitives_inner(pts, vol)
     return (points = pts, mapper = mapper, sizes = sizes, line = line)
@@ -202,11 +202,11 @@ function meshscatter_primitives_inner(pts, vol)
     sizes = similar(pts)
     for i in axes(sizes, 1)
         v = vol[i]
-        # Assume that the grid scaling holds for each cell and solve for the diameter 
+        # Assume that the grid scaling holds for each cell and solve for the diameter
         # in each direction
-        gamma = (v/prod(urng))^(1.0/dim)
+        gamma = (v / prod(urng))^(1.0 / dim)
         for d in 1:dim
-            sizes[i, d] = gamma*urng[d]/2
+            sizes[i, d] = gamma * urng[d] / 2
         end
     end
     return sizes
@@ -224,11 +224,11 @@ function declare_entities(G::JutulMesh)
     nc = number_of_cells(G)
     nbnd = number_of_boundary_faces(G)
     return [
-            (entity = Cells(), count = nc),
-            (entity = Faces(), count = nf),
-            (entity = BoundaryFaces(), count = nbnd),
-            (entity = HalfFaces(), count = 2*nf)
-        ]
+        (entity = Cells(), count = nc),
+        (entity = Faces(), count = nf),
+        (entity = BoundaryFaces(), count = nbnd),
+        (entity = HalfFaces(), count = 2 * nf),
+    ]
 end
 
 function add_default_domain_data!(Ω::DataDomain, m::FiniteVolumeMesh; geometry = missing)
@@ -239,7 +239,7 @@ function add_default_domain_data!(Ω::DataDomain, m::FiniteVolumeMesh; geometry 
         Pair(Faces(), [:neighbors, :areas, :normals, :face_centroids]),
         Pair(Cells(), [:cell_centroids, :volumes]),
         Pair(HalfFaces(), [:half_face_cells, :half_face_faces]),
-        Pair(BoundaryFaces(), [:boundary_areas, :boundary_centroids, :boundary_normals, :boundary_neighbors])
+        Pair(BoundaryFaces(), [:boundary_areas, :boundary_centroids, :boundary_normals, :boundary_neighbors]),
     )
     for (entity, names) in geom_pairs
         if hasentity(Ω, entity)
@@ -248,6 +248,7 @@ function add_default_domain_data!(Ω::DataDomain, m::FiniteVolumeMesh; geometry 
             end
         end
     end
+    return
 end
 
 function tpfv_geometry(G::FiniteVolumeMesh)
@@ -323,7 +324,8 @@ function cellmap_to_posmap(x, num_cells = length(x))
     return (vals, posmap)
 end
 
-function mesh_linesegments(m;
+function mesh_linesegments(
+        m;
         cells = nothing,
         faces = nothing,
         boundary_faces = nothing,

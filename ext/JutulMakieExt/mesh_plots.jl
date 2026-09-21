@@ -1,4 +1,5 @@
-function Jutul.plot_mesh_impl(m;
+function Jutul.plot_mesh_impl(
+        m;
         resolution = default_jutul_resolution(),
         z_is_depth = Jutul.mesh_z_is_depth(m),
         kwarg...
@@ -14,7 +15,8 @@ function Jutul.plot_mesh_impl(m;
     return (fig, ax, p)
 end
 
-function Jutul.plot_mesh_impl!(ax, m;
+function Jutul.plot_mesh_impl!(
+        ax, m;
         cells = nothing,
         faces = nothing,
         boundaryfaces = nothing,
@@ -114,7 +116,8 @@ function remove_unused_points(tri, pts)
     return (tri, pts, unique_pts_ix)
 end
 
-function Jutul.plot_cell_data_impl(m, data;
+function Jutul.plot_cell_data_impl(
+        m, data;
         colorbar = :horizontal,
         resolution = default_jutul_resolution(),
         z_is_depth = Jutul.mesh_z_is_depth(m),
@@ -130,7 +133,7 @@ function Jutul.plot_cell_data_impl(m, data;
     p = Jutul.plot_cell_data!(ax, m, data; kwarg...)
     min_data = minimum(data)
     max_data = maximum(data)
-    if !isnothing(colorbar) && colorbar !=false && min_data != max_data
+    if !isnothing(colorbar) && colorbar != false && min_data != max_data
         # ticks = range(min_data, max_data, 10)
         if colorbar == :horizontal
             Colorbar(fig[2, 1], p, vertical = false)
@@ -189,7 +192,8 @@ function Jutul.plot_cell_data_impl!(ax, m, data::AbstractVecOrMat; cells = nothi
     return mesh!(ax, pts, tri; backlight = 1, color = color, kwarg...)
 end
 
-function Jutul.plot_mesh_edges_impl(m;
+function Jutul.plot_mesh_edges_impl(
+        m;
         resolution = default_jutul_resolution(),
         z_is_depth = Jutul.mesh_z_is_depth(m),
         kwarg...
@@ -201,7 +205,8 @@ function Jutul.plot_mesh_edges_impl(m;
 end
 
 
-function Jutul.plot_mesh_edges_impl!(ax, m;
+function Jutul.plot_mesh_edges_impl!(
+        ax, m;
         transparency = true,
         color = :black,
         cells = nothing,
@@ -217,7 +222,8 @@ function Jutul.plot_mesh_edges_impl!(ax, m;
     if length(s) == 0
         return missing
     end
-    f = linesegments!(ax, s;
+    f = linesegments!(
+        ax, s;
         linewidth = linewidth,
         transparency = transparency,
         color = color,

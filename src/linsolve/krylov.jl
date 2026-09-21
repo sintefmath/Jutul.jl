@@ -6,15 +6,15 @@ mutable struct PrecondWrapper{T}
     const op::T
     count::Int
     time::Float64
-    function PrecondWrapper(op::T; count = 0, time = 0.0) where T<:LinearOperator
-        new{T}(op, count, time)
+    function PrecondWrapper(op::T; count = 0, time = 0.0) where {T <: LinearOperator}
+        return new{T}(op, count, time)
     end
 end
 
 Base.eltype(p::PrecondWrapper) = eltype(p.op)
 
 function LinearAlgebra.mul!(x, p::PrecondWrapper, y)
-    out = mul!(x, p, y, true, false)
+    return out = mul!(x, p, y, true, false)
 end
 
 function LinearAlgebra.mul!(x, p::PrecondWrapper, y, α, β)
@@ -42,7 +42,7 @@ mutable struct GenericKrylov <: AbstractKrylov
     config::IterativeSolverConfig
     function GenericKrylov(solver = :gmres; scaling = :none, preconditioner = nothing, kwarg...)
         @assert scaling == :diagonal || scaling == :none || scaling == :dt
-        new(solver, scaling, preconditioner, nothing, nothing, nothing, nothing, IterativeSolverConfig(;kwarg...))
+        return new(solver, scaling, preconditioner, nothing, nothing, nothing, nothing, IterativeSolverConfig(; kwarg...))
     end
 end
 
@@ -53,7 +53,7 @@ end
 function Base.show(io::IO, krylov::GenericKrylov)
     rtol = linear_solver_tolerance(krylov, :relative)
     atol = linear_solver_tolerance(krylov, :absolute)
-    print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
+    return print(io, "Generic Krylov using $(krylov.solver) (ϵₐ=$atol, ϵ=$rtol) with prec = $(typeof(krylov.preconditioner))")
 end
 
 function preconditioner(krylov::AbstractKrylov, sys, context, model, storage, recorder)
@@ -68,21 +68,22 @@ function preconditioner(krylov::AbstractKrylov, sys, context, model, storage, re
     return op
 end
 
-function linear_solve!(sys::LSystem,
-                krylov::GenericKrylov,
-                context::JutulContext,
-                model::JutulModel,
-                storage = nothing,
-                dt = nothing,
-                recorder = ProgressRecorder(),
-                executor = default_executor();
-                dx = sys.dx_buffer,
-                r = vector_residual(sys),
-                atol = linear_solver_tolerance(krylov, :absolute),
-                rtol = linear_solver_tolerance(krylov, :relative),
-                rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
-                rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
-                )
+function linear_solve!(
+        sys::LSystem,
+        krylov::GenericKrylov,
+        context::JutulContext,
+        model::JutulModel,
+        storage = nothing,
+        dt = nothing,
+        recorder = ProgressRecorder(),
+        executor = default_executor();
+        dx = sys.dx_buffer,
+        r = vector_residual(sys),
+        atol = linear_solver_tolerance(krylov, :absolute),
+        rtol = linear_solver_tolerance(krylov, :relative),
+        rtol_nl = linear_solver_tolerance(krylov, :nonlinear_relative),
+        rtol_relaxed = linear_solver_tolerance(krylov, :relaxed_relative)
+    )
     cfg = krylov.config
     prec = krylov.preconditioner
     Ft = eltype(r)
@@ -101,7 +102,7 @@ function linear_solve!(sys::LSystem,
         r_k = norm(r, 2)
         if use_true_rel_norm
             # Try to avoid relative reduction in preconditioned norm
-            atol = atol + rtol*r_k
+            atol = atol + rtol * r_k
             rtol = 0.0
         end
         if use_relaxed_tol
@@ -111,7 +112,7 @@ function linear_solve!(sys::LSystem,
             if it == 1
                 krylov.r_norm = r_k
             elseif !isnothing(rtol_nl) && !isnothing(r_0)
-                maybe_rtol = r_0*rtol_nl/r_k
+                maybe_rtol = r_0 * rtol_nl / r_k
                 rtol = max(min(maybe_rtol, rtol_relaxed), rtol)
             end
         end
@@ -122,24 +123,25 @@ function linear_solve!(sys::LSystem,
         abs_tol = atol
         callback = solver -> krylov_termination_criterion(solver, abs_tol, rel_tol, min_it)
         # Set to small numbers so the callback fully controls convergence checks
-        atol = 1e-20
-        rtol = 1e-20
+        atol = 1.0e-20
+        rtol = 1.0e-20
         manual_conv = true
     else
         callback = solver -> false
         manual_conv = false
     end
     if cfg.precond_side == :right
-        preconditioner_arg = (N = prec_op, )
+        preconditioner_arg = (N = prec_op,)
     else
-        preconditioner_arg = (M = prec_op, )
+        preconditioner_arg = (M = prec_op,)
     end
     solve_f, F = krylov_jl_solve_function(krylov, op, r)
     # Krylov workspaces use the context's floating-point type and require
     # tolerances of that type as well (notably for Float32 KA contexts).
     solver_rtol = convert(Ft, rtol)
     solver_atol = convert(Ft, atol)
-    @tic "solve" solve_f(F, op, r;
+    @tic "solve" solve_f(
+        F, op, r;
         preconditioner_arg...,
         itmax = max_it,
         verbose = v,
@@ -159,20 +161,20 @@ function linear_solve!(sys::LSystem,
         final_res = res[end]
     else
         initial_res = norm(r, 2)
-        final_res = norm(op*x - r, 2)
+        final_res = norm(op * x - r, 2)
     end
 
     bad_auto = !manual_conv && !solved
     bad_manual = manual_conv && stats.niter == max_it
     if (bad_manual || bad_auto)
-        bad_msg = "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
-        if final_res/initial_res > 1.0
+        bad_msg = "Linear solver: $msg, final residual: $final_res, rel. value $(final_res / initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
+        if final_res / initial_res > 1.0
             error("Bad linear solve: $bad_msg")
         elseif v > 0
             @warn bad_msg
         end
     elseif v > 0
-        @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res/initial_res)."
+        @debug "$n lsolve its: Final residual $final_res, rel. value $(final_res / initial_res)."
     end
     @tic "update dx" update_dx_from_vector!(sys, x, dx = dx)
     if prec_op isa PrecondWrapper
@@ -202,7 +204,7 @@ end
 
 function krylov_termination_criterion(solver, atol, rtol, min_its)
     res = solver.stats.residuals
-    tol = atol + rtol*res[1]
+    tol = atol + rtol * res[1]
     ok_tol = res[end] <= tol
     ok_its = length(res) > min_its
     done = ok_tol && ok_its

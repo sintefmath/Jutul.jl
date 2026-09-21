@@ -15,8 +15,8 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
             dt = min(dt, candidate)
         end
         # The selectors might go crazy, so we have some safety bounds
-        min_allowable = config[:timestep_max_decrease]*dt_prev
-        max_allowable = config[:timestep_max_increase]*dt_prev
+        min_allowable = config[:timestep_max_decrease] * dt_prev
+        max_allowable = config[:timestep_max_increase] * dt_prev
         dt = clamp(dt, min_allowable, max_allowable)
     end
     # Make sure that the final timestep is still within the limits of all selectors
@@ -25,13 +25,13 @@ function pick_timestep(sim, config, dt_prev, dT, forces, reports, current_report
     end
     # If we are not going to reach the end anyway, we split the remaining part
     # into two to avoid a long step and a very short step.
-    half_remain = remaining_time/2.0
+    half_remain = remaining_time / 2.0
     if dt > half_remain && dt < remaining_time
         dt = half_remain
     end
     dt = clamp(dt, config[:min_timestep], config[:max_timestep])
     if config[:info_level] > 1
-        ratio = dt/dt_prev
+        ratio = dt / dt_prev
         if ratio > 5
             t_sym = "⏫"
         elseif ratio > 1.1

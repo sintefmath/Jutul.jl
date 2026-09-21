@@ -40,7 +40,8 @@ struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
     reduce_memory::Bool
 end
 
-function KernelAbstractionsContext(backend;
+function KernelAbstractionsContext(
+        backend;
         float_type::Type{F} = Float64,
         index_type::Type{I} = Int,
         linear_float_type::Type{LF} = float_type,
@@ -77,8 +78,11 @@ function KernelAbstractionsContext(backend;
     end
     if !use_kernels_for_secondary &&
             !(backend isa KernelAbstractions.CPU)
-        throw(ArgumentError(
-            "use_kernels_for_secondary=false requires a CPU backend"))
+        throw(
+            ArgumentError(
+                "use_kernels_for_secondary=false requires a CPU backend"
+            )
+        )
     end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
@@ -107,7 +111,8 @@ is_cpu_backend(ctx::KernelAbstractionsContext) =
     ctx.backend isa KernelAbstractions.CPU
 
 function Base.adjoint(ctx::KernelAbstractionsContext)
-    return KernelAbstractionsContext(ctx.backend;
+    return KernelAbstractionsContext(
+        ctx.backend;
         float_type = float_type(ctx),
         index_type = index_type(ctx),
         linear_float_type = linear_float_type(ctx),
@@ -125,14 +130,16 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
             linear_index_type(ctx) === index_type(ctx)
         return ctx
     end
-    return KernelAbstractionsContext(ctx.backend;
+    return KernelAbstractionsContext(
+        ctx.backend;
         float_type = linear_float_type(ctx),
         index_type = linear_index_type(ctx),
         matrix_layout = matrix_layout(ctx),
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-        reduce_memory = ctx.reduce_memory)
+        reduce_memory = ctx.reduce_memory
+    )
 end
 
 
@@ -141,8 +148,10 @@ end
     f(index)
 end
 
-function launch_threaded_loop(f, n, ctx::KernelAbstractionsContext;
-        cpu_minbatch::Int = minbatch(ctx))
+function launch_threaded_loop(
+        f, n, ctx::KernelAbstractionsContext;
+        cpu_minbatch::Int = minbatch(ctx)
+    )
     if n <= 0
         return nothing
     end
@@ -164,7 +173,8 @@ function threaded_loop(f, n, ctx::KernelAbstractionsContext; do_wait = true)
     return nothing
 end
 
-function threaded_loop_minbatch(f, n, ctx::KernelAbstractionsContext,
+function threaded_loop_minbatch(
+        f, n, ctx::KernelAbstractionsContext,
         cpu_minbatch::Int = minbatch(ctx);
         do_wait::Bool = true
     )
@@ -178,8 +188,10 @@ function threaded_loop_minbatch(f, n, ctx::KernelAbstractionsContext,
     return nothing
 end
 
-@kernel function secondary_variable_update_kernel!(dest, var, model,
-        @Const(dependencies))
+@kernel function secondary_variable_update_kernel!(
+        dest, var, model,
+        @Const(dependencies)
+    )
     i = @index(Global)
     Jutul.update_secondary_variable!(dest, var, model, dependencies, i:i)
 end

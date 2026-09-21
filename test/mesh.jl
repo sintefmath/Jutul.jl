@@ -22,9 +22,9 @@ using LinearAlgebra
         end
         @testset "$d-D IJK -> linear indexing" begin
             lix = 1
-            for k = 1:nz
-                for j = 1:ny
-                    for i = 1:nx
+            for k in 1:nz
+                for j in 1:ny
+                    for i in 1:nx
                         @test cell_index(g, (i, j, k)) == lix
                         lix += 1
                     end
@@ -33,9 +33,9 @@ using LinearAlgebra
         end
         @testset "$d-D linear -> IJK indexing" begin
             lix = 1
-            for k = 1:nz
-                for j = 1:ny
-                    for i = 1:nx
+            for k in 1:nz
+                for j in 1:ny
+                    for i in 1:nx
                         @test cell_ijk(g, lix) == (i, j, k)
                         lix += 1
                     end
@@ -53,7 +53,7 @@ using MAT
     G = UnstructuredMesh(g)
     @testset "basics" begin
         function test_faces(G, g)
-            for i = 1:number_of_faces(G)
+            for i in 1:number_of_faces(G)
                 f_ix = G.face_map[i]
                 if f_ix > 0
                     e = Faces()
@@ -81,7 +81,7 @@ using MAT
         end
         test_faces(G, g)
 
-        for i = 1:number_of_cells(G)
+        for i in 1:number_of_cells(G)
             c, v = Jutul.compute_centroid_and_measure(G, Cells(), i)
             c_mrst = G_raw["cells"]["centroids"][i, :]
             v_mrst = G_raw["cells"]["volumes"][i]
@@ -103,7 +103,7 @@ using MAT
     @testset "cartesian to unstructured" begin
         meshes_1d = [
             CartesianMesh((3,)),
-            CartesianMesh((3,), ([1.0, 3.0, 4.0], )),
+            CartesianMesh((3,), ([1.0, 3.0, 4.0],)),
         ]
         meshes_2d = [
             CartesianMesh((3, 2)),
@@ -116,7 +116,7 @@ using MAT
             CartesianMesh((9, 7, 5), origin = [0.2, 0.6, 10.1]),
             CartesianMesh((3, 2, 2), (10.0, 3.0, 5.0)),
             CartesianMesh((3, 2, 2), ([10.0, 5.0, π], 3.0, 5.0)),
-            CartesianMesh((100, 3, 7))
+            CartesianMesh((100, 3, 7)),
         ]
         for mdim in 1:3
             @testset "$(mdim)D conversion" begin
@@ -195,7 +195,7 @@ end
     geo = tpfv_geometry(G)
     geo_c = tpfv_geometry(CG)
 
-    @test geo.volumes[1] ≈ geo_c.volumes[1]/2
+    @test geo.volumes[1] ≈ geo_c.volumes[1] / 2
     # Make a trivial coarse grid and test
     CG2 = CoarseMesh(G, [1, 2, 3, 4])
     geo_c2 = tpfv_geometry(CG2)

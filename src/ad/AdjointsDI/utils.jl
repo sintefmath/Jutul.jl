@@ -24,13 +24,14 @@ function vectorize_nested_meta(
         multiplier_targets = multiplier_targets,
         scalers = scalers,
         lumping = lumping,
-        limits = limits
+        limits = limits,
     )
     return meta
 end
 
 
-function setup_vectorize_nested!(meta, data, active = missing;
+function setup_vectorize_nested!(
+        meta, data, active = missing;
         header = [],
         active_type = Float64,
         multipliers = missing
@@ -69,7 +70,7 @@ function setup_vectorize_nested!(meta, data, active = missing;
                     d = size(v)
                     num = length(v)
                     minval, maxval = extrema(v)
-                    meanval = sum(v)/num
+                    meanval = sum(v) / num
                 else
                     d = nothing
                     num = 1
@@ -79,7 +80,7 @@ function setup_vectorize_nested!(meta, data, active = missing;
                 meta.statistics[name] = (
                     mean = meanval,
                     min = minval,
-                    max = maxval
+                    max = maxval,
                 )
                 push!(meta.offsets, meta.offsets[end] + num)
                 push!(meta.names, name)
@@ -90,7 +91,7 @@ function setup_vectorize_nested!(meta, data, active = missing;
             continue
         end
     end
-    if !ismissing(multipliers)
+    return if !ismissing(multipliers)
         for (name, mult) in pairs(multipliers)
             v = mult.value
             if v isa AbstractArray
@@ -108,7 +109,7 @@ function setup_vectorize_nested!(meta, data, active = missing;
             meta.statistics[name] = (
                 mean = 1.0,
                 min = 1.0,
-                max = 1.0
+                max = 1.0,
             )
         end
     end
@@ -125,14 +126,14 @@ function vectorize_nested!(x, data; setup = missing, active = missing, active_ty
     if ismissing(setup)
         setup = setup_vectorize_nested(data, active, active_type = active_type, multipliers = multipliers)
     end
-    n = setup.offsets[end]-1
+    n = setup.offsets[end] - 1
     if ismissing(x)
         x = zeros(n)
     end
     for (i, name) in enumerate(setup.names)
         vtype = setup.types[i]
         start = setup.offsets[i]
-        stop = setup.offsets[i+1]-1
+        stop = setup.offsets[i + 1] - 1
         if vtype == :value
             d = get_subdict(data, name)
             lastname = name[end]
@@ -167,7 +168,7 @@ end
 
 function get_subdict(data, name_list::Vector)
     out = data
-    for name in name_list[1:end-1]
+    for name in name_list[1:(end - 1)]
         if !haskey(out, name)
             out[name] = Dict()
         end
@@ -180,7 +181,7 @@ end
 function devectorize_nested_for_type!(data, x, setup, target_type::Symbol; multipliers = missing)
     for (i, name) in enumerate(setup.names)
         start = setup.offsets[i]
-        stop = setup.offsets[i+1]-1
+        stop = setup.offsets[i + 1] - 1
         dims = setup.dims[i]
         vtype = setup.types[i]
         if vtype != target_type
@@ -232,14 +233,14 @@ function apply_multiplier_to_targets!(data, multval, targets)
     return data
 end
 
-function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::T) where T
+function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::T) where {T}
     for i in eachindex(d)
         d[i] *= multval
     end
     return d
 end
 
-function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::AbstractArray{T, <:Any}) where T
+function apply_multiplier!(d::AbstractArray{T, <:Any}, multval::AbstractArray{T, <:Any}) where {T}
     for i in eachindex(d, multval)
         d[i] *= multval[i]
     end
@@ -254,4 +255,3 @@ function apply_multiplier!(d, multval)
     d = d .* multval
     return d
 end
-
