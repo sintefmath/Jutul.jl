@@ -177,6 +177,8 @@ module Jutul
     include("KernelExecution/KernelExecution.jl")
     using .KernelExecution
 
+    include("Benchmarking/Benchmarking.jl")
+
     # This is to make Jutul simulators work nicely with nested ForwardDiff.
     JutulSimulateTag = ForwardDiff.Tag{typeof(simulate), <:JutulEntity}
     ForwardDiff.:≺(::JutulSimulateTag, ::Type{<:ForwardDiff.Tag}) = true
