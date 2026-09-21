@@ -22,13 +22,13 @@ function benchmark_secondary_variables(model::SimulationModel, state;
         for _ in 1:n
             @timeit local_timer "$k" if use_kernel || fake_kernel
                 function update(batch)
-                    indices = Jutul.entity_eachindex(target, batch, batch_count)
                     Jutul.update_secondary_variable!(
-                        target, var, model, state, indices)
+                        target, var, model, state, batch)
                     return nothing
                 end
                 if use_kernel
-                    Jutul.KernelExecution.launch_threaded_loop(update, batch_count, context)
+                    # Jutul.KernelExecution.launch_threaded_loop(update, batch_count, context)
+                    Jutul.KernelExecution.secondary_variable_loop!(state, model, k, context)
                 else
                     Jutul.threaded_loop(update, batch_count, context)
                 end

@@ -199,3 +199,24 @@ function threaded_loop_minbatch(f, n, ctx::KernelAbstractionsContext,
     end
     return nothing
 end
+
+@kernel function secondary_variable_update_kernel!(dest, var, model,
+        @Const(dependencies))
+    i = @index(Global)
+    Jutul.update_secondary_variable!(dest, var, model, dependencies, i:i)
+end
+
+function secondary_variable_loop!(state, model, k::Symbol,
+        ctx::KernelAbstractionsContext; do_wait = true)
+    dest = state[k]
+    n = length(Jutul.entity_eachindex(dest))
+    var = model[k]
+    deps = Tuple(Jutul.get_dependencies(var, model))
+    dependencies = NamedTuple{deps}(ntuple(i -> state[deps[i]], length(deps)))
+    kernel! = secondary_variable_update_kernel!(ctx.backend, ctx.workgroupsize)
+    event = kernel!(dest, var, model, dependencies; ndrange = n)
+    if do_wait
+        # wait(event)
+    end
+    return event
+end

@@ -295,7 +295,7 @@ struct UnaryTabulatedVariable <: VectorVariables
 end
 
 function get_dependencies(var::UnaryTabulatedVariable, model)
-    return [var.x_symbol]
+    return (var.x_symbol,)
 end
 
 function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state, ix = entity_eachindex(V))
@@ -346,7 +346,7 @@ end
 
 values_per_entity(model, u::BlendingVariable) = u.values_per_entity
 associated_entity(u::BlendingVariable) = u.entity
-get_dependencies(u::BlendingVariable, model) = [u.names..., u.parameter_name]
+get_dependencies(u::BlendingVariable, model) = (u.names..., u.parameter_name)
 
 function update_secondary_variable!(V, var::BlendingVariable, model, state, ix = entity_eachindex(V))
     α = var.alpha
