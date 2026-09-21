@@ -105,12 +105,6 @@ end
 KernelAbstractions.get_backend(ctx::KernelAbstractionsContext) = ctx.backend
 is_cpu_backend(ctx::KernelAbstractionsContext) =
     ctx.backend isa KernelAbstractions.CPU
-secondary_variables_use_device_kernels(ctx::KernelAbstractionsContext) =
-    ctx.use_kernels_for_secondary
-function secondary_variables_thread_context(ctx::KernelAbstractionsContext)
-    @assert is_cpu_backend(ctx)
-    return :batch
-end
 
 function Base.adjoint(ctx::KernelAbstractionsContext)
     return KernelAbstractionsContext(ctx.backend;
@@ -190,8 +184,7 @@ end
     Jutul.update_secondary_variable!(dest, var, model, dependencies, i:i)
 end
 
-function secondary_variable_loop!(state, model, k::Symbol,
-        ctx::KernelAbstractionsContext; do_wait = true)
+function secondary_variable_loop!(state, model, k::Symbol, ctx::KernelAbstractionsContext; do_wait = true)
     dest = state[k]
     n = length(Jutul.entity_eachindex(dest))
     if n == 0

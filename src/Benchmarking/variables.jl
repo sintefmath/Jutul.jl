@@ -10,7 +10,7 @@ function benchmark_secondary_variables(model::SimulationModel, state;
         n = 100,
         verbose = false,
         fake_kernel = false,
-        use_kernel = Jutul.secondary_variables_use_device_kernels(model.context),
+        use_kernel = model.context isa KernelAbstractionsContext,
         timer = TimerOutput()
     )
     svars = Jutul.get_secondary_variables(model)
@@ -27,7 +27,6 @@ function benchmark_secondary_variables(model::SimulationModel, state;
                     return nothing
                 end
                 if use_kernel
-                    # Jutul.KernelExecution.launch_threaded_loop(update, batch_count, context)
                     Jutul.KernelExecution.secondary_variable_loop!(state, model, k, context)
                 else
                     Jutul.threaded_loop(update, batch_count, context)

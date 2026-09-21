@@ -118,30 +118,18 @@ end
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
     ctx = model.context
     var_pairs = pairs(vars)
-    M = length(var_pairs)
-    if M > 0
-        if secondary_variables_use_device_kernels(ctx)
-            for (symbol, var) in var_pairs
-                @tic "$symbol" begin
-                    if ctx isa KernelAbstractionsContext
-                        KernelExecution.secondary_variable_loop!(
-                            state, model, symbol, ctx)
-                    else
-                        v = state[symbol]
-                        update(i) = update_secondary_variable!(
-                            v, var, model, state, i:i)
-                        threaded_loop(update, number_of_entities(model, var), ctx)
-                    end
-                end
+    if ctx isa KernelAbstractionsContext && ctx.use_kernels_for_secondary
+        for (symbol, var) in var_pairs
+            @tic "$symbol" begin
+                KernelExecution.secondary_variable_loop!(state, model, symbol, ctx)
             end
-            return state
         end
-        thread_ctx = secondary_variables_thread_context(ctx)
+    elseif length(var_pairs) > 0
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
         K = number_of_entities(model, first_var)
         mb = minbatch(ctx)
-        N = nthreads(thread_ctx)
+        N = nthreads(ctx)
         N_batches = clamp(K ÷ mb, 1, N)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
@@ -161,14 +149,11 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                     update_secondary_variable!(v, var, model, state, ix)
                 end
             end
-            threaded_loop(batch_update, N_batches, thread_ctx)
+            threaded_loop(batch_update, N_batches, ctx)
         end
     end
     return state
 end
-
-secondary_variables_use_device_kernels(ctx) = ctx isa GPUJutulContext
-secondary_variables_thread_context(ctx) = ctx
 
 # Initializers
 function select_secondary_variables!(model)
