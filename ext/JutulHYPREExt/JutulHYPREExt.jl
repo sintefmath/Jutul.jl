@@ -1,5 +1,5 @@
 module JutulHYPREExt
-    using Jutul, HYPRE, SparseArrays, TimerOutputs
+    using Jutul, HYPRE, MPI, SparseArrays, TimerOutputs
     import Jutul: local_hypre_copy!
 
     timeit_debug_enabled() = Jutul.timeit_debug_enabled()
@@ -37,26 +37,56 @@ module JutulHYPREExt
                 V[i] = zeros(Float64, 1, i)
             end
         end
+        csr = nothing
+        if !column_major
+            nnz_J = nnz(J)
+            ncols = Vector{HYPRE.HYPRE_Int}(undef, n)
+            rows = Vector{HYPRE.HYPRE_BigInt}(undef, n)
+            cols = Vector{HYPRE.HYPRE_BigInt}(undef, nnz_J)
+            values = Vector{HYPRE.HYPRE_Complex}(undef, nnz_J)
+            J_cols = Jutul.colvals(J)
+            @inbounds for row in 1:n
+                positions = nzrange(J, row)
+                ncols[row] = length(positions)
+                rows[row] = Jutul.executor_index_to_global(
+                    executor, row, :row)
+                for position in positions
+                    global_col = Jutul.executor_index_to_global(
+                        executor, J_cols[position], :column)
+                    cols[position] = global_col
+                end
+            end
+            csr = (
+                nrows = HYPRE.HYPRE_Int(n),
+                ncols = ncols,
+                rows = rows,
+                cols = cols,
+                values = values,
+            )
+        end
         return (
             I = zeros(Int, 1),
             J = zeros(Int, max_width),
             V = V, indices = HYPRE.HYPRE_BigInt.(ilower:iupper),
             native_zeroed_buffer = zeros(n),
-            n = n
+            n = n,
+            csr = csr,
             )
     end
 
     function Jutul.update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
-        update_boomeramg!(preconditioner, J, r, ctx, executor, do_setup = true)
+        rebuild_boomeramg!(preconditioner, J, r, ctx, executor)
         return preconditioner
     end
 
     function Jutul.partial_update_preconditioner!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
-        update_boomeramg!(preconditioner, J, r, ctx, executor, do_setup = false)
+        # BoomerAMG does not expose an operator-only refresh that leaves its
+        # coarse hierarchy consistent, so this is just a resetup.
+        rebuild_boomeramg!(preconditioner, J, r, ctx, executor)
         return preconditioner
     end
 
-    function update_boomeramg!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor; do_setup = true)
+    function rebuild_boomeramg!(preconditioner::BoomerAMGPreconditioner, J, r, ctx, executor)
         D = preconditioner.data
         if !haskey(D, :assembly_helper)
             D[:assembly_helper] = Jutul.generate_hypre_assembly_helper(J, executor)
@@ -75,9 +105,7 @@ module JutulHYPREExt
             J_h = transfer_matrix_to_hypre(J, D, executor)
         end
         D[:hypre_system] = (J_h, r_h, x_h)
-        if do_setup
-            HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
-        end
+        HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(preconditioner.prec, J_h, r_h, x_h)
     end
 
     function transfer_vector_to_hypre(r, D, executor)
@@ -93,7 +121,7 @@ module JutulHYPREExt
     function transfer_matrix_to_hypre(J::Jutul.StaticSparsityMatrixCSR, D, executor)
         n, m = size(J)
         @assert n == m
-        J_h = HYPRE.HYPREMatrix(J.At)
+        J_h = HYPRE.HYPREMatrix(MPI.COMM_SELF, 1, n)
         reassemble_matrix!(J_h, D, J, executor)
         return J_h
     end
@@ -110,6 +138,12 @@ module JutulHYPREExt
     function reassemble_matrix!(J_h, D, J, executor)
         I_buf, J_buf, V_buffers = D[:assembly_helper]
         reassemble_internal_boomeramg!(I_buf, J_buf, V_buffers, J, J_h, executor)
+    end
+
+    function reassemble_matrix!(J_h, D,
+            J::Jutul.StaticSparsityMatrixCSR, executor)
+        reassemble_internal_boomeramg!(
+            D[:assembly_helper].csr, J, J_h)
     end
 
     function Jutul.operator_nrows(p::BoomerAMGPreconditioner)
@@ -160,9 +194,9 @@ module JutulHYPREExt
     end
 
     function Jutul.local_hypre_copy!(dst::HYPRE.HYPREVector, src::Vector{HYPRE.HYPRE_Complex}, ix::Vector{HYPRE.HYPRE_BigInt})
-        nvalues = hypre_check(dst, src, ix)
-        HYPRE.@check HYPRE.HYPRE_IJVectorSetValues(dst, nvalues, ix, src)
-        HYPRE.Internals.assemble_vector(dst)
+        hypre_check(dst, src, ix)
+        copy!(dst, src)
+        return dst
     end
 
     function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::SparseMatrixCSC, J_h, executor)
@@ -189,30 +223,18 @@ module JutulHYPREExt
         HYPRE.finish_assemble!(assembler)
     end
 
-    function reassemble_internal_boomeramg!(single_buf, longer_buf, V_buffers, Jac::Jutul.StaticSparsityMatrixCSR, J_h, executor)
-        nzval = nonzeros(Jac)
-        cols = Jutul.colvals(Jac)
-
+    function reassemble_internal_boomeramg!(helper,
+            Jac::Jutul.StaticSparsityMatrixCSR, J_h)
         n = size(Jac, 1)
-        @assert length(single_buf) == 1
         (; iupper, ilower) = J_h
         @assert n == iupper - ilower + 1
+        @assert !isnothing(helper)
         assembler = HYPRE.start_assemble!(J_h)
-        @inbounds for row in 1:n
-            pos_ix = nzrange(Jac, row)
-            k = length(pos_ix)
-            I = single_buf
-            I[1] = Jutul.executor_index_to_global(executor, row, :row)
-            J = longer_buf
-            resize!(J, k)
-            V_buf = V_buffers[k]
-            @inbounds for ki in 1:k
-                ri = pos_ix[ki]
-                V_buf[ki] = nzval[ri]
-                J[ki] = Jutul.executor_index_to_global(executor, cols[ri], :column)
-            end
-            HYPRE.assemble!(assembler, I, J, V_buf)
-        end
+        copyto!(helper.values, nonzeros(Jac))
+        HYPRE.@check HYPRE.HYPRE_IJMatrixSetValues(
+            J_h, helper.nrows, helper.ncols, helper.rows,
+            helper.cols, helper.values)
         HYPRE.finish_assemble!(assembler)
+        return J_h
     end
 end

@@ -1,5 +1,14 @@
 using Jutul, Test, StaticArrays, ForwardDiff
 
+@testset "Local AD entity indices" begin
+    x = Jutul.get_ad_entity_scalar(1.0f0, 1, 1; tag = Cells())
+    state = (X = [x, x],)
+    local_state = Jutul.local_ad(state, 1, typeof(x))
+    second = Jutul.new_entity_index(local_state, Int32(2))
+    @test ForwardDiff.partials(second.X[1])[1] == 0.0f0
+    @test ForwardDiff.partials(second.X[2])[1] == 1.0f0
+end
+
 @testset "entity_eachindex" begin
     N = 3
     M = 5

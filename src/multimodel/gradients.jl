@@ -11,10 +11,12 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
         F = m -> adjoint_model_copy(m)
         g = model.groups
         r = model.reduction
+        execution = model.group_execution
     else
         F = m -> adjoint_model_copy(m, context = context)
         g = nothing
         r = nothing
+        execution = SolveFullyOnDevice
     end
     new_models = map(F, model.models)
     ctp = copy(model.cross_terms)
@@ -23,7 +25,9 @@ function adjoint_model_copy(model::MultiModel; context = nothing)
     else
         new_context = adjoint(context)
     end
-    return MultiModel(new_models, context = new_context, groups = g, cross_terms = ctp, reduction = r)
+    return MultiModel(new_models, context = new_context, groups = g,
+        group_execution = execution, cross_terms = ctp,
+        reduction = r)
 end
 
 function convert_state_ad(model::MultiModel, state, tag = nothing)

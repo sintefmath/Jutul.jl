@@ -11,19 +11,19 @@ end
 
 function update_preconditioner!(f::FactorStore, g, g!, A, executor)
     if isnothing(f.factor)
-        f.factor = g(A)
+        f.factor = factorize_linear_system(g, A)
     else
-        g!(f.factor, A)
+        refactorize_linear_system!(g!, f.factor, A)
     end
     return f.factor
 end
 
 function update_preconditioner!(f::FactorStore, g, g!, A::AbstractArray, executor)
     if isnothing(f.factor)
-        f.factor = map(g, A)
+        f.factor = map(A_i -> factorize_linear_system(g, A_i), A)
     else
         for (F, A_i) in zip(f.factor, A)
-            g!(F, A_i)
+            refactorize_linear_system!(g!, F, A_i)
         end
     end
     return f.factor
@@ -48,6 +48,10 @@ struct LinearizedBlock{R, C, J, B} <: JutulLinearSystem
     function LinearizedBlock(sparse_arg, context, layout_row, layout_col, rowcol_dim)
         jac, jac_buf = build_jacobian(sparse_arg, context, layout_row, layout_col)
         new{typeof(layout_row), typeof(layout_col), typeof(jac), typeof(jac_buf)}(jac, jac_buf, rowcol_dim)
+    end
+    function LinearizedBlock(jac::J, jac_buffer::B, rowcol_dim,
+            layout_row::R, layout_col::C, ::Val{:assembled}) where {R, C, J, B}
+        new{R, C, J, B}(jac, jac_buffer, rowcol_dim)
     end
 end
 
@@ -93,11 +97,16 @@ function MultiLinearizedSystem(subsystems, context, layout; r = nothing, dx = no
         else
             bz = size(e, 1)
         end
+        # Match the subsystem residual's scalar type and storage backend.
+        buffer = similar(vec(subsystems[i, i].r_buffer), ni*bz)
+        fill!(buffer, zero(eltype(buffer)))
         if i == 1
-            push!(schur_buffer, zeros(ni*bz))
+            push!(schur_buffer, buffer)
         else
             # Need two buffers of same size for Schur complement
-            b = (zeros(ni*bz), zeros(ni*bz))
+            second_buffer = similar(buffer)
+            fill!(second_buffer, zero(eltype(second_buffer)))
+            b = (buffer, second_buffer)
             push!(schur_buffer, b)
         end
         n += ni
@@ -243,7 +252,7 @@ function linear_operator(sys::LinearizedSystem; skip_red = false)
     else
         apply! = get_mul!(sys)
         n = length(sys.r_buffer)
-        op = LinearOperator(Float64, n, n, false, false, apply!)
+        op = LinearOperator(eltype(sys.r_buffer), n, n, false, false, apply!)
     end
     return op
 end

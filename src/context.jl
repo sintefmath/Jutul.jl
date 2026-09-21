@@ -76,6 +76,9 @@ end
 float_type(context) = Float64
 index_type(context) = Int64
 nzval_index_type(context) = index_type(context)
+linear_float_type(context) = float_type(context)
+linear_index_type(context) = index_type(context)
+linear_solver_context(context) = context
 
 function synchronize(::SingleCUDAContext)
 

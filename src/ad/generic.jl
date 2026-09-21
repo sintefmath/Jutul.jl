@@ -45,7 +45,7 @@ function diagonal_view(cache::GenericAutoDiffCache)
     if isnothing(dpos)
         v = nothing
     else
-        v = view(cache.entries, :, dpos)
+        v = @inbounds view(cache.entries, :, dpos)
     end
     return v
 end

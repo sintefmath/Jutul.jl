@@ -80,6 +80,7 @@ function solve_and_differentiate_for_optimization(x, dopt::DictParameters, setup
                 t_setup = @elapsed S = Jutul.AdjointsDI.setup_adjoint_storage_generic(
                     x, setup_from_vector, packed_steps, objective;
                     backend_arg...,
+                    simulator = get(adj_cache, :simulator, missing),
                     info_level = adj_cache[:info_level]
                 )
                 # Make sure that tolerances match between forward and adjoint configs

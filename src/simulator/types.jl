@@ -27,7 +27,7 @@ function Simulator(model; extra_timing = false, executor = default_executor(), k
     model::JutulModel
     set_global_timer!(extra_timing)
     storage = simulator_storage(model; kwarg...)
-    storage::JutulStorage
+    storage::AbstractJutulStorage
     print_global_timer(extra_timing)
     return Simulator(executor, model, storage)
 end
@@ -45,6 +45,26 @@ end
 
 function get_simulator_storage(sim)
     return sim.storage
+end
+
+"""
+    state = evaluation_state(s::JutulSimulator)
+
+Get the state from a simulator for use during equation assembly.
+"""
+function evaluation_state(s::JutulSimulator)
+    storage = get_simulator_storage(s)
+    return evaluation_state(storage)
+end
+
+"""
+    state = evaluation_state(s::JutulSimulator)
+
+Get the state at the previous step from a simulator for use during equation assembly.
+"""
+function evaluation_state0(s::JutulSimulator)
+    storage = get_simulator_storage(s)
+    return evaluation_state0(storage)
 end
 
 function get_prepare_step_handler(sim::JutulSimulator)

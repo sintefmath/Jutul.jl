@@ -167,6 +167,10 @@ struct BilinearInterpolant{V, T, LX, LY}
         size(fs) == (nx, ny) || throw(ArgumentError("f(x, y) must match lengths of xs (as rows) and xy (as columns) = ($nx,$ny)"))
         return new{T, M, typeof(lookup_x), typeof(lookup_y)}(xs, ys, fs, lookup_x, lookup_y)
     end
+    function BilinearInterpolant(xs::V, ys::V, fs::T,
+            lookup_x::LX, lookup_y::LY) where {V, T, LX, LY}
+        return new{V, T, LX, LY}(xs, ys, fs, lookup_x, lookup_y)
+    end
 end
 
 function bilinear_interp(X, Y, F, x, y, lookup_x = missing, lookup_y = missing)
@@ -181,7 +185,6 @@ function bilinear_interp(X, Y, F, x, y, lookup_x = missing, lookup_y = missing)
     @inbounds begin
         x_1 = X[x_pos]
         x_2 = X[x_pos+1]
-        Δx = x_2 - x_1
 
         y_1 = Y[y_pos]
         y_2 = Y[y_pos+1]
@@ -292,7 +295,7 @@ struct UnaryTabulatedVariable <: VectorVariables
 end
 
 function get_dependencies(var::UnaryTabulatedVariable, model)
-    return [var.x_symbol]
+    return (var.x_symbol,)
 end
 
 function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state, ix = entity_eachindex(V))
@@ -343,7 +346,7 @@ end
 
 values_per_entity(model, u::BlendingVariable) = u.values_per_entity
 associated_entity(u::BlendingVariable) = u.entity
-get_dependencies(u::BlendingVariable, model) = [u.names..., u.parameter_name]
+get_dependencies(u::BlendingVariable, model) = (u.names..., u.parameter_name)
 
 function update_secondary_variable!(V, var::BlendingVariable, model, state, ix = entity_eachindex(V))
     α = var.alpha
