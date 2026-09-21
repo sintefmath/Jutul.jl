@@ -840,6 +840,7 @@ function maybe_synchronize_device_host!(storage, model::MultiModel;
         return storage
     end
     host = storage.host_evaluation
+    mixed_on_host = host.cross_term_evaluation.mixed_on_host
     for key in host.keys
         host_storage = host.storage[key]
         host_model = host.model[key]
@@ -849,7 +850,7 @@ function maybe_synchronize_device_host!(storage, model::MultiModel;
     for key in host.cross_term_evaluation.mixed_models
         host_storage = host.storage[key]
         backend_storage = storage[key]
-        if host.cross_term_evaluation.mixed_on_host
+        if mixed_on_host
             if state
                 backend_copy_state_without_parameters!(
                     host_storage.state, backend_storage.state,
@@ -871,8 +872,8 @@ function maybe_synchronize_device_host!(storage, model::MultiModel;
             end
         end
     end
-    needs_host_state = host.cross_term_evaluation.mixed_on_host && state &&
-        !isempty(host.cross_term_evaluation.mixed_models)
+    has_mixed_models = !isempty(host.cross_term_evaluation.mixed_models)
+    needs_host_state = mixed_on_host && state && has_mixed_models
     if needs_host_state
         synchronize(model.context)
     end
