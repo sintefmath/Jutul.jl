@@ -46,6 +46,17 @@ function KAPreconditioners.csr_matrix(
     )
 end
 
+function Jutul.KernelExecution.factorize_linear_system(
+        ::typeof(lu),
+        matrix::StaticSparsityMatrixCSR{
+            Tv, Ti, V, I, R, B,
+        }
+    ) where {Tv, Ti <: Integer, V, I, R, B <: CUDA.CUDABackend}
+    return KAPreconditioners.build_coarse_solver(
+        matrix, KAPreconditioners.matrix_backend(matrix)
+    )
+end
+
 function LinearAlgebra.mul!(
         y::CuArray{Tv, 1},
         A::StaticSparsityMatrixCSR{

@@ -49,15 +49,14 @@ end
 
 function AMGPreconditioner(
         method = :hmis;
-        smoother_type::Symbol = :ilu0,
+        smoother_type::Symbol = :spai0,
         smoother = nothing,
         cycle = :V,
         npre::Int = 1,
         npost::Int = npre,
         theta = 0.5,
         theta_agg = 0.25,
-        max_coarse = 50,
-        coarse_size = max_coarse,
+        coarse_size = 5,
         reuse::Symbol = :memory,
         reuse_partial::Symbol = :operators,
         damping = 1.0,

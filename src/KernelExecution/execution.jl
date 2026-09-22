@@ -1471,6 +1471,14 @@ function refactorize_linear_system!(
     return factorization
 end
 
+function refactorize_linear_system!(
+        update!,
+        factorization::KAPreconditioners.DenseLUState,
+        matrix::StaticSparsityMatrixCSR
+    )
+    return KAPreconditioners.update_coarse_solver!(factorization, matrix)
+end
+
 function transfer_csr_to_backend(
         reference::StaticSparsityMatrixCSR{
             Tv, Ti, V, I, R, B,

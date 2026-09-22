@@ -6,11 +6,9 @@ using Jutul: StaticSparsityMatrixCSR
 using KernelAbstractions
 using AMDGPU
 using AMDGPU.rocSPARSE
+using LinearAlgebra
 
-@static if pkgversion(AMDGPU) >= v"2.6.0"
-    KAPreconditioners.native_dense_lu(::ROCArray) =
-        AMDGPU.functional(:rocsolver)
-end
+KAPreconditioners.native_dense_lu(::ROCArray) = true
 
 function KAPreconditioners.csr_matrix(
         A::ROCSparseMatrixCSR;
@@ -20,6 +18,17 @@ function KAPreconditioners.csr_matrix(
         A.nzVal, A.colVal, A.rowPtr, size(A, 1), size(A, 2),
         KernelAbstractions.get_backend(A.nzVal);
         nthreads = 1, minbatch = Int(block_size), thread_type = :serial
+    )
+end
+
+function Jutul.KernelExecution.factorize_linear_system(
+        ::typeof(lu),
+        matrix::StaticSparsityMatrixCSR{
+            Tv, Ti, V, I, R, B,
+        }
+    ) where {Tv, Ti <: Integer, V, I, R, B <: AMDGPU.ROCBackend}
+    return KAPreconditioners.build_coarse_solver(
+        matrix, KAPreconditioners.matrix_backend(matrix)
     )
 end
 

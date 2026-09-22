@@ -438,6 +438,14 @@ function coarse_solve!(x, b, S::DenseLUState, backend, block_size)
     return x
 end
 
+function LinearAlgebra.ldiv!(x, S::DenseLUState, b)
+    ldiv!(
+        logical_backend_buffer(x), S.factorization,
+        logical_backend_buffer(b)
+    )
+    return x
+end
+
 function coarse_solve!(x, b, S::HostLUState, backend, block_size)
     copyto!(S.rhs, b)
     ldiv!(S.factorization, S.rhs)
