@@ -49,7 +49,7 @@ end
 
 function AMGPreconditioner(
         method = :hmis;
-        smoother_type::Symbol = :ilu0,
+        smoother_type::Symbol = :spai0,
         smoother = nothing,
         cycle = :V,
         npre::Int = 1,
