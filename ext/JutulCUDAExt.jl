@@ -125,6 +125,16 @@ function jutul_preconverted_threaded_loop_kernel(f, n::Int, args...)
     return nothing
 end
 
+# The prepared cross-term plan already contains device-compatible callables.
+# Let KernelCall handle the launch without adapting those callables a second
+# time.
+struct PreconvertedKernelArgument{F}
+    value::F
+end
+
+Adapt.adapt_structure(::KernelAdaptor, arg::PreconvertedKernelArgument) =
+    arg.value
+
 function Jutul.KernelExecution.launch_preconverted_threaded_loop(
         f, n,
         context::Jutul.KernelAbstractionsContext{<:CUDA.CUDABackend},
@@ -134,7 +144,10 @@ function Jutul.KernelExecution.launch_preconverted_threaded_loop(
         return nothing
     end
     n = Int(n)
-    call = CUDA.KernelCall(jutul_preconverted_threaded_loop_kernel, f, n, args...)
+    call = CUDA.KernelCall(
+        jutul_preconverted_threaded_loop_kernel,
+        PreconvertedKernelArgument(f), n, args...
+    )
     kernel = CUDA.kernel_compile(
         call;
         always_inline = context.backend.always_inline,

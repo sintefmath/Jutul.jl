@@ -1,7 +1,4 @@
-abstract type AbstractPreparedCrossTermKernel end
-
-struct PreparedCrossTermPreparation{ST, ST0, SS, SS0, MT, MS, C, E} <:
-    AbstractPreparedCrossTermKernel
+struct PreparedCrossTermPreparation{ST, ST0, SS, SS0, MT, MS, C, E}
     state_t::ST
     state0_t::ST0
     state_s::SS
@@ -22,8 +19,7 @@ end
     )
 end
 
-struct PreparedCrossTermCache{C, CT, S, M, E} <:
-    AbstractPreparedCrossTermKernel
+struct PreparedCrossTermCache{C, CT, S, M, E}
     cache::C
     cross_term::CT
     states::S
