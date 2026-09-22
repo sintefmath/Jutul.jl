@@ -313,15 +313,6 @@ end
     end
 end
 
-function launch_levels!(kernel!, offsets, rows, arguments...)
-    for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
-        kernel!(arguments..., rows, first, count; ndrange = count)
-    end
-    return nothing
-end
-
 function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}) where {Tv}
     factors = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nonzeros(A))
     inverse_diagonal = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nrows(A))
@@ -376,7 +367,8 @@ function setup_smoother(
         backend_copy(matrix_backend(A), symbolic.factor_rows),
         symbolic.upper_offsets,
         backend_copy(matrix_backend(A), symbolic.upper_rows),
-        symbolic.rowptr, symbolic.colval, config,
+        symbolic.rowptr, symbolic.colval,
+        nothing, nothing, nothing, config,
         matrix_backend(A), matrix_batch_size(A), matrix_nrows(A)
     )
     return update_smoother!(state, A)
@@ -406,36 +398,76 @@ function setup_smoother(
         backend_copy(backend, symbolic.factor_rows),
         symbolic.upper_offsets,
         backend_copy(backend, symbolic.upper_rows),
-        symbolic.rowptr, symbolic.colval, config,
+        symbolic.rowptr, symbolic.colval,
+        nothing, nothing, nothing, config,
         backend, matrix_batch_size(A), matrix_nrows(A)
     )
     return update_smoother!(state, A)
 end
 
-factor_values(state::ILU0State) = state.factors
-factor_values(state::DILUState) = state.values
-factor_kernel(::ILU0State) = ilu0_factor_level_kernel!
-factor_kernel(::DILUState) = dilu_factor_level_kernel!
-factor_arguments(state::ILU0State) = (
-    state.factors, state.inverse_diagonal, state.rowptr, state.colval,
-    state.diagonal_positions,
-)
-factor_arguments(state::DILUState) = (
-    state.inverse_diagonal, state.values, state.rowptr, state.colval,
-    state.diagonal_positions, state.transpose_positions,
-)
+function setup_factor_kernel!(state::ILU0State)
+    if isnothing(state.factor_kernel) && length(state.factor_offsets) > 1
+        first = state.factor_offsets[1]
+        count = state.factor_offsets[2] - first
+        state.factor_kernel = setup_smoother_kernel(
+            ilu0_factor_level_kernel!, state.backend, state.block_size,
+            state.factors, state.inverse_diagonal,
+            state.rowptr, state.colval, state.diagonal_positions,
+            state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
+    return state.factor_kernel
+end
 
-function update_smoother!(
-        state::Union{ILU0State, DILUState},
-        A::StaticSparsityMatrixCSR
-    )
+function setup_factor_kernel!(state::DILUState)
+    if isnothing(state.factor_kernel) && length(state.factor_offsets) > 1
+        first = state.factor_offsets[1]
+        count = state.factor_offsets[2] - first
+        state.factor_kernel = setup_smoother_kernel(
+            dilu_factor_level_kernel!, state.backend, state.block_size,
+            state.inverse_diagonal, state.values,
+            state.rowptr, state.colval, state.diagonal_positions,
+            state.transpose_positions, state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
+    return state.factor_kernel
+end
+
+function update_smoother!(state::ILU0State, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
-    copyto!(factor_values(state), 1, A.nzval, 1, matrix_nonzeros(A))
-    kernel! = factor_kernel(state)(state.backend, state.block_size)
-    launch_levels!(
-        kernel!, state.factor_offsets, state.factor_rows,
-        factor_arguments(state)...
-    )
+    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
+    kernel = setup_factor_kernel!(state)
+    for level in 1:(length(state.factor_offsets) - 1)
+        first = state.factor_offsets[level]
+        count = state.factor_offsets[level + 1] - first
+        launch_smoother_kernel(
+            kernel,
+            state.factors, state.inverse_diagonal,
+            state.rowptr, state.colval, state.diagonal_positions,
+            state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
+    return state
+end
+
+function update_smoother!(state::DILUState, A::StaticSparsityMatrixCSR)
+    require_same_smoother_pattern(state, A)
+    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
+    kernel = setup_factor_kernel!(state)
+    for level in 1:(length(state.factor_offsets) - 1)
+        first = state.factor_offsets[level]
+        count = state.factor_offsets[level + 1] - first
+        launch_smoother_kernel(
+            kernel,
+            state.inverse_diagonal, state.values,
+            state.rowptr, state.colval, state.diagonal_positions,
+            state.transpose_positions, state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
     return state
 end
 
@@ -455,7 +487,7 @@ function update_smoother!(
     for level in 1:(length(offsets) - 1)
         first = offsets[level]
         count = offsets[level + 1] - first
-        foreach_cpu_row(count, state.block_size) do q
+        @batch for q in 1:count
             i = rows[first + q - 1]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
                 j = colval[k]
@@ -497,7 +529,7 @@ function update_smoother!(
     for level in 1:(length(offsets) - 1)
         first = offsets[level]
         count = offsets[level + 1] - first
-        foreach_cpu_row(count, state.block_size) do q
+        @batch for q in 1:count
             i = rows[first + q - 1]
             diagonal = values[diagonal_positions[i]]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
@@ -513,39 +545,129 @@ function update_smoother!(
     return state
 end
 
-solve_kernels(::ILU0State) =
-    (ilu0_lower_level_kernel!, ilu0_upper_level_kernel!)
-solve_kernels(::DILUState) =
-    (dilu_lower_level_kernel!, dilu_upper_level_kernel!)
-lower_solve_arguments(state::ILU0State, b) = (
-    state.work, b, state.factors, state.rowptr, state.colval,
-)
-lower_solve_arguments(state::DILUState, b) = (
-    state.work, b, state.values, state.inverse_diagonal,
-    state.rowptr, state.colval,
-)
-upper_solve_arguments(state::ILU0State, x) = (
-    x, state.work, state.factors, state.inverse_diagonal,
-    state.rowptr, state.colval, smoother_damping(state),
-)
-upper_solve_arguments(state::DILUState, x) = (
-    x, state.work, state.values, state.inverse_diagonal,
-    state.rowptr, state.colval, smoother_damping(state),
-)
+function ensure_smoother_work!(state::Union{ILU0State, DILUState}, prototype)
+    work = ensure_smoother_buffer(state.work, prototype)
+    residual = ensure_smoother_buffer(state.residual, prototype)
+    if work !== state.work || residual !== state.residual
+        state.solve_kernels = nothing
+        state.smooth_kernels = nothing
+    end
+    state.work = work
+    state.residual = residual
+    return state
+end
 
-function ilu_solve!(x, state::Union{ILU0State, DILUState}, b)
+function setup_solve_kernels!(state::ILU0State, x, b)
+    if isnothing(state.solve_kernels)
+        if length(state.factor_offsets) == 1
+            state.solve_kernels = (nothing, nothing)
+            return state.solve_kernels
+        end
+        lower_first = state.factor_offsets[1]
+        lower_count = state.factor_offsets[2] - lower_first
+        upper_first = state.upper_offsets[1]
+        upper_count = state.upper_offsets[2] - upper_first
+        lower = setup_smoother_kernel(
+            ilu0_lower_level_kernel!, state.backend, state.block_size,
+            state.work, b, state.factors,
+            state.rowptr, state.colval,
+            state.factor_rows, lower_first, lower_count;
+            ndrange = lower_count
+        )
+        upper = setup_smoother_kernel(
+            ilu0_upper_level_kernel!, state.backend, state.block_size,
+            x, state.work, state.factors,
+            state.inverse_diagonal, state.rowptr, state.colval,
+            smoother_damping(state),
+            state.upper_rows, upper_first, upper_count;
+            ndrange = upper_count
+        )
+        state.solve_kernels = (lower, upper)
+    end
+    return state.solve_kernels
+end
+
+function setup_solve_kernels!(state::DILUState, x, b)
+    if isnothing(state.solve_kernels)
+        if length(state.factor_offsets) == 1
+            state.solve_kernels = (nothing, nothing)
+            return state.solve_kernels
+        end
+        lower_first = state.factor_offsets[1]
+        lower_count = state.factor_offsets[2] - lower_first
+        upper_first = state.upper_offsets[1]
+        upper_count = state.upper_offsets[2] - upper_first
+        lower = setup_smoother_kernel(
+            dilu_lower_level_kernel!, state.backend, state.block_size,
+            state.work, b, state.values, state.inverse_diagonal,
+            state.rowptr, state.colval,
+            state.factor_rows, lower_first, lower_count;
+            ndrange = lower_count
+        )
+        upper = setup_smoother_kernel(
+            dilu_upper_level_kernel!, state.backend, state.block_size,
+            x, state.work, state.values, state.inverse_diagonal,
+            state.rowptr, state.colval, smoother_damping(state),
+            state.upper_rows, upper_first, upper_count;
+            ndrange = upper_count
+        )
+        state.solve_kernels = (lower, upper)
+    end
+    return state.solve_kernels
+end
+
+function ilu_solve!(x, state::ILU0State, b)
     ensure_smoother_work!(state, b)
-    lower_kernel, upper_kernel = solve_kernels(state)
-    lower! = lower_kernel(state.backend, state.block_size)
-    upper! = upper_kernel(state.backend, state.block_size)
-    launch_levels!(
-        lower!, state.factor_offsets, state.factor_rows,
-        lower_solve_arguments(state, b)...
-    )
-    launch_levels!(
-        upper!, state.upper_offsets, state.upper_rows,
-        upper_solve_arguments(state, x)...
-    )
+    lower, upper = setup_solve_kernels!(state, x, b)
+    for level in 1:(length(state.factor_offsets) - 1)
+        first = state.factor_offsets[level]
+        count = state.factor_offsets[level + 1] - first
+        launch_smoother_kernel(
+            lower,
+            state.work, b, state.factors, state.rowptr, state.colval,
+            state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
+    for level in 1:(length(state.upper_offsets) - 1)
+        first = state.upper_offsets[level]
+        count = state.upper_offsets[level + 1] - first
+        launch_smoother_kernel(
+            upper,
+            x, state.work, state.factors, state.inverse_diagonal,
+            state.rowptr, state.colval, smoother_damping(state),
+            state.upper_rows, first, count;
+            ndrange = count
+        )
+    end
+    return x
+end
+
+function ilu_solve!(x, state::DILUState, b)
+    ensure_smoother_work!(state, b)
+    lower, upper = setup_solve_kernels!(state, x, b)
+    for level in 1:(length(state.factor_offsets) - 1)
+        first = state.factor_offsets[level]
+        count = state.factor_offsets[level + 1] - first
+        launch_smoother_kernel(
+            lower,
+            state.work, b, state.values, state.inverse_diagonal,
+            state.rowptr, state.colval,
+            state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
+    for level in 1:(length(state.upper_offsets) - 1)
+        first = state.upper_offsets[level]
+        count = state.upper_offsets[level + 1] - first
+        launch_smoother_kernel(
+            upper,
+            x, state.work, state.values, state.inverse_diagonal,
+            state.rowptr, state.colval, smoother_damping(state),
+            state.upper_rows, first, count;
+            ndrange = count
+        )
+    end
     return x
 end
 
@@ -563,22 +685,36 @@ function ilu_solve_cpu!(x, state::ILU0State, b, work)
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    @inbounds for i in 1:state.n
-        value = b[i]
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            j < i && (value -= factors[k] * work[j])
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            value = b[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                j < i && (value -= factors[k] * work[j])
+            end
+            @inbounds work[i] = value
         end
-        work[i] = value
     end
     damping = smoother_damping(state)
-    @inbounds for i in state.n:-1:1
-        value = work[i]
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            j > i && (value -= factors[k] * x[j])
+    rows = state.upper_rows
+    offsets = state.upper_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            value = work[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                j > i && (value -= factors[k] * x[j])
+            end
+            @inbounds x[i] = damping * (inverse_diagonal[i] * value)
         end
-        x[i] = damping * (inverse_diagonal[i] * value)
     end
     return x
 end
@@ -597,64 +733,157 @@ function ilu_solve_cpu!(x, state::DILUState, b, work)
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    @inbounds for i in 1:state.n
-        value = b[i]
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            j < i && (value -= values[k] * work[j])
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            value = b[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                j < i && (value -= values[k] * work[j])
+            end
+            @inbounds work[i] = inverse_diagonal[i] * value
         end
-        work[i] = inverse_diagonal[i] * value
     end
     damping = smoother_damping(state)
-    @inbounds for i in state.n:-1:1
-        correction = zero(eltype(x))
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            j > i && (correction += values[k] * x[j])
+    rows = state.upper_rows
+    offsets = state.upper_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            correction = zero(eltype(x))
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                j > i && (correction += values[k] * x[j])
+            end
+            @inbounds x[i] = damping * (
+                work[i] - inverse_diagonal[i] * correction
+            )
         end
-        x[i] = damping * (work[i] - inverse_diagonal[i] * correction)
     end
     return x
 end
 
-smooth_kernels(::ILU0State) = (
-    ilu0_smooth_lower_level_kernel!, ilu0_smooth_upper_level_kernel!,
-)
-smooth_kernels(::DILUState) = (
-    dilu_smooth_lower_level_kernel!, dilu_smooth_upper_level_kernel!,
-)
-lower_smooth_arguments(state::ILU0State, A, x, b) = (
-    state.work, b, x, A.nzval, state.factors, state.rowptr, state.colval,
-)
-lower_smooth_arguments(state::DILUState, A, x, b) = (
-    state.work, b, x, state.values, state.inverse_diagonal,
-    state.rowptr, state.colval,
-)
-upper_smooth_arguments(state::ILU0State, x) = (
-    x, state.residual, state.work, state.factors, state.inverse_diagonal,
-    state.rowptr, state.colval, smoother_damping(state),
-)
-upper_smooth_arguments(state::DILUState, x) = (
-    x, state.residual, state.work, state.values, state.inverse_diagonal,
-    state.rowptr, state.colval, smoother_damping(state),
-)
+function setup_smooth_kernels!(state::ILU0State, A, x, b)
+    if isnothing(state.smooth_kernels)
+        if length(state.factor_offsets) == 1
+            state.smooth_kernels = (nothing, nothing)
+            return state.smooth_kernels
+        end
+        lower_first = state.factor_offsets[1]
+        lower_count = state.factor_offsets[2] - lower_first
+        upper_first = state.upper_offsets[1]
+        upper_count = state.upper_offsets[2] - upper_first
+        lower = setup_smoother_kernel(
+            ilu0_smooth_lower_level_kernel!, state.backend, state.block_size,
+            state.work, b, x, A.nzval,
+            state.factors, state.rowptr, state.colval,
+            state.factor_rows, lower_first, lower_count;
+            ndrange = lower_count
+        )
+        upper = setup_smoother_kernel(
+            ilu0_smooth_upper_level_kernel!, state.backend, state.block_size,
+            x, state.residual, state.work,
+            state.factors, state.inverse_diagonal,
+            state.rowptr, state.colval, smoother_damping(state),
+            state.upper_rows, upper_first, upper_count;
+            ndrange = upper_count
+        )
+        state.smooth_kernels = (lower, upper)
+    end
+    return state.smooth_kernels
+end
 
-function ilu_smooth_result!(
-        x, A::StaticSparsityMatrixCSR, b,
-        state::Union{ILU0State, DILUState}
-    )
+function setup_smooth_kernels!(state::DILUState, A, x, b)
+    if isnothing(state.smooth_kernels)
+        if length(state.factor_offsets) == 1
+            state.smooth_kernels = (nothing, nothing)
+            return state.smooth_kernels
+        end
+        lower_first = state.factor_offsets[1]
+        lower_count = state.factor_offsets[2] - lower_first
+        upper_first = state.upper_offsets[1]
+        upper_count = state.upper_offsets[2] - upper_first
+        lower = setup_smoother_kernel(
+            dilu_smooth_lower_level_kernel!, state.backend, state.block_size,
+            state.work, b, x,
+            state.values, state.inverse_diagonal, state.rowptr, state.colval,
+            state.factor_rows, lower_first, lower_count;
+            ndrange = lower_count
+        )
+        upper = setup_smoother_kernel(
+            dilu_smooth_upper_level_kernel!, state.backend, state.block_size,
+            x, state.residual, state.work,
+            state.values, state.inverse_diagonal,
+            state.rowptr, state.colval, smoother_damping(state),
+            state.upper_rows, upper_first, upper_count;
+            ndrange = upper_count
+        )
+        state.smooth_kernels = (lower, upper)
+    end
+    return state.smooth_kernels
+end
+
+function ilu_smooth_result!(x, A::StaticSparsityMatrixCSR, b, state::ILU0State)
     ensure_smoother_work!(state, b)
-    lower_kernel, upper_kernel = smooth_kernels(state)
-    lower! = lower_kernel(state.backend, state.block_size)
-    upper! = upper_kernel(state.backend, state.block_size)
-    launch_levels!(
-        lower!, state.factor_offsets, state.factor_rows,
-        lower_smooth_arguments(state, A, x, b)...
-    )
-    launch_levels!(
-        upper!, state.upper_offsets, state.upper_rows,
-        upper_smooth_arguments(state, x)...
-    )
+    lower, upper = setup_smooth_kernels!(state, A, x, b)
+    for level in 1:(length(state.factor_offsets) - 1)
+        first = state.factor_offsets[level]
+        count = state.factor_offsets[level + 1] - first
+        launch_smoother_kernel(
+            lower,
+            state.work, b, x, A.nzval, state.factors,
+            state.rowptr, state.colval,
+            state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
+    for level in 1:(length(state.upper_offsets) - 1)
+        first = state.upper_offsets[level]
+        count = state.upper_offsets[level + 1] - first
+        launch_smoother_kernel(
+            upper,
+            x, state.residual, state.work,
+            state.factors, state.inverse_diagonal,
+            state.rowptr, state.colval, smoother_damping(state),
+            state.upper_rows, first, count;
+            ndrange = count
+        )
+    end
+    return x
+end
+
+function ilu_smooth_result!(x, A::StaticSparsityMatrixCSR, b, state::DILUState)
+    ensure_smoother_work!(state, b)
+    lower, upper = setup_smooth_kernels!(state, A, x, b)
+    for level in 1:(length(state.factor_offsets) - 1)
+        first = state.factor_offsets[level]
+        count = state.factor_offsets[level + 1] - first
+        launch_smoother_kernel(
+            lower,
+            state.work, b, x, state.values, state.inverse_diagonal,
+            state.rowptr, state.colval,
+            state.factor_rows, first, count;
+            ndrange = count
+        )
+    end
+    for level in 1:(length(state.upper_offsets) - 1)
+        first = state.upper_offsets[level]
+        count = state.upper_offsets[level + 1] - first
+        launch_smoother_kernel(
+            upper,
+            x, state.residual, state.work,
+            state.values, state.inverse_diagonal,
+            state.rowptr, state.colval, smoother_damping(state),
+            state.upper_rows, first, count;
+            ndrange = count
+        )
+    end
     return x
 end
 
@@ -672,25 +901,41 @@ function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    @inbounds for i in 1:state.n
-        value = b[i]
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            value -= A.nzval[k] * x[j]
-            j < i && (value -= factors[k] * work[j])
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            value = b[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                value -= A.nzval[k] * x[j]
+                j < i && (value -= factors[k] * work[j])
+            end
+            @inbounds work[i] = value
         end
-        work[i] = value
     end
     damping = smoother_damping(state)
-    @inbounds for i in state.n:-1:1
-        value = work[i]
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            j > i && (value -= factors[k] * correction[j])
+    rows = state.upper_rows
+    offsets = state.upper_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            value = work[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                j > i && (value -= factors[k] * correction[j])
+            end
+            delta = damping * (inverse_diagonal[i] * value)
+            @inbounds begin
+                correction[i] = delta
+                x[i] += delta
+            end
         end
-        delta = damping * (inverse_diagonal[i] * value)
-        correction[i] = delta
-        x[i] += delta
     end
     return x
 end
@@ -709,25 +954,44 @@ function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    @inbounds for i in 1:state.n
-        value = b[i]
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            value -= A.nzval[k] * x[j]
-            j < i && (value -= values[k] * work[j])
+    rows = state.factor_rows
+    offsets = state.factor_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            value = b[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                value -= A.nzval[k] * x[j]
+                j < i && (value -= values[k] * work[j])
+            end
+            @inbounds work[i] = inverse_diagonal[i] * value
         end
-        work[i] = inverse_diagonal[i] * value
     end
     damping = smoother_damping(state)
-    @inbounds for i in state.n:-1:1
-        value = work[i]
-        for k in rowptr[i]:(rowptr[i + 1] - 1)
-            j = colval[k]
-            j > i && (value -= inverse_diagonal[i] * values[k] * correction[j])
+    rows = state.upper_rows
+    offsets = state.upper_offsets
+    for level in 1:(length(offsets) - 1)
+        first = offsets[level]
+        count = offsets[level + 1] - first
+        @batch for q in 1:count
+            i = rows[first + q - 1]
+            value = work[i]
+            diagonal_inverse = inverse_diagonal[i]
+            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+                j = colval[k]
+                j > i && (
+                    value -= diagonal_inverse * values[k] * correction[j]
+                )
+            end
+            delta = damping * value
+            @inbounds begin
+                correction[i] = delta
+                x[i] += delta
+            end
         end
-        delta = damping * value
-        correction[i] = delta
-        x[i] += delta
     end
     return x
 end

@@ -106,6 +106,9 @@ mutable struct ILU0State{F, D, RP, CV, DP, FO, FF, UO, UF, HRP, HCV, C} <: Abstr
     upper_rows::UF
     host_rowptr::HRP
     host_colval::HCV
+    factor_kernel::Any
+    solve_kernels::Any
+    smooth_kernels::Any
     config::C
     backend::Any
     block_size::Int
@@ -127,6 +130,9 @@ mutable struct DILUState{D, AV, RP, CV, DP, TP, FO, FF, UO, UF, HRP, HCV, C} <: 
     upper_rows::UF
     host_rowptr::HRP
     host_colval::HCV
+    factor_kernel::Any
+    solve_kernels::Any
+    smooth_kernels::Any
     config::C
     backend::Any
     block_size::Int

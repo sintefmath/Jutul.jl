@@ -159,7 +159,7 @@ end
     b = ones(size(A, 1))
     context = DefaultContext()
 
-    @test AMGPreconditioner().options.smoother isa ILU0
+    @test AMGPreconditioner().options.smoother isa SPAI0
     @test AMGPreconditioner().options.interpolation isa ExtendedIInterpolation
     @test AMGPreconditioner(:aggregation).options.interpolation isa ConstantInterpolation
     @test AMGPreconditioner(:ruge_stuben).options.interpolation isa ClassicalInterpolation

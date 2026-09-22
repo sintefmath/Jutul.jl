@@ -151,6 +151,19 @@ function axpy!(
     return x
 end
 
+# Backends can use the representative arguments to compile a reusable launch
+# object. The default keeps the ordinary KernelAbstractions kernel.
+function setup_smoother_kernel(
+        kernel, backend, block_size, arguments...; ndrange
+    )
+    return kernel(backend, block_size)
+end
+
+function launch_smoother_kernel(kernel, arguments...; ndrange)
+    kernel(arguments...; ndrange = ndrange)
+    return nothing
+end
+
 function ensure_smoother_work!(state, prototype)
     state.work = ensure_smoother_buffer(state.work, prototype)
     state.residual = ensure_smoother_buffer(state.residual, prototype)

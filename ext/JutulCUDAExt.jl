@@ -9,6 +9,54 @@ using KernelAbstractions
 using LinearAlgebra
 import Adapt
 import CUDA: KernelAdaptor
+import KernelAbstractions as KA
+
+struct CUDASmootherKernel{K, C}
+    kernel::K
+    compiled::C
+end
+
+function cuda_smoother_launch_config(kernel, ndrange)
+    ndrange, _, iterspace, _ = KA.launch_config(kernel, ndrange, nothing)
+    context = KA.mkcontext(kernel, ndrange, iterspace)
+    threads = length(KA.workitems(iterspace))
+    blocks = length(KA.blocks(iterspace))
+    return context, threads, blocks
+end
+
+function KAPreconditioners.setup_smoother_kernel(
+        kernel, backend::CUDA.CUDABackend, block_size, arguments...;
+        ndrange
+    )
+    kernel = kernel(backend, block_size)
+    context, _, _ = cuda_smoother_launch_config(kernel, ndrange)
+    # Cache the compiled kernel rather than the KernelCall. A KernelCall owns
+    # its source arguments and is tied to the current CUDA task and context.
+    call = CUDA.KernelCall(kernel.f, context, arguments...)
+    maxthreads = if KA.workgroupsize(kernel) <: KA.StaticSize
+        prod(KA.get(KA.workgroupsize(kernel)))
+    else
+        nothing
+    end
+    compiled = CUDA.kernel_compile(
+        call; always_inline = backend.always_inline, maxthreads = maxthreads
+    )
+    return CUDASmootherKernel(kernel, compiled)
+end
+
+function KAPreconditioners.launch_smoother_kernel(
+        prepared::CUDASmootherKernel, arguments...; ndrange
+    )
+    context, threads, blocks = cuda_smoother_launch_config(
+        prepared.kernel, ndrange
+    )
+    iszero(blocks) && return nothing
+    call = CUDA.KernelCall(prepared.kernel.f, context, arguments...)
+    CUDA.kernel_launch(
+        prepared.compiled, call; threads = threads, blocks = blocks
+    )
+    return nothing
+end
 
 KAPreconditioners.native_dense_lu(::CuArray) = true
 
