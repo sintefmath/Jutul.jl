@@ -132,17 +132,33 @@ function schur_dx_update!(x, y, C, D, E, b, sys, dx, Δx, buffers)
     end
 end
 
-@inline function schur_mul_internal!(res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β::T) where {T}
+@inline function schur_mul_internal!(
+        res, res_v, schur_buffers, B, C, D, E, x, x_v, α, β::T
+    ) where {T}
+    backend = KAPreconditioners.KernelAbstractions.get_backend(x)
+    host_execution = backend isa KAPreconditioners.KernelAbstractions.CPU
     @tic "spmv (schur)" begin
         n = length(D)
-        @batch for i in 1:n
-            @inbounds b_buf_1, b_buf_2 = schur_buffers[i + 1]
-            @inbounds D_i = D[i]
-            @inbounds E_i = E[i]
-            @inbounds C_i = C[i]
-            mul!(b_buf_2, D_i, x)
-            ldiv!(b_buf_1, E_i, b_buf_2)
-            mul!(res, C_i, b_buf_1, -α, true)
+        if host_execution
+            @batch for i in 1:n
+                @inbounds b_buf_1, b_buf_2 = schur_buffers[i + 1]
+                @inbounds D_i = D[i]
+                @inbounds E_i = E[i]
+                @inbounds C_i = C[i]
+                mul!(b_buf_2, D_i, x)
+                ldiv!(b_buf_1, E_i, b_buf_2)
+                mul!(res, C_i, b_buf_1, -α, true)
+            end
+        else
+            for i in 1:n
+                @inbounds b_buf_1, b_buf_2 = schur_buffers[i + 1]
+                @inbounds D_i = D[i]
+                @inbounds E_i = E[i]
+                @inbounds C_i = C[i]
+                mul!(b_buf_2, D_i, x)
+                ldiv!(b_buf_1, E_i, b_buf_2)
+                mul!(res, C_i, b_buf_1, -α, true)
+            end
         end
     end
     return res
