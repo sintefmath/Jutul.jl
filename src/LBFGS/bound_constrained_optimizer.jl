@@ -318,7 +318,7 @@ function get_search_direction_qp!(u, g, H, H_prev, lb, ub, grad_tol, max_it_qp, 
         d = zeros(size(u))
         max_step = 0.0
         qpinfo = nothing
-        return (d, H, pg, max_step, qpinfo)
+        return (d, H, H_prev, pg, max_step, qpinfo)
     end
     # In case of problematic Hessian approximation, we try up to 3 times
     rough_solve_info = nothing
