@@ -38,6 +38,7 @@ struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
     minbatch::Int
     use_kernels_for_secondary::Bool
     reduce_memory::Bool
+    nthreads::Int
 end
 
 function KernelAbstractionsContext(
@@ -46,6 +47,7 @@ function KernelAbstractionsContext(
         index_type::Type{I} = Int,
         linear_float_type::Type{LF} = float_type,
         linear_index_type::Type{LI} = index_type,
+        nthreads = Threads.nthreads(),
         use_kernels_for_secondary = missing,
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
@@ -86,7 +88,7 @@ function KernelAbstractionsContext(
     end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
-        use_kernels_for_secondary, reduce_memory
+        use_kernels_for_secondary, reduce_memory, Int(nthreads)
     )
 end
 
@@ -96,7 +98,7 @@ linear_float_type(::KernelAbstractionsContext{B, F, I, L, LF}) where {B, F, I, L
 linear_index_type(::KernelAbstractionsContext{B, F, I, L, LF, LI}) where {B, F, I, L, LF, LI} = LI
 nzval_index_type(ctx::KernelAbstractionsContext) = index_type(ctx)
 matrix_layout(ctx::KernelAbstractionsContext) = ctx.matrix_layout
-nthreads(::KernelAbstractionsContext) = 1
+nthreads(ctx::KernelAbstractionsContext) = ctx.nthreads
 minbatch(ctx::KernelAbstractionsContext) = ctx.minbatch
 
 function synchronize(ctx::KernelAbstractionsContext)
@@ -107,8 +109,7 @@ function synchronize(ctx::KernelAbstractionsContext)
 end
 
 KernelAbstractions.get_backend(ctx::KernelAbstractionsContext) = ctx.backend
-is_cpu_backend(ctx::KernelAbstractionsContext) =
-    ctx.backend isa KernelAbstractions.CPU
+is_cpu_backend(ctx::KernelAbstractionsContext) = ctx.backend isa KernelAbstractions.CPU
 
 function Base.adjoint(ctx::KernelAbstractionsContext)
     return KernelAbstractionsContext(
