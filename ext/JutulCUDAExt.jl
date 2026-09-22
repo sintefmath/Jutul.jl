@@ -85,10 +85,9 @@ function Jutul.KernelExecution.maybe_convert_cross_term_evaluation(
     return converted
 end
 
-# KernelAbstractions' CUDA launcher converts arguments when constructing the
-# kernel and again when launching it. Jutul's threaded loop only needs a
-# one-dimensional CUDA kernel, so convert its callable once and launch the
-# compiled kernel with argument conversion disabled.
+# Jutul's threaded loop only needs a one-dimensional CUDA kernel. KernelCall
+# converts its callable and arguments once and retains their host owners through
+# the launch.
 function jutul_threaded_loop_kernel(f, n::Int)
     index = (CUDA.blockIdx().x - 1) * CUDA.blockDim().x + CUDA.threadIdx().x
     if index <= n
@@ -106,20 +105,15 @@ function Jutul.KernelExecution.launch_threaded_loop(
         return nothing
     end
     n = Int(n)
-    device_f = CUDA.cudaconvert(f)
-    kernel = CUDA.cufunction(
-        jutul_threaded_loop_kernel, Tuple{typeof(device_f), Int};
+    call = CUDA.KernelCall(jutul_threaded_loop_kernel, f, n)
+    kernel = CUDA.kernel_compile(
+        call;
         always_inline = context.backend.always_inline,
         maxthreads = context.workgroupsize
     )
     threads = min(n, context.workgroupsize)
     blocks = cld(n, threads)
-    GC.@preserve f begin
-        kernel(
-            device_f, n;
-            threads = threads, blocks = blocks, convert = Val(false)
-        )
-    end
+    CUDA.kernel_launch(kernel, call; threads = threads, blocks = blocks)
     return nothing
 end
 
@@ -140,20 +134,15 @@ function Jutul.KernelExecution.launch_preconverted_threaded_loop(
         return nothing
     end
     n = Int(n)
-    argument_types = Tuple{typeof(f), Int, map(typeof, args)...}
-    kernel = CUDA.cufunction(
-        jutul_preconverted_threaded_loop_kernel, argument_types;
+    call = CUDA.KernelCall(jutul_preconverted_threaded_loop_kernel, f, n, args...)
+    kernel = CUDA.kernel_compile(
+        call;
         always_inline = context.backend.always_inline,
         maxthreads = context.workgroupsize
     )
     threads = min(n, context.workgroupsize)
     blocks = cld(n, threads)
-    GC.@preserve f args begin
-        kernel(
-            f, n, args...;
-            threads = threads, blocks = blocks, convert = Val(false)
-        )
-    end
+    CUDA.kernel_launch(kernel, call; threads = threads, blocks = blocks)
     return nothing
 end
 
