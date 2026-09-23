@@ -199,6 +199,7 @@ end
     context = DefaultContext()
     preconditioner = AMGPreconditioner(
         :ruge_stuben;
+        smoother_type = :ilu0,
         coarse_size = 10,
         reuse = :none,
         reuse_partial = :operators
