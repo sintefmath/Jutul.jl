@@ -53,7 +53,11 @@ function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = min
     N_threads = nthreads(context)
     N_batches = clamp(N_threads ÷ minbatch, 1, N)
     threads = thread_type(context)
-    return if N_batches == 1 || threads == :serial
+    return threaded_loop_minbatch(F, N, N_batches, minbatch, threads)
+end
+
+function threaded_loop_minbatch(F, N::Integer, N_batches::Integer, minbatch::Integer, threads::Symbol)
+    if N_batches == 1 || threads == :serial
         for i in 1:N
             F(i)
         end
@@ -78,6 +82,7 @@ function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = min
             throw(ArgumentError("Unknown thread_type $threads"))
         end
     end
+    return nothing
 end
 
 function threaded_loop_minbatch(F, N, minbatch::Int; thread_type = :threads, do_wait = true)
