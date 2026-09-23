@@ -93,8 +93,10 @@ function KAPreconditioners.setup_sparse_lu(
     elseif Tv === Float64
         return setup_cuda_sparse_lu(matrix)
     else
-        return invoke(KAPreconditioners.setup_sparse_lu,
-            Tuple{StaticSparsityMatrixCSR}, matrix)
+        return invoke(
+            KAPreconditioners.setup_sparse_lu,
+            Tuple{StaticSparsityMatrixCSR}, matrix
+        )
     end
 end
 
