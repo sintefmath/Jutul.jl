@@ -1,4 +1,4 @@
-function build_vendor_ilu(A::StaticSparsityMatrixCSR)
+function build_vendor_ilu(A::StaticSparsityMatrixCSR, work)
     backend = matrix_backend(A)
     throw(
         ArgumentError(
@@ -17,6 +17,12 @@ function refactor_vendor_ilu!(factor)
 end
 
 vendor_ilu_factor_storage_bytes(factor) = 0
+
+function solve_vendor_ilu_factor!(values, factor)
+    ldiv!(UnitLowerTriangular(factor), values)
+    ldiv!(UpperTriangular(factor), values)
+    return values
+end
 
 function replaced_ilu_storage_bytes(state::VendorILUState)
     return vendor_ilu_factor_storage_bytes(state.factor) +
@@ -44,8 +50,8 @@ function setup_smoother(
     mark_backend_reallocation!(
         reallocation_tracker, replaced_ilu_storage_bytes(reuse)
     )
-    factor, factor_values = build_vendor_ilu(A)
     work, residual = allocate_ilu_work(A)
+    factor, factor_values = build_vendor_ilu(A, work)
     return VendorILUState(
         Tv, factor, factor_values, work, residual,
         A.rowptr, A.colval,
@@ -73,8 +79,7 @@ end
 function vendor_ilu_solve!(x, state::VendorILUState, b)
     copyto!(x, b)
     values = vendor_ilu_vector(x)
-    ldiv!(UnitLowerTriangular(state.factor), values)
-    ldiv!(UpperTriangular(state.factor), values)
+    solve_vendor_ilu_factor!(values, state.factor)
     return x
 end
 
