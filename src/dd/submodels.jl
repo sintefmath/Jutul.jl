@@ -161,11 +161,6 @@ function subvariable(var, map)
     return var
 end
 
-function subvariable(var::Pair, map)
-    label, var = var
-    return Pair(label, subvariable(var, map))
-end
-
 function subequation(eq, subr, map)
     return eq
 end

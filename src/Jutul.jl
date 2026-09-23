@@ -53,7 +53,7 @@ timeit_debug_enabled() = false
 # Declare before CSR module is loaded
 function threaded_loop
 
-    end
+end
 # Separate module for CSR backend
 include("StaticCSR/StaticCSR.jl")
 using .StaticCSR
@@ -99,8 +99,6 @@ include("config.jl")
 include("interpolation.jl")
 include("partitioning.jl")
 
-# Systems that are made up of subsystems
-include("composite/composite.jl")
 # Models that contain submodels
 include("multimodel/multimodel.jl")
 # Domain decomposition

@@ -7,11 +7,11 @@ end
 
 function setup_hypre_precond
 
-    end
+end
 
 function set_hypre_threads
 
-    end
+end
 
 export BoomerAMGPreconditioner
 
@@ -51,11 +51,11 @@ end
 
 function generate_hypre_assembly_helper
 
-    end
+end
 
 function local_hypre_copy!
 
-    end
+end
 
 function check_hypre_availability(; throw = true)
     ok = true
@@ -77,4 +77,4 @@ end
 
 function check_hypre_availability_impl
 
-    end
+end

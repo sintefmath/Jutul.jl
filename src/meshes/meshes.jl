@@ -161,7 +161,7 @@ Get the number of boundary/exterior faces in a mesh.
 """
 function number_of_boundary_faces
 
-    end
+end
 
 function faces(G)
     return 1:number_of_faces(G)

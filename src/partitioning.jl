@@ -122,7 +122,7 @@ process_partition(g, p)
 """
 function process_partition
 
-    end
+end
 
 function process_partition(g::JutulMesh, partition; weights = missing)
     return process_partition(get_neighborship(g), partition; weights = weights)

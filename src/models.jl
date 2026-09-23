@@ -163,19 +163,8 @@ function replace_variables!(model; throw = true, kwarg...)
     for (k, v) in kwarg
         done = false
         for vars in [pvar, svar, prm]
-            # v::JutulVariables
             if haskey(vars, k)
-                oldvar = vars[k]
-                if oldvar isa JutulVariables
-                    vars[k] = v
-                elseif oldvar isa Pair
-                    @assert model.system isa CompositeSystem
-                    if v isa Pair
-                        vars[k] = v
-                    else
-                        vars[k] = Pair(first(oldvar), v)
-                    end
-                end
+                vars[k] = v
                 done = true
                 break
             end
