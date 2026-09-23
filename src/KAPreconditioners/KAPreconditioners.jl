@@ -6,6 +6,7 @@ using KernelAbstractions
 using LinearAlgebra
 using Polyester: @batch
 using SparseArrays
+using StaticArrays: StaticMatrix, SVector
 import Adapt
 
 using ..Jutul: StaticSparsityMatrixCSR, colvals, minbatch
@@ -22,6 +23,7 @@ include("smoothers/interface.jl")
 include("smoothers/spai0.jl")
 include("smoothers/gauss_seidel.jl")
 include("smoothers/ilu0.jl")
+include("smoothers/vendor_ilu.jl")
 include("setup.jl")
 include("reset.jl")
 include("cycle.jl")
@@ -52,7 +54,8 @@ apply_ka_smoother!(x, state, b) = apply!(x, state, b)
 export AbstractCoarsening, Aggregation, RugeStuben, HMIS
 export AbstractInterpolation, ConstantInterpolation, ClassicalInterpolation,
     ExtendedIInterpolation, AMGOptions, AMGHierarchy
-export AbstractSmoother, AbstractSmootherState, SPAI0, GaussSeidel, ILU0, DILU
+export AbstractSmoother, AbstractSmootherState, SPAI0, GaussSeidel, ILU0, DILU,
+    VendorILU
 export csr_matrix
 export setup_smoother, update_smoother!, smooth!
 export setup_amg, resetup_amg!, cycle!, solve!

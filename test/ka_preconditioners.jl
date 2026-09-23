@@ -164,6 +164,12 @@ end
     @test AMGPreconditioner(:aggregation).options.interpolation isa ConstantInterpolation
     @test AMGPreconditioner(:ruge_stuben).options.interpolation isa ClassicalInterpolation
 
+    vendor = KASmootherPreconditioner(:vendor_ilu)
+    @test vendor.config isa VendorILU
+    @test_throws ArgumentError Jutul.update_preconditioner!(
+        vendor, A, b, context, nothing
+    )
+
     for preconditioner in (
             AMGPreconditioner(:ruge_stuben; coarse_size = 10),
             KASmootherPreconditioner(:spai0),
@@ -718,6 +724,7 @@ end
 
     for config in (ILU0(), DILU())
         state = setup_smoother(C, config)
+        @test Any ∉ fieldtypes(typeof(state))
         @test size(state) == size(A)
         @test eltype(state) == Float64
 
@@ -776,6 +783,7 @@ end
 
     for config in (ILU0(), DILU())
         state = setup_smoother(C, config)
+        @test Any ∉ fieldtypes(typeof(state))
         x = JLArray(zeros(size(A, 1)))
         KAPreconditioners.apply!(x, state, b)
         @test norm(ones(size(A, 1)) - A * Array(x)) < norm(ones(size(A, 1)))

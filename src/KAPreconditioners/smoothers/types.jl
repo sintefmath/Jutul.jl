@@ -68,6 +68,21 @@ struct DILU <: AbstractSmoother
     end
 end
 
+"""
+    VendorILU(steps=1, damping=1.0)
+
+Backend-native ILU(0). Scalar matrices use the vendor CSR implementation and
+matrices with static dense blocks use the vendor block CSR implementation.
+Setup throws when the matrix backend has no native implementation.
+"""
+struct VendorILU <: AbstractSmoother
+    steps::Int
+    damping::Float64
+    function VendorILU(steps::Integer = 1, damping::Real = 1.0)
+        return new(positive_smoother_parameters("VendorILU", steps, damping)...)
+    end
+end
+
 mutable struct SPAI0State{D, C} <: AbstractSmootherState
     diagonal::D
     temporary::Any
@@ -92,11 +107,14 @@ mutable struct GaussSeidelState{D, C, B} <: AbstractSmootherState
     n::Int
 end
 
-mutable struct ILU0State{F, D, RP, CV, DP, FO, FF, UO, UF, HRP, HCV, C} <: AbstractSmootherState
+mutable struct ILU0State{
+        F, D, RP, CV, DP, FO, FF, UO, UF, HRP, HCV,
+        W, R, FK, SK, SMK, C, B,
+    } <: AbstractSmootherState
     factors::F
     inverse_diagonal::D
-    work::Any
-    residual::Any
+    work::W
+    residual::R
     rowptr::RP
     colval::CV
     diagonal_positions::DP
@@ -106,19 +124,22 @@ mutable struct ILU0State{F, D, RP, CV, DP, FO, FF, UO, UF, HRP, HCV, C} <: Abstr
     upper_rows::UF
     host_rowptr::HRP
     host_colval::HCV
-    factor_kernel::Any
-    solve_kernels::Any
-    smooth_kernels::Any
+    factor_kernel::FK
+    solve_kernels::SK
+    smooth_kernels::SMK
     config::C
-    backend::Any
+    backend::B
     block_size::Int
     n::Int
 end
 
-mutable struct DILUState{D, AV, RP, CV, DP, TP, FO, FF, UO, UF, HRP, HCV, C} <: AbstractSmootherState
+mutable struct DILUState{
+        D, AV, RP, CV, DP, TP, FO, FF, UO, UF, HRP, HCV,
+        W, R, FK, SK, SMK, C, B,
+    } <: AbstractSmootherState
     inverse_diagonal::D
-    work::Any
-    residual::Any
+    work::W
+    residual::R
     values::AV
     rowptr::RP
     colval::CV
@@ -130,11 +151,41 @@ mutable struct DILUState{D, AV, RP, CV, DP, TP, FO, FF, UO, UF, HRP, HCV, C} <: 
     upper_rows::UF
     host_rowptr::HRP
     host_colval::HCV
-    factor_kernel::Any
-    solve_kernels::Any
-    smooth_kernels::Any
+    factor_kernel::FK
+    solve_kernels::SK
+    smooth_kernels::SMK
     config::C
-    backend::Any
+    backend::B
     block_size::Int
     n::Int
+end
+
+mutable struct VendorILUState{
+        Tv, F, FV, W, R, RP, CV, HRP, HCV, C, B,
+    } <: AbstractSmootherState
+    factor::F
+    factor_values::FV
+    work::W
+    residual::R
+    rowptr::RP
+    colval::CV
+    host_rowptr::HRP
+    host_colval::HCV
+    config::C
+    backend::B
+    block_size::Int
+    n::Int
+end
+
+function VendorILUState(
+        ::Type{Tv}, factor::F, factor_values::FV, work::W, residual::R,
+        rowptr::RP, colval::CV, host_rowptr::HRP, host_colval::HCV,
+        config::C, backend::B, block_size::Int, n::Int
+    ) where {Tv, F, FV, W, R, RP, CV, HRP, HCV, C, B}
+    return VendorILUState{
+        Tv, F, FV, W, R, RP, CV, HRP, HCV, C, B,
+    }(
+        factor, factor_values, work, residual, rowptr, colval,
+        host_rowptr, host_colval, config, backend, block_size, n
+    )
 end

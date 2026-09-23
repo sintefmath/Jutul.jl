@@ -42,6 +42,8 @@ function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
         return KAPreconditioners.ILU0(steps, damping)
     elseif method == :dilu
         return KAPreconditioners.DILU(steps, damping)
+    elseif method == :vendor_ilu
+        return KAPreconditioners.VendorILU(steps, damping)
     else
         throw(ArgumentError("Unsupported KA smoother: $method"))
     end
@@ -131,8 +133,8 @@ end
     KASmootherPreconditioner(config = KAPreconditioners.SPAI0())
 
 Wrap a backend-portable smoother in Jutul's preconditioner lifecycle. A symbol
-(`:spai0`, `:gauss_seidel`, `:ilu0`, or `:dilu`) can be supplied instead of a
-smoother config.
+(`:spai0`, `:gauss_seidel`, `:ilu0`, `:dilu`, or `:vendor_ilu`) can be supplied
+instead of a smoother config.
 """
 mutable struct KASmootherPreconditioner{C} <: JutulPreconditioner
     config::C
