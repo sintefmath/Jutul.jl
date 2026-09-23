@@ -1,18 +1,18 @@
 function update_cross_term_in_entity!
 
-    end
+end
 
 function cross_term_entities_source
 
-    end
+end
 
 function cross_term_entities
 
-    end
+end
 
 function has_symmetry
 
-    end
+end
 
 
 function prepare_cross_term_in_entity!(

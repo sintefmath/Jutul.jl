@@ -43,8 +43,8 @@ end
 
 function check_amgcl_availability_impl
 
-    end
+end
 
 function amgcl_parse_parameters_impl
 
-    end
+end

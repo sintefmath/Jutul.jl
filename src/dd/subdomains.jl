@@ -53,7 +53,7 @@ subdiscretization(disc, ::TrivialGlobalMap) = disc
 
 function subgrid
 
-    end
+end
 
 function subdomain(d::DiscretizedDomain, indices; entity = Cells(), variables_always_active = false, kwarg...)
     grid = physical_representation(d)

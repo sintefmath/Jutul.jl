@@ -53,7 +53,7 @@ timeit_debug_enabled() = false
 # Declare before CSR module is loaded
 function threaded_loop
 
-    end
+end
 # Separate module for CSR backend
 include("StaticCSR/StaticCSR.jl")
 using .StaticCSR

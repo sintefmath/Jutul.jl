@@ -61,4 +61,4 @@ julia> convert_to_si(1.0, "milligram") # Get 1 milligram represented as kilogram
 """
 function convert_to_si
     # Place docs here to avoid docstring duplication
-    end
+end
