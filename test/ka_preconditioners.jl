@@ -159,10 +159,16 @@ end
     b = ones(size(A, 1))
     context = DefaultContext()
 
-    @test AMGPreconditioner().options.smoother isa ILU0
+    @test AMGPreconditioner().options.smoother isa SPAI0
     @test AMGPreconditioner().options.interpolation isa ExtendedIInterpolation
     @test AMGPreconditioner(:aggregation).options.interpolation isa ConstantInterpolation
     @test AMGPreconditioner(:ruge_stuben).options.interpolation isa ClassicalInterpolation
+
+    vendor = KASmootherPreconditioner(:vendor_ilu)
+    @test vendor.config isa VendorILU
+    @test_throws ArgumentError Jutul.update_preconditioner!(
+        vendor, A, b, context, nothing
+    )
 
     for preconditioner in (
             AMGPreconditioner(:ruge_stuben; coarse_size = 10),
@@ -193,6 +199,7 @@ end
     context = DefaultContext()
     preconditioner = AMGPreconditioner(
         :ruge_stuben;
+        smoother_type = :ilu0,
         coarse_size = 10,
         reuse = :none,
         reuse_partial = :operators
@@ -718,6 +725,7 @@ end
 
     for config in (ILU0(), DILU())
         state = setup_smoother(C, config)
+        @test Any ∉ fieldtypes(typeof(state))
         @test size(state) == size(A)
         @test eltype(state) == Float64
 
@@ -776,6 +784,7 @@ end
 
     for config in (ILU0(), DILU())
         state = setup_smoother(C, config)
+        @test Any ∉ fieldtypes(typeof(state))
         x = JLArray(zeros(size(A, 1)))
         KAPreconditioners.apply!(x, state, b)
         @test norm(ones(size(A, 1)) - A * Array(x)) < norm(ones(size(A, 1)))

@@ -15,7 +15,7 @@ function smooth! end
 
 setup_smoother(
     A::SparseMatrixCSC,
-    config::Union{SPAI0, GaussSeidel, ILU0, DILU} = SPAI0(); kwargs...
+    config::Union{SPAI0, GaussSeidel, ILU0, DILU, VendorILU} = SPAI0(); kwargs...
 ) =
     setup_smoother(csr_matrix(A), config; kwargs...)
 
@@ -23,7 +23,7 @@ smoother_steps(config::AbstractSmoother) = config.steps
 
 Base.size(state::SPAI0State) = (length(state.diagonal), length(state.diagonal))
 Base.size(state::GaussSeidelState) = (state.n, state.n)
-Base.size(state::Union{ILU0State, DILUState}) = (state.n, state.n)
+Base.size(state::Union{ILU0State, DILUState, VendorILUState}) = (state.n, state.n)
 function Base.size(state::AbstractSmootherState, dimension::Integer)
     return if dimension == 1 || dimension == 2
         state.n
@@ -35,6 +35,7 @@ Base.eltype(state::SPAI0State) = eltype(state.diagonal)
 Base.eltype(state::GaussSeidelState) = eltype(state.inverse_diagonal)
 Base.eltype(state::ILU0State) = eltype(state.factors)
 Base.eltype(state::DILUState) = eltype(state.values)
+Base.eltype(::VendorILUState{Tv}) where {Tv} = Tv
 
 function smoother_damping(state::SPAI0State)
     T = matrix_real_type(eltype(state.diagonal))
@@ -43,6 +44,11 @@ end
 
 function smoother_damping(state::Union{GaussSeidelState, ILU0State, DILUState})
     T = matrix_real_type(eltype(state.inverse_diagonal))
+    return convert(T, state.config.damping)
+end
+
+function smoother_damping(state::VendorILUState)
+    T = matrix_real_type(eltype(state.factor_values))
     return convert(T, state.config.damping)
 end
 
@@ -151,6 +157,22 @@ function axpy!(
     return x
 end
 
+# Backends can use the representative arguments to compile a reusable launch
+# object. The default keeps the ordinary KernelAbstractions kernel.
+function setup_smoother_kernel(
+        kernel, backend, block_size, arguments...;
+        ndrange, number_of_launches = 1
+    )
+    return kernel(backend, block_size)
+end
+
+function launch_smoother_kernel(
+        kernel, arguments...; ndrange, launch_index = 1
+    )
+    kernel(arguments...; ndrange = ndrange)
+    return nothing
+end
+
 function ensure_smoother_work!(state, prototype)
     state.work = ensure_smoother_buffer(state.work, prototype)
     state.residual = ensure_smoother_buffer(state.residual, prototype)
@@ -167,7 +189,9 @@ ensure_smoother_buffer(buffer, prototype) =
     isnothing(buffer) ? similar(prototype) : buffer
 
 function update_level_smoother!(
-        state::Union{SPAI0State, GaussSeidelState, ILU0State, DILUState},
+        state::Union{
+            SPAI0State, GaussSeidelState, ILU0State, DILUState, VendorILUState,
+        },
         A::StaticSparsityMatrixCSR, options::AMGOptions
     )
     state.config = options.smoother
