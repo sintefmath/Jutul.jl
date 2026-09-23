@@ -99,8 +99,6 @@ include("config.jl")
 include("interpolation.jl")
 include("partitioning.jl")
 
-# Systems that are made up of subsystems
-include("composite/composite.jl")
 # Models that contain submodels
 include("multimodel/multimodel.jl")
 # Domain decomposition

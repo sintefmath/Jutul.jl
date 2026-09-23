@@ -573,10 +573,6 @@ function ct_equation(model, eq::Symbol)
     return model.equations[eq]
 end
 
-function ct_equation(model, eq::Pair)
-    return last(model.equations[last(eq)])
-end
-
 function cross_term(storage, target::Symbol)
     return storage[:cross_terms][target]
 end

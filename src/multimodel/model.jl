@@ -310,10 +310,6 @@ function local_group_offset(keys, target_key, ndofs)
     error("Should not happen")
 end
 
-function get_equation_offset(model::SimulationModel, eq_label::Pair, arg...)
-    return get_equation_offset(model, last(eq_label), arg...)
-end
-
 function get_equation_offset(model::SimulationModel, eq_label::Symbol)
     offset = 0
     layout = matrix_layout(model.context)

@@ -752,11 +752,6 @@ function Base.getindex(S::AbstractJutulStorage, name::Symbol)
     return Base.getindex(data(S), name)
 end
 
-function Base.getindex(S::AbstractJutulStorage, name::Pair)
-    # This is hacked in for CompositeSystem
-    return S[last(name)]
-end
-
 function Base.haskey(S::JutulStorage, name::Symbol)
     return Base.haskey(data(S), name)
 end
@@ -972,26 +967,6 @@ struct ConservationLaw{C, T <: FlowDiscretization, FT <: FluxType, N} <: JutulEq
         return new{conserved, T, typeof(flux), N}(disc, flux)
     end
 end
-
-export CompositeSystem
-struct CompositeSystem{label, T} <: JutulSystem
-    systems::T
-end
-
-function Base.show(io::IO, t::CompositeSystem)
-    print(io, "CompositeSystem:\n")
-    for (name, sys) in pairs(t.systems)
-        print(io, "($name => $sys)\n")
-    end
-    return
-end
-function CompositeSystem(label::Symbol = :composite; kwarg...)
-    tup = NamedTuple(pairs(kwarg))
-    T = typeof(tup)
-    return CompositeSystem{label, T}(tup)
-end
-
-const CompositeModel = SimulationModel{<:JutulDomain, <:CompositeSystem, <:JutulFormulation, <:JutulContext}
 
 struct JutulLinePlotData
     xdata
