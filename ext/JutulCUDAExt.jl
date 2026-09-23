@@ -147,11 +147,23 @@ function KAPreconditioners.build_vendor_ilu(
             "CUDA VendorILU does not support matrix scalar type $scalar_type"
         )
     )
+    maximum_index = max(size(A)..., length(A.nzval) + 1)
+    maximum_index <= typemax(Cint) || throw(
+        ArgumentError(
+            "CUDA VendorILU requires a matrix indexable by 32-bit integers"
+        )
+    )
     factor_values = copy(A.nzval)
-    rowptr = copy(A.rowptr)
-    colval = copy(A.colval)
+    # CUDA.jl's ilu02! and BSR triangular solves use the legacy cuSPARSE
+    # routines. Those routines accept 32-bit indices only, even though the
+    # sparse wrapper itself permits other integer types. Convert the private
+    # factor pattern to Cint and use the one-parameter constructors; passing
+    # Int64 buffers to the legacy C API makes it reinterpret them as packed
+    # Int32 indices and can result in an illegal memory access.
+    rowptr = convert(CuVector{Cint}, A.rowptr)
+    colval = convert(CuVector{Cint}, A.colval)
     factor = if Tv <: Number
-        CuSparseMatrixCSR{Tv, Ti}(
+        CuSparseMatrixCSR{Tv}(
             rowptr, colval, factor_values, size(A)
         )
     elseif Tv <: StaticMatrix
@@ -163,7 +175,7 @@ function KAPreconditioners.build_vendor_ilu(
         dimensions = (
             block_rows * size(A, 1), block_columns * size(A, 2)
         )
-        CuSparseMatrixBSR{scalar_type, Ti}(
+        CuSparseMatrixBSR{scalar_type}(
             rowptr, colval, scalar_values, dimensions,
             block_rows, 'C', length(factor_values)
         )
