@@ -444,6 +444,7 @@ function perform_step!(
     end
     report[:linear_system_time] = t_lsys
     solved = false
+    synchronize(model.context)
     if config[:check_before_solve]
         t_conv = @elapsed e, converged = perform_step_check_convergence_impl!(report, prev_report, storage, model, config, dt, iteration)
         should_solve = !converged && solve
