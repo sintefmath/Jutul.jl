@@ -72,21 +72,32 @@ function KAPreconditioners.resetup_sparse_lu!(
     F = S.factorization
     KAPreconditioners.sparse_lu_same_pattern(S, A) ||
         throw(ArgumentError("sparse LU resetup requires the same CSR pattern"))
-    copyto!(F.values, A.nzval)
-    RF.cusolverRfResetValues(
-        F.n, length(F.values), F.rowptr, F.colval, F.values,
-        F.p, F.q, F.handle
-    )
-    RF.cusolverRfRefactor(F.handle)
+    # RF reuses the original pivot permutation. It can fail with a zero pivot,
+    # or succeed with an unsuitable permutation after the values change. These
+    # systems are small, so recompute pivoting for every resetup.
+    S.factorization = setup_cuda_sparse_lu(A).factorization
+    finalize(F)
     return S
 end
 
 function KAPreconditioners.setup_sparse_lu(
         matrix::StaticSparsityMatrixCSR{
-            Float64, Ti, V, I, R, B,
+            Tv, Ti, V, I, R, B,
         }
-    ) where {Ti <: Integer, V, I, R, B <: CUDA.CUDABackend}
-    return setup_cuda_sparse_lu(matrix)
+    ) where {
+        Tv <: Union{Float32, Float64, ComplexF32, ComplexF64},
+        Ti <: Integer, V, I, R, B <: CUDA.CUDABackend,
+    }
+    if applicable(KAPreconditioners.setup_preferred_sparse_lu, matrix)
+        return KAPreconditioners.setup_preferred_sparse_lu(matrix)
+    elseif Tv === Float64
+        return setup_cuda_sparse_lu(matrix)
+    else
+        return invoke(
+            KAPreconditioners.setup_sparse_lu,
+            Tuple{StaticSparsityMatrixCSR}, matrix
+        )
+    end
 end
 
 function LinearAlgebra.ldiv!(
