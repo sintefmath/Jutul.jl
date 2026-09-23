@@ -19,6 +19,7 @@ include("smoothers/types.jl")
 include("types.jl")
 include("csr.jl")
 include("kernels.jl")
+include("sparse_lu.jl")
 include("smoothers/interface.jl")
 include("smoothers/spai0.jl")
 include("smoothers/gauss_seidel.jl")
@@ -59,5 +60,6 @@ export AbstractSmoother, AbstractSmootherState, SPAI0, GaussSeidel, ILU0, DILU,
 export csr_matrix
 export setup_smoother, update_smoother!, smooth!
 export setup_amg, resetup_amg!, cycle!, solve!
+export SparseLU
 
 end

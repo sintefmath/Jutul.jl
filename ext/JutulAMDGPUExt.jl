@@ -403,9 +403,7 @@ function Jutul.KernelExecution.factorize_linear_system(
             Tv, Ti, V, I, R, B,
         }
     ) where {Tv, Ti <: Integer, V, I, R, B <: AMDGPU.ROCBackend}
-    return KAPreconditioners.build_coarse_solver(
-        matrix, KAPreconditioners.matrix_backend(matrix)
-    )
+    return KAPreconditioners.setup_sparse_lu(matrix)
 end
 
 end
