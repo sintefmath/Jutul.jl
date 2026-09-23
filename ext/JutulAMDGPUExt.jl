@@ -124,15 +124,21 @@ function roc_analyze_vendor_ilu(matrix::ROCSparseMatrixCSR)
     upper_solve_descriptor = rocSPARSE.ROCMatrixDescriptor(
         'G', 'U', 'N', 'O'
     )
-    factor_workspace = ROCVector{UInt8}(undef, roc_ilu_buffer_size(
-        matrix, factor_info, factor_descriptor
-    ))
-    lower_workspace = ROCVector{UInt8}(undef, roc_solve_buffer_size(
-        matrix, lower_solve_info, lower_solve_descriptor
-    ))
-    upper_workspace = ROCVector{UInt8}(undef, roc_solve_buffer_size(
-        matrix, upper_solve_info, upper_solve_descriptor
-    ))
+    factor_workspace = ROCVector{UInt8}(
+        undef, roc_ilu_buffer_size(
+            matrix, factor_info, factor_descriptor
+        )
+    )
+    lower_workspace = ROCVector{UInt8}(
+        undef, roc_solve_buffer_size(
+            matrix, lower_solve_info, lower_solve_descriptor
+        )
+    )
+    upper_workspace = ROCVector{UInt8}(
+        undef, roc_solve_buffer_size(
+            matrix, upper_solve_info, upper_solve_descriptor
+        )
+    )
     factor = ROCVendorILUFactor(
         matrix, factor_info, factor_descriptor,
         lower_solve_info, lower_solve_descriptor,
@@ -181,15 +187,21 @@ function roc_analyze_vendor_ilu(matrix::ROCSparseMatrixBSR)
     upper_solve_descriptor = rocSPARSE.ROCMatrixDescriptor(
         'G', 'U', 'N', 'O'
     )
-    factor_workspace = ROCVector{UInt8}(undef, roc_ilu_buffer_size(
-        matrix, factor_info, factor_descriptor
-    ))
-    lower_workspace = ROCVector{UInt8}(undef, roc_solve_buffer_size(
-        matrix, lower_solve_info, lower_solve_descriptor
-    ))
-    upper_workspace = ROCVector{UInt8}(undef, roc_solve_buffer_size(
-        matrix, upper_solve_info, upper_solve_descriptor
-    ))
+    factor_workspace = ROCVector{UInt8}(
+        undef, roc_ilu_buffer_size(
+            matrix, factor_info, factor_descriptor
+        )
+    )
+    lower_workspace = ROCVector{UInt8}(
+        undef, roc_solve_buffer_size(
+            matrix, lower_solve_info, lower_solve_descriptor
+        )
+    )
+    upper_workspace = ROCVector{UInt8}(
+        undef, roc_solve_buffer_size(
+            matrix, upper_solve_info, upper_solve_descriptor
+        )
+    )
     factor = ROCVendorILUFactor(
         matrix, factor_info, factor_descriptor,
         lower_solve_info, lower_solve_descriptor,
@@ -259,7 +271,7 @@ function KAPreconditioners.build_vendor_ilu(
         )
         scalar_values = reinterpret(scalar_type, factor_values)
         dimensions = (
-            block_rows * size(A, 1), block_columns * size(A, 2)
+            block_rows * size(A, 1), block_columns * size(A, 2),
         )
         ROCSparseMatrixBSR{scalar_type}(
             rowptr, colval, scalar_values, dimensions,
@@ -312,13 +324,13 @@ function KAPreconditioners.vendor_ilu_factor_storage_bytes(
     return sizeof(eltype(matrix.rowPtr)) * length(matrix.rowPtr) +
         sizeof(eltype(matrix.colVal)) * length(matrix.colVal) +
         sum(
-            sizeof(eltype(workspace)) * length(workspace)
+        sizeof(eltype(workspace)) * length(workspace)
             for workspace in (
                 factor.factor_workspace,
                 factor.lower_workspace,
                 factor.upper_workspace,
             )
-        )
+    )
 end
 
 function KAPreconditioners.solve_vendor_ilu_factor!(

@@ -63,11 +63,13 @@ end
     updates = Expr[]
     for i in 1:fieldcount(A)
         call_index = i + 1
-        push!(updates, quote
-            if current.source.arguments[$call_index] !== arguments[$i]
-                current = CUDA.rebind(current, arguments[$i], $call_index)
+        push!(
+            updates, quote
+                if current.source.arguments[$call_index] !== arguments[$i]
+                    current = CUDA.rebind(current, arguments[$i], $call_index)
+                end
             end
-        end)
+        )
     end
     return quote
         current = call
@@ -491,7 +493,7 @@ function KAPreconditioners.build_vendor_ilu(
         )
         scalar_values = reinterpret(scalar_type, factor_values)
         dimensions = (
-            block_rows * size(A, 1), block_columns * size(A, 2)
+            block_rows * size(A, 1), block_columns * size(A, 2),
         )
         CuSparseMatrixBSR{scalar_type}(
             rowptr, colval, scalar_values, dimensions,
@@ -552,13 +554,13 @@ function KAPreconditioners.vendor_ilu_factor_storage_bytes(
     return sizeof(eltype(matrix.rowPtr)) * length(matrix.rowPtr) +
         sizeof(eltype(matrix.colVal)) * length(matrix.colVal) +
         sum(
-            sizeof(eltype(workspace)) * length(workspace)
+        sizeof(eltype(workspace)) * length(workspace)
             for workspace in (
                 factor.factor_workspace,
                 factor.lower_workspace,
                 factor.upper_workspace,
             )
-        )
+    )
 end
 
 function KAPreconditioners.solve_vendor_ilu_factor!(

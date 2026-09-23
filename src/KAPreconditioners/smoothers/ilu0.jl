@@ -339,7 +339,7 @@ function setup_ilu0_kernels(
         work, residual, damping
     )
     length(factor_offsets) > 1 || return (
-        nothing, (nothing, nothing), (nothing, nothing)
+        nothing, (nothing, nothing), (nothing, nothing),
     )
     backend = matrix_backend(A)
     block_size = matrix_batch_size(A)
@@ -393,7 +393,7 @@ function setup_dilu_kernels(
         upper_offsets, upper_rows, work, residual, damping
     )
     length(factor_offsets) > 1 || return (
-        nothing, (nothing, nothing), (nothing, nothing)
+        nothing, (nothing, nothing), (nothing, nothing),
     )
     backend = matrix_backend(A)
     block_size = matrix_batch_size(A)
