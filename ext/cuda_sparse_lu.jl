@@ -72,12 +72,11 @@ function KAPreconditioners.resetup_sparse_lu!(
     F = S.factorization
     KAPreconditioners.sparse_lu_same_pattern(S, A) ||
         throw(ArgumentError("sparse LU resetup requires the same CSR pattern"))
-    copyto!(F.values, A.nzval)
-    RF.cusolverRfResetValues(
-        F.n, length(F.values), F.rowptr, F.colval, F.values,
-        F.p, F.q, F.handle
-    )
-    RF.cusolverRfRefactor(F.handle)
+    # RF reuses the original pivot permutation. It can fail with a zero pivot,
+    # or succeed with an unsuitable permutation after the values change. These
+    # systems are small, so recompute pivoting for every resetup.
+    S.factorization = setup_cuda_sparse_lu(A).factorization
+    finalize(F)
     return S
 end
 

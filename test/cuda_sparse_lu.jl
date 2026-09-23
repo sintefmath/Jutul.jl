@@ -58,4 +58,33 @@ if CUDA.functional()
         Jutul.KAPreconditioners.cycle!(x, H, b)
         @test norm(ones(size(A, 1)) - (1.2A) * Array(x)) < norm(ones(size(A, 1)))
     end
+
+    @testset "CUDA sparse LU repivots on resetup" begin
+        A = sparse([10.0 1.0; 1.0 10.0])
+        backend = CUDA.CUDABackend()
+        F = Jutul.KAPreconditioners.setup_sparse_lu(
+            Jutul.KAPreconditioners.csr_matrix(A; backend)
+        )
+        initial_factor = F.factorization
+        p = Array(initial_factor.p) .+ 1
+        q = Array(initial_factor.q) .+ 1
+        changed = copy(A)
+        changed[p[1], q[1]] = 0.0
+        @test nnz(changed) == nnz(A)
+        @test !iszero(det(Matrix(changed)))
+
+        matrix = Jutul.KAPreconditioners.csr_matrix(changed; backend)
+        @test Jutul.KAPreconditioners.resetup_sparse_lu!(F, matrix) === F
+        @test F.factorization !== initial_factor
+        b = CuArray([1.0, 2.0])
+        x = similar(b)
+        ldiv!(x, F, b)
+        @test Array(x) ≈ changed \ Array(b)
+
+        @test Jutul.KAPreconditioners.resetup_sparse_lu!(
+            F, Jutul.KAPreconditioners.csr_matrix(A; backend)
+        ) === F
+        ldiv!(x, F, b)
+        @test Array(x) ≈ A \ Array(b)
+    end
 end
