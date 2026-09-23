@@ -161,6 +161,11 @@ mutable struct DenseLUState{F}
     factorization::F
 end
 
+"""Sparse LU for a fixed CSR pattern."""
+mutable struct SparseLU{F}
+    factorization::F
+end
+
 """Standard host LU fallback for backends without a native dense LU overload."""
 mutable struct HostLUState{F, V, RP, CV, B}
     factorization::F

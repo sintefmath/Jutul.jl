@@ -1464,6 +1464,12 @@ function build_coarse_solver(A::StaticSparsityMatrixCSR{Tv, Ti}, backend, reuse 
         end
         return CoarseLUState(matrix, lu(matrix), csr_to_csc)
     end
+    if !(backend isa KernelAbstractions.CPU) && Tv <: Number
+        if reuse isa SparseLU && sparse_lu_same_pattern(reuse, A)
+            return resetup_sparse_lu!(reuse, A)
+        end
+        return setup_sparse_lu(A)
+    end
     if backend isa KernelAbstractions.CPU || native_dense_lu(A.nzval)
         if reuse isa DenseLUState && size(reuse.factorization.factors) == size(A)
             return update_coarse_solver!(reuse, A)

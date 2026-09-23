@@ -1458,6 +1458,24 @@ function factorize_linear_system(
     return host_backend_factorization(matrix)
 end
 
+function factorize_linear_system(
+        ::typeof(lu),
+        matrix::StaticSparsityMatrixCSR{
+            Tv, Ti, V, I, R, B,
+        }
+    ) where {
+        Tv, Ti <: Integer, V, I, R, B <: KernelAbstractions.Backend,
+    }
+    return KAPreconditioners.setup_sparse_lu(matrix)
+end
+
+function refactorize_linear_system!(
+        update!, factorization::KAPreconditioners.SparseLU,
+        matrix::StaticSparsityMatrixCSR
+    )
+    return KAPreconditioners.resetup_sparse_lu!(factorization, matrix)
+end
+
 function refactorize_linear_system!(
         update!,
         factorization::HostBackendFactorization,

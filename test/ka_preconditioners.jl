@@ -57,6 +57,33 @@ function poisson_2d(n, scale = 1.0)
     return kron(sparse(I, n, n), T) + kron(E, sparse(I, n, n))
 end
 
+@testset "SparseLU setup and same-pattern resetup" begin
+    A = poisson_2d(4)
+    b = collect(1.0:size(A, 1))
+    for backend in (KernelAbstractions.CPU(), JLBackend())
+        matrix = csr_matrix(A; backend)
+        rhs = backend isa KernelAbstractions.CPU ? b : JLArray(b)
+        F = backend isa KernelAbstractions.CPU ?
+            KAPreconditioners.setup_sparse_lu(matrix) :
+            Jutul.KernelExecution.factorize_linear_system(lu, matrix)
+        @test F isa SparseLU
+        x = similar(rhs)
+        ldiv!(x, F, rhs)
+        @test Array(x) ≈ A \ b
+
+        changed = csr_matrix(1.5A; backend)
+        @test KAPreconditioners.resetup_sparse_lu!(F, changed) === F
+        ldiv!(x, F, rhs)
+        @test Array(x) ≈ (1.5A) \ b
+
+        different = copy(A)
+        different[1, 3] = 0.1
+        @test_throws ArgumentError KAPreconditioners.resetup_sparse_lu!(
+            F, csr_matrix(different; backend)
+        )
+    end
+end
+
 @testset "Float32 KA preconditioner scalars" begin
     A = poisson_2d(5, 1.0f0)
     @test eltype(A) === Float32
@@ -662,9 +689,8 @@ end
     @test H.levels[1].A.nzval isa JLArray
     @test all(level -> level.A.nzval isa JLArray, H.levels)
     coarse_solver = H.levels[end].coarse_solver
-    @test coarse_solver isa KAPreconditioners.HostLUState
-    @test coarse_solver.factorization isa LU
-    @test coarse_solver.factorization.factors isa Matrix
+    @test coarse_solver isa SparseLU
+    @test coarse_solver.factorization isa KAPreconditioners.KASparseLUFactor
     b = JLArray(ones(size(A, 1)))
     x = JLArray(zeros(size(A, 1)))
     for _ in 1:4
@@ -679,6 +705,7 @@ end
     ids = map(level -> objectid(level.A.nzval), H.levels)
     resetup_amg!(H, D2, :sparsity)
     @test ids == map(level -> objectid(level.A.nzval), H.levels)
+    @test H.levels[end].coarse_solver === coarse_solver
 
     DB = csr_matrix(
         copy(D.rowptr), copy(D.colval),
@@ -699,6 +726,7 @@ end
     )
     resetup_amg!(H, DB, :memory)
     test_galerkin(H)
+    @test H.levels[end].coarse_solver isa SparseLU
     @test level1_ids == (
         objectid(H.levels[1].A.rowptr), objectid(H.levels[1].A.colval),
         objectid(H.levels[1].A.nzval),

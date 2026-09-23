@@ -7,10 +7,13 @@ using CUDA
 using CUDA.CUSPARSE: CuSparseMatrixBSR, CuSparseMatrixCSR
 using KernelAbstractions
 using LinearAlgebra
+using SparseArrays
 using StaticArrays: StaticMatrix
 import Adapt
 import CUDA: KernelAdaptor
 import KernelAbstractions as KA
+
+include("cuda_sparse_lu.jl")
 
 struct CUDASmootherKernel{K, C, KC}
     kernel::K
@@ -622,17 +625,6 @@ function KAPreconditioners.csr_matrix(
         A.nzVal, A.colVal, A.rowPtr, size(A, 1), size(A, 2),
         KernelAbstractions.get_backend(A.nzVal);
         nthreads = 1, minbatch = Int(block_size), thread_type = :serial
-    )
-end
-
-function Jutul.KernelExecution.factorize_linear_system(
-        ::typeof(lu),
-        matrix::StaticSparsityMatrixCSR{
-            Tv, Ti, V, I, R, B,
-        }
-    ) where {Tv, Ti <: Integer, V, I, R, B <: CUDA.CUDABackend}
-    return KAPreconditioners.build_coarse_solver(
-        matrix, KAPreconditioners.matrix_backend(matrix)
     )
 end
 
