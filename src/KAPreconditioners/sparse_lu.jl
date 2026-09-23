@@ -1,3 +1,5 @@
+function setup_preferred_sparse_lu end
+
 """
 The portable sparse LU uses a fixed symbolic fill pattern and no pivoting. It is
 intended for eliminated blocks that admit LU without pivoting.

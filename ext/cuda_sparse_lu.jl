@@ -82,10 +82,20 @@ end
 
 function KAPreconditioners.setup_sparse_lu(
         matrix::StaticSparsityMatrixCSR{
-            Float64, Ti, V, I, R, B,
+            Tv, Ti, V, I, R, B,
         }
-    ) where {Ti <: Integer, V, I, R, B <: CUDA.CUDABackend}
-    return setup_cuda_sparse_lu(matrix)
+    ) where {
+        Tv <: Union{Float32, Float64, ComplexF32, ComplexF64},
+        Ti <: Integer, V, I, R, B <: CUDA.CUDABackend,
+    }
+    if applicable(KAPreconditioners.setup_preferred_sparse_lu, matrix)
+        return KAPreconditioners.setup_preferred_sparse_lu(matrix)
+    elseif Tv === Float64
+        return setup_cuda_sparse_lu(matrix)
+    else
+        return invoke(KAPreconditioners.setup_sparse_lu,
+            Tuple{StaticSparsityMatrixCSR}, matrix)
+    end
 end
 
 function LinearAlgebra.ldiv!(
