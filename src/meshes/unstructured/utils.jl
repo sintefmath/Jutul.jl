@@ -164,7 +164,7 @@ function extract_submesh(g::UnstructuredMesh, cells; kwarg...)
         new_neighbors,
         new_boundary_cells;
         structure = g.structure,
-        cell_map = cells,
+        cell_map = isnothing(g.cell_map) ? cells : g.cell_map[cells],
         kwarg...
     )
 end
