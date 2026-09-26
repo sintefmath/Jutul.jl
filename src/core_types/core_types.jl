@@ -1402,7 +1402,8 @@ struct IndirectionMap{V, Values <: AbstractVector{V}, Pos <: AbstractVector{Int}
         return new{V, typeof(vals), typeof(pos)}(vals, pos)
     end
     function IndirectionMap(vals::Values, pos::Pos) where {
-            V, Values<:AbstractVector{V}, Pos<:AbstractVector{Int}}
+            V, Values <: AbstractVector{V}, Pos <: AbstractVector{Int},
+        }
         return new{V, Values, Pos}(vals, pos)
     end
 end
