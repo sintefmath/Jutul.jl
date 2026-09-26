@@ -90,8 +90,9 @@ function compute_half_face_trans(
         throw(ArgumentError("version must be :xyz or :ijk"))
     end
     if version == :ijk
-        if size(perm, 1) != dim
-            throw(ArgumentError("version = :ijk is only valid when perm is strictly diagonal."))
+        permdim = size(perm, 1)
+        if permdim > 1 && permdim != dim
+            throw(ArgumentError("version = :ijk is only valid when perm is strictly diagonal. ($permdim vs $dim)"))
         end
         if ismissing(face_dir)
             throw(ArgumentError("version = :ijk cannot be used without also passing face_dir."))
