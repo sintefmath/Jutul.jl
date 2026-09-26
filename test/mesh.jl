@@ -186,6 +186,49 @@ using MAT
     end
 end
 
+@testset "cell geometry with a collapsed edge" begin
+    # One hexahedron on a unit square, top depth z and thickness t at its four
+    # pillars, with the bottom node of pillar (2, 2) merged into the top node
+    # there (thickness 0): the two side faces at that pillar become triangles,
+    # as corner-point processing makes them. Thin and warped, the cell does
+    # not contain the mean of its face nodes, which the tetrahedra are built
+    # around, so their volumes must be summed with signs.
+    function collapsed_hex(z, t)
+        g = UnstructuredMesh(CartesianMesh((1, 1, 1), (1.0, 1.0, 1.0)))
+        pts = g.node_points
+        pillar(p) = (round(Int, p[1]) + 1, round(Int, p[2]) + 1)
+        for (k, p) in enumerate(pts)
+            i, j = pillar(p)
+            pts[k] = typeof(p)(p[1], p[2], z[i, j] + (p[3] < 0.5 ? 0.0 : t[i, j]))
+        end
+        at_pillar = findall(k -> pillar(pts[k]) == (2, 2), eachindex(pts))
+        top, bottom = sort(at_pillar, by = k -> pts[k][3])
+        B = g.boundary_faces
+        vals, pos = Int[], [1]
+        for f in 1:length(B.faces_to_nodes)
+            nodes = replace(collect(B.faces_to_nodes[f]), bottom => top)
+            nodes = [n for (k, n) in enumerate(nodes) if n != nodes[k == 1 ? end : k - 1]]
+            append!(vals, nodes)
+            push!(pos, pos[end] + length(nodes))
+        end
+        return UnstructuredMesh(
+            g.faces.cells_to_faces, B.cells_to_faces,
+            g.faces.faces_to_nodes, Jutul.IndirectionMap(vals, pos), pts,
+            g.faces.neighbors, B.neighbors
+        )
+    end
+    t = [0.01 0.01; 0.01 0.0]
+    # the exact volume is the mean thickness (unit footprint, planar sides)
+    for z in ([0.0 0.0; 0.0 0.0], [0.0 0.1; 0.1 0.3], [0.0 0.5; 0.2 2.0])
+        g = collapsed_hex(z, t)
+        @test length(g.boundary_faces.faces_to_nodes[1]) in (3, 4)
+        geo = tpfv_geometry(g)
+        @test geo.volumes[1] ≈ sum(t) / 4 rtol = 1.0e-10
+        c = geo.cell_centroids[:, 1]
+        @test 0 < c[1] < 1 && 0 < c[2] < 1 && minimum(z) <= c[3] <= maximum(z + t)
+    end
+end
+
 @testset "CoarseMesh" begin
     G = CartesianMesh((4, 1, 1))
     uG = UnstructuredMesh(G)
