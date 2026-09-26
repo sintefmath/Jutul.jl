@@ -135,6 +135,7 @@ function Jutul.plot_explorer_impl(
         textcolor = missing,
         background_colormap = missing,
         colormap = missing,
+        colormap_override::AbstractDict = Dict(),
         hist_colormap = colormap,
         nbins = 25,
         use_highclip = Sys.isapple(),
@@ -166,6 +167,7 @@ function Jutul.plot_explorer_impl(
     if ismissing(colormap)
         colormap = default_colors.colormap
     end
+    colormap = to_colormap(colormap)
     if ismissing(background_colormap)
         background_colormap = default_colors.background_colormap
     end
@@ -299,12 +301,7 @@ function Jutul.plot_explorer_impl(
         else
             cmapkey = sel
         end
-
-        if colormap isa AbstractDict
-            return get(colormap, cmapkey, colormap)
-        else
-            return colormap
-        end
+        return get(colormap_override, cmapkey, colormap)
     end
     lights = []
 
