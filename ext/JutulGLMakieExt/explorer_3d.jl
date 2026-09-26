@@ -293,7 +293,19 @@ function Jutul.plot_explorer_impl(
     N = 20
 
     bgcmap = background_colormap
-    cmap = colormap
+    function get_colormap(sel, sel_dyn, is_dynamic)
+        if is_dynamic
+            cmapkey = sel_dyn
+        else
+            cmapkey = sel
+        end
+
+        if colormap isa AbstractDict
+            return get(colormap, cmapkey, colormap)
+        else
+            return colormap
+        end
+    end
     lights = []
 
     fig = Figure(size = (1650, 1000), figure_padding = 0.0)
@@ -603,6 +615,7 @@ function Jutul.plot_explorer_impl(
     else
         mesh_arg = NamedTuple()
     end
+    cmap = @lift get_colormap($sel, $sel_dyn, $is_dynamic)
     mplt = mesh!(
         lscene, points, ttri;
         colormap = cmap,
