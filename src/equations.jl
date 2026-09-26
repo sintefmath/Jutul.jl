@@ -47,7 +47,7 @@ function find_jac_position(
         # target_entity_offset = 0
         # The block we are in could actually be bigger. This only matters for
         # entity/block major stuff.
-        eqs_per_entity = max(eqs_per_entity, partials_per_entity)
+        eqs_per_entity = max(eqs_per_entity, partials_per_entity, number_of_equations_for_entity)
     end
     row_layout = scalarize_layout(row_layout, col_layout)
     col_layout = scalarize_layout(col_layout, row_layout)

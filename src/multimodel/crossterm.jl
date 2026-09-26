@@ -488,13 +488,16 @@ function offdiagonal_crossterm_alignment!(s_source, ct, lsys, model, target, sou
     equation_offset += get_equation_offset(target_model, eq_label)
     @assert !isnothing(offdiag_alignment)
     nt = number_of_entities(target_model, ct_equation(target_model, eq_label))
-    for source_e in get_primary_variable_ordered_entities(source_model)
-        neqs_total = 0
-        for (k, eq) in source_model.equations
-            if associated_entity(eq) == source_e
-                neqs_total += number_of_equations_per_entity(source_model, eq)
-            end
+    # Rows belong to the target model: the row stride is the number of target
+    # equations per entity of the target equation's entity.
+    target_e = associated_entity(ct_equation(target_model, eq_label))
+    neqs_total = 0
+    for (k, eq) in target_model.equations
+        if associated_entity(eq) == target_e
+            neqs_total += number_of_equations_per_entity(target_model, eq)
         end
+    end
+    for source_e in get_primary_variable_ordered_entities(source_model)
         align_to_jacobian!(
             s_source, ct, J, source_model, source_e, impact,
             equation_offset = equation_offset,
