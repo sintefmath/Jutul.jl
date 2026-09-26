@@ -1392,15 +1392,26 @@ dense vectors that is encoded. The `vals` array holds the entries for vector i
 in the range `pos[i]:(pos[i+1]-1)` for fast lookup. Indexing into the
 indirection map with index `k` will give a view into the values for vector `k`.
 """
-struct IndirectionMap{V}
-    vals::Vector{V}
-    pos::Vector{Int}
+struct IndirectionMap{V, Values <: AbstractVector{V}, Pos <: AbstractVector{Int}}
+    vals::Values
+    pos::Pos
     function IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where {V}
         lastpos = pos[end]
         @assert length(vals) == lastpos - 1 "Expected vals to have length lastpos - 1 = $(lastpos - 1), was $(length(vals))"
         @assert pos[1] == 1
-        return new{V}(vals, pos)
+        return new{V, typeof(vals), typeof(pos)}(vals, pos)
     end
+    function IndirectionMap(vals::Values, pos::Pos) where {
+            V, Values <: AbstractVector{V}, Pos <: AbstractVector{Int},
+        }
+        return new{V, Values, Pos}(vals, pos)
+    end
+end
+
+function Adapt.adapt_structure(to, map::IndirectionMap)
+    return IndirectionMap(
+        Adapt.adapt(to, map.vals), Adapt.adapt(to, map.pos)
+    )
 end
 
 """
