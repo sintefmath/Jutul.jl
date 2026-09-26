@@ -967,10 +967,15 @@ Base.@propagate_inbounds function Base.getindex(m::IndirectionMap, ix::Int)
     return view(m.vals, p[ix]:(p[ix + 1] - 1))
 end
 
+Base.@propagate_inbounds function indirection_range(m::IndirectionMap, ix::Int)
+    p = m.pos
+    return p[ix]:(p[ix + 1] - 1)
+end
+
 Base.length(m::IndirectionMap) = length(m.pos) - 1
 
 function Base.show(io::IO, t::MIME"text/plain", m::IndirectionMap)
-    return print(io, "IndirectionMap with $(length(m)) entities and total $(m.pos[end] - 1) entries")
+    return print(io, "IndirectionMap with $(length(m)) entities and total $(length(m.vals)) entries")
 end
 
 function get_mat_testgrid(name)
