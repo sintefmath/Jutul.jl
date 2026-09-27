@@ -1075,12 +1075,12 @@ end
 Adapt a fully initialized CPU simulator to a KernelAbstractions backend.
 [`SimulationModel`](@ref) and [`MultiModel`](@ref) are supported. Sparsity
 discovery and Jacobian/cross-term alignment finish on the CPU before the CSR
-arrays are moved. Array aliases used by primary variables, parameters,
-residual views and Jacobian buffers are rebuilt against the adapted root
-arrays. Submodels marked [`AssembleOnDevice`](@ref) retain their CPU model and
-storage and copy into preallocated backend mirrors after evaluation. Mixed
-host/device cross terms execute on the host by default; set
-`mixed_cross_terms_on_host=false` to use backend evaluation instead.
+arrays are moved. Array aliases used by primary variables, parameters, residual
+views and Jacobian buffers are rebuilt against the adapted root arrays.
+Submodels marked `AssembleOnDevice` retain their CPU model and storage and copy
+into preallocated backend mirrors after evaluation. Mixed host/device cross
+terms execute on the host by default; set `mixed_cross_terms_on_host=false` to
+use backend evaluation instead.
 """
 function transfer_to_backend(
         sim::Simulator, backend;

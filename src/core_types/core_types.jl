@@ -1188,15 +1188,15 @@ multimodel_label(::AbstractMultiModel{L}) where {L} = L
 Execution policy for a submodel in a backend-resident
 [`MultiModel`](@ref).
 
-- [`SolveFullyOnDevice`](@ref): variables, equations, assembly and the linear
+- `SolveFullyOnDevice`: variables, equations, assembly and the linear
   system reside on the device.
-- [`AssembleOnDevice`](@ref): variables and equations are evaluated on the
+- `AssembleOnDevice`: variables and equations are evaluated on the
   host, then synchronized to preallocated device storage for linear-system
   assembly. Cross terms with another `AssembleOnDevice` model are evaluated
   on the host and copied to the device. Cross terms with a
   `SolveFullyOnDevice` model are evaluated on the device after synchronizing
   the host model's state.
-- [`NothingOnDevice`](@ref): variables, equations, assembly and the linear
+- `NothingOnDevice`: variables, equations, assembly and the linear
   system remain on the host.
 """
 @enum DeviceExecutionMode::UInt8 begin
