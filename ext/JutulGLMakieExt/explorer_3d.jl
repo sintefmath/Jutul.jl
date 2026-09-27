@@ -135,6 +135,7 @@ function Jutul.plot_explorer_impl(
         textcolor = missing,
         background_colormap = missing,
         colormap = missing,
+        colormap_override::AbstractDict = Dict(),
         hist_colormap = colormap,
         nbins = 25,
         use_highclip = Sys.isapple(),
@@ -166,6 +167,7 @@ function Jutul.plot_explorer_impl(
     if ismissing(colormap)
         colormap = default_colors.colormap
     end
+    colormap = to_colormap(colormap)
     if ismissing(background_colormap)
         background_colormap = default_colors.background_colormap
     end
@@ -293,7 +295,14 @@ function Jutul.plot_explorer_impl(
     N = 20
 
     bgcmap = background_colormap
-    cmap = colormap
+    function get_colormap(sel, sel_dyn, is_dynamic)
+        if is_dynamic
+            cmapkey = sel_dyn
+        else
+            cmapkey = sel
+        end
+        return get(colormap_override, cmapkey, colormap)
+    end
     lights = []
 
     fig = Figure(size = (1650, 1000), figure_padding = 0.0)
@@ -603,6 +612,7 @@ function Jutul.plot_explorer_impl(
     else
         mesh_arg = NamedTuple()
     end
+    cmap = @lift get_colormap($sel, $sel_dyn, $is_dynamic)
     mplt = mesh!(
         lscene, points, ttri;
         colormap = cmap,
