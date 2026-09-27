@@ -309,7 +309,8 @@ function sort_secondary_variables!(model::SimulationModel)
     secondary = model.secondary_variables
     param = model.parameters
 
-    isect = intersect(keys(primary), keys(secondary))
+    skeys = keys(secondary)
+    isect = intersect(keys(primary), skeys)
     if length(isect) > 0
         error("$isect found in both primary and secondary variables.")
     end
@@ -317,7 +318,7 @@ function sort_secondary_variables!(model::SimulationModel)
     if length(isect) > 0
         error("$isect found in both primary variables and parameters.")
     end
-    isect = intersect(keys(param), keys(secondary))
+    isect = intersect(keys(param), skeys)
     if length(isect) > 0
         error("$isect found in both parameters and secondary variables.")
     end
@@ -332,9 +333,16 @@ function sort_secondary_variables!(model::SimulationModel)
     order = order[order .> np]
     # Offset by primary variables
     @. order -= np
-    @. secondary.keys = secondary.keys[order]
-    @. secondary.vals = secondary.vals[order]
-    OrderedCollections.rehash!(secondary)
+    # Remove and re-add in evaluation order
+    skeys = collect(skeys)
+    svar_old = copy(secondary)
+    for k in skeys
+        delete!(secondary, k)
+    end
+    for i in order
+        k = skeys[i]
+        secondary[k] = svar_old[k]
+    end
     return model
 end
 
