@@ -1391,10 +1391,10 @@ end
     update_before_step_multimodel_backend!(storage, model,
         backend_storage, backend_model, submodel, dt, forces, label; kwarg...)
 
-Backend-aware variant of [`update_before_step_multimodel!`](@ref). `storage`
-and `model` are the selected evaluation view, while `backend_storage` and
-`backend_model` are the simulator's preallocated backend objects. The default
-implementation delegates to the ordinary hook.
+Backend-aware variant of `update_before_step_multimodel!`. `storage` and `model`
+are the selected evaluation view, while `backend_storage` and `backend_model`
+are the simulator's preallocated backend objects. The default implementation
+delegates to the ordinary hook.
 """
 function update_before_step_multimodel_backend!(
         storage, model, backend_storage, backend_model,
