@@ -139,12 +139,54 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
     return reset_solve_history!(H)
 end
 
-const AMG_REUSE_MODES = (:operators, :sparsity, :memory, :none)
+function partial_sparsity_reset!(
+        H::AMGHierarchy, A::StaticSparsityMatrixCSR, n_sparse_keep::Integer
+    )
+    n_sparse_keep >= 0 || throw(ArgumentError("n_sparse_keep must be non-negative"))
+    same_pattern(H, A) || throw(ArgumentError("reuse=:partial_sparsity requires an unchanged CSR pattern"))
+    same_backend(matrix_backend(A), H.backend) ||
+        throw(ArgumentError("matrix and hierarchy must use the same backend"))
+    if n_sparse_keep >= length(H.levels)
+        return numeric_reset!(H, A, :sparsity)
+    elseif n_sparse_keep == 0
+        return memory_reset!(H, A)
+    end
+    cutoff = Int(n_sparse_keep) + 1
+    copy_matrix_values!(H.levels[1].A, A)
+    for l in 1:(cutoff - 1)
+        level = H.levels[l]
+        update_level_smoother!(level.smoother, level.A, H.options)
+        update_prolongation!(level, H.options.interpolation)
+        galerkin!(H.levels[l + 1].A, level.A, level.P, level.galerkin)
+    end
+    old_levels = H.levels
+    cutoff_matrix = old_levels[cutoff].A
+    host_cutoff = H.backend isa KernelAbstractions.CPU ? cutoff_matrix : host_csr(cutoff_matrix)
+    replaced_bytes = Ref(0)
+    H.levels = build_hierarchy(
+        cutoff_matrix, H.options; reuse_levels = old_levels,
+        workspace = H.workspace, host_finest = host_cutoff,
+        reuse_finest_structure = true,
+        prefix_levels = old_levels[1:(cutoff - 1)],
+        reallocation_tracker = replaced_bytes
+    )
+    H.pending_replaced_storage += replaced_bytes[]
+    cleanup_threshold = replaced_backend_storage_cleanup_threshold(H.backend)
+    if H.pending_replaced_storage > 0 &&
+            H.pending_replaced_storage >= cleanup_threshold
+        release_replaced_backend_storage!(H.backend)
+        H.pending_replaced_storage = 0
+    end
+    synchronize_backend(H.backend)
+    return reset_solve_history!(H)
+end
+
+const AMG_REUSE_MODES = (:operators, :sparsity, :partial_sparsity, :memory, :none)
 
 function validate_amg_reuse_mode(reuse::Symbol)
     reuse in AMG_REUSE_MODES || throw(
         ArgumentError(
-            "reuse must be :operators, :sparsity, :memory, or :none"
+            "reuse must be :operators, :sparsity, :partial_sparsity, :memory, or :none"
         )
     )
     return reuse
@@ -212,11 +254,15 @@ Refresh a hierarchy for new coefficients.
 * `:memory` recomputes all symbolic data while recycling compatible hierarchy
   buffers. The finest sparsity pattern must be unchanged; coefficients may alter
   strength, splitting, interpolation, and every coarse pattern.
+* `:partial_sparsity` retains splits and patterns on the first `n_sparse_keep`
+  levels (default 3), updating interpolation weights there as in `:sparsity`.
+  Remaining levels are rebuilt as in `:memory`.
 * `:none` is a completely fresh setup and is useful as a reference baseline.
 
 The first two modes perform no hierarchy-array allocation.
 """
-function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol = :operators)
+function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol = :operators;
+        n_sparse_keep::Integer = 3)
     validate_amg_reuse_mode(reuse)
     if reuse == :operators || reuse == :sparsity
         same_pattern(H, A) || throw(ArgumentError("reuse=$reuse requires an unchanged CSR pattern"))
@@ -229,6 +275,8 @@ function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol
         numeric_reset!(H, A, :sparsity)
     elseif reuse == :memory
         memory_reset!(H, A)
+    elseif reuse == :partial_sparsity
+        partial_sparsity_reset!(H, A, n_sparse_keep)
     else
         replace_hierarchy!(H, setup_amg(A, H.options))
     end
@@ -237,7 +285,8 @@ end
 
 function resetup_amg!(
         H::AMGHierarchy{Tv, Ti}, A::SparseMatrixCSC,
-        reuse::Symbol = :operators
+        reuse::Symbol = :operators;
+        n_sparse_keep::Integer = 3
     ) where {Tv, Ti}
     validate_amg_reuse_mode(reuse)
     eltype(A) === Tv || throw(ArgumentError("matrix value type must match the hierarchy"))
@@ -258,9 +307,11 @@ function resetup_amg!(
         rebuild_memory!(H, host_finest)
     else
         C = csr_matrix(A; backend = H.backend, block_size = H.block_size, index_type = Ti)
-        resetup_amg!(H, C, reuse)
+        resetup_amg!(H, C, reuse; n_sparse_keep)
     end
     return H
 end
 
-resetup_amg!(H::AMGHierarchy, A; reuse::Symbol = :operators) = resetup_amg!(H, A, reuse)
+resetup_amg!(H::AMGHierarchy, A; reuse::Symbol = :operators,
+    n_sparse_keep::Integer = 3) =
+    resetup_amg!(H, A, reuse; n_sparse_keep)

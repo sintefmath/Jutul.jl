@@ -550,6 +550,64 @@ end
     @test_throws ArgumentError resetup_amg!(H, changed_graph, :memory)
 end
 
+@testset "partial sparsity reset" begin
+    A = poisson_2d(12)
+    options = AMGOptions(coarsening = HMIS(0.5), coarse_size = 10)
+    H = setup_amg(A, options)
+    @test length(H.levels) >= 3
+    cutoff = 3
+    n_sparse_keep = cutoff - 1
+    upper_ids = [level_memory_ids(level) for level in H.levels[1:(cutoff - 1)]]
+    B = copy(A)
+    rows = rowvals(B)
+    @inbounds for j in axes(B, 2), p in nzrange(B, j)
+        i = rows[p]
+        B.nzval[p] *= i == j ? 1.3 : (isodd(i + j) ? 0.4 : 1.6)
+    end
+    @test resetup_amg!(H, B, :partial_sparsity;
+        n_sparse_keep = n_sparse_keep) === H
+    @test upper_ids == [level_memory_ids(level) for level in H.levels[1:(cutoff - 1)]]
+    @test isapprox(Matrix(KAPreconditioners.sparse_matrix(H.levels[1].A)), Matrix(B))
+    fresh_suffix = setup_amg(H.levels[cutoff].A, options)
+    @test length(H.levels) - cutoff + 1 == length(fresh_suffix.levels)
+    @test H.levels[cutoff].cf == fresh_suffix.levels[1].cf
+    @test H.levels[cutoff].P.colval == fresh_suffix.levels[1].P.colval
+    @test H.levels[cutoff].P.nzval ≈ fresh_suffix.levels[1].P.nzval
+    test_galerkin(H)
+
+    H_memory = setup_amg(A, options)
+    resetup_amg!(H_memory, B, :memory)
+    H_zero = setup_amg(A, options)
+    resetup_amg!(H_zero, B, :partial_sparsity; n_sparse_keep = 0)
+    @test H_zero.levels[1].cf == H_memory.levels[1].cf
+    @test H_zero.levels[1].P.nzval ≈ H_memory.levels[1].P.nzval
+
+    H_default = setup_amg(A, options)
+    H_three = setup_amg(A, options)
+    resetup_amg!(H_default, B, :partial_sparsity)
+    resetup_amg!(H_three, B, :partial_sparsity; n_sparse_keep = 3)
+    @test H_default.levels[1].P.nzval ≈ H_three.levels[1].P.nzval
+
+    H_sparsity = setup_amg(A, options)
+    resetup_amg!(H_sparsity, B, :sparsity)
+    H_no_cutoff = setup_amg(A, options)
+    resetup_amg!(H_no_cutoff, B, :partial_sparsity;
+        n_sparse_keep = length(H_no_cutoff.levels))
+    @test H_no_cutoff.levels[1].P.nzval ≈ H_sparsity.levels[1].P.nzval
+    @test_throws ArgumentError resetup_amg!(H, B, :partial_sparsity;
+        n_sparse_keep = -1)
+
+    preconditioner = AMGPreconditioner(:hmis;
+        coarse_size = 10, reuse = :partial_sparsity, n_sparse_keep = 2)
+    @test preconditioner.n_sparse_keep == 2
+    rhs = ones(size(A, 1))
+    context = DefaultContext()
+    Jutul.update_preconditioner!(preconditioner, A, rhs, context, nothing)
+    wrapper_ids = [level_memory_ids(level) for level in preconditioner.factor.levels[1:2]]
+    Jutul.update_preconditioner!(preconditioner, B, rhs, context, nothing)
+    @test wrapper_ids == [level_memory_ids(level) for level in preconditioner.factor.levels[1:2]]
+end
+
 @testset "backend buffer capacity reuse" begin
     backend = JLBackend()
     allocation = JLArray(collect(Int32, 1:12))
@@ -765,6 +823,11 @@ end
         objectid(H.levels[1].A.nzval),
     )
     resetup_amg!(H, D, :memory)
+    test_galerkin(H)
+    @test length(H.levels) >= 3
+    kept_ids = [level_memory_ids(level) for level in H.levels[1:2]]
+    resetup_amg!(H, DB, :partial_sparsity; n_sparse_keep = 2)
+    @test kept_ids == [level_memory_ids(level) for level in H.levels[1:2]]
     test_galerkin(H)
 
     # Exercise every method-specific interpolation reset on device arrays.
