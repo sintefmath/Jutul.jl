@@ -73,13 +73,24 @@ function compute_centroid_and_measure(G::UnstructuredMesh, ::Cells, i)
 
     centroid, vol = sum_centroid_volumes_helper(pts, c_node, G.faces, centroid, vol, i)
     centroid, vol = sum_centroid_volumes_helper(pts, c_node, G.boundary_faces, centroid, vol, i)
-    return (centroid ./ vol, vol)
+    # In 3D the tetrahedron volumes are signed (see below): their sum is the
+    # cell volume up to one sign fixed by the node-order convention, and the
+    # centroid is unaffected by it.
+    return (centroid ./ vol, abs(vol))
 end
+
+# Orientation of a face's node order relative to cell i: +1 if the normal
+# given by the node order points out of the cell, -1 otherwise. Interior faces
+# are ordered to point from the first to the second neighbor, boundary faces
+# out of the domain.
+face_orientation_sign(faces::FaceMap{<:Any, Tuple{Int, Int}}, face, i) = faces.neighbors[face][1] == i ? 1 : -1
+face_orientation_sign(faces::FaceMap{<:Any, Int}, face, i) = 1
 
 function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector{N, E}, faces, centroid::SVector{N, E}, vol, i) where {N, E}
     T = SVector{N, E}
     for face in faces.cells_to_faces[i]
         nodes = faces.faces_to_nodes[face]
+        sgn = face_orientation_sign(faces, face, i)
         # Compute center point (not centroid) for face
         c_node_face = zero(T)
         for node in nodes
@@ -104,7 +115,11 @@ function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector
                         l_node[3], r_node[3], c_node[3], c_node_face[3],
                         1.0, 1.0, 1.0, 1.0
                     )
-                    local_volume = (1.0 / 6.0) * abs(det(M))
+                    # Signed volume, oriented by the face: where the center
+                    # point c_node lies outside a non-convex cell, the
+                    # tetrahedra outside count negatively. Taking abs() here
+                    # would add them instead.
+                    local_volume = (sgn / 6.0) * det(M)
                     local_centroid = (1.0 / 4.0) * (l_node + r_node + c_node_face + c_node)
                 else
                     A = r_node - c_node
