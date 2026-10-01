@@ -123,14 +123,14 @@ end
         @inbounds for row in 1:n
             for position in rowptr[row]:(rowptr[row + 1] - 1)
                 col = colval[position]
-                factors[(row - 1)*n + col] = source[position]
+                factors[(row - 1) * n + col] = source[position]
             end
         end
         @inbounds for k in 1:n
             pivot_row = k
-            pivot_size = abs(factors[(k - 1)*n + k])
+            pivot_size = abs(factors[(k - 1) * n + k])
             for row in (k + 1):n
-                candidate = abs(factors[(row - 1)*n + k])
+                candidate = abs(factors[(row - 1) * n + k])
                 if candidate > pivot_size
                     pivot_size = candidate
                     pivot_row = row
@@ -143,21 +143,21 @@ end
             pivots[k] = pivot_row
             if pivot_row != k
                 for col in 1:n
-                    first = (k - 1)*n + col
-                    second = (pivot_row - 1)*n + col
+                    first = (k - 1) * n + col
+                    second = (pivot_row - 1) * n + col
                     value = factors[first]
                     factors[first] = factors[second]
                     factors[second] = value
                 end
             end
-            pivot = factors[(k - 1)*n + k]
+            pivot = factors[(k - 1) * n + k]
             for row in (k + 1):n
-                lower = (row - 1)*n + k
+                lower = (row - 1) * n + k
                 multiplier = factors[lower] / pivot
                 factors[lower] = multiplier
                 for col in (k + 1):n
-                    factors[(row - 1)*n + col] -=
-                        multiplier*factors[(k - 1)*n + col]
+                    factors[(row - 1) * n + col] -=
+                        multiplier * factors[(k - 1) * n + col]
                 end
             end
         end
@@ -201,16 +201,16 @@ end
         @inbounds for i in 1:n
             value = output[i]
             for j in 1:(i - 1)
-                value -= factors[(i - 1)*n + j]*output[j]
+                value -= factors[(i - 1) * n + j] * output[j]
             end
             output[i] = value
         end
         @inbounds for i in n:-1:1
             value = output[i]
             for j in (i + 1):n
-                value -= factors[(i - 1)*n + j]*output[j]
+                value -= factors[(i - 1) * n + j] * output[j]
             end
-            output[i] = value / factors[(i - 1)*n + i]
+            output[i] = value / factors[(i - 1) * n + i]
         end
     end
 end
@@ -264,13 +264,17 @@ function resetup_sparse_lu!(S::SparseLU{<:KASparseLUFactor}, A::StaticSparsityMa
         throw(ArgumentError("sparse LU resetup requires the same CSR pattern"))
     if F.pivoting
         kernel! = pivoted_sparse_lu_factor_kernel!(F.backend, 1)
-        event = kernel!(F.factors, F.pivots, F.status,
-            A.nzval, F.rowptr, F.colval, F.n; ndrange = 1)
+        event = kernel!(
+            F.factors, F.pivots, F.status,
+            A.nzval, F.rowptr, F.colval, F.n; ndrange = 1
+        )
     else
         kernel! = sparse_lu_factor_kernel!(F.backend, 1)
-        event = kernel!(F.factors, A.nzval, F.rowptr, F.colval,
+        event = kernel!(
+            F.factors, A.nzval, F.rowptr, F.colval,
             F.diagonal, F.source_to_factor, F.status, nnz(A), F.n;
-            ndrange = 1)
+            ndrange = 1
+        )
     end
     isnothing(event) || wait(event)
     singular = only(Array(F.status))
@@ -286,8 +290,10 @@ function LinearAlgebra.ldiv!(x, S::SparseLU{<:KASparseLUFactor}, b)
         event = kernel!(x, b, F.factors, F.pivots, F.n; ndrange = 1)
     else
         kernel! = sparse_lu_solve_kernel!(F.backend, 1)
-        event = kernel!(x, b, F.factors, F.rowptr, F.colval,
-            F.diagonal, F.n; ndrange = 1)
+        event = kernel!(
+            x, b, F.factors, F.rowptr, F.colval,
+            F.diagonal, F.n; ndrange = 1
+        )
     end
     isnothing(event) || wait(event)
     return x

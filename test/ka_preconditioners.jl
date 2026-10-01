@@ -107,7 +107,8 @@ end
         ldiv!(x, F, rhs)
         @test Array(x) ≈ A \ b
         @test KAPreconditioners.resetup_sparse_lu!(
-            F, csr_matrix(B; backend)) === F
+            F, csr_matrix(B; backend)
+        ) === F
         ldiv!(x, F, rhs)
         @test Array(x) ≈ B \ b
         missing_diagonal = KAPreconditioners.setup_sparse_lu(csr_matrix(C; backend))
