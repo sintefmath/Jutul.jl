@@ -81,6 +81,39 @@ end
         @test_throws ArgumentError KAPreconditioners.resetup_sparse_lu!(
             F, csr_matrix(different; backend)
         )
+
+        unpivoted = KAPreconditioners.setup_sparse_lu(matrix; pivoting = false)
+        @test !unpivoted.factorization.pivoting
+        ldiv!(x, unpivoted, rhs)
+        @test Array(x) ≈ A \ b
+    end
+end
+
+@testset "SparseLU row pivoting" begin
+    # Resetup changes which row is selected as the first pivot while
+    # preserving the CSR pattern, including its explicit zero diagonal.
+    rows = [1, 1, 2, 2]
+    cols = [1, 2, 1, 2]
+    A = sparse(rows, cols, [0.0, 2.0, 3.0, 4.0], 2, 2)
+    B = sparse(rows, cols, [5.0, 2.0, 3.0, 4.0], 2, 2)
+    C = sparse([1, 2, 2], [2, 1, 2], [2.0, 3.0, 4.0], 2, 2)
+    b = [1.0, 2.0]
+    for backend in (KernelAbstractions.CPU(), JLBackend())
+        matrix = csr_matrix(A; backend)
+        F = KAPreconditioners.setup_sparse_lu(matrix)
+        @test F.factorization.pivoting
+        rhs = backend isa KernelAbstractions.CPU ? b : JLArray(b)
+        x = similar(rhs)
+        ldiv!(x, F, rhs)
+        @test Array(x) ≈ A \ b
+        @test KAPreconditioners.resetup_sparse_lu!(
+            F, csr_matrix(B; backend)
+        ) === F
+        ldiv!(x, F, rhs)
+        @test Array(x) ≈ B \ b
+        missing_diagonal = KAPreconditioners.setup_sparse_lu(csr_matrix(C; backend))
+        ldiv!(x, missing_diagonal, rhs)
+        @test Array(x) ≈ C \ b
     end
 end
 
