@@ -13,9 +13,12 @@ coarsening strategy, interpolation method, smoother configuration, and cycle
 type. These are not a public API and are subject to change without notice or
 major version bump.
 
-With `reuse=:partial_sparsity`, `n_sparse_keep` controls how many leading
-levels retain their sparsity patterns and C/F splits. It defaults to 3;
-remaining levels rebuild their symbolic data on each full update.
+With `reuse=:partial_operators` or `:partial_sparsity`,
+`n_levels_partial_keep` controls how many leading levels retain their
+symbolic structure (default 3). `n_partial_keep` can shorten that prefix
+at the first level whose matrix size is below the specified value. Its
+default of -1 disables the size limit. The remaining levels rebuild their
+symbolic data on each full update.
 """
 mutable struct AMGPreconditioner{O} <: JutulPreconditioner
     options::O
@@ -23,7 +26,8 @@ mutable struct AMGPreconditioner{O} <: JutulPreconditioner
     dim
     reuse::Symbol
     reuse_partial::Symbol
-    n_sparse_keep::Int
+    n_levels_partial_keep::Int
+    n_partial_keep::Int
 end
 
 function amg_coarsening(method::Symbol, theta)
@@ -66,7 +70,8 @@ function AMGPreconditioner(
         coarse_size = 5,
         reuse::Symbol = :memory,
         reuse_partial::Symbol = :operators,
-        n_sparse_keep::Integer = 3,
+        n_levels_partial_keep::Integer = 3,
+        n_partial_keep::Integer = -1,
         damping = 1.0,
         kwarg...
     )
@@ -79,8 +84,10 @@ function AMGPreconditioner(
         smoother = ka_smoother(smoother_type; steps = npre, damping = damping)
     end
     cycle in (:V, :W) || throw(ArgumentError("cycle must be :V or :W"))
-    n_sparse_keep >= 0 ||
-        throw(ArgumentError("n_sparse_keep must be non-negative"))
+    n_levels_partial_keep >= 0 ||
+        throw(ArgumentError("n_levels_partial_keep must be non-negative"))
+    (n_partial_keep == -1 || n_partial_keep > 0) ||
+        throw(ArgumentError("n_partial_keep must be -1 or positive"))
     if method isa Jutul.KAPreconditioners.AbstractCoarsening
         coarsening = method
     else
@@ -99,7 +106,7 @@ function AMGPreconditioner(
     )
     return AMGPreconditioner(
         options, nothing, nothing, reuse, reuse_partial,
-        Int(n_sparse_keep)
+        Int(n_levels_partial_keep), Int(n_partial_keep)
     )
 end
 
@@ -109,7 +116,8 @@ function update_preconditioner!(amg::AMGPreconditioner, A, b, context, executor)
         amg.dim = (length(b), length(b))
     else
         update_ka_amg!(amg.factor, A, amg.reuse;
-            n_sparse_keep = amg.n_sparse_keep)
+            n_levels_partial_keep = amg.n_levels_partial_keep,
+            n_partial_keep = amg.n_partial_keep)
     end
     return amg
 end
@@ -121,7 +129,8 @@ function partial_update_preconditioner!(
     isnothing(amg.factor) &&
         return update_preconditioner!(amg, A, b, context, executor)
     update_ka_amg!(amg.factor, A, amg.reuse_partial;
-        n_sparse_keep = amg.n_sparse_keep)
+        n_levels_partial_keep = amg.n_levels_partial_keep,
+        n_partial_keep = amg.n_partial_keep)
     return amg
 end
 

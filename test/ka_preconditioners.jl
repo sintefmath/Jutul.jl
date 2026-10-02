@@ -550,13 +550,23 @@ end
     @test_throws ArgumentError resetup_amg!(H, changed_graph, :memory)
 end
 
-@testset "partial sparsity reset" begin
+@testset "partial AMG reset" begin
     A = poisson_2d(12)
     options = AMGOptions(coarsening = HMIS(0.5), coarse_size = 10)
     H = setup_amg(A, options)
     @test length(H.levels) >= 3
     cutoff = 3
-    n_sparse_keep = cutoff - 1
+    n_levels_partial_keep = cutoff - 1
+    @test KAPreconditioners.partial_reset_cutoff(H, 2, -1) == 3
+    @test KAPreconditioners.partial_reset_cutoff(
+        H, length(H.levels), size(H.levels[2].A, 1) + 1
+    ) == 2
+    @test KAPreconditioners.partial_reset_cutoff(
+        H, 1, size(H.levels[end].A, 1)
+    ) == 2
+    @test KAPreconditioners.partial_reset_cutoff(
+        H, length(H.levels), size(H.levels[1].A, 1) + 1
+    ) == 1
     upper_ids = [level_memory_ids(level) for level in H.levels[1:(cutoff - 1)]]
     B = copy(A)
     rows = rowvals(B)
@@ -565,7 +575,7 @@ end
         B.nzval[p] *= i == j ? 1.3 : (isodd(i + j) ? 0.4 : 1.6)
     end
     @test resetup_amg!(H, B, :partial_sparsity;
-        n_sparse_keep = n_sparse_keep) === H
+        n_levels_partial_keep = n_levels_partial_keep) === H
     @test upper_ids == [level_memory_ids(level) for level in H.levels[1:(cutoff - 1)]]
     @test isapprox(Matrix(KAPreconditioners.sparse_matrix(H.levels[1].A)), Matrix(B))
     fresh_suffix = setup_amg(H.levels[cutoff].A, options)
@@ -578,28 +588,68 @@ end
     H_memory = setup_amg(A, options)
     resetup_amg!(H_memory, B, :memory)
     H_zero = setup_amg(A, options)
-    resetup_amg!(H_zero, B, :partial_sparsity; n_sparse_keep = 0)
+    resetup_amg!(H_zero, B, :partial_sparsity; n_levels_partial_keep = 0)
     @test H_zero.levels[1].cf == H_memory.levels[1].cf
     @test H_zero.levels[1].P.nzval ≈ H_memory.levels[1].P.nzval
 
     H_default = setup_amg(A, options)
     H_three = setup_amg(A, options)
     resetup_amg!(H_default, B, :partial_sparsity)
-    resetup_amg!(H_three, B, :partial_sparsity; n_sparse_keep = 3)
+    resetup_amg!(H_three, B, :partial_sparsity; n_levels_partial_keep = 3)
     @test H_default.levels[1].P.nzval ≈ H_three.levels[1].P.nzval
 
     H_sparsity = setup_amg(A, options)
     resetup_amg!(H_sparsity, B, :sparsity)
     H_no_cutoff = setup_amg(A, options)
     resetup_amg!(H_no_cutoff, B, :partial_sparsity;
-        n_sparse_keep = length(H_no_cutoff.levels))
+        n_levels_partial_keep = length(H_no_cutoff.levels))
     @test H_no_cutoff.levels[1].P.nzval ≈ H_sparsity.levels[1].P.nzval
     @test_throws ArgumentError resetup_amg!(H, B, :partial_sparsity;
-        n_sparse_keep = -1)
+        n_levels_partial_keep = -1)
+    @test_throws ArgumentError resetup_amg!(H, B, :partial_sparsity;
+        n_partial_keep = 0)
+
+    H_operators = setup_amg(A, options)
+    retained_p = [copy(level.P.nzval) for level in H_operators.levels[1:2]]
+    resetup_amg!(H_operators, B, :partial_operators;
+        n_levels_partial_keep = 2)
+    @test retained_p == [level.P.nzval for level in H_operators.levels[1:2]]
+    test_galerkin(H_operators)
+    fresh_operators_suffix = setup_amg(H_operators.levels[cutoff].A, options)
+    @test H_operators.levels[cutoff].cf == fresh_operators_suffix.levels[1].cf
+
+    # The matrix-size limit takes precedence when it requires rebuilding earlier.
+    size_cutoff = size(H.levels[2].A, 1) + 1
+    @test size(H.levels[1].A, 1) >= size_cutoff
+    H_size = setup_amg(A, options)
+    first_ids = level_memory_ids(H_size.levels[1])
+    resetup_amg!(H_size, B, :partial_sparsity;
+        n_levels_partial_keep = length(H_size.levels),
+        n_partial_keep = size_cutoff)
+    @test first_ids == level_memory_ids(H_size.levels[1])
+    @test H_size.levels[2].cf == setup_amg(H_size.levels[2].A, options).levels[1].cf
+    test_galerkin(H_size)
+
+    # A level limit still wins when the matrix-size limit would rebuild later.
+    H_levels = setup_amg(A, options)
+    resetup_amg!(H_levels, B, :partial_operators;
+        n_levels_partial_keep = 1,
+        n_partial_keep = size(H_levels.levels[end].A, 1))
+    @test H_levels.levels[2].cf == setup_amg(H_levels.levels[2].A, options).levels[1].cf
+    test_galerkin(H_levels)
+
+    H_all_operators = setup_amg(A, options)
+    resetup_amg!(H_all_operators, B, :partial_operators;
+        n_levels_partial_keep = length(H_all_operators.levels))
+    H_regular_operators = setup_amg(A, options)
+    resetup_amg!(H_regular_operators, B, :operators)
+    @test H_all_operators.levels[1].P.nzval == H_regular_operators.levels[1].P.nzval
 
     preconditioner = AMGPreconditioner(:hmis;
-        coarse_size = 10, reuse = :partial_sparsity, n_sparse_keep = 2)
-    @test preconditioner.n_sparse_keep == 2
+        coarse_size = 10, reuse = :partial_operators,
+        n_levels_partial_keep = 2, n_partial_keep = -1)
+    @test preconditioner.n_levels_partial_keep == 2
+    @test preconditioner.n_partial_keep == -1
     rhs = ones(size(A, 1))
     context = DefaultContext()
     Jutul.update_preconditioner!(preconditioner, A, rhs, context, nothing)
@@ -826,8 +876,10 @@ end
     test_galerkin(H)
     @test length(H.levels) >= 3
     kept_ids = [level_memory_ids(level) for level in H.levels[1:2]]
-    resetup_amg!(H, DB, :partial_sparsity; n_sparse_keep = 2)
+    resetup_amg!(H, DB, :partial_sparsity; n_levels_partial_keep = 2)
     @test kept_ids == [level_memory_ids(level) for level in H.levels[1:2]]
+    test_galerkin(H)
+    resetup_amg!(H, D, :partial_operators; n_levels_partial_keep = 2)
     test_galerkin(H)
 
     # Exercise every method-specific interpolation reset on device arrays.

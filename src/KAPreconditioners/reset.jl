@@ -139,24 +139,47 @@ function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
     return reset_solve_history!(H)
 end
 
-function partial_sparsity_reset!(
-        H::AMGHierarchy, A::StaticSparsityMatrixCSR, n_sparse_keep::Integer
+function partial_reset_cutoff(
+        H::AMGHierarchy, n_levels_partial_keep::Integer,
+        n_partial_keep::Integer
     )
-    n_sparse_keep >= 0 || throw(ArgumentError("n_sparse_keep must be non-negative"))
-    same_pattern(H, A) || throw(ArgumentError("reuse=:partial_sparsity requires an unchanged CSR pattern"))
+    n_levels_partial_keep >= 0 ||
+        throw(ArgumentError("n_levels_partial_keep must be non-negative"))
+    (n_partial_keep == -1 || n_partial_keep > 0) ||
+        throw(ArgumentError("n_partial_keep must be -1 or positive"))
+    nlevels = length(H.levels)
+    cutoff = min(n_levels_partial_keep, nlevels) + 1
+    if n_partial_keep > 0
+        for (i, level) in enumerate(H.levels)
+            if matrix_nrows(level.A) < n_partial_keep
+                cutoff = min(cutoff, i)
+                break
+            end
+        end
+    end
+    return Int(cutoff)
+end
+
+function partial_reset!(
+        H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol,
+        n_levels_partial_keep::Integer, n_partial_keep::Integer
+    )
+    cutoff = partial_reset_cutoff(H, n_levels_partial_keep, n_partial_keep)
+    same_pattern(H, A) ||
+        throw(ArgumentError("reuse=$reuse requires an unchanged CSR pattern"))
     same_backend(matrix_backend(A), H.backend) ||
         throw(ArgumentError("matrix and hierarchy must use the same backend"))
-    if n_sparse_keep >= length(H.levels)
-        return numeric_reset!(H, A, :sparsity)
-    elseif n_sparse_keep == 0
+    mode = reuse == :partial_operators ? :operators : :sparsity
+    if cutoff > length(H.levels)
+        return numeric_reset!(H, A, mode)
+    elseif cutoff == 1
         return memory_reset!(H, A)
     end
-    cutoff = Int(n_sparse_keep) + 1
     copy_matrix_values!(H.levels[1].A, A)
     for l in 1:(cutoff - 1)
         level = H.levels[l]
         update_level_smoother!(level.smoother, level.A, H.options)
-        update_prolongation!(level, H.options.interpolation)
+        mode == :sparsity && update_prolongation!(level, H.options.interpolation)
         galerkin!(H.levels[l + 1].A, level.A, level.P, level.galerkin)
     end
     old_levels = H.levels
@@ -181,12 +204,14 @@ function partial_sparsity_reset!(
     return reset_solve_history!(H)
 end
 
-const AMG_REUSE_MODES = (:operators, :sparsity, :partial_sparsity, :memory, :none)
+const AMG_REUSE_MODES = (
+    :operators, :sparsity, :partial_operators, :partial_sparsity, :memory, :none
+)
 
 function validate_amg_reuse_mode(reuse::Symbol)
     reuse in AMG_REUSE_MODES || throw(
         ArgumentError(
-            "reuse must be :operators, :sparsity, :partial_sparsity, :memory, or :none"
+            "reuse must be :operators, :sparsity, :partial_operators, :partial_sparsity, :memory, or :none"
         )
     )
     return reuse
@@ -254,15 +279,18 @@ Refresh a hierarchy for new coefficients.
 * `:memory` recomputes all symbolic data while recycling compatible hierarchy
   buffers. The finest sparsity pattern must be unchanged; coefficients may alter
   strength, splitting, interpolation, and every coarse pattern.
-* `:partial_sparsity` retains splits and patterns on the first `n_sparse_keep`
-  levels (default 3), updating interpolation weights there as in `:sparsity`.
-  Remaining levels are rebuilt as in `:memory`.
+* `:partial_operators` and `:partial_sparsity` retain the first
+  `n_levels_partial_keep` levels (default 3), updating them as in `:operators`
+  and `:sparsity`, respectively. `n_partial_keep` (default -1, disabled)
+  can end the retained prefix sooner: the first level with a matrix size below
+  that value is rebuilt. Remaining levels are rebuilt as in `:memory`.
 * `:none` is a completely fresh setup and is useful as a reference baseline.
 
 The first two modes perform no hierarchy-array allocation.
 """
 function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol = :operators;
-        n_sparse_keep::Integer = 3)
+        n_levels_partial_keep::Integer = 3,
+        n_partial_keep::Integer = -1)
     validate_amg_reuse_mode(reuse)
     if reuse == :operators || reuse == :sparsity
         same_pattern(H, A) || throw(ArgumentError("reuse=$reuse requires an unchanged CSR pattern"))
@@ -275,8 +303,8 @@ function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol
         numeric_reset!(H, A, :sparsity)
     elseif reuse == :memory
         memory_reset!(H, A)
-    elseif reuse == :partial_sparsity
-        partial_sparsity_reset!(H, A, n_sparse_keep)
+    elseif reuse == :partial_sparsity || reuse == :partial_operators
+        partial_reset!(H, A, reuse, n_levels_partial_keep, n_partial_keep)
     else
         replace_hierarchy!(H, setup_amg(A, H.options))
     end
@@ -286,7 +314,8 @@ end
 function resetup_amg!(
         H::AMGHierarchy{Tv, Ti}, A::SparseMatrixCSC,
         reuse::Symbol = :operators;
-        n_sparse_keep::Integer = 3
+        n_levels_partial_keep::Integer = 3,
+        n_partial_keep::Integer = -1
     ) where {Tv, Ti}
     validate_amg_reuse_mode(reuse)
     eltype(A) === Tv || throw(ArgumentError("matrix value type must match the hierarchy"))
@@ -307,11 +336,12 @@ function resetup_amg!(
         rebuild_memory!(H, host_finest)
     else
         C = csr_matrix(A; backend = H.backend, block_size = H.block_size, index_type = Ti)
-        resetup_amg!(H, C, reuse; n_sparse_keep)
+        resetup_amg!(H, C, reuse; n_levels_partial_keep, n_partial_keep)
     end
     return H
 end
 
 resetup_amg!(H::AMGHierarchy, A; reuse::Symbol = :operators,
-    n_sparse_keep::Integer = 3) =
-    resetup_amg!(H, A, reuse; n_sparse_keep)
+    n_levels_partial_keep::Integer = 3,
+    n_partial_keep::Integer = -1) =
+    resetup_amg!(H, A, reuse; n_levels_partial_keep, n_partial_keep)
