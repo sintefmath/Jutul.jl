@@ -115,9 +115,11 @@ function update_preconditioner!(amg::AMGPreconditioner, A, b, context, executor)
         amg.factor = setup_ka_amg(A, amg.options)
         amg.dim = (length(b), length(b))
     else
-        update_ka_amg!(amg.factor, A, amg.reuse;
+        update_ka_amg!(
+            amg.factor, A, amg.reuse;
             n_levels_partial_keep = amg.n_levels_partial_keep,
-            n_partial_keep = amg.n_partial_keep)
+            n_partial_keep = amg.n_partial_keep
+        )
     end
     return amg
 end
@@ -128,9 +130,11 @@ function partial_update_preconditioner!(
     )
     isnothing(amg.factor) &&
         return update_preconditioner!(amg, A, b, context, executor)
-    update_ka_amg!(amg.factor, A, amg.reuse_partial;
+    update_ka_amg!(
+        amg.factor, A, amg.reuse_partial;
         n_levels_partial_keep = amg.n_levels_partial_keep,
-        n_partial_keep = amg.n_partial_keep)
+        n_partial_keep = amg.n_partial_keep
+    )
     return amg
 end
 

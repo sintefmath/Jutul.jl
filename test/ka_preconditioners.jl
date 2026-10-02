@@ -574,8 +574,10 @@ end
         i = rows[p]
         B.nzval[p] *= i == j ? 1.3 : (isodd(i + j) ? 0.4 : 1.6)
     end
-    @test resetup_amg!(H, B, :partial_sparsity;
-        n_levels_partial_keep = n_levels_partial_keep) === H
+    @test resetup_amg!(
+        H, B, :partial_sparsity;
+        n_levels_partial_keep = n_levels_partial_keep
+    ) === H
     @test upper_ids == [level_memory_ids(level) for level in H.levels[1:(cutoff - 1)]]
     @test isapprox(Matrix(KAPreconditioners.sparse_matrix(H.levels[1].A)), Matrix(B))
     fresh_suffix = setup_amg(H.levels[cutoff].A, options)
@@ -601,18 +603,26 @@ end
     H_sparsity = setup_amg(A, options)
     resetup_amg!(H_sparsity, B, :sparsity)
     H_no_cutoff = setup_amg(A, options)
-    resetup_amg!(H_no_cutoff, B, :partial_sparsity;
-        n_levels_partial_keep = length(H_no_cutoff.levels))
+    resetup_amg!(
+        H_no_cutoff, B, :partial_sparsity;
+        n_levels_partial_keep = length(H_no_cutoff.levels)
+    )
     @test H_no_cutoff.levels[1].P.nzval ≈ H_sparsity.levels[1].P.nzval
-    @test_throws ArgumentError resetup_amg!(H, B, :partial_sparsity;
-        n_levels_partial_keep = -1)
-    @test_throws ArgumentError resetup_amg!(H, B, :partial_sparsity;
-        n_partial_keep = 0)
+    @test_throws ArgumentError resetup_amg!(
+        H, B, :partial_sparsity;
+        n_levels_partial_keep = -1
+    )
+    @test_throws ArgumentError resetup_amg!(
+        H, B, :partial_sparsity;
+        n_partial_keep = 0
+    )
 
     H_operators = setup_amg(A, options)
     retained_p = [copy(level.P.nzval) for level in H_operators.levels[1:2]]
-    resetup_amg!(H_operators, B, :partial_operators;
-        n_levels_partial_keep = 2)
+    resetup_amg!(
+        H_operators, B, :partial_operators;
+        n_levels_partial_keep = 2
+    )
     @test retained_p == [level.P.nzval for level in H_operators.levels[1:2]]
     test_galerkin(H_operators)
     fresh_operators_suffix = setup_amg(H_operators.levels[cutoff].A, options)
@@ -623,31 +633,39 @@ end
     @test size(H.levels[1].A, 1) >= size_cutoff
     H_size = setup_amg(A, options)
     first_ids = level_memory_ids(H_size.levels[1])
-    resetup_amg!(H_size, B, :partial_sparsity;
+    resetup_amg!(
+        H_size, B, :partial_sparsity;
         n_levels_partial_keep = length(H_size.levels),
-        n_partial_keep = size_cutoff)
+        n_partial_keep = size_cutoff
+    )
     @test first_ids == level_memory_ids(H_size.levels[1])
     @test H_size.levels[2].cf == setup_amg(H_size.levels[2].A, options).levels[1].cf
     test_galerkin(H_size)
 
     # A level limit still wins when the matrix-size limit would rebuild later.
     H_levels = setup_amg(A, options)
-    resetup_amg!(H_levels, B, :partial_operators;
+    resetup_amg!(
+        H_levels, B, :partial_operators;
         n_levels_partial_keep = 1,
-        n_partial_keep = size(H_levels.levels[end].A, 1))
+        n_partial_keep = size(H_levels.levels[end].A, 1)
+    )
     @test H_levels.levels[2].cf == setup_amg(H_levels.levels[2].A, options).levels[1].cf
     test_galerkin(H_levels)
 
     H_all_operators = setup_amg(A, options)
-    resetup_amg!(H_all_operators, B, :partial_operators;
-        n_levels_partial_keep = length(H_all_operators.levels))
+    resetup_amg!(
+        H_all_operators, B, :partial_operators;
+        n_levels_partial_keep = length(H_all_operators.levels)
+    )
     H_regular_operators = setup_amg(A, options)
     resetup_amg!(H_regular_operators, B, :operators)
     @test H_all_operators.levels[1].P.nzval == H_regular_operators.levels[1].P.nzval
 
-    preconditioner = AMGPreconditioner(:hmis;
+    preconditioner = AMGPreconditioner(
+        :hmis;
         coarse_size = 10, reuse = :partial_operators,
-        n_levels_partial_keep = 2, n_partial_keep = -1)
+        n_levels_partial_keep = 2, n_partial_keep = -1
+    )
     @test preconditioner.n_levels_partial_keep == 2
     @test preconditioner.n_partial_keep == -1
     rhs = ones(size(A, 1))

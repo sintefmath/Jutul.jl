@@ -205,7 +205,7 @@ function partial_reset!(
 end
 
 const AMG_REUSE_MODES = (
-    :operators, :sparsity, :partial_operators, :partial_sparsity, :memory, :none
+    :operators, :sparsity, :partial_operators, :partial_sparsity, :memory, :none,
 )
 
 function validate_amg_reuse_mode(reuse::Symbol)
@@ -288,9 +288,11 @@ Refresh a hierarchy for new coefficients.
 
 The first two modes perform no hierarchy-array allocation.
 """
-function resetup_amg!(H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol = :operators;
+function resetup_amg!(
+        H::AMGHierarchy, A::StaticSparsityMatrixCSR, reuse::Symbol = :operators;
         n_levels_partial_keep::Integer = 3,
-        n_partial_keep::Integer = -1)
+        n_partial_keep::Integer = -1
+    )
     validate_amg_reuse_mode(reuse)
     if reuse == :operators || reuse == :sparsity
         same_pattern(H, A) || throw(ArgumentError("reuse=$reuse requires an unchanged CSR pattern"))
@@ -341,7 +343,9 @@ function resetup_amg!(
     return H
 end
 
-resetup_amg!(H::AMGHierarchy, A; reuse::Symbol = :operators,
+resetup_amg!(
+    H::AMGHierarchy, A; reuse::Symbol = :operators,
     n_levels_partial_keep::Integer = 3,
-    n_partial_keep::Integer = -1) =
+    n_partial_keep::Integer = -1
+) =
     resetup_amg!(H, A, reuse; n_levels_partial_keep, n_partial_keep)
