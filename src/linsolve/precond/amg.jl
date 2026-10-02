@@ -70,7 +70,7 @@ function AMGPreconditioner(
         coarse_size = 5,
         reuse::Symbol = :memory,
         reuse_partial::Symbol = :operators,
-        n_levels_partial_keep::Integer = 1,
+        n_levels_partial_keep::Integer = 2,
         n_partial_keep::Integer = -1,
         damping = 1.0,
         kwarg...
