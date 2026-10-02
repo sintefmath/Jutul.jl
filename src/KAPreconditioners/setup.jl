@@ -1638,14 +1638,15 @@ function build_hierarchy(
         workspace = SetupWorkspace(Tv, Ti),
         host_finest = nothing,
         reuse_finest_structure::Bool = false,
+        prefix_levels = AMGLevel{Tv, Ti}[],
         reallocation_tracker = nothing
     ) where {Tv, Ti}
     validate_setup_options(options)
     current, stage_slot, backend, cpu_backend =
         initial_hierarchy_state(Ain, reuse_levels, workspace, host_finest)
-    levels = AMGLevel{Tv, Ti}[]
+    levels = copy(prefix_levels)
     pattern_matches_old = reuse_finest_structure
-    for level_index in 1:(options.max_levels - 1)
+    for level_index in (length(prefix_levels) + 1):(options.max_levels - 1)
         n = matrix_nrows(current)
         n <= options.coarse_size && break
         number_of_nonzeros = matrix_nonzeros(current)
@@ -1756,7 +1757,8 @@ function build_hierarchy(
             levels, make_level(
                 current, P, Pt, G, cf, cmap, strong, backend,
                 options, old;
-                reuse_A_structure = reuse_finest_structure && level_index == 1,
+                reuse_A_structure = reuse_finest_structure &&
+                    level_index == length(prefix_levels) + 1,
                 reallocation_tracker = reallocation_tracker
             )
         )
@@ -1773,6 +1775,8 @@ function build_hierarchy(
         levels, make_level(
             current, nothing, nothing, nothing, nothing, nothing,
             nothing, backend, options, old;
+            reuse_A_structure = reuse_finest_structure &&
+                level_index == length(prefix_levels) + 1,
             reallocation_tracker = reallocation_tracker
         )
     )

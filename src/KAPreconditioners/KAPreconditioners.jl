@@ -30,7 +30,8 @@ include("reset.jl")
 include("cycle.jl")
 
 setup_ka_amg(A, options) = setup_amg(A, options)
-update_ka_amg!(hierarchy, A, reuse) = resetup_amg!(hierarchy, A, reuse)
+update_ka_amg!(hierarchy, A, reuse; kwargs...) =
+    resetup_amg!(hierarchy, A, reuse; kwargs...)
 apply_ka_amg!(x, hierarchy, b) = apply!(x, hierarchy, b)
 
 setup_ka_smoother(A, config; reuse = nothing) =

@@ -766,6 +766,13 @@ end
     )
     resetup_amg!(H, D, :memory)
     test_galerkin(H)
+    @test length(H.levels) >= 3
+    kept_ids = [level_memory_ids(level) for level in H.levels[1:2]]
+    resetup_amg!(H, DB, :partial_sparsity; n_levels_partial_keep = 2)
+    @test kept_ids == [level_memory_ids(level) for level in H.levels[1:2]]
+    test_galerkin(H)
+    resetup_amg!(H, D, :partial_operators; n_levels_partial_keep = 2)
+    test_galerkin(H)
 
     # Exercise every method-specific interpolation reset on device arrays.
     for coarsening in (RugeStuben(), Aggregation())
