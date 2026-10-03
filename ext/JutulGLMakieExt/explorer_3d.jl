@@ -785,9 +785,6 @@ function Jutul.plot_explorer_impl(
                         push!(cell_outline, pp)
                     end
                 end
-                return Consume(true)
-            else
-                return Consume(false)
             end
         end
         return Consume(false)
