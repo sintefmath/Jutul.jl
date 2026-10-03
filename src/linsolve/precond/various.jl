@@ -1,7 +1,7 @@
 mutable struct TrivialPreconditioner <: JutulPreconditioner
     dim
     function TrivialPreconditioner()
-        new(nothing)
+        return new(nothing)
     end
 end
 
@@ -11,12 +11,12 @@ Full LU factorization as preconditioner (intended for smaller subsystems)
 mutable struct LUPreconditioner <: JutulPreconditioner
     factor
     function LUPreconditioner()
-        new(nothing)
+        return new(nothing)
     end
 end
 
 function update_preconditioner!(lup::LUPreconditioner, A, b, context, executor)
-    if isnothing(lup.factor)
+    return if isnothing(lup.factor)
         lup.factor = lu(A)
     else
         lu!(lup.factor, A)
@@ -37,8 +37,8 @@ end
 """
 Trivial / identity preconditioner with size for use in subsystems.
 """
-function apply!(x,tp::TrivialPreconditioner,r, args...)
-    x = copy(r)
+function apply!(x, tp::TrivialPreconditioner, r, args...)
+    return x = copy(r)
 end
 
 
@@ -46,7 +46,7 @@ end
 function update_preconditioner!(tp::TrivialPreconditioner, lsys, model, storage, recorder, executor)
     A = jacobian(lsys)
     b = residual(lsys)
-    tp.dim = size(A).*length(b[1])
+    return tp.dim = size(A) .* length(b[1])
 end
 
 export linear_operator
@@ -61,7 +61,7 @@ Multi-model preconditioners
 mutable struct GroupWisePreconditioner <: JutulPreconditioner
     preconditioners::AbstractVector
     function GroupWisePreconditioner(preconditioners)
-        new(preconditioners)
+        return new(preconditioners)
     end
 end
 
@@ -72,6 +72,7 @@ function update_preconditioner!(prec::GroupWisePreconditioner, lsys::MultiLinear
     for i in 1:n
         update_preconditioner!(prec.preconditioners[i], s[i, i], arg...)
     end
+    return
 end
 
 function linear_operator(precond::GroupWisePreconditioner, float_t = Float64)

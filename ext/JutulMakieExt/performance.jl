@@ -2,10 +2,10 @@ function Jutul.plot_solve_breakdown(allreports, names; per_it = false, include_l
     t_unit, t_num = t_scale
     if per_it
         plot_title = "Time per iteration"
-        to_plot = x -> [x.assembly/x.its, x.subdomains/x.its, x.solve/x.its, x.total/x.its]./t_num
+        to_plot = x -> [x.assembly / x.its, x.subdomains / x.its, x.solve / x.its, x.total / x.its] ./ t_num
     else
         plot_title = "Total time"
-        to_plot = x -> [x.assembly, x.subdomains, x.solve, x.total]./t_num
+        to_plot = x -> [x.assembly, x.subdomains, x.solve, x.total] ./ t_num
     end
     labels = ["Assembly", "Local solves", "Linear solve", "Total"]
 
@@ -29,20 +29,22 @@ function Jutul.plot_solve_breakdown(allreports, names; per_it = false, include_l
 
     h = vcat(D...)
     x = ones(nel)
-    for i = 2:ndata
-        x = vcat(x, i*ones(nel))
+    for i in 2:ndata
+        x = vcat(x, i * ones(nel))
     end
     grp = repeat(1:nel, ndata)
 
     fig = Figure()
-    ax = Axis(fig[1,1], xticks = (1:ndata, names), ylabel = "Time [$t_unit]", title = plot_title)
-    barplot!(ax, x, h,
-            dodge = grp,
-            color = colors[grp])
+    ax = Axis(fig[1, 1], xticks = (1:ndata, names), ylabel = "Time [$t_unit]", title = plot_title)
+    barplot!(
+        ax, x, h,
+        dodge = grp,
+        color = colors[grp]
+    )
 
     elements = [PolyElement(polycolor = colors[i]) for i in 1:length(labels)]
-    title = nothing# "Legend"
-    Legend(fig[2,1], elements, labels, title, orientation = :horizontal)
+    title = nothing # "Legend"
+    Legend(fig[2, 1], elements, labels, title, orientation = :horizontal)
     display(fig)
     return (fig, D)
 end
@@ -54,7 +56,8 @@ function Jutul.plot_cumulative_solve(allreports, arg...; kwarg...)
     return (fig, ax, alldata, t)
 end
 
-function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothing; 
+function Jutul.plot_cumulative_solve!(
+        f, allreports, dt = nothing, names = nothing;
         use_time = false,
         use_title = true,
         linewidth = 3.5,
@@ -89,7 +92,7 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     r_rep = map(x -> timing_breakdown(x, reduce = false), allreports)
     if use_time
         t_unit, t_num = t_scale
-        F = D -> map(x -> x.total/t_num, D)
+        F = D -> map(x -> x.total / t_num, D)
         yl = "Wall time [$t_unit]"
         tit = "Runtime"
     else
@@ -112,10 +115,10 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     ax = Axis(f; xlabel = xl, title = tit, ylabel = yl, axis_arg...)
     if cumulative
         get_data = x -> cumsum(vcat(0, F(x)))
-        t = map(dt -> cumsum(vcat(0, dt))/(3600*24*365), dt)
+        t = map(dt -> cumsum(vcat(0, dt)) / (3600 * 24 * 365), dt)
     else
         get_data = x -> F(x)
-        t = map(dt -> cumsum(dt)/(3600*24*365), dt)
+        t = map(dt -> cumsum(dt) / (3600 * 24 * 365), dt)
     end
     if !x_is_time
         t = map(t -> eachindex(t), dt)
@@ -128,18 +131,20 @@ function Jutul.plot_cumulative_solve!(f, allreports, dt = nothing, names = nothi
     colors = to_colormap(colormap)
     n_rep = length(r_rep)
     for i in eachindex(r_rep)
-        c = colors[mod(i-1, n_rep)+1]
+        c = colors[mod(i - 1, n_rep) + 1]
         data_i = get_data(r_rep[i])
         push!(alldata, data_i)
         lstyle = get_linestyle(i)
         skip_line = ismissing(lstyle)
         if !skip_line
-            lines!(ax, t[i], data_i,
+            lines!(
+                ax, t[i], data_i,
                 label = names[i],
                 linewidth = linewidth,
                 color = c,
                 linestyle = lstyle;
-                kwarg...)
+                kwarg...
+            )
         end
         if scatter_points
             if skip_line
@@ -164,7 +169,7 @@ function Jutul.plot_linear_convergence(report; kwarg...)
 end
 
 function Jutul.plot_linear_convergence!(ax, report::AbstractDict)
-    if haskey(report, :ministeps)
+    return if haskey(report, :ministeps)
         plot_linear_convergence!(ax, report[:ministeps])
     elseif haskey(report, :steps)
         plot_linear_convergence!(ax, report[:steps])
@@ -178,4 +183,5 @@ function Jutul.plot_linear_convergence!(ax, reports::Vector)
     for r in reports
         plot_linear_convergence!(ax, r)
     end
+    return
 end

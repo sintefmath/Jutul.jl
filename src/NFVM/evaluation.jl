@@ -24,14 +24,14 @@ function evaluate_flux(p, nfvm, ph::Int)
         r_rw = abs(r_r)
     end
     r_total = r_lw + r_rw
-    if abs(r_total) < 1e-10
+    if abs(r_total) < 1.0e-10
         μ_l = μ_r = 0.5
     else
-        μ_l = r_rw/r_total
-        μ_r = r_lw/r_total
+        μ_l = r_rw / r_total
+        μ_r = r_lw / r_total
     end
 
-    q = μ_l*q_l - μ_r*q_r
+    q = μ_l * q_l - μ_r * q_r
     return q
 end
 
@@ -45,24 +45,24 @@ end
 
 @inline function ntpfa_half_flux(p_l, p_r, p, disc, ph, sgn)
     q, r = ntpfa_half_flux(p_l, p_r, p, disc, ph)
-    return (sgn*q, sgn*r)
+    return (sgn * q, sgn * r)
 end
 
 
-@inline function compute_r(p::AbstractVector{T}, hf::NFVMLinearDiscretization, ph::Int) where T
+@inline function compute_r(p::AbstractVector{T}, hf::NFVMLinearDiscretization, ph::Int) where {T}
     q = zero(T)
     for i in 1:length(hf.mpfa)
         @inbounds c, T_c = hf.mpfa[i]
-        @inbounds q += p[c]*T_c
+        @inbounds q += p[c] * T_c
     end
     return q
 end
 
-@inline function compute_r(p::AbstractMatrix{T}, hf::NFVMLinearDiscretization, ph::Int) where T
+@inline function compute_r(p::AbstractMatrix{T}, hf::NFVMLinearDiscretization, ph::Int) where {T}
     q = zero(T)
     for i in 1:length(hf.mpfa)
         @inbounds c, T_c = hf.mpfa[i]
-        @inbounds q += p[ph, c]*T_c
+        @inbounds q += p[ph, c] * T_c
     end
     return q
 end
@@ -84,5 +84,5 @@ end
 @inline function tpfa_flux(p_l, p_r, hf::NFVMLinearDiscretization)
     T_l = hf.T_left
     T_r = hf.T_right
-    return T_l*p_l + T_r*p_r
+    return T_l * p_l + T_r * p_r
 end

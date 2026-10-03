@@ -1,4 +1,5 @@
-function parray_linear_solve!(simulator, lsolve; 
+function parray_linear_solve!(
+        simulator, lsolve;
         atol = Jutul.linear_solver_tolerance(lsolve, :absolute),
         rtol = Jutul.linear_solver_tolerance(lsolve, :relative),
     )
@@ -15,7 +16,7 @@ end
 
 
 function prepare_distributed_solve!(simulators, b)
-    map(simulators, local_values(b)) do sim, r
+    return map(simulators, local_values(b)) do sim, r
         lsys = Jutul.get_simulator_storage(sim).LinearizedSystem
         N = sim.executor.data[:n_self]
         Jutul.prepare_linear_solve!(lsys)
@@ -47,7 +48,6 @@ function bsolver_setup!(lsolve, simulators, b)
 end
 
 
-
 function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, atol, rtol)
     t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, length(b))
     t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
@@ -58,18 +58,18 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
     l_arg = (bsolver, op, b)
     l_kwarg = (
         M = P,
-        verbose = 0*Int(verbose),
+        verbose = 0 * Int(verbose),
         itmax = max_it,
         history = true,
         rtol = rtol,
-        atol = atol
+        atol = atol,
     )
     if lsolve.solver == :bicgstab
         F! = Krylov.bicgstab!
         extra = NamedTuple()
     else
         F! = Krylov.gmres!
-        extra = (restart = true, )
+        extra = (restart = true,)
     end
     @tic "solve" F!(l_arg...; extra..., l_kwarg...)
     @tic "communication" consistent!(bsolver.x) |> wait
@@ -89,56 +89,57 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
     initial_res = res[1]
     final_res = res[end]
     if !stats.solved
-        bad_msg = "Linear solver: $msg, final residual: $final_res, rel. value $(final_res/initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
-        if res[end]/res[1] > 1.0
+        bad_msg = "Linear solver: $msg, final residual: $final_res, rel. value $(final_res / initial_res). rtol = $rtol, atol = $atol, max_it = $max_it"
+        if res[end] / res[1] > 1.0
             error(bad_msg)
         elseif verbose > 0
             @warn bad_msg
         end
     end
     t_prep = t_op + t_prec
-    return Jutul.linear_solve_return(solved, n_lin_its, stats,
+    return Jutul.linear_solve_return(
+        solved, n_lin_its, stats,
         prepare = t_prep,
         precond = P.time,
         precond_count = P.count
     )
 end
 
-function local_bicgstab_solver(X::S) where S
+function local_bicgstab_solver(X::S) where {S}
     n = length(X)
     m = n
     FC = eltype(S)
-    T  = real(FC)
+    T = real(FC)
     Δx = similar(X)
-    x  = similar(X)
-    r  = similar(X)
-    p  = similar(X)
-    v  = similar(X)
-    s  = similar(X)
+    x = similar(X)
+    r = similar(X)
+    p = similar(X)
+    v = similar(X)
+    s = similar(X)
     qd = similar(X)
     yz = similar(X)
-    t  = similar(X)
+    t = similar(X)
     stats = Krylov.SimpleStats(0, false, false, T[], T[], T[], 0.0, "unknown")
-    solver = Krylov.BicgstabSolver{T,FC,S}(m, n, Δx, x, r, p, v, s, qd, yz, t, false, stats)
+    solver = Krylov.BicgstabSolver{T, FC, S}(m, n, Δx, x, r, p, v, s, qd, yz, t, false, stats)
     return solver
 end
 
-function local_gmres_solver(X::S, memory = 20) where S
+function local_gmres_solver(X::S, memory = 20) where {S}
     n = length(X)
     m = n
     FC = eltype(S)
-    T  = real(FC)
+    T = real(FC)
     Δx = similar(X)
-    x  = similar(X)
-    w  = similar(X)
-    p  = similar(X)
-    q  = similar(X)
-    V = S[similar(X) for i = 1:memory]
+    x = similar(X)
+    w = similar(X)
+    p = similar(X)
+    q = similar(X)
+    V = S[similar(X) for i in 1:memory]
     c = Vector{T}(undef, memory)
-    s  = Vector{FC}(undef, memory)
-    z  = Vector{FC}(undef, memory)
-    R  = Vector{FC}(undef, div(memory * (memory+1), 2))
+    s = Vector{FC}(undef, memory)
+    z = Vector{FC}(undef, memory)
+    R = Vector{FC}(undef, div(memory * (memory + 1), 2))
     stats = Krylov.SimpleStats(0, false, false, T[], T[], T[], 0.0, "unknown")
-    solver = Krylov.GmresSolver{T,FC,S}(m, n, Δx, x, w, p, q, V, c, s, z, R, false, 0, stats)
+    solver = Krylov.GmresSolver{T, FC, S}(m, n, Δx, x, w, p, q, V, c, s, z, R, false, 0, stats)
     return solver
 end

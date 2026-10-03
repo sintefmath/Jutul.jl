@@ -1,5 +1,9 @@
 export state_gradient, solve_adjoint_sensitivities, solve_adjoint_sensitivities!, setup_adjoint_storage
 
+# Backend modules can overload this hook to move an initialized CPU adjoint
+# simulator to the execution backend of `execution_model`.
+transfer_adjoint_simulator(simulator, execution_model) = simulator
+
 """
     solve_adjoint_sensitivities(model, states, reports_or_timesteps, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
 
@@ -14,13 +18,15 @@ Given Lagrange multipliers λₙ from the adjoint equations
     (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
 where the last term is omitted for step n = N and G is the objective function.
 """
-function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
+function solve_adjoint_sensitivities(
+        model, states, reports_or_timesteps, G;
         n_objective = nothing,
         extra_timing = false,
         state0 = setup_state(model),
         forces = setup_forces(model),
         raw_output = false,
         extra_output = false,
+        storage = missing,
         info_level = 0,
         kwarg...
     )
@@ -31,7 +37,10 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     if info_level > 1
         jutul_message("Adjoints", "Setting up storage...", color = :blue)
     end
-    t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
+    t_storage = 0.0
+    if ismissing(storage)
+        t_storage = @elapsed storage = setup_adjoint_storage(model; state0 = state0, n_objective = n_objective, info_level = info_level, kwarg...)
+    end
     if info_level > 1
         jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
     end
@@ -40,7 +49,7 @@ function solve_adjoint_sensitivities(model, states, reports_or_timesteps, G;
     ∇G = gradient_vec_or_mat(n_param, n_objective)
     # Timesteps
     N = length(states)
-    if eltype(reports_or_timesteps)<:Real
+    if eltype(reports_or_timesteps) <: Real
         timesteps = reports_or_timesteps
     else
         @assert length(reports_or_timesteps) == N
@@ -105,19 +114,26 @@ end
 
 Set up storage for use with `solve_adjoint_sensitivities!`.
 """
-function setup_adjoint_storage(model;
+function setup_adjoint_storage(
+        model;
         state0 = setup_state(model),
         parameters = setup_parameters(model),
         n_objective = nothing,
         targets = parameter_targets(model),
         include_state0 = false,
         use_sparsity = true,
-        linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-6),
+        execution_model = model,
+        linear_solver = missing,
         param_obj = true,
         info_level = 0,
         kwarg...
     )
     # Create parameter model for ∂Fₙ / ∂p
+    if ismissing(linear_solver)
+        linear_solver = select_linear_solver(
+            execution_model, mode = :adjoint, rtol = 1.0e-6
+        )
+    end
     parameter_model = adjoint_parameter_model(model, targets)
     n_prm = number_of_degrees_of_freedom(parameter_model)
     # Note that primary is here because the target parameters are now the primaries for the parameter_model
@@ -136,22 +152,25 @@ function setup_adjoint_storage(model;
     end
     # Set up the generic adjoint storage
     storage = setup_adjoint_storage_base(
-            model, state0, parameters,
-            use_sparsity = use_sparsity,
-            linear_solver = linear_solver,
-            n_objective = n_objective,
-            info_level = info_level,
+        model, state0, parameters,
+        use_sparsity = use_sparsity,
+        linear_solver = linear_solver,
+        n_objective = n_objective,
+        info_level = info_level,
+        execution_model = execution_model,
     )
     if include_state0
-        state0_model = storage.backward.model
+        state0_model = storage.objective.model
         state0_map, = variable_mapper(state0_model, :primary)
         n_state0 = number_of_degrees_of_freedom(state0_model)
         state0_vec = zeros(n_state0)
-        state0_buf = similar(state0_vec)
+        state0_buf = similar(storage.lagrange, n_state0)
+        state0_device = similar(state0_buf)
     else
         state0_map = missing
         state0_vec = missing
         state0_buf = missing
+        state0_device = missing
     end
     storage[:dparam] = dobj_dparam
     storage[:param_buf] = param_buf
@@ -160,27 +179,41 @@ function setup_adjoint_storage(model;
     storage[:state0_map] = state0_map
     storage[:dstate0] = state0_vec
     storage[:state0_buf] = state0_buf
+    storage[:state0_device] = state0_device
     storage[:n] = n_prm
 
     return storage
 end
 
-function setup_adjoint_storage_base(model, state0, parameters;
+function setup_adjoint_storage(case::JutulCase; kwarg...)
+    return setup_adjoint_storage(case.model; state0 = case.state0, parameters = case.parameters, kwarg...)
+end
+
+function setup_adjoint_storage_base(
+        model, state0, parameters;
         use_sparsity = true,
-        linear_solver = select_linear_solver(model, mode = :adjoint, rtol = 1e-8),
+        linear_solver = missing,
         n_objective = nothing,
-        info_level = 0
+        info_level = 0,
+        execution_model = model
     )
+    if ismissing(linear_solver)
+        linear_solver = select_linear_solver(
+            execution_model, mode = :adjoint, rtol = 1.0e-8
+        )
+    end
     primary_model = adjoint_model_copy(model)
     # Standard model for: ∂Fₙᵀ / ∂xₙ
-    forward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
+    forward_host = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
     # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
-    backward_sim = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
+    backward_host = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
+    forward_sim = transfer_adjoint_simulator(forward_host, execution_model)
+    backward_sim = transfer_adjoint_simulator(backward_host, execution_model)
     if use_sparsity isa Bool
         if use_sparsity
             # We will update these later on
             sparsity_obj = Dict{Any, Any}(
-                :parameter => nothing, 
+                :parameter => nothing,
                 :forward => nothing
             )
         else
@@ -190,9 +223,15 @@ function setup_adjoint_storage_base(model, state0, parameters;
         # Assume it was manually set up
         sparsity_obj = use_sparsity
     end
-    n_pvar = number_of_degrees_of_freedom(model)
-    λ = gradient_vec_or_mat(n_pvar, n_objective)
     fsim_s = forward_sim.storage
+    n_pvar = number_of_degrees_of_freedom(model)
+    prototype = fsim_s.LinearizedSystem.dx_buffer
+    if isnothing(n_objective)
+        λ = similar(prototype, n_pvar)
+    else
+        λ = similar(prototype, n_pvar, n_objective)
+    end
+    fill!(λ, 0.0)
     rhs = vector_residual(fsim_s.LinearizedSystem)
     dx = fsim_s.LinearizedSystem.dx_buffer
     n_var = length(dx)
@@ -201,17 +240,20 @@ function setup_adjoint_storage_base(model, state0, parameters;
     multiple_rhs = !isnothing(n_objective)
     if multiple_rhs
         # Need bigger buffers for multiple rhs
-        rhs = gradient_vec_or_mat(n_var, n_objective)
-        dx = gradient_vec_or_mat(n_var, n_objective)
+        rhs = similar(prototype, n_var, n_objective)
+        dx = similar(prototype, n_var, n_objective)
     elseif rhs_transfer_needed
-        rhs = zeros(n_var)
+        rhs = similar(prototype, n_var)
     end
     storage = JutulStorage()
     storage[:forward] = forward_sim
     storage[:backward] = backward_sim
+    storage[:objective] = forward_host
     storage[:objective_sparsity] = sparsity_obj
     storage[:lagrange] = λ
     storage[:lagrange_buffer] = similar(λ)
+    storage[:lagrange_host] = zeros(eltype(λ), size(λ))
+    storage[:objective_rhs] = zeros(eltype(rhs), size(rhs))
     storage[:dx] = dx
     storage[:rhs] = rhs
     storage[:n_forward] = n_var
@@ -250,8 +292,10 @@ function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPacked
     update_objective_sparsity!(storage, G, packed_steps, :parameter, objective_sparsity_steps)
     # Set gradient to zero before solve starts
     @. ∇G = 0
-    if info_level == 0 && !JUTUL_IS_CI
+    if info_level > 0
         jutul_message("Jutul", "Solving adjoint for $N substeps")
+    end
+    if info_level == 0 && !JUTUL_IS_CI
         p = Progress(N, color = :blue, desc = "Progress")
     else
         p = missing
@@ -294,6 +338,12 @@ function adjoint_reset_parameters!(storage, parameters)
             reset_variables!(sim, parameters, type = k)
         end
     end
+    objective_sim = storage.objective
+    if objective_sim !== storage.forward
+        for k in (:state, :state0, :parameters)
+            reset_variables!(objective_sim, parameters, type = k)
+        end
+    end
     return storage
 end
 
@@ -302,13 +352,13 @@ function adjoint_step_state_triplet(packed_steps::AdjointPackedResult, i::Int)
     if i == 1
         s0 = packed_steps.state0
     else
-        s0 = states[i-1]
+        s0 = states[i - 1]
     end
     s = states[i]
     if i == length(states)
         s_next = nothing
     else
-        s_next = states[i+1]
+        s_next = states[i + 1]
     end
     return (s0, s, s_next)
 end
@@ -321,7 +371,11 @@ function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResul
     else
         sparsity = obj_sparsity[k]
         if isnothing(sparsity)
-            sim = storage[k]
+            if k == :forward
+                sim = storage.objective
+            else
+                sim = storage[k]
+            end
             # Note: Variables here may be parameters or variables depending in the "outer" context
             obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps, :variables, steps)
         end
@@ -425,7 +479,7 @@ function state_gradient_outer!(∂F∂x, obj_eval, model, state; sparsity = noth
     if !isnothing(sparsity)
         @. ∂F∂x = 0
     end
-    state_gradient_inner!(∂F∂x, obj_eval, model, state, nothing; sparsity = sparsity)
+    return state_gradient_inner!(∂F∂x, obj_eval, model, state, nothing; sparsity = sparsity)
 end
 
 function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = model; sparsity = nothing, symbol = nothing)
@@ -444,8 +498,9 @@ function state_gradient_inner!(∂F∂x, F, model, state, tag, eval_model = mode
             S = typeof(get_ad_entity_scalar(1.0, np, tag = ltag))
             state_gradient_inner_diff!(∂F∂x, F, eval_model, it_rng, state, Val(S), Val(ne), Val(np), offset, symbol, layout)
         end
-        offset += ne*np
+        offset += ne * np
     end
+    return
 end
 
 function state_gradient_inner_diff!(∂F∂x, F, eval_model, it_rng, state, S, ne, np, offset, symbol, layout)
@@ -464,6 +519,7 @@ function state_gradient_inner_diff_entity!(∂F∂x, eval_model, F, state, i, ::
             ix = alignment_linear_index(i, p_i, ne, np, layout) + offset
             ∂F∂x[ix] = state_gradient_get_partial(v, p_i)
         end
+        return
     end
 
     function store_partials!(∂F∂x::AbstractMatrix, v, i, ne, np, offset)
@@ -473,11 +529,12 @@ function state_gradient_inner_diff_entity!(∂F∂x, eval_model, F, state, i, ::
                 ∂F∂x[ix, j] = state_gradient_get_partial(v[j], p_i)
             end
         end
+        return
     end
 
     state_i = local_ad(state, i, S, symbol)
     v = F(eval_model, state_i)
-    store_partials!(∂F∂x, v, i, ne, np, offset)
+    return store_partials!(∂F∂x, v, i, ne, np, offset)
 end
 
 function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state_next, packed_steps::AdjointPackedResult)
@@ -502,9 +559,11 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, current_time)
     lsys_param = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_param)
-    sens_add_mult!(∇G, op_p, λ)
+    λ_host = adjoint_storage.lagrange_host
+    copyto!(λ_host, λ)
+    sens_add_mult!(∇G, op_p, λ_host)
     dparam = adjoint_storage.dparam
-    @tic "objective parameter gradient" if !isnothing(dparam)
+    return @tic "objective parameter gradient" if !isnothing(dparam)
         if i == N
             @. dparam = 0
         end
@@ -553,13 +612,24 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
     rhs = adjoint_storage.rhs
     # Fill rhs with (∂J / ∂x)ᵀₙ (which will be treated with a negative sign when the result is written by the linear solver)
     S_p = get_objective_sparsity(adjoint_storage, :forward)
-    obj_eval = objective_evaluator_from_model_and_state(G, forward_sim.model, packed_steps, i)
-    @tic "objective primary gradient" state_gradient_outer!(rhs, obj_eval, forward_sim.model, forward_sim.storage.state, sparsity = S_p)
+    objective_sim = adjoint_storage.objective
+    objective_model = objective_sim.model
+    objective_rhs = adjoint_storage.objective_rhs
+    reset_variables!(objective_sim, state)
+    obj_eval = objective_evaluator_from_model_and_state(
+        G, objective_model, packed_steps, i
+    )
+    @tic "objective primary gradient" state_gradient_outer!(
+        objective_rhs,
+        obj_eval, objective_model, objective_sim.storage.state,
+        sparsity = S_p
+    )
+    copyto!(rhs, objective_rhs)
     if isnothing(state_next)
         @assert i == N
         @. λ = 0
     else
-        next_packed_step = packed_steps[i+1]
+        next_packed_step = packed_steps[i + 1]
         next_step_info = next_packed_step.step_info
         forces_next = next_packed_step.forces
         @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, next_step_info[:dt], forces_next, next_step_info[:time])
@@ -589,7 +659,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
 end
 
 function sens_add_mult!(x::AbstractVector, op::LinearOperator, y::AbstractVector)
-    mul!(x, op, y, 1.0, 1.0)
+    return mul!(x, op, y, 1.0, 1.0)
 end
 
 function sens_add_mult!(x::AbstractMatrix, op::LinearOperator, y::AbstractMatrix)
@@ -598,6 +668,7 @@ function sens_add_mult!(x::AbstractMatrix, op::LinearOperator, y::AbstractMatrix
         y_i = vec(view(y, :, i))
         sens_add_mult!(x_i, op, y_i)
     end
+    return
 end
 
 function adjoint_reassemble!(sim, state, state0, dt, forces, time)
@@ -617,7 +688,7 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     reset_variables!(s, model, state)
     update_state_dependents!(s, model, dt, forces, time = time, update_secondary = true)
     # Finally update the system
-    update_linearized_system!(s, model)
+    return update_linearized_system!(s, model)
 end
 
 function swap_primary_with_parameters!(pmodel, model, targets = parameter_targets(model))
@@ -643,7 +714,7 @@ end
 function parameter_targets(model::SimulationModel)
     prm = get_parameters(model)
     targets = Symbol[]
-    for (k, v) in prm
+    for (k, v) in pairs(prm)
         if parameter_is_differentiable(v, model)
             push!(targets, k)
         end
@@ -697,11 +768,13 @@ Compute sensitivities of `model` parameter with name `target` for objective func
 
 This method uses numerical perturbation and is primarily intended for testing of `solve_adjoint_sensitivities`.
 """
-function solve_numerical_sensitivities(model, states, reports, G, target;
-                                                forces = setup_forces(model),
-                                                state0 = setup_state(model),
-                                                parameters = setup_parameters(model),
-                                                epsilon = 1e-8)
+function solve_numerical_sensitivities(
+        model, states, reports, G, target;
+        forces = setup_forces(model),
+        state0 = setup_state(model),
+        parameters = setup_parameters(model),
+        epsilon = 1.0e-8
+    )
     timesteps = report_timesteps(reports)
     G = adjoint_wrap_objective(G, model)
     N = length(states)
@@ -721,7 +794,7 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
     if isnothing(scale)
         ϵ = epsilon
     else
-        ϵ = scale*epsilon
+        ϵ = scale * epsilon
     end
     n, m = sz
     for i in 1:n
@@ -731,7 +804,7 @@ function solve_numerical_sensitivities(model, states, reports, G, target;
             sim_i = Simulator(model, state0 = copy(state0), parameters = param_i)
             states_i, reports = simulate!(sim_i, timesteps, info_level = -1, forces = forces)
             v = evaluate_objective(G, model, states_i, timesteps, forces)
-            grad_num[i, j] = (v - base_obj)/ϵ
+            grad_num[i, j] = (v - base_obj) / ϵ
         end
     end
     if grad_is_vector
@@ -745,6 +818,7 @@ function solve_numerical_sensitivities(model, states, reports, G; kwarg...)
     for k in keys(model.parameters)
         out[k] = solve_numerical_sensitivities(model, states, reports, G, k; kwarg...)
     end
+    return
 end
 
 function get_parameter_pair(model, parameters, target)
@@ -752,10 +826,11 @@ function get_parameter_pair(model, parameters, target)
 end
 
 function perturb_parameter!(model, param_i, target, i, j, sz, ϵ)
-    param_i[target][j + i*(sz[1]-1)] += ϵ
+    return param_i[target][j + i * (sz[1] - 1)] += ϵ
 end
 
-function evaluate_objective(G, model, states, timesteps, all_forces;
+function evaluate_objective(
+        G, model, states, timesteps, all_forces;
         step_index = eachindex(states),
         kwarg...
     )
@@ -764,7 +839,8 @@ function evaluate_objective(G, model, states, timesteps, all_forces;
     return evaluate_objective(obj, model, packed_steps; kwarg...)
 end
 
-function evaluate_objective(G::AbstractSumObjective, model, packed_steps::AdjointPackedResult;
+function evaluate_objective(
+        G::AbstractSumObjective, model, packed_steps::AdjointPackedResult;
         kwarg...
     )
     obj = 0.0
@@ -812,7 +888,7 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Equation
         (; n_x, offset_x) = prm_map[k]
         m = degrees_of_freedom_per_entity(model, var)
         if n_x > 0
-            rng = (offset_x+1):(offset_x+n_x)
+            rng = (offset_x + 1):(offset_x + n_x)
             if scalar_valued_objective
                 result_k = view(result, rng)
                 v = extract_sensitivity_subset(result_k, var, n_x, m, offset_x)
@@ -820,7 +896,7 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Equation
                 # Grab each of the sensitivities and put them in an array for simplicity
                 # TODO: Update this part
                 v = map(
-                    i -> extract_sensitivity_subset(view(result, rng, i), var, n_x, m, n_x*(i-1)),
+                    i -> extract_sensitivity_subset(view(result, rng, i), var, n_x, m, n_x * (i - 1)),
                     1:N
                 )
             end
@@ -846,7 +922,7 @@ function store_sensitivities!(out, model, variables, result, prm_map, ::Union{Eq
     for (k, var) in pairs(variables)
         m = degrees_of_freedom_per_entity(model, var)
         var::ScalarVariable
-        pos = offset:bz:(bz*(ne-1)+offset)
+        pos = offset:bz:(bz * (ne - 1) + offset)
         @assert length(pos) == ne "$(length(pos))"
         out[k] = result[pos]
         offset += 1
@@ -867,7 +943,8 @@ end
 gradient_vec_or_mat(n, ::Nothing) = zeros(n)
 gradient_vec_or_mat(n, m) = zeros(n, m)
 
-function variable_mapper(model::SimulationModel, type = :primary;
+function variable_mapper(
+        model::SimulationModel, type = :primary;
         targets = nothing,
         config = nothing,
         offset_x = 0,
@@ -891,8 +968,8 @@ function variable_mapper(model::SimulationModel, type = :primary;
             if !isnothing(lumping)
                 N = maximum(lumping)
                 sort(unique(lumping)) == 1:N || error("Lumping for $t must include all values from 1 to $N")
-                length(lumping) == n÷m || error("Lumping for $t must have one entry for each value if present")
-                n_x = N*m
+                length(lumping) == n ÷ m || error("Lumping for $t must have one entry for each value if present")
+                n_x = N * m
             end
         end
         out[t] = (
@@ -901,7 +978,7 @@ function variable_mapper(model::SimulationModel, type = :primary;
             n_row = m,
             offset_full = offset_full,
             offset_x = offset_x,
-            scale = variable_scale(var)
+            scale = variable_scale(var),
         )
         offset_full += n
         offset_x += n_x
@@ -913,7 +990,7 @@ function rescale_sensitivities!(dG, model, parameter_map; renum = nothing)
     for (k, v) in parameter_map
         (; n_full, offset_full, scale) = v
         if !isnothing(scale)
-            interval = (offset_full+1):(offset_full+n_full)
+            interval = (offset_full + 1):(offset_full + n_full)
             if !isnothing(renum)
                 interval = renum[interval]
             end
@@ -925,6 +1002,7 @@ function rescale_sensitivities!(dG, model, parameter_map; renum = nothing)
             @. dG_k /= scale
         end
     end
+    return
 end
 
 function swap_variables(state, parameters, model; variables = true)
@@ -952,6 +1030,7 @@ function internal_swapper!(out, A, B, keep, skip)
             out[k] = v
         end
     end
+    return
 end
 
 function adjoint_transfer_canonical_order(dx, model; to_canonical = true)
@@ -964,20 +1043,21 @@ function adjoint_transfer_canonical_order!(λ, dx, model::MultiModel; to_canonic
     offset = 0
     for (k, m) in pairs(model.models)
         ndof = number_of_degrees_of_freedom(m)
-        ix = (offset+1):(offset+ndof)
+        ix = (offset + 1):(offset + ndof)
         λ_i = view(λ, ix)
         dx_i = view(dx, ix)
         adjoint_transfer_canonical_order_inner!(λ_i, dx_i, m, matrix_layout(m.context), to_canonical)
         offset += ndof
     end
+    return
 end
 
 function adjoint_transfer_canonical_order!(λ, dx, model; to_canonical = true)
-    adjoint_transfer_canonical_order_inner!(λ, dx, model, matrix_layout(model.context), to_canonical)
+    return adjoint_transfer_canonical_order_inner!(λ, dx, model, matrix_layout(model.context), to_canonical)
 end
 
 function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::EquationMajorLayout, to_canonical)
-    @. λ = dx
+    return @. λ = dx
 end
 
 function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::BlockMajorLayout, to_canonical)
@@ -990,16 +1070,16 @@ function adjoint_transfer_canonical_order_inner!(λ, dx, model, ::BlockMajorLayo
     end
     n = length(dx) ÷ bz
     n::Int
-    if to_canonical
+    return if to_canonical
         for b in 1:bz
             for i in 1:n
-                λ[(b-1)*n + i] = dx[(i-1)*bz + b]
+                λ[(b - 1) * n + i] = dx[(i - 1) * bz + b]
             end
         end
     else
         for b in 1:bz
             for i in 1:n
-                λ[(i-1)*bz + b] = dx[(b-1)*n + i]
+                λ[(i - 1) * bz + b] = dx[(b - 1) * n + i]
             end
         end
     end
@@ -1007,7 +1087,7 @@ end
 
 function update_state0_sensitivities!(storage)
     state0_map = storage.state0_map
-    if !ismissing(state0_map)
+    return if !ismissing(state0_map)
         sim = storage.backward
         model = sim.model
         # Assume that this gets called at the end when everything has been set
@@ -1023,8 +1103,14 @@ function update_state0_sensitivities!(storage)
         adjoint_transfer_canonical_order!(λ_renum, λ, model, to_canonical = false)
         sens_add_mult!(buf, op_b, λ_renum)
         # Transfer back to canonical order before return usage
-        adjoint_transfer_canonical_order!(∇x, buf, model, to_canonical = true)
-        rescale_sensitivities!(∇x, model, storage.state0_map)
+        state0_device = storage.state0_device
+        adjoint_transfer_canonical_order!(
+            state0_device, buf, model, to_canonical = true
+        )
+        copyto!(∇x, state0_device)
+        rescale_sensitivities!(
+            ∇x, storage.objective.model, storage.state0_map
+        )
     end
 end
 
@@ -1051,7 +1137,8 @@ function is a `Dict` with the following fields:
 - `:total_time` - The total time of the simulation (i.e. time at the final
   step and substep)
 """
-function optimization_step_info(step::Int, time::Real, dt::Real;
+function optimization_step_info(
+        step::Int, time::Real, dt::Real;
         Nstep = missing,
         total_time = missing,
         substep_global = step,

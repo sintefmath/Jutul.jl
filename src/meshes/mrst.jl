@@ -34,7 +34,7 @@ function MRSTWrapMesh(G, N = nothing)
 end
 
 function grid_dims_ijk(g::MRSTWrapMesh)
-    cart = Int.(vec(g.data.cartDims)) 
+    cart = Int.(vec(g.data.cartDims))
     if length(cart) == 3
         return (cart[1], cart[2], cart[3])
     elseif length(cart) == 2
@@ -43,12 +43,12 @@ function grid_dims_ijk(g::MRSTWrapMesh)
         return (cart[1], 1, 1)
     else
         error("Unsupported cartDims length = $(length(cart))")
-    end 
+    end
 end
 
 function cell_dims(g::MRSTWrapMesh, pos::Integer)
     fp = g.data.cells.facePos
-    faces = Int.(g.data.cells.faces[Int(fp[pos]):Int(fp[pos+1]-1)])
+    faces = Int.(g.data.cells.faces[Int(fp[pos]):Int(fp[pos + 1] - 1)])
     fc = g.data.faces.centroids[faces, :]
     dim = size(fc, 2)
     tmp = zeros(dim)
@@ -61,7 +61,7 @@ end
 
 function cell_ijk(g::MRSTWrapMesh, base_index::Integer)
     if haskey(g.data.cells, :indexMap)
-        imap =  g.data.cells.indexMap
+        imap = g.data.cells.indexMap
         t = Int(imap[base_index])
     else
         t = base_index
@@ -70,8 +70,8 @@ function cell_ijk(g::MRSTWrapMesh, base_index::Integer)
     # (z-1)*nx*ny + (y-1)*nx + x
     x = mod(t - 1, nx) + 1
     y = mod((t - x) ÷ nx, ny) + 1
-    leftover = (t - x - (y-1)*nx)
-    z = (leftover ÷ (nx*ny)) + 1
+    leftover = (t - x - (y - 1) * nx)
+    z = (leftover ÷ (nx * ny)) + 1
     return (x, y, z)
 end
 
@@ -90,7 +90,7 @@ end
 function Base.show(io::IO, m::MRSTWrapMesh)
     nc = number_of_cells(m)
     nf = number_of_faces(m)
-    print(io, "MRSTWrapMesh with $nc cells and $nf faces.")
+    return print(io, "MRSTWrapMesh with $nc cells and $nf faces.")
 end
 
 function tpfv_geometry(g::MRSTWrapMesh)
@@ -115,10 +115,10 @@ function tpfv_geometry(g::MRSTWrapMesh)
     if self_consistent
         face_centroids = copy((faces.centroids[internal_faces, :])')
         face_areas = vec(faces.areas[internal_faces])
-        face_normals = faces.normals[internal_faces, :]./face_areas
+        face_normals = faces.normals[internal_faces, :] ./ face_areas
         face_normals = copy(face_normals')
     else
-        @assert eltype(N)<:Integer
+        @assert eltype(N) <: Integer
         @assert size(N, 1) == 2
         dim = size(cell_centroids, 1)
         fake_vec() = repeat([NaN], dim, nf)
@@ -168,19 +168,19 @@ function triangulate_mesh(m::MRSTWrapMesh; outer = false)
     npts = G.nodes.coords
 
     function face_nodes(f)
-        return Int64.(gnodes[nodePos[f]:nodePos[f+1]-1])
+        return Int64.(gnodes[nodePos[f]:(nodePos[f + 1] - 1)])
     end
     function cell_faces(c)
-        return Int64.(faces[fpos[c]:fpos[c+1]-1])
+        return Int64.(faces[fpos[c]:(fpos[c + 1] - 1)])
     end
     function cyclical_tesselation(n)
         c = ones(Int64, n)
         # Create a triangulation of face, assuming convexity
         # Each tri is two successive points on boundary connected to centroid
         start = 2
-        stop = n+1
+        stop = n + 1
         l = start:stop
-        r = [stop, (start:stop-1)...]
+        r = [stop, (start:(stop - 1))...]
 
         return hcat(l, c, r)
     end
@@ -195,22 +195,22 @@ function triangulate_mesh(m::MRSTWrapMesh; outer = false)
         nn = size(nodes, 1)
         @assert nn == nc + 1
         offset = 0
-        for cell = 1:nc
+        for cell in 1:nc
             x0 = nodes[cell]
-            x1 = nodes[cell+1]
+            x1 = nodes[cell + 1]
 
             push!(tri, [1 2 4; 1 4 3] .+ offset)
             push!(pts, [x0 0.0; x1 0.0; x0 1.0; x1 1.0])
             N = 4
             for i in 1:N
-                push!(cell_index, cell) 
+                push!(cell_index, cell)
             end
             offset += N
         end
     elseif d == 2
         # For each cell, rotate around and add all nodes and triangles that include the center cell
         ccent = G.cells.centroids
-        for cell = 1:nc
+        for cell in 1:nc
             center = ccent[cell, :]
             local_pts = [center']
             local_tri = []
@@ -255,7 +255,7 @@ function triangulate_mesh(m::MRSTWrapMesh; outer = false)
         fcent = G.faces.centroids
         for i in active
             cell = cells[i]
-            for f in cell_faces(cell)        
+            for f in cell_faces(cell)
                 center = fcent[f, :]
                 # Grab local nodes
                 local_nodes = face_nodes(f)
@@ -281,10 +281,10 @@ function triangulate_mesh(m::MRSTWrapMesh; outer = false)
     tri = plot_flatten_helper(tri)
 
     mapper = (
-                Cells = (cell_data) -> cell_data[cell_index],
-                Faces = (face_data) -> face_data[face_index],
-                indices = (Cells = cell_index, Faces = face_index)
-              )
+        Cells = (cell_data) -> cell_data[cell_index],
+        Faces = (face_data) -> face_data[face_index],
+        indices = (Cells = cell_index, Faces = face_index),
+    )
     return (points = pts, triangulation = tri, mapper = mapper)
 end
 

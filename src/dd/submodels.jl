@@ -23,6 +23,7 @@ function submodel(model::SimulationModel, p_i::AbstractVector; context = model.c
         for k in keys(old)
             new[k] = subvariable(old[k], M)
         end
+        return
     end
     transfer_vars!(new_model.primary_variables, model.primary_variables)
     transfer_vars!(new_model.secondary_variables, model.secondary_variables)
@@ -117,6 +118,10 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
             push!(groups, groups_0[i])
         end
     end
+    execution = DeviceExecutionMode[]
+    for key in keys(new_submodels)
+        push!(execution, group_execution_mode(model, key))
+    end
     if !has_groups || length(groups) == 1
         groups = nothing
         reduction = nothing
@@ -129,7 +134,10 @@ function submodel(model::MultiModel, mp::SimpleMultiModelPartition, index; kwarg
     # Cross terms...
     mk = keys(new_submodels)
     sm = convert_to_immutable_storage(new_submodels)
-    new_model = MultiModel(sm, groups = groups, reduction = reduction, context = ctx)
+    new_model = MultiModel(
+        sm, groups = groups, group_execution = execution,
+        reduction = reduction, context = ctx
+    )
 
     for ctp in model.cross_terms
         (; target, source) = ctp
@@ -151,11 +159,6 @@ function subvariable(var, map)
         @warn "Default subvariable called for $(typeof(var)) that contains regions property. Potential missing interface specialization. Map was: $(typeof(map))"
     end
     return var
-end
-
-function subvariable(var::Pair, map)
-    label, var = var
-    return Pair(label, subvariable(var, map))
 end
 
 function subequation(eq, subr, map)

@@ -24,20 +24,20 @@ function generic_cache_declare_pattern(cache::GenericAutoDiffCache, entity_indic
     return (I, J)
 end
 
-number_of_partials(::Type{ForwardDiff.Dual{T, V, N}}) where {T,V,N} = N
+number_of_partials(::Type{ForwardDiff.Dual{T, V, N}}) where {T, V, N} = N
 number_of_partials(::Type{<:Real}) = 0
 
-entity(::GenericAutoDiffCache{<:Any, E}) where E = E
-equations_per_entity(::GenericAutoDiffCache{N}) where N = N
-number_of_entities(c::GenericAutoDiffCache) = length(c.vpos)-1
+entity(::GenericAutoDiffCache{<:Any, E}) where {E} = E
+equations_per_entity(::GenericAutoDiffCache{N}) where {N} = N
+number_of_entities(c::GenericAutoDiffCache) = length(c.vpos) - 1
 number_of_partials(c::GenericAutoDiffCache{N, E, ∂T}) where {N, E, ∂T} = number_of_partials(∂T)
 
-vrange(c::GenericAutoDiffCache, i) = c.vpos[i]:(c.vpos[i+1]-1)
+vrange(c::GenericAutoDiffCache, i) = c.vpos[i]:(c.vpos[i + 1] - 1)
 get_entries(c::GenericAutoDiffCache) = c.entries
 
 @inline function get_jacobian_pos(c::GenericAutoDiffCache, index, eqNo, partial_index, pos = c.jacobian_positions)
     np = number_of_partials(c)
-    @inbounds pos[(eqNo-1)*np + partial_index, index]
+    return @inbounds pos[(eqNo - 1) * np + partial_index, index]
 end
 
 function diagonal_view(cache::GenericAutoDiffCache)
@@ -45,7 +45,7 @@ function diagonal_view(cache::GenericAutoDiffCache)
     if isnothing(dpos)
         v = nothing
     else
-        v = view(cache.entries, :, dpos)
+        v = @inbounds view(cache.entries, :, dpos)
     end
     return v
 end
@@ -53,44 +53,48 @@ end
 function fill_equation_entries!(nz, r, model, cache::GenericAutoDiffCache)
     nu, ne, np = ad_dims(cache)
     entries = cache.entries
-    tb = minbatch(model.context)
     dpos = cache.diagonal_positions
-    fill_equation_entries_impl!(nz, r, cache, entries, tb, dpos, nu, Val(ne), Val(np))
+    return fill_equation_entries_impl!(nz, r, cache, entries, model.context, dpos, nu, Val(ne), Val(np))
 end
 
-function fill_equation_entries_impl!(nz, r, cache, entries, tb, dpos, nu, ::Val{ne}, ::Val{np}) where {ne, np}
-    if isnothing(dpos)
-        # We don't have diagonals, just fill inn residual whenever
-        @batch minbatch = tb for i in 1:nu
-            for (jno, j) in enumerate(vrange(cache, i))
-                fill_residual = jno == 1
-                for e in 1:ne
-                    @inbounds a = entries[e, j]
-                    if fill_residual
-                        insert_residual_value(r, i, e, a.value)
-                    end
-                    for d = 1:np
-                        update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
-                    end
+function fill_equation_entries_impl!(nz, r, cache, entries, context, dpos, nu, ::Val{ne}, ::Val{np}) where {ne, np}
+    function F_without_diag(i)
+        for (jno, j) in enumerate(vrange(cache, i))
+            fill_residual = jno == 1
+            for e in 1:ne
+                @inbounds a = entries[e, j]
+                if fill_residual
+                    insert_residual_value(r, i, e, a.value)
+                end
+                for d in 1:np
+                    update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
                 end
             end
         end
+        return
+    end
+    function F(i)
+        @inbounds diag_index = dpos[i]
+        for j in vrange(cache, i)
+            fill_residual = j == diag_index
+            for e in 1:ne
+                @inbounds a = entries[e, j]
+                if fill_residual
+                    insert_residual_value(r, i, e, a.value)
+                end
+                for d in 1:np
+                    update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
+                end
+            end
+        end
+        return
+    end
+
+    return if isnothing(dpos)
+        # We don't have diagonals, just fill inn residual whenever
+        threaded_loop(F_without_diag, nu, context)
     else
         # Diagonal value might differ due to source terms, be careful
-        @batch minbatch = tb for i in 1:nu
-            @inbounds diag_index = dpos[i]
-            for j in vrange(cache, i)
-                fill_residual = j == diag_index
-                for e in 1:ne
-                    @inbounds a = entries[e, j]
-                    if fill_residual
-                        insert_residual_value(r, i, e, a.value)
-                    end
-                    for d = 1:np
-                        update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
-                    end
-                end
-            end
-        end
+        threaded_loop(F, nu, context)
     end
 end

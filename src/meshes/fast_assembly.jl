@@ -50,7 +50,7 @@ struct FastAssemblyData{dim, num_type}
         length(faces_to_nodes) == nf || error("Length of faces_to_nodes must match number of faces")
         length(face_centroids) == nf || error("Length of face_centroids must match number of faces")
         length(normals) == nf || error("Length of normals must match number of faces")
-        new{dim, num_type}(
+        return new{dim, num_type}(
             node_points,
             face_centroids,
             cell_centroids,
@@ -205,7 +205,7 @@ function FastAssemblyData(
 end
 
 function Base.show(io::IO, t::MIME"text/plain", data::FastAssemblyData{dim, num_type}) where {dim, num_type}
-    print(io, "FastAssemblyData with dimension $dim and numerical type $num_type")
+    return print(io, "FastAssemblyData with dimension $dim and numerical type $num_type")
 end
 
 float_type(::FastAssemblyData{d, num_type}) where {d, num_type} = num_type

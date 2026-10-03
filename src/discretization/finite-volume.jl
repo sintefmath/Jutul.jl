@@ -43,11 +43,16 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
 end
 
 
-function compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; version = :xyz, face_dir = missing)
+function compute_half_face_trans(
+        cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns;
+        version = :xyz,
+        face_dir = missing,
+        half_face_centroids = missing
+    )
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
-    nc = length(facepos)-1
+    nc = length(facepos) - 1
     if isa(perm, Real)
         perm = repeat([perm], 1, nc)
     else
@@ -85,8 +90,9 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         throw(ArgumentError("version must be :xyz or :ijk"))
     end
     if version == :ijk
-        if size(perm, 1) != dim
-            throw(ArgumentError("version = :ijk is only valid when perm is strictly diagonal."))
+        permdim = size(perm, 1)
+        if permdim > 1 && permdim != dim
+            throw(ArgumentError("version = :ijk is only valid when perm is strictly diagonal. ($permdim vs $dim)"))
         end
         if ismissing(face_dir)
             throw(ArgumentError("version = :ijk cannot be used without also passing face_dir."))
@@ -102,6 +108,9 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
     end
     is_xyz = Val(version == :xyz)
+    function to_vec_of_svectors(x::Missing)
+        return x
+    end
     function to_vec_of_svectors(x)
         elT = eltype(x)
         if isbitstype(elT)
@@ -111,11 +120,23 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
         end
         return x_vec
     end
+    function to_vec_of_svectors(x::AbstractVector{<:AbstractVector})
+        return x
+    end
+    if !ismissing(half_face_centroids) && length(half_face_centroids) > 0
+        half_face_centroids = to_vec_of_svectors(half_face_centroids)
+        cfc_dim = length(first(half_face_centroids))
+        cfc_n = length(half_face_centroids)
+        cfc_dim == dim || throw(ArgumentError("half_face_centroids had $cfc_dim rows but grid had $dim dimension."))
+        cfc_n == length(faces) || throw(ArgumentError("half_face_centroids had $cfc_n columns but grid had $(length(faces)) cell-faces."))
+    end
+
     compute_half_face_trans!(
         T_hf,
         to_vec_of_svectors(cell_centroids),
         to_vec_of_svectors(face_centroids),
         to_vec_of_svectors(face_normals),
+        half_face_centroids,
         face_areas,
         perm,
         faces,
@@ -127,19 +148,23 @@ function compute_half_face_trans(cell_centroids, face_centroids, face_normals, f
     return T_hf
 end
 
-function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns, face_dir, ::Val{is_xyz} = Val(true)) where {is_xyz}
+function compute_half_face_trans!(T_hf, cell_centroids::AbstractVector, face_centroids, face_normals, cell_face_centers, face_areas, perm, faces, facepos, facesigns, face_dir, ::Val{is_xyz} = Val(true)) where {is_xyz}
     if length(cell_centroids) > 0
         dim = length(cell_centroids[1])
-        T = eltype(eltype(cell_centroids))
+        # T = eltype(eltype(cell_centroids))
         for cell in eachindex(cell_centroids)
-            @inbounds for fpos = facepos[cell]:(facepos[cell+1]-1)
+            @inbounds for fpos in facepos[cell]:(facepos[cell + 1] - 1)
                 face = faces[fpos]
                 sgn = facesigns[fpos]
-                cc = cell_centroids[cell]
                 fc = face_centroids[face]
+                if ismissing(cell_face_centers)
+                    cc = cell_centroids[cell]
+                else
+                    cc = cell_face_centers[fpos]
+                end
                 A = face_areas[face]
                 C = fc - cc
-                Nn = sgn*face_normals[face]
+                Nn = sgn * face_normals[face]
                 if is_xyz
                     perm_c = view(perm, :, cell)
                     K = expand_perm(perm_c, Val(dim))
@@ -181,7 +206,7 @@ function expand_perm(K, ::Val{2})
     K_e = @SMatrix [
         K_xx K_xy;
         K_xy K_yy
-        ]
+    ]
     return K_e
 end
 
@@ -210,15 +235,16 @@ function expand_perm(K, ::Val{3})
     else
         error("Permeability for three-dimensional meshes must have 1/3/6 entries per cell, had $n")
     end
-    K_e =  @SMatrix[
+    K_e = @SMatrix[
         K_xx K_xy K_xz;
         K_xy K_yy K_yz;
-        K_xz K_yz K_zz]
+        K_xz K_yz K_zz
+    ]
     return K_e
 end
 
 function half_face_trans(A, K, C, N)
-    return A*(dot(K*C, N))/dot(C, C)
+    return A * (dot(K * C, N)) / dot(C, C)
 end
 
 function compute_face_trans(T_hf, N, faces = first(get_facepos(N)))
@@ -226,7 +252,7 @@ function compute_face_trans(T_hf, N, faces = first(get_facepos(N)))
     nf = size(N, 2)
     T = zeros(eltype(T_hf), nf)
     for i in eachindex(faces)
-        T[faces[i]] += 1.0/T_hf[i]
+        T[faces[i]] += 1.0 / T_hf[i]
     end
     @. T = 1.0 / T
     return T
@@ -283,7 +309,7 @@ function compute_boundary_trans(d::DataDomain, perm; kwarg...)
     nc = length(cells)
     @assert nf == nc "$nf != $nc"
     faces = collect(1:nf)
-    facepos = collect(1:(nc+1))
+    facepos = collect(1:(nc + 1))
     facesigns = ones(nf)
     return compute_half_face_trans(cell_centroids, face_centroids, face_normals, face_areas, perm, faces, facepos, facesigns; kwarg...)
 end
@@ -307,7 +333,7 @@ function compute_face_gdz(N, z; g = gravity_constant)
     for i in 1:nf
         l = N[1, i]
         r = N[2, i]
-        gdz[i] = -g*(z[r] - z[l])
+        gdz[i] = -g * (z[r] - z[l])
     end
     return gdz
 end

@@ -8,7 +8,7 @@ function si_unit(::Union{Val{:kilogram}, Val{:kg}})
 end
 
 function si_unit(::Union{Val{:gram}, Val{:g}})
-    return 1e-3
+    return 1.0e-3
 end
 
 function si_unit(::Val{:tonne})

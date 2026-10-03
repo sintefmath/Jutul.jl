@@ -14,7 +14,7 @@ end
 Return +1, -1, or 0 depending on whether `pt` is on the positive side,
 negative side, or on the plane.
 """
-function classify_point(plane::PlaneCut, pt::SVector{3}; tol = 1e-12)
+function classify_point(plane::PlaneCut, pt::SVector{3}; tol = 1.0e-12)
     d = signed_distance(plane, pt)
     if d > tol
         return 1
@@ -31,7 +31,7 @@ end
 Find the intersection point of line segment (p1, p2) with a plane.
 Returns the intersection point. Assumes the segment does cross the plane.
 """
-function edge_plane_intersection(p1::SVector{3, T}, p2::SVector{3, T}, plane::PlaneCut) where T
+function edge_plane_intersection(p1::SVector{3, T}, p2::SVector{3, T}, plane::PlaneCut) where {T}
     d1 = signed_distance(plane, p1)
     d2 = signed_distance(plane, p2)
     denom = d1 - d2
@@ -98,7 +98,7 @@ Returns:
   - `:negative` if all nodes are on negative side (or on plane)
   - `:cut` if nodes span both sides
 """
-function classify_cell(mesh::UnstructuredMesh{3}, cell::Int, plane::PlaneCut; tol = 1e-12)
+function classify_cell(mesh::UnstructuredMesh{3}, cell::Int, plane::PlaneCut; tol = 1.0e-12)
     nodes = cell_nodes(mesh, cell)
     has_pos = false
     has_neg = false
@@ -134,11 +134,11 @@ Uses the Sutherland-Hodgman algorithm variant.
 Returns (pos_poly, neg_poly) where each is a Vector{SVector{3, T}}.
 """
 function clip_face_by_plane(
-    face_nodes::AbstractVector{Int},
-    node_points::Vector{SVector{3, T}},
-    plane::PlaneCut;
-    tol = 1e-12
-) where T
+        face_nodes::AbstractVector{Int},
+        node_points::Vector{SVector{3, T}},
+        plane::PlaneCut;
+        tol = 1.0e-12
+    ) where {T}
     n = length(face_nodes)
     pts = [node_points[face_nodes[i]] for i in 1:n]
     dists = [signed_distance(plane, p) for p in pts]
@@ -179,7 +179,7 @@ end
 
 Compute the area of a 3D planar polygon.
 """
-function polygon_area(poly::Vector{SVector{3, T}}) where T
+function polygon_area(poly::Vector{SVector{3, T}}) where {T}
     n = length(poly)
     if n < 3
         return zero(T)
@@ -200,7 +200,7 @@ end
 
 Compute the centroid of a 3D planar polygon.
 """
-function polygon_centroid(poly::Vector{SVector{3, T}}) where T
+function polygon_centroid(poly::Vector{SVector{3, T}}) where {T}
     n = length(poly)
     if n == 0
         return zero(SVector{3, T})
@@ -228,7 +228,7 @@ end
 
 Order polygon points counter-clockwise when viewed from the direction of `normal`.
 """
-function order_polygon_points(pts::Vector{SVector{3, T}}, normal::SVector{3, T}) where T
+function order_polygon_points(pts::Vector{SVector{3, T}}, normal::SVector{3, T}) where {T}
     n = length(pts)
     if n <= 2
         return pts
@@ -270,7 +270,7 @@ end
 Project a 3D point onto the cutting plane, returning 2D coordinates (u, v)
 in a local coordinate system on the plane.
 """
-function project_to_plane(pt::SVector{3, T}, plane::PlaneCut) where T
+function project_to_plane(pt::SVector{3, T}, plane::PlaneCut) where {T}
     n = plane.normal
     # Pick a reference direction not parallel to normal
     ref = abs(n[1]) < 0.9 ? SVector{3, T}(1, 0, 0) : SVector{3, T}(0, 1, 0)
@@ -285,7 +285,7 @@ end
 
 Project a 3D bounding polygon onto the cutting plane, returning 2D coordinates.
 """
-function project_polygon_to_2d(polygon::Vector{SVector{3, T}}, plane::PlaneCut) where T
+function project_polygon_to_2d(polygon::Vector{SVector{3, T}}, plane::PlaneCut) where {T}
     return [project_to_plane(pt, plane) for pt in polygon]
 end
 
@@ -294,7 +294,7 @@ end
 
 Check whether a 2D point lies inside a 2D polygon using the ray-casting algorithm.
 """
-function point_in_polygon_2d(pt::SVector{2, T}, polygon::Vector{SVector{2, T}}) where T
+function point_in_polygon_2d(pt::SVector{2, T}, polygon::Vector{SVector{2, T}}) where {T}
     n = length(polygon)
     inside = false
     j = n
@@ -302,7 +302,7 @@ function point_in_polygon_2d(pt::SVector{2, T}, polygon::Vector{SVector{2, T}}) 
         xi, yi = polygon[i]
         xj, yj = polygon[j]
         if ((yi > pt[2]) != (yj > pt[2])) &&
-           (pt[1] < (xj - xi) * (pt[2] - yi) / (yj - yi) + xi)
+                (pt[1] < (xj - xi) * (pt[2] - yi) / (yj - yi) + xi)
             inside = !inside
         end
         j = i
@@ -317,11 +317,11 @@ Check whether a cell's centroid, when projected onto the cutting plane,
 falls inside the 2D bounding polygon.
 """
 function cell_centroid_in_bounding_polygon(
-    mesh::UnstructuredMesh{3},
-    cell::Int,
-    plane::PlaneCut,
-    bounding_polygon_2d::Vector{SVector{2, T}}
-) where T
+        mesh::UnstructuredMesh{3},
+        cell::Int,
+        plane::PlaneCut,
+        bounding_polygon_2d::Vector{SVector{2, T}}
+    ) where {T}
     # Compute approximate cell centroid from all cell nodes
     nodes = cell_nodes(mesh, cell)
     centroid = zero(SVector{3, T})
@@ -341,11 +341,11 @@ falls inside the 2D bounding polygon. Used for the `clip_to_polygon` option
 to include partially-inside cells.
 """
 function cell_any_node_in_bounding_polygon(
-    mesh::UnstructuredMesh{3},
-    cell::Int,
-    plane::PlaneCut,
-    bounding_polygon_2d::Vector{SVector{2, T}}
-) where T
+        mesh::UnstructuredMesh{3},
+        cell::Int,
+        plane::PlaneCut,
+        bounding_polygon_2d::Vector{SVector{2, T}}
+    ) where {T}
     nodes = cell_nodes(mesh, cell)
     for n in nodes
         pt2d = project_to_plane(mesh.node_points[n], plane)

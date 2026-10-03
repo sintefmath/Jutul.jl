@@ -9,7 +9,8 @@ export BlockMajorLayout, EquationMajorLayout, EntityMajorLayout
 
 export transfer, allocate_array
 
-export JutulStorage
+export AbstractJutulStorage, JutulStorage, ImmutableJutulStorage
+export evaluation_state, evaluation_state0, maybe_convert_evaluation_state
 
 import Base: show, size, setindex!, getindex, ndims
 
@@ -156,11 +157,11 @@ function scalarize_layout(layout::BlockMajorLayout, other_layout::ScalarLayout)
     return slayout
 end
 
-function Base.adjoint(ctx::T) where T<: JutulContext
+function Base.adjoint(ctx::T) where {T <: JutulContext}
     return T(matrix_layout = adjoint(ctx.matrix_layout))
 end
 
-function Base.adjoint(layout::T) where T <: JutulMatrixLayout
+function Base.adjoint(layout::T) where {T <: JutulMatrixLayout}
     return T(true)
 end
 
@@ -199,7 +200,7 @@ struct SparsePattern{L_r, L_c}
         if m == 0
             @debug "Pattern has zero columns?" n m I J
         end
-        new{LR, LC}(I, J, n, m, block_n, block_m, layout_row, layout_col)
+        return new{LR, LC}(I, J, n, m, block_n, block_m, layout_row, layout_col)
     end
 end
 
@@ -234,26 +235,36 @@ abstract type DiagonalEquation <: JutulEquation end
 
 # Models
 export JutulModel, FullyImplicitFormulation, SimulationModel, JutulEquation, JutulFormulation
+export DeviceExecutionMode, SolveFullyOnDevice, AssembleOnDevice, NothingOnDevice
+export group_execution_mode
 
 abstract type JutulModel end
 abstract type AbstractSimulationModel <: JutulModel end
 
-struct SimulationModel{O<:JutulDomain,
-                       S<:JutulSystem,
-                       F<:JutulFormulation,
-                       C<:JutulContext
-                       } <: AbstractSimulationModel
+struct SimulationModel{
+        O <: JutulDomain,
+        S <: JutulSystem,
+        F <: JutulFormulation,
+        C <: JutulContext,
+        DD,
+        PV,
+        SV,
+        P,
+        E,
+        OV,
+        X,
+    } <: AbstractSimulationModel
     domain::O
     system::S
     context::C
     formulation::F
-    data_domain
-    primary_variables::OrderedDict{Symbol, Any}
-    secondary_variables::OrderedDict{Symbol, Any}
-    parameters::OrderedDict{Symbol, Any}
-    equations::OrderedDict{Symbol, Any}
-    output_variables::Vector{Symbol}
-    extra::OrderedDict{Symbol, Any}
+    data_domain::DD
+    primary_variables::PV
+    secondary_variables::SV
+    parameters::P
+    equations::E
+    output_variables::OV
+    extra::X
     optimization_level::Int
 end
 
@@ -262,21 +273,22 @@ end
 
 Instantiate a model for a given `system` discretized on the `domain`.
 """
-function SimulationModel(domain, system;
-                            formulation=FullyImplicitFormulation(),
-                            context=DefaultContext(),
-                            output_level=:primary_variables,
-                            data_domain = missing,
-                            extra = OrderedDict{Symbol, Any}(),
-                            plot_mesh = missing,
-                            primary_variables = missing,
-                            secondary_variables = missing,
-                            parameters = missing,
-                            equations = missing,
-                            optimization_level = 1,
-                            outputs = Vector{Symbol}(),
-                            kwarg...
-                        )
+function SimulationModel(
+        domain, system;
+        formulation = FullyImplicitFormulation(),
+        context = DefaultContext(),
+        output_level = :primary_variables,
+        data_domain = missing,
+        extra = OrderedDict{Symbol, Any}(),
+        plot_mesh = missing,
+        primary_variables = missing,
+        secondary_variables = missing,
+        parameters = missing,
+        equations = missing,
+        optimization_level = 1,
+        outputs = Vector{Symbol}(),
+        kwarg...
+    )
     context = initialize_context!(context, domain, system, formulation)
     if ismissing(data_domain)
         if domain isa DataDomain
@@ -294,7 +306,7 @@ function SimulationModel(domain, system;
         error("plot_mesh argument is deprecated.")
     end
 
-    T = OrderedDict{Symbol,JutulVariables}
+    T = OrderedDict{Symbol, JutulVariables}
     need_primary = ismissing(primary_variables)
     if need_primary
         primary_variables = T()
@@ -309,13 +321,20 @@ function SimulationModel(domain, system;
     end
     need_equations = ismissing(equations)
     if need_equations
-        equations = OrderedDict{Symbol,JutulEquation}()
+        equations = OrderedDict{Symbol, JutulEquation}()
     end
     D = typeof(domain)
     S = typeof(system)
     F = typeof(formulation)
     C = typeof(context)
-    model = SimulationModel{D,S,F,C}(
+    DD = typeof(data_domain)
+    PV = typeof(primary_variables)
+    SV = typeof(secondary_variables)
+    P = typeof(parameters)
+    E = typeof(equations)
+    OV = typeof(outputs)
+    X = typeof(extra)
+    model = SimulationModel{D, S, F, C, DD, PV, SV, P, E, OV, X}(
         domain,
         system,
         context,
@@ -350,6 +369,7 @@ function SimulationModel(domain, system;
                     error("All primary variables of the same type must come sequentially: Error ocurred for $ut:\nPrimary: $pvar\nTypes: $a")
                 end
             end
+            return
         end
     end
     if need_primary
@@ -360,7 +380,7 @@ function SimulationModel(domain, system;
     return model
 end
 
-function SimulationModel{D,S,F,C}(
+function SimulationModel{D, S, F, C}(
         domain,
         system,
         context,
@@ -372,9 +392,16 @@ function SimulationModel{D,S,F,C}(
         equations,
         outputs,
         extra
-    ) where {D,S,F,C}
+    ) where {D, S, F, C}
     # Backward compatibility constructor
-    return SimulationModel{D,S,F,C}(
+    DD = typeof(data_domain)
+    PV = typeof(primary_variables)
+    SV = typeof(secondary_variables)
+    P = typeof(parameters)
+    E = typeof(equations)
+    OV = typeof(outputs)
+    X = typeof(extra)
+    return SimulationModel{D, S, F, C, DD, PV, SV, P, E, OV, X}(
         domain,
         system,
         context,
@@ -407,13 +434,31 @@ function update_model_post_selection!(model)
 end
 
 import Base: copy
-function Base.copy(m::SimulationModel{O, S, C, F}) where {O, S, C, F}
+function Base.copy(m::SimulationModel)
     pvar = copy(m.primary_variables)
     svar = copy(m.secondary_variables)
     outputs = copy(m.output_variables)
     prm = copy(m.parameters)
-    eqs = m.equations
-    return SimulationModel{O, S, C, F}(m.domain, m.system, m.context, m.formulation, m.plot_mesh, pvar, svar, prm, eqs, outputs)
+    eqs = copy(m.equations)
+    if isnothing(m.extra)
+        extra = nothing
+    else
+        extra = copy(m.extra)
+    end
+    return SimulationModel(
+        m.domain,
+        m.system,
+        m.context,
+        m.formulation,
+        m.data_domain,
+        pvar,
+        svar,
+        prm,
+        eqs,
+        outputs,
+        extra,
+        m.optimization_level
+    )
 end
 
 function Base.getindex(model::SimulationModel, s::Symbol)
@@ -509,6 +554,7 @@ function Base.show(io::IO, t::MIME"text/plain", @nospecialize(model::SimulationM
             print(io, "\n\n")
         end
     end
+    return
 end
 
 # Grids etc
@@ -570,31 +616,71 @@ together with a [`JutulSystem`](@ref) that imposes physical laws.
 function SimulationModel(g::JutulMesh, system; discretization = nothing, kwarg...)
     # Simple constructor that assumes
     d = DiscretizedDomain(g, discretization)
-    SimulationModel(d, system; kwarg...)
+    return SimulationModel(d, system; kwarg...)
 end
 
 
 import Base: getindex, @propagate_inbounds, parent, size, axes
 
-struct JutulStorage{K}
-    data::Union{JUTUL_OUTPUT_TYPE, K}
+abstract type AbstractJutulStorage end
+
+"""Mutable, unspecialized storage backed by `JUTUL_OUTPUT_TYPE`."""
+struct JutulStorage <: AbstractJutulStorage
+    data::JUTUL_OUTPUT_TYPE
     always_mutable::Bool
-    function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
-        if isa(S, AbstractDict)
-            K = Nothing
-            for (k, v) in kwarg
-                S[k] = v
-            end
-        elseif S isa JutulStorage
-            @assert length(kwarg) == 0
-            return S
-        else
-            @assert isa(S, NamedTuple)
-            K = typeof(S)
-            @assert length(kwarg) == 0
-        end
-        return new{K}(S, always_mutable)
+end
+
+"""Immutable storage whose named fields and value types are fully specialized."""
+struct ImmutableJutulStorage{K <: NamedTuple} <: AbstractJutulStorage
+    data::K
+end
+
+"""
+    maybe_convert_evaluation_state(state::ImmutableJutulStorage, context)
+
+Backend hook for constructing a pre-converted, isbits state mirror used as a
+kernel argument. Return `nothing` when the ordinary state can be used directly.
+"""
+maybe_convert_evaluation_state(
+    state::ImmutableJutulStorage, context
+) = nothing
+
+
+export evaluation_state, evaluation_state0
+"""
+    state = evaluation_state(storage)
+
+Get the evaluation state (at the end of the current timestep) from the simulator
+storage.
+"""
+@inline function evaluation_state(storage)
+    return get(storage, :evaluation_state, storage.state)
+end
+
+"""
+    state = evaluation_state0(storage)
+
+Get the evaluation state at the previous timestep from the simulator storage.
+"""
+@inline function evaluation_state0(storage)
+    return get(storage, :evaluation_state0, storage.state0)
+end
+
+function JutulStorage(S = JUTUL_OUTPUT_TYPE(); always_mutable = false, kwarg...)
+    if S isa JutulStorage
+        @assert isempty(kwarg)
+        return S
+    elseif S isa ImmutableJutulStorage
+        S = data(S)
     end
+    @assert S isa Union{AbstractDict, NamedTuple}
+    if !(S isa JUTUL_OUTPUT_TYPE)
+        S = JUTUL_OUTPUT_TYPE(pairs(S))
+    end
+    for (k, v) in kwarg
+        S[k] = v
+    end
+    return JutulStorage(S, always_mutable)
 end
 
 function convert_to_immutable_storage(S::JutulStorage)
@@ -602,14 +688,16 @@ function convert_to_immutable_storage(S::JutulStorage)
         return S
     end
     tup = convert_to_immutable_storage(data(S))
-    return JutulStorage(tup)
+    return ImmutableJutulStorage(tup)
 end
+
+convert_to_immutable_storage(S::ImmutableJutulStorage) = S
 
 function convert_to_immutable_storage(S::NamedTuple)
     return S
 end
 
-function Base.getindex(S::JutulStorage, i::Int)
+function Base.getindex(S::AbstractJutulStorage, i::Int)
     d = data(S)
     if d isa OrderedDict
         for (j, v) in enumerate(values(d))
@@ -622,75 +710,76 @@ function Base.getindex(S::JutulStorage, i::Int)
         return d[i]
     end
 end
-Base.length(S::JutulStorage, arg...) = Base.length(values(S), arg...)
-Base.iterate(S::JutulStorage, arg...) = Base.iterate(values(S), arg...)
-function Base.map(f, S::JutulStorage)
+Base.length(S::AbstractJutulStorage, arg...) = Base.length(values(S), arg...)
+Base.iterate(S::AbstractJutulStorage, arg...) = Base.iterate(values(S), arg...)
+function Base.map(f, S::AbstractJutulStorage)
     d = data(S)
     if d isa OrderedDict
         d = NamedTuple(d)
     end
     return Base.map(f, d)
 end
-Base.pairs(S::JutulStorage) = Base.pairs(data(S))
-Base.values(S::JutulStorage) = Base.values(data(S))
-
-function Base.getproperty(S::JutulStorage{Nothing}, name::Symbol)
-    Base.getindex(data(S), name)
-end
+Base.pairs(S::AbstractJutulStorage) = Base.pairs(data(S))
+Base.values(S::AbstractJutulStorage) = Base.values(data(S))
 
 function Base.getproperty(S::JutulStorage, name::Symbol)
-    Base.getproperty(data(S), name)
+    return Base.getindex(data(S), name)
 end
 
-Base.propertynames(S::JutulStorage) = keys(getfield(S, :data))
-
-data(S::JutulStorage{Nothing}) = getfield(S, :data)
-data(S::JutulStorage{T}) where T = getfield(S, :data)::T
-
-function Base.setproperty!(S::JutulStorage, name::Symbol, x)
-    Base.setproperty!(data(S), name, x)
+function Base.getproperty(S::ImmutableJutulStorage, name::Symbol)
+    return Base.getproperty(data(S), name)
 end
 
-function Base.setindex!(S::JutulStorage, x, name::Symbol)
-    Base.setindex!(data(S), x, name)
+Base.get(S::AbstractJutulStorage, name::Symbol, default) = get(data(S), name, default)
+
+Base.propertynames(S::AbstractJutulStorage) = keys(getfield(S, :data))
+
+data(S::AbstractJutulStorage) = getfield(S, :data)
+
+function Adapt.adapt_structure(to, S::ImmutableJutulStorage)
+    return ImmutableJutulStorage(Adapt.adapt(to, data(S)))
 end
 
-function Base.getindex(S::JutulStorage, name::Symbol)
-    Base.getindex(data(S), name)
+function Base.setproperty!(S::AbstractJutulStorage, name::Symbol, x)
+    return Base.setproperty!(data(S), name, x)
 end
 
-function Base.getindex(S::JutulStorage, name::Pair)
-    # This is hacked in for CompositeSystem
-    return S[last(name)]
+function Base.setindex!(S::AbstractJutulStorage, x, name::Symbol)
+    return Base.setindex!(data(S), x, name)
 end
 
-function Base.haskey(S::JutulStorage{Nothing}, name::Symbol)
+function Base.getindex(S::AbstractJutulStorage, name::Symbol)
+    return Base.getindex(data(S), name)
+end
+
+function Base.haskey(S::JutulStorage, name::Symbol)
     return Base.haskey(data(S), name)
 end
 
-function Base.keys(S::JutulStorage{Nothing})
+function Base.keys(S::JutulStorage)
     return Tuple(keys(data(S)))
 end
 
 
-function Base.haskey(S::JutulStorage{NamedTuple{K, V}}, name::Symbol) where {K, V}
+function Base.haskey(S::ImmutableJutulStorage{<:NamedTuple{K}}, name::Symbol) where {K}
     return name in K
 end
 
-function Base.keys(S::JutulStorage{NamedTuple{K, V}}) where {K, V}
+function Base.keys(S::ImmutableJutulStorage{<:NamedTuple{K}}) where {K}
     return K
 end
 
-function Base.show(io::IO, t::MIME"text/plain", @nospecialize(storage::JutulStorage))
+function Base.show(io::IO, t::MIME"text/plain", @nospecialize(storage::AbstractJutulStorage))
     D = data(storage)
-    if isa(D, AbstractDict)
+    if storage isa JutulStorage
         println(io, "JutulStorage (mutable) with fields:")
     else
-        println(io, "JutulStorage (immutable) with fields:")
+        println(io, "ImmutableJutulStorage with fields:")
     end
     for key in keys(D)
         println(io, "  $key: $(typeof(D[key]))")
     end
+    return
 end
 
 abstract type AbstractGlobalMap end
@@ -720,7 +809,7 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         for (i, v) in enumerate(inner_to_full_cells)
             inverse_inner_to_full_cells[v] = i
         end
-        for i = 1:n
+        for i in 1:n
             v = get(inverse_inner_to_full_cells, i, 0)
             @assert v >= 0 && v <= n
             full_to_inner_cells[i] = v
@@ -732,7 +821,7 @@ struct FiniteVolumeGlobalMap{T} <: AbstractGlobalMap
         for (i, c) in enumerate(cells)
             g2l[c] = i
         end
-        new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active, g2l)
+        return new{eltype(cells)}(cells, inner_to_full_cells, full_to_inner_cells, faces, is_boundary, variables_always_active, g2l)
     end
 end
 
@@ -745,19 +834,30 @@ abstract type JutulAutoDiffCache end
 """
 Cache that holds an AD vector/matrix together with their positions.
 """
-struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
+struct CompactAutoDiffCache{I, ∂x, E, P, ET} <: JutulAutoDiffCache where {I <: Integer, ∂x <: Real}
     entries::E
-    entity
+    entity::ET
     jacobian_positions::P
     equations_per_entity::I
     number_of_entities::I
     npartials::I
-    function CompactAutoDiffCache(equations_per_entity, n_entities, npartials_or_model = 1; 
-                                                        entity = Cells(),
-                                                        context = DefaultContext(),
-                                                        tag = nothing,
-                                                        n_entities_pos = nothing,
-                                                        kwarg...)
+    function CompactAutoDiffCache{I, ∂x}(
+            entries::E, entity, positions::P,
+            equations_per_entity::I, number_of_entities::I, npartials::I
+        ) where {I <: Integer, ∂x <: Real, E, P}
+        return new{I, ∂x, E, P, typeof(entity)}(
+            entries, entity, positions,
+            equations_per_entity, number_of_entities, npartials
+        )
+    end
+    function CompactAutoDiffCache(
+            equations_per_entity, n_entities, npartials_or_model = 1;
+            entity = Cells(),
+            context = DefaultContext(),
+            tag = nothing,
+            n_entities_pos = nothing,
+            kwarg...
+        )
         if isa(npartials_or_model, JutulModel)
             model = npartials_or_model
             npartials = degrees_of_freedom_per_entity(model, entity)
@@ -778,9 +878,11 @@ struct CompactAutoDiffCache{I, ∂x, E, P} <: JutulAutoDiffCache where {I <: Int
             n_entities_pos = n_entities
         end
         I_t = nzval_index_type(context)
-        pos = Array{I_t, 2}(undef, equations_per_entity*npartials, n_entities_pos)
+        pos = Array{I_t, 2}(undef, equations_per_entity * npartials, n_entities_pos)
         pos = transfer(context, pos)
-        new{I, D, typeof(entries), typeof(pos)}(entries, entity, pos, equations_per_entity, n_entities, npartials)
+        return new{I, D, typeof(entries), typeof(pos), typeof(entity)}(
+            entries, entity, pos, equations_per_entity, n_entities, npartials
+        )
     end
 end
 
@@ -794,7 +896,18 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
     number_of_entities_target::Int
     number_of_entities_source::Int
     variable_map::VM
-    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap()) where I
+    function GenericAutoDiffCache{N, E, ∂x}(
+            entries::A, vpos::P,
+            variables::P, jacobian_positions::M, diagonal_positions::D,
+            number_of_entities_target::Int, number_of_entities_source::Int,
+            variable_map::VM
+        ) where {N, E, ∂x <: Real, A, P, M, D, VM}
+        return new{N, E, ∂x, A, P, M, D, VM}(
+            entries, vpos, variables, jacobian_positions, diagonal_positions,
+            number_of_entities_target, number_of_entities_source, variable_map
+        )
+    end
+    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap()) where {I}
         @assert nt > 0
         @assert ns > 0
         counts = map(length, sparsity)
@@ -807,15 +920,15 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
         pos = cumsum(vcat(1, counts))
         P = typeof(pos)
         variables = convert(P, variables)
-        algn = zeros(I, nvalues_per_entity*number_of_partials(T), num_entities_touched)
+        algn = zeros(I, nvalues_per_entity * number_of_partials(T), num_entities_touched)
         if has_diagonal
             # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
             m = length(sparsity)
             diag_ix = zeros(I, m)
             ok = true
-            for i = 1:m
+            for i in 1:m
                 found = false
-                for j = pos[i]:(pos[i+1]-1)
+                for j in pos[i]:(pos[i + 1] - 1)
                     if variables[j] == i
                         diag_ix[i] = j
                         found = true
@@ -847,32 +960,13 @@ abstract type FlowDiscretization <: JutulDiscretization end
 abstract type FluxType end
 
 struct DefaultFlux <: FluxType end
-struct ConservationLaw{C, T<:FlowDiscretization, FT<:FluxType, N} <: JutulEquation
+struct ConservationLaw{C, T <: FlowDiscretization, FT <: FluxType, N} <: JutulEquation
     flow_discretization::T
     flux_type::FT
-    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1; flux = DefaultFlux()) where T
+    function ConservationLaw(disc::T, conserved::Symbol = :TotalMasses, N::Integer = 1; flux = DefaultFlux()) where {T}
         return new{conserved, T, typeof(flux), N}(disc, flux)
     end
 end
-
-export CompositeSystem
-struct CompositeSystem{label, T} <: JutulSystem
-    systems::T
-end
-
-function Base.show(io::IO, t::CompositeSystem)
-    print(io, "CompositeSystem:\n")
-    for (name, sys) in pairs(t.systems)
-        print(io, "($name => $sys)\n")
-    end
-end
-function CompositeSystem(label::Symbol = :composite; kwarg...)
-    tup = NamedTuple(pairs(kwarg))
-    T = typeof(tup)
-    return CompositeSystem{label, T}(tup)
-end
-
-const CompositeModel = SimulationModel{<:JutulDomain, <:CompositeSystem, <:JutulFormulation, <:JutulContext}
 
 struct JutulLinePlotData
     xdata
@@ -889,10 +983,10 @@ function line_plot_data(model::SimulationModel, ::Any)
 end
 
 function JutulLinePlotData(x, y; labels = nothing, title = "", xlabel = "", ylabel = "")
-    if eltype(x)<:AbstractFloat
+    if eltype(x) <: AbstractFloat
         x = [x]
     end
-    if eltype(y)<:AbstractFloat
+    if eltype(y) <: AbstractFloat
         y = [y]
     end
     if labels isa String
@@ -937,7 +1031,7 @@ The arguements are:
 - `solve_recorder`: The solve recorder holding information about the current
   time, etc. You can get the current time with `get_current_time(solve_recorder,
   :global)`.
-""" 
+"""
 function timestepping_is_done(C::AbstractTerminationCriterion, simulator, states, substates, reports, solve_recorder)
     error("should_terminate not implemented for criterion of type $(typeof(C))")
 end
@@ -959,7 +1053,8 @@ end
 
 Set up a structure that holds the complete specification of a simulation case.
 """
-function JutulCase(model::JutulModel, dt = [1.0], forces = setup_forces(model);
+function JutulCase(
+        model::JutulModel, dt = [1.0], forces = setup_forces(model);
         state0 = nothing,
         parameters = nothing,
         input_data = nothing,
@@ -1004,7 +1099,7 @@ function Base.show(io::IO, t::MIME"text/plain", case::JutulCase)
     end
     nstep = length(case.dt)
     println(io, "Jutul case with $nstep time-steps ($(get_tstr(sum(case.dt)))) and $ctrl_type.\n\nModel:\n")
-    Base.show(io, t, case.model)
+    return Base.show(io, t, case.model)
 end
 
 function duplicate(case::JutulCase; copy_model = false)
@@ -1060,7 +1155,7 @@ end
 
 function SimpleRelaxation(; tol = 0.01, w_min = 0.25, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0)
     if isnothing(dw_increase)
-        dw_increase = dw/2
+        dw_increase = dw / 2
     end
     if isnothing(dw_decrease)
         dw_decrease = dw
@@ -1079,23 +1174,49 @@ struct CrossTermPair
 end
 
 function CrossTermPair(target, source, equation, cross_term::CrossTerm; source_equation = equation)
-    CrossTermPair(target, source, equation, source_equation, cross_term)
+    return CrossTermPair(target, source, equation, source_equation, cross_term)
 end
 
-Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.source_equation, c.target_equation, c.cross_term,)
+Base.transpose(c::CrossTermPair) = CrossTermPair(c.source, c.target, c.source_equation, c.target_equation, c.cross_term)
 
 abstract type AbstractMultiModel{label} <: JutulModel end
-multimodel_label(::AbstractMultiModel{L}) where L = L
+multimodel_label(::AbstractMultiModel{L}) where {L} = L
+
+"""
+    DeviceExecutionMode
+
+Execution policy for a submodel in a backend-resident
+[`MultiModel`](@ref).
+
+- `SolveFullyOnDevice`: variables, equations, assembly and the linear
+  system reside on the device.
+- `AssembleOnDevice`: variables and equations are evaluated on the
+  host, then synchronized to preallocated device storage for linear-system
+  assembly. Cross terms with another `AssembleOnDevice` model are evaluated
+  on the host and copied to the device. Cross terms with a
+  `SolveFullyOnDevice` model are evaluated on the device after synchronizing
+  the host model's state.
+- `NothingOnDevice`: variables, equations, assembly and the linear
+  system remain on the host.
+"""
+@enum DeviceExecutionMode::UInt8 begin
+    NothingOnDevice = 0
+    AssembleOnDevice = 1
+    SolveFullyOnDevice = 2
+end
 
 """
     MultiModel(models)
     MultiModel(models, :SomeLabel)
 
-A model variant that is made up of many named submodels, each a fully realized [`SimulationModel`](@ref).
-
-`models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`.
+A model variant made up of named, fully realized [`SimulationModel`](@ref)
+instances. `models` should be a `NamedTuple` or `Dict{Symbol, JutulModel}`. The
+`group_execution` keyword sets one `DeviceExecutionMode` per submodel, in the
+same order as `models` and `groups`. Within each linear-system group, all
+submodels must either use `NothingOnDevice`, or use any combination of
+`AssembleOnDevice` and `SolveFullyOnDevice`.
 """
-struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
+struct MultiModel{label, T, CT, G, C, GL, GE} <: AbstractMultiModel{label}
     models::T
     cross_terms::CT
     groups::G
@@ -1103,20 +1224,34 @@ struct MultiModel{label, T, CT, G, C, GL} <: AbstractMultiModel{label}
     reduction::Union{Symbol, Nothing}
     specialize_ad::Bool
     group_lookup::GL
+    group_execution::GE
 end
 
-function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
+function MultiModel(
+        models, label::Union{Nothing, Symbol} = nothing;
         cross_terms = Vector{CrossTermPair}(),
         groups = nothing,
         context = nothing,
         reduction = missing,
         specialize = false,
-        specialize_ad = false
+        specialize_ad = false,
+        group_execution = SolveFullyOnDevice
     )
     if isnothing(context)
         context = models[first(keys(models))].context
     end
     group_lookup = Dict{Symbol, Int}()
+    number_of_models = length(models)
+    if group_execution isa DeviceExecutionMode
+        group_execution = fill(group_execution, number_of_models)
+    else
+        group_execution = collect(DeviceExecutionMode, group_execution)
+        length(group_execution) == number_of_models || throw(
+            ArgumentError(
+                "Expected one device execution mode per model ($number_of_models), got $(length(group_execution))"
+            )
+        )
+    end
     if isnothing(groups)
         num_groups = 1
         for k in keys(models)
@@ -1148,6 +1283,7 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
             end
             models = new_models
             groups = groups[ix]
+            group_execution = group_execution[ix]
         end
         for (k, g) in zip(keys(models), groups)
             group_lookup[k] = g
@@ -1162,11 +1298,28 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
         end
         models = models_new
     else
-        models::JutulStorage
+        models::AbstractJutulStorage
     end
     if reduction == :schur_apply
         if length(groups) == 1
             reduction = nothing
+        end
+    end
+    if isnothing(groups)
+        effective_groups = ones(Int, number_of_models)
+    else
+        effective_groups = groups
+    end
+    for group in 1:num_groups
+        modes = group_execution[effective_groups .== group]
+        has_nothing = any(==(NothingOnDevice), modes)
+        if has_nothing && !all(==(NothingOnDevice), modes)
+            throw(
+                ArgumentError(
+                    "Linear-system group $group mixes NothingOnDevice with device execution modes. " *
+                        "A group must be entirely NothingOnDevice, or contain only AssembleOnDevice and SolveFullyOnDevice."
+                )
+            )
         end
     end
     if isnothing(groups) && !isnothing(context)
@@ -1184,26 +1337,49 @@ function MultiModel(models, label::Union{Nothing, Symbol} = nothing;
     G = typeof(groups)
     C = typeof(context)
     GL = typeof(group_lookup)
-    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    GE = typeof(group_execution)
+    return MultiModel{label, T, CT, G, C, GL, GE}(
+        models, cross_terms,
+        groups, context, reduction, specialize_ad, group_lookup,
+        group_execution
+    )
 end
-                              
-function MultiModel(models, ::Val{label}; kwarg...) where label
+
+function MultiModel(models, ::Val{label}; kwarg...) where {label}
     # BattMo compatability, support ::Val for symbol
-    return MultiModel(models, label; kwarg...)                              
+    return MultiModel(models, label; kwarg...)
 end
 
 function convert_to_immutable_storage(model::MultiModel)
-    (; models, cross_terms, groups, context, reduction, specialize_ad, group_lookup) = model
+    (;
+        models, cross_terms, groups, context, reduction, specialize_ad,
+        group_lookup, group_execution,
+    ) = model
     models = convert_to_immutable_storage(models)
     cross_terms = Tuple(cross_terms)
     group_lookup = convert_to_immutable_storage(group_lookup)
+    group_execution = Tuple(group_execution)
     label = multimodel_label(model)
     T = typeof(models)
     CT = typeof(cross_terms)
     G = typeof(groups)
     C = typeof(context)
     GL = typeof(group_lookup)
-    return MultiModel{label, T, CT, G, C, GL}(models, cross_terms, groups, context, reduction, specialize_ad, group_lookup)
+    GE = typeof(group_execution)
+    return MultiModel{label, T, CT, G, C, GL, GE}(
+        models, cross_terms,
+        groups, context, reduction, specialize_ad, group_lookup,
+        group_execution
+    )
+end
+
+group_execution_mode(model::MultiModel, model_index::Integer) =
+    model.group_execution[model_index]
+function group_execution_mode(model::MultiModel, key::Symbol)
+    for (index, candidate) in enumerate(keys(model.models))
+        candidate == key && return group_execution_mode(model, index)
+    end
+    throw(KeyError(key))
 end
 
 """
@@ -1216,15 +1392,26 @@ dense vectors that is encoded. The `vals` array holds the entries for vector i
 in the range `pos[i]:(pos[i+1]-1)` for fast lookup. Indexing into the
 indirection map with index `k` will give a view into the values for vector `k`.
 """
-struct IndirectionMap{V}
-    vals::Vector{V}
-    pos::Vector{Int}
-    function IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where V
+struct IndirectionMap{V, Values <: AbstractVector{V}, Pos <: AbstractVector{Int}}
+    vals::Values
+    pos::Pos
+    function IndirectionMap(vals::Vector{V}, pos::Vector{Int}) where {V}
         lastpos = pos[end]
-        @assert length(vals) == lastpos - 1 "Expected vals to have length lastpos - 1 = $(lastpos-1), was $(length(vals))"
+        @assert length(vals) == lastpos - 1 "Expected vals to have length lastpos - 1 = $(lastpos - 1), was $(length(vals))"
         @assert pos[1] == 1
-        new{V}(vals, pos)
+        return new{V, typeof(vals), typeof(pos)}(vals, pos)
     end
+    function IndirectionMap(vals::Values, pos::Pos) where {
+            V, Values <: AbstractVector{V}, Pos <: AbstractVector{Int},
+        }
+        return new{V, Values, Pos}(vals, pos)
+    end
+end
+
+function Adapt.adapt_structure(to, map::IndirectionMap)
+    return IndirectionMap(
+        Adapt.adapt(to, map.vals), Adapt.adapt(to, map.pos)
+    )
 end
 
 """
@@ -1233,7 +1420,7 @@ end
 Create indirection map for a variable length dense vector that is represented as
 a Vector of Vectors.
 """
-function IndirectionMap(vec_of_vec::Vector{Vector{T}}) where T
+function IndirectionMap(vec_of_vec::Vector{Vector{T}}) where {T}
     vals = T[]
     pos = Int[1]
     for subvec in vec_of_vec
@@ -1254,7 +1441,7 @@ function IndexRenumerator(T = Int)
     return IndexRenumerator{T}(d)
 end
 
-function IndexRenumerator(x::AbstractArray{T}) where T
+function IndexRenumerator(x::AbstractArray{T}) where {T}
     ir = IndexRenumerator(T)
     for i in x
         ir[i]
@@ -1267,24 +1454,24 @@ function Base.length(m::IndexRenumerator)
     return length(keys(m.indices))
 end
 
-function Base.getindex(m::IndexRenumerator{T}, ix::T) where T
+function Base.getindex(m::IndexRenumerator{T}, ix::T) where {T}
     indices = m.indices
     if !(ix in m)
-        n = length(m)+1
+        n = length(m) + 1
         indices[ix] = n
     end
     return indices[ix]
 end
 
 function (m::IndexRenumerator)(ix)
-    Base.getindex(m, ix)
+    return Base.getindex(m, ix)
 end
 
-function Base.in(ix::T, m::IndexRenumerator{T}) where T
+function Base.in(ix::T, m::IndexRenumerator{T}) where {T}
     return haskey(m.indices, ix)
 end
 
-function indices(im::IndexRenumerator{T}) where T
+function indices(im::IndexRenumerator{T}) where {T}
     n = length(im)
     out = Vector{T}(undef, n)
     for (k, v) in im.indices
@@ -1294,13 +1481,14 @@ function indices(im::IndexRenumerator{T}) where T
 end
 
 function renumber(x, im::IndexRenumerator)
-    renumber!(similar(x), im)
+    return renumber!(similar(x), im)
 end
 
 function renumber!(x, im::IndexRenumerator)
     for (i, v) in enumerate(x)
         x[i] = im[v]
     end
+    return
 end
 
 struct EntityTags{T}
@@ -1328,7 +1516,7 @@ Base.keys(et::MeshEntityTags) = Base.keys(et.tags)
 Base.getindex(et::MeshEntityTags, arg...) = Base.getindex(et.tags, arg...)
 Base.setindex!(et::MeshEntityTags, arg...) = Base.setindex!(et.tags, arg...)
 
-function Base.show(io::IO, t::MIME"text/plain", options::MeshEntityTags{T}) where T
+function Base.show(io::IO, t::MIME"text/plain", options::MeshEntityTags{T}) where {T}
     println(io, "MeshEntityTags stored as $T:")
     for (k, v) in pairs(options.tags)
         kv = keys(v)
@@ -1340,6 +1528,7 @@ function Base.show(io::IO, t::MIME"text/plain", options::MeshEntityTags{T}) wher
         end
         println(io, "    $k:\n\t$(kv)")
     end
+    return
 end
 
 function MeshEntityTags(g::JutulMesh; kwarg...)
@@ -1373,7 +1562,7 @@ function set_mesh_entity_tag!(m::JutulMesh, arg...; kwarg...)
     return m
 end
 
-function set_mesh_entity_tag!(met::MeshEntityTags{T}, entity::JutulEntity, tag_group::Symbol, tag_value::Symbol, ix::Vector{T}; allow_merge = true, allow_new = true) where T
+function set_mesh_entity_tag!(met::MeshEntityTags{T}, entity::JutulEntity, tag_group::Symbol, tag_value::Symbol, ix::Vector{T}; allow_merge = true, allow_new = true) where {T}
     tags = met.tags[entity]
     tags::EntityTags{T}
     if !haskey(tags, tag_group)
@@ -1457,7 +1646,7 @@ struct SimResult
     function SimResult(states, reports, start_time)
         nr = length(reports)
         ns = length(states)
-        @assert ns == nr || ns == nr-1 || ns == 0 "Recieved $ns or $ns - 1 states different from $nr reports"
+        @assert ns == nr || ns == nr - 1 || ns == 0 "Recieved $ns or $ns - 1 states different from $nr reports"
         return new(states, reports, start_time, now())
     end
 end
@@ -1469,14 +1658,14 @@ mutable struct AdjointPackedResult
     state0
     input_data
     Nstep::Int
-    function AdjointPackedResult(states::Vector{JutulStorage{T}}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing, input_data = missing) where T
+    function AdjointPackedResult(states::Vector{<:AbstractJutulStorage}, step_infos::Vector, Nstep::Int, forces::Union{Vector, Missing}; state0 = missing, input_data = missing)
         if length(states) != length(step_infos)
             error("States and step_infos must have the same length, was $(length(states)) and $(length(step_infos))")
         end
         if !ismissing(forces) && length(forces) != length(step_infos)
             error("Forces and step_infos must have the same length, was $(length(forces)) and $(length(step_infos))")
         end
-        new(step_infos, states, forces, state0, input_data, Nstep)
+        return new(step_infos, states, forces, state0, input_data, Nstep)
     end
 end
 
@@ -1513,17 +1702,6 @@ end
 
 function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     N_report_step = maximum(step_index)
-    N_mini_step = length(dt)
-    if forces isa Vector
-        N_forces = length(forces)
-        if N_forces != N_mini_step
-            if N_forces == N_report_step
-                forces = forces[step_index]
-            else
-                error("Forces must have the same length as either states ($(N_mini_step)) or report steps ($(N_report_step)), was $(N_forces).")
-            end
-        end
-    end
     length(states) == length(dt) || error("States and timesteps must have the same length, was $(length(states)) and $(length(dt))")
     total_time = sum(dt)
     # Set
@@ -1540,7 +1718,8 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
         else
             ministep_ix += 1
         end
-        step_info = optimization_step_info(step_ix, time, dt_i,
+        step_info = optimization_step_info(
+            step_ix, time, dt_i,
             Nstep = N_report_step,
             substep = ministep_ix,
             substep_global = i,
@@ -1556,7 +1735,7 @@ function AdjointPackedResult(states, dt::Vector{Float64}, forces, step_index)
     if !ismissing(forces)
         forces = map(i -> forces_for_timestep(nothing, forces, dt, i), step_index)
     end
-    function convert_state_to_jutul_storage(x::JutulStorage)
+    function convert_state_to_jutul_storage(x::AbstractJutulStorage)
         return x
     end
     function convert_state_to_jutul_storage(x::Any)
@@ -1619,7 +1798,7 @@ struct WrappedSumObjective{T} <: AbstractSumObjective
     objective::T
     depends_on_crossterms::Bool
     depends_on_parameters::Bool
-    function WrappedSumObjective(objective::T; depends_on_crossterms = false, depends_on_parameters = true) where T
+    function WrappedSumObjective(objective::T; depends_on_crossterms = false, depends_on_parameters = true) where {T}
         return new{T}(objective, depends_on_crossterms, depends_on_parameters)
     end
 end
@@ -1635,7 +1814,7 @@ struct WrappedGlobalObjective{T} <: AbstractGlobalObjective
     objective::T
     depends_on_crossterms::Bool
     depends_on_parameters::Bool
-    function WrappedGlobalObjective(objective::T; depends_on_crossterms = false, depends_on_parameters = true) where T
+    function WrappedGlobalObjective(objective::T; depends_on_crossterms = false, depends_on_parameters = true) where {T}
         return new{T}(objective, depends_on_crossterms, depends_on_parameters)
     end
 end
@@ -1672,4 +1851,3 @@ function timestepping_is_done(C::EndTimeTerminationCriterion, simulator, states,
     now = recorder_current_time(solve_recorder, :global)
     return now >= C.end_time
 end
-

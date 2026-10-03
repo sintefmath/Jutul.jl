@@ -9,5 +9,5 @@ function plot_jutul_line_data
 end
 
 function independent_figure(fig)
-    display(fig)
+    return display(fig)
 end

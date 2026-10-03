@@ -62,6 +62,19 @@ optimize
 parameters_gradient
 ```
 
+### Utilities for debugging and coupling to other optimizers
+
+```@docs
+Jutul.optimization_problem
+```
+
+A few unexported useful utilities (API may change without breaking release):
+
+```@docs
+Jutul.DictOptimization.evaluate
+Jutul.DictOptimization.finite_difference_gradient_entry
+```
+
 ## Numerical parameter optimization interface
 
 ```@docs

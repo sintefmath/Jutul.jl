@@ -1,5 +1,5 @@
 function set_global_timer!(enabled = true)
-    if enabled
+    return if enabled
         if !isdefined(Jutul, :timeit_debug_enabled)
             @tic "tmp" sleep(0.001)
         end
@@ -14,7 +14,7 @@ end
 set_global_timer!(::Nothing) = nothing
 
 function print_global_timer(do_print = true; text = "Detailed timing")
-    if do_print
+    return if do_print
         if !isnothing(text)
             jutul_message(text, "If empty, the timer was enabled but not compiled. Re-run and it should show.")
         end
@@ -37,11 +37,11 @@ function start_simulation_message(info_level, timesteps, config)
             if bg == :default
                 bg = missing
             elseif bg == :futuristic
-                bg = BarGlyphs(' ','▰', '▰', '▱',' ',)
+                bg = BarGlyphs(' ', '▰', '▰', '▱', ' ')
             elseif bg == :thin
-                bg = BarGlyphs(' ','━', '╸', ' ',' ',)
+                bg = BarGlyphs(' ', '━', '╸', ' ', ' ')
             elseif bg == :dotted
-                bg = BarGlyphs(' ','█', '▒', '░',' ',)
+                bg = BarGlyphs(' ', '█', '▒', '░', ' ')
             else
                 error("Unknown option $bg for glyphs")
             end
@@ -51,7 +51,8 @@ function start_simulation_message(info_level, timesteps, config)
         else
             arg = (barglyphs = bg)
         end
-        p = Progress(n+1;
+        p = Progress(
+            n + 1;
             desc = "Progress",
             dt = 0.1,
             color = config[:progress_color],
@@ -62,7 +63,7 @@ function start_simulation_message(info_level, timesteps, config)
 end
 
 function new_simulation_control_step_message(info_level, p, rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
-    if info_level == 0
+    return if info_level == 0
         if !isnothing(p)
             msgvals = progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
             next!(p; showvalues = msgvals)
@@ -78,7 +79,7 @@ function new_simulation_control_step_message(info_level, p, rec, elapsed, step_n
         if isnothing(start_date)
             fmt = x -> get_tstr(x, 2)
         else
-            fmt = x -> Dates.format(start_date + Microsecond(ceil(x*1e6)), raw"u. dd Y")
+            fmt = x -> Dates.format(start_date + Microsecond(ceil(x * 1.0e6)), raw"u. dd Y")
         end
         start_time = fmt(t)
         end_time = fmt(t_now)
@@ -90,10 +91,10 @@ end
 
 function progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_date)
     r = rec.recorder
-    frac = (r.time + dT)/t_tot
-    perc = @sprintf("%2.2f", 100*frac)
+    frac = (r.time + dT) / t_tot
+    perc = @sprintf("%2.2f", 100 * frac)
     its = rec.recorder.iterations + rec.subrecorder.iterations
-    elapsed_each = elapsed/its
+    elapsed_each = elapsed / its
     done = step_no == no_steps + 1
     if done
         msg_status = "Solved step $no_steps/$no_steps"
@@ -105,12 +106,12 @@ function progress_showvalues(rec, elapsed, step_no, no_steps, dT, t_tot, start_d
 
     msgvals = [
         (:Progress, msg_status),
-        (:Stats, msg_timing)
-        ]
+        (:Stats, msg_timing),
+    ]
 
     if !isnothing(start_date)
         t_format = raw"u. dd YY"
-        push!(msgvals, (:Date, "$(Dates.format(start_date + Microsecond(ceil(r.time*1e6)), t_format))"))
+        push!(msgvals, (:Date, "$(Dates.format(start_date + Microsecond(ceil(r.time * 1.0e6)), t_format))"))
     end
     return msgvals
 end
@@ -149,7 +150,7 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
                     cancel(p, "$start_str: $final_message")
                 else
                     n = length(timesteps)
-                    msgvals = progress_showvalues(rec, t_elapsed, n+1, n, 0.0, t_tot, start_date)
+                    msgvals = progress_showvalues(rec, t_elapsed, n + 1, n, 0.0, t_tot, start_date)
                     next!(p; showvalues = msgvals)
                     finish!(p)
                 end
@@ -168,14 +169,15 @@ function final_simulation_message(simulator, p, rec, t_elapsed, reports, timeste
     # Optional table of performance numbers etc.
     if print_end_report && config[:output_reports]
         n = simulator_reports_per_step(simulator)
-        print_stats(stats,
+        print_stats(
+            stats,
             table_formatter = config[:table_formatter],
             scale = n
         )
     end
     # Detailed timing through @tic instrumentation (can be a lot)
     print_global_timer(config[:extra_timing])
-    if aborted
+    return if aborted
         msg = "Simulation did not complete successfully."
         if config[:error_on_incomplete]
             error(msg)
@@ -192,7 +194,8 @@ export jutul_message
 Print a line with a colored prefix. The prefix is colored with the `color`
 argument. The `fancy` argument controls whether the output is colored or not.
 """
-function jutul_message(prestr, substr = nothing;
+function jutul_message(
+        prestr, substr = nothing;
         color = :light_blue,
         fancy = !JUTUL_IS_CI,
         kwarg...
@@ -204,7 +207,7 @@ function jutul_message(prestr, substr = nothing;
         fmt = "$prestr:"
         substr = " $substr"
     end
-    if fancy
+    return if fancy
         print(Crayon(foreground = color, bold = true; kwarg...), fmt)
         println(Crayon(reset = true), substr)
     else

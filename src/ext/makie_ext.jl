@@ -10,11 +10,12 @@ export plot_cumulative_solve, plot_cumulative_solve!
 
 Launch an interactive plot of a mesh with the given `vector_of_dicts` (or just a
 dict). Each dict can have cell data either as vectors (one value per cell) or
-matrices (one column per cell).
+matrices (one column per cell). For 3D plots, use `axis_view = :default|:xz|:yz|:xy`
+to set the initial camera preset programmatically.
 """
 function plot_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
-    plot_interactive_impl(arg...; kwarg...)
+    return plot_interactive_impl(arg...; kwarg...)
 end
 
 function plot_interactive_impl
@@ -27,24 +28,31 @@ end
     plot_explorer(mesh, static::Dict)
     plot_explorer(mesh, static::Dict, dynamic::Vector{Dict})
     plot_explorer(mesh, static = somedict, dynamic = vectorofdicts)
+    plot_explorer(mesh, static = somedict, dynamic = vectorofdicts, sens = sensdict)
 
 An interactive 3D plot of a mesh with static and dynamic data that is well
 suited for interactive exploration and full screen usage. It also has prettier
 defaults than `plot_interactive` and is the recommended way to quickly visualize
-a mesh and its data.
+a mesh and its data. This plotter supports static data (via the `static`
+argument), dynamic data (via the `dynamic` argument), and sensitivity data (via
+the `sens` argument, plotted using a special colormap).
 """
 function plot_explorer(arg...; kwarg...)
     check_plotting_availability(interactive = true)
-    plot_explorer_impl(arg...; kwarg...)
+    return plot_explorer_impl(arg...; kwarg...)
 end
 
 function plot_explorer_impl
 
 end
 
+function makie_current_backend
+
+end
+
 function plot_multimodel_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
-    plot_multimodel_interactive_impl(arg...; kwarg...)
+    return plot_multimodel_interactive_impl(arg...; kwarg...)
 end
 
 function plot_multimodel_interactive_impl
@@ -67,7 +75,7 @@ entities.
 """
 function plot_mesh(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_impl(arg...; kwarg...)
+    return plot_mesh_impl(arg...; kwarg...)
 end
 
 function plot_mesh_impl
@@ -83,7 +91,7 @@ instance.
 """
 function plot_mesh!(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_impl!(arg...; kwarg...)
+    return plot_mesh_impl!(arg...; kwarg...)
 end
 
 function plot_mesh_impl!
@@ -98,7 +106,7 @@ Plot the edges of all cells on the exterior of a mesh.
 """
 function plot_mesh_edges(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_edges_impl(arg...; kwarg...)
+    return plot_mesh_edges_impl(arg...; kwarg...)
 end
 
 function plot_mesh_edges_impl
@@ -113,7 +121,7 @@ Plot the edges of all cells on the exterior of a mesh into existing Makie
 """
 function plot_mesh_edges!(arg...; kwarg...)
     check_plotting_availability()
-    plot_mesh_edges_impl!(arg...; kwarg...)
+    return plot_mesh_edges_impl!(arg...; kwarg...)
 end
 
 function plot_mesh_edges_impl!
@@ -134,7 +142,7 @@ selection of entities.
 """
 function plot_cell_data(arg...; kwarg...)
     check_plotting_availability()
-    plot_cell_data_impl(arg...; kwarg...)
+    return plot_cell_data_impl(arg...; kwarg...)
 end
 
 function plot_cell_data_impl
@@ -148,7 +156,7 @@ Mutating version of `plot_cell_data` that plots into an existing Makie `Axis`
 """
 function plot_cell_data!(arg...; kwarg...)
     check_plotting_availability()
-    plot_cell_data_impl!(arg...; kwarg...)
+    return plot_cell_data_impl!(arg...; kwarg...)
 end
 
 function plot_cell_data_impl!

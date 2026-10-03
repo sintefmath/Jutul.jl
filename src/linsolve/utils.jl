@@ -14,8 +14,8 @@ mutable struct IterativeSolverConfig
 end
 
 function IterativeSolverConfig(;
-        relative_tolerance = 1e-3,
-        absolute_tolerance = nothing, 
+        relative_tolerance = 1.0e-3,
+        absolute_tolerance = nothing,
         max_iterations = 100,
         min_iterations = 1,
         verbose = false,
@@ -26,7 +26,16 @@ function IterativeSolverConfig(;
         kwarg...
     )
     @assert precond_side in (:left, :right)
-    IterativeSolverConfig(
+    if ismissing(absolute_tolerance)
+        absolute_tolerance = nothing
+    end
+    if ismissing(relative_tolerance)
+        relative_tolerance = nothing
+    end
+    if ismissing(relaxed_relative_tolerance)
+        relaxed_relative_tolerance = nothing
+    end
+    return IterativeSolverConfig(
         relative_tolerance,
         absolute_tolerance,
         max_iterations,
@@ -53,7 +62,7 @@ function linear_solver_tolerance(cfg::IterativeSolverConfig, variant = :relative
             tol = cfg.absolute_tolerance
         end
         # default_num_tol = sqrt(eps(T))
-        default_num_tol = 1e-12
+        default_num_tol = 1.0e-12
         tol = T(isnothing(tol) ? default_num_tol : tol)
     end
     return tol
@@ -69,42 +78,51 @@ function to_sparse_pattern(A::SparseMatrixCSC{Tv, Ti}) where {Tv, Ti}
     return SparsePattern(I, J, n, m, layout, block_n, block_m)
 end
 
-function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:Real, Ti}
+function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv <: Real, Ti}
     return EquationMajorLayout()
 end
 
-function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:StaticMatrix, Ti}
+function matrix_layout(A::SparseMatrixCSC{Tv, Ti}) where {Tv <: StaticMatrix, Ti}
     layout = BlockMajorLayout()
     return layout
 end
 
-matrix_layout(A::AbstractVector{T}) where {T<:StaticVector} = BlockMajorLayout()
+matrix_layout(A::AbstractVector{T}) where {T <: StaticVector} = BlockMajorLayout()
 
-function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:Real, Ti}
+function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv <: Real, Ti}
     return (1, 1)
 end
 
-function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv<:StaticMatrix, Ti}
+function block_dims(A::SparseMatrixCSC{Tv, Ti}) where {Tv <: StaticMatrix, Ti}
     n, m = size(Tv)
     return (n, m)
 end
 
 block_dims(A::AbstractVector) = 1
-block_dims(A::AbstractVector{T}) where T<:StaticVector = length(T)
+block_dims(A::AbstractVector{T}) where {T <: StaticVector} = length(T)
 
 """
     unsafe_reinterpret(Vt, v, n)
 
 Unsafely reinterpret v as a n length vector of value type Vt
 """
-function unsafe_reinterpret(Vt, v, n)
+function unsafe_reinterpret(Vt::Type, v::Array, n)
     ptr = Base.unsafe_convert(Ptr{Vt}, v)
     return Base.unsafe_wrap(Array, ptr, n)::Vector{Vt}
 end
 
-function unsafe_reinterpret(::Val{Vt}, v, n) where Vt
-    ptr = Base.unsafe_convert(Ptr{Vt}, v)
-    return Base.unsafe_wrap(Array, ptr, n)::Vector{Vt}
+function unsafe_reinterpret(Vt::Type, v, n)
+    out = reinterpret(Vt, v)
+    length(out) == n || throw(
+        DimensionMismatch(
+            "reinterpreted array has $(length(out)) entries, expected $n"
+        )
+    )
+    return out
+end
+
+function unsafe_reinterpret(::Val{Vt}, v, n) where {Vt}
+    return unsafe_reinterpret(Vt, v, n)
 end
 
 function executor_index_to_global(executor, index, row_or_column::Symbol)

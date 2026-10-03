@@ -8,13 +8,13 @@ function test_heat_residual()
     model = SimulationModel(D, sys)
     nc = number_of_cells(g)
     T0 = rand(nc)
-    state0 = setup_state(model, Dict(:T=>T0))
+    state0 = setup_state(model, Dict(:T => T0))
     sim = Simulator(model, state0 = state0)
     states, = simulate(sim, [1.0], info_level = -1, max_timestep_cuts = 0, max_nonlinear_iterations = 0)
     hsim = HelperSimulator(model, state0 = state0)
     x = vectorize_variables(model, state0)
     r = model_residual(hsim, x)
-    r ≈ sim.storage.LinearizedSystem.r
+    return r ≈ sim.storage.LinearizedSystem.r
 end
 
 function test_multimodel_residual()
@@ -23,12 +23,12 @@ function test_multimodel_residual()
     modelA = SimulationModel(A, sys)
     sourceA = ScalarTestForce(1.0)
     forcesA = setup_forces(modelA, sources = sourceA)
-    state0A = setup_state(modelA, Dict(:XVar=>0.0))
+    state0A = setup_state(modelA, Dict(:XVar => 0.0))
     # Model B
     modelB = SimulationModel(B, sys)
     sourceB = ScalarTestForce(-1.0)
     forcesB = setup_forces(modelB, sources = sourceB)
-    state0B = setup_state(modelB, Dict(:XVar=>0.0))
+    state0B = setup_state(modelB, Dict(:XVar => 0.0))
 
     model = MultiModel((A = modelA, B = modelB))
     add_cross_term!(model, ScalarTestCrossTerm(), target = :A, source = :B, equation = :test_equation)
@@ -42,7 +42,7 @@ function test_multimodel_residual()
     hsim = HelperSimulator(model, state0 = state0)
     x = vectorize_variables(model, state0)
     r = model_residual(hsim, x)
-    r ≈ sim.storage.LinearizedSystem.r
+    return r ≈ sim.storage.LinearizedSystem.r
 end
 @testset "Helper" begin
     @testset "Single model" begin

@@ -1,4 +1,3 @@
-
 function check_normal(left_center, face_center, normal)
     to_face = face_center .- left_center
     return dot(to_face, normal) >= 0.0

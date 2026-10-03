@@ -2,8 +2,8 @@ export TimestepSelector, IterationTimestepSelector, VariableChangeTimestepSelect
 
 abstract type AbstractTimestepSelector end
 
-pick_first_timestep(sel, sim, config, dT, forces) = min(dT*initial_relative(sel), initial_absolute(sel))
-pick_next_timestep(sel, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step) = dt_prev*increase_factor(sel)
+pick_first_timestep(sel, sim, config, dT, forces) = min(dT * initial_relative(sel), initial_absolute(sel))
+pick_next_timestep(sel, sim, config, dt_prev, dT, forces, reports, current_reports, step_index, new_step) = dt_prev * increase_factor(sel)
 
 pick_cut_timestep(sel, sim, config, dt, dT, forces, reports, cut_count) = dt
 
@@ -12,7 +12,7 @@ increase_factor(sel) = Inf
 initial_relative(sel) = 1.0
 initial_absolute(sel) = Inf
 maximum_timestep(sel) = Inf
-minimum_timestep(sel) = 1e-20
+minimum_timestep(sel) = 1.0e-20
 
 valid_timestep(sel, dt) = min(max(dt, minimum_timestep(sel)), maximum_timestep(sel))
 
@@ -27,7 +27,7 @@ struct TimestepSelector <: AbstractTimestepSelector
         if isnothing(decrease)
             decrease = factor
         end
-        new(initial_relative, initial_absolute, decrease, factor, max, min)
+        return new(initial_relative, initial_absolute, decrease, factor, max, min)
     end
 end
 
@@ -41,10 +41,10 @@ minimum_timestep(sel::TimestepSelector) = sel.min
 function pick_cut_timestep(sel::TimestepSelector, sim, config, dt, dT, forces, reports, cut_count)
     df = decrease_factor(sel)
     max_cuts = config[:max_timestep_cuts]
-    if cut_count + 1 > max_cuts && dt <= dT/(df^max_cuts)
+    if cut_count + 1 > max_cuts && dt <= dT / (df^max_cuts)
         dt = NaN
     else
-        dt = dt/df
+        dt = dt / df
     end
     return dt
 end
@@ -54,7 +54,7 @@ struct IterationTimestepSelector <: AbstractTimestepSelector
     offset
     function IterationTimestepSelector(target_its = 5; offset = 1)
         @assert offset > 0
-        new(target_its, offset)
+        return new(target_its, offset)
     end
 end
 
@@ -80,7 +80,7 @@ function pick_next_timestep(sel::IterationTimestepSelector, sim, config, dt_prev
         its_p = length(r[:steps]) - 1
     end
     if length(R) > 1
-        r0 = R[end-1]
+        r0 = R[end - 1]
         if haskey(r0, :stats)
             its_p0 = r0[:stats].newtons
         else
@@ -101,7 +101,7 @@ struct VariableChangeTimestepSelector <: AbstractTimestepSelector
     reduction::Symbol
     function VariableChangeTimestepSelector(key, target; model = nothing, relative = true, reduction = :max)
         @assert reduction == :max || reduction == :average
-        new(key, model, target, relative, reduction)
+        return new(key, model, target, relative, reduction)
     end
 end
 
@@ -119,11 +119,11 @@ function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt
         else
             # average
             N = stats.n
-            dx = stats.dx.sum/N
-            x = stats.x.sum/N
+            dx = stats.dx.sum / N
+            x = stats.x.sum / N
         end
         if sel.is_rel
-            obj = dx/x
+            obj = dx / x
         else
             obj = dx
         end
@@ -138,7 +138,7 @@ function pick_next_timestep(sel::VariableChangeTimestepSelector, sim, config, dt
     r = R[end]
     dt1, stats1 = dt_info(r)
     if length(R) > 1
-        dt0, stats0 = dt_info(R[end-1])
+        dt0, stats0 = dt_info(R[end - 1])
     else
         dt0, stats0 = dt1, stats1
     end
@@ -165,7 +165,7 @@ function pick_next_timestep(sel::LimitByFailedTimestepSelector, sim, config, dt_
     dt = dT
     for rep in R
         if !rep[:success]
-            dt = min(dt, rep[:dt]*sel.factor)
+            dt = min(dt, rep[:dt] * sel.factor)
         end
     end
     return dt
@@ -183,7 +183,7 @@ function successful_reports(old_reports, current_reports, step_index, n = 1; suc
     if isfinite(n)
         sizehint!(out, n)
     else
-        sizehint!(out, 4*length(old_reports))
+        sizehint!(out, 4 * length(old_reports))
     end
     for step in step_index:-1:1
         if step == step_index
@@ -215,7 +215,7 @@ Get last n successful reports starting at the end of `step` and reversing
 backwards until `n` values have been found. `n` can be set to `Inf` to produce
 all successful reports.
 """
-function successful_reports(reports, current_reports = missing; step = length(reports)+1, n = 1, kwarg...)
+function successful_reports(reports, current_reports = missing; step = length(reports) + 1, n = 1, kwarg...)
     if ismissing(current_reports)
         step = clamp(step, 1, length(reports))
         current_reports = reports[step][:ministeps]
@@ -230,15 +230,15 @@ Produce linear estimate of timestep `dt` for some value `x` from observed
 observations. If the observations have the same `x` or `dt` values, a simple
 scaling based on the `x1` value is used.
 """
-function linear_timestep_selection(x, x0, x1, dt0, dt1, rtol = 1e-3)
+function linear_timestep_selection(x, x0, x1, dt0, dt1, rtol = 1.0e-3)
     obj_equal = isapprox(x1, x0, rtol = rtol) || isapprox(dt1, dt0, rtol = rtol)
-    obj_bad = (dt1 <= dt0 && x1 > x0) || (dt0 <= dt1 && x0 > x1) 
+    obj_bad = (dt1 <= dt0 && x1 > x0) || (dt0 <= dt1 && x0 > x1)
     if obj_equal || obj_bad
         # Fallback for missing / degenerate data
-        dt_next = x*dt1/x1
+        dt_next = x * dt1 / x1
     else
         # Linear approximation
-        dt_next = dt0 + (x - x0)*(dt1 - dt0)/(x1 - x0)
+        dt_next = dt0 + (x - x0) * (dt1 - dt0) / (x1 - x0)
     end
     return dt_next
 end
@@ -270,7 +270,7 @@ function compress_timesteps(timesteps, forces = nothing; max_step = Inf)
 
     function update_output!(dt, force)
         push!(new_timesteps, dt)
-        if has_forces
+        return if has_forces
             push!(new_forces, force)
         end
     end

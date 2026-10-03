@@ -1,4 +1,6 @@
-export ILUZeroPreconditioner, SPAI0Preconditioner, LUPreconditioner, GroupWisePreconditioner, TrivialPreconditioner, JacobiPreconditioner, AMGPreconditioner, JutulPreconditioner, apply!
+export ILUZeroPreconditioner, SPAI0Preconditioner, LUPreconditioner,
+    GroupWisePreconditioner, TrivialPreconditioner, JacobiPreconditioner,
+    AMGPreconditioner, KASmootherPreconditioner, JutulPreconditioner, apply!
 
 abstract type JutulPreconditioner end
 abstract type DiagonalPreconditioner <: JutulPreconditioner end
@@ -10,4 +12,3 @@ include("ilu.jl")
 include("spai.jl")
 include("jacobi.jl")
 include("various.jl")
-

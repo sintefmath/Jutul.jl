@@ -46,7 +46,7 @@ function get_model_residuals(report)
         residual_norms = keys(criterions)
 
         equation_residuals = Dict()
-    
+
         for res_norm in residual_norms
 
             rsd = criterions[res_norm].errors
@@ -58,13 +58,13 @@ function get_model_residuals(report)
                 if !haskey(equation_residuals, α)
                     equation_residuals[α] = Dict()
                 end
-                equation_residuals[α][res_norm] = r/tol
+                equation_residuals[α][res_norm] = r / tol
             end
 
         end
 
         residuals[equation] = equation_residuals
-    
+
     end
 
     return residuals
@@ -77,10 +77,10 @@ end
 Process a names to be suibale as dictionary keys.
 """
 function process_name(name)
-    
+
     name = string(name)
     name = replace(name, " " => "_", "(" => "", ")" => "")
-    name = Symbol(name)
+    return name = Symbol(name)
 
 end
 

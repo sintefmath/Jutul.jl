@@ -43,12 +43,21 @@ function Base.setindex!(opts::JutulConfig, x, name::Symbol)
     return opts
 end
 
+function Base.get(opts::JutulConfig, name::Symbol, default)
+    if haskey(opts.options, name)
+        out = opts[name]
+    else
+        out = default
+    end
+    return out
+end
+
 function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
     _, sz = displaysize(io)
     olim = 25
     Vlim = 8
     remainder = max(sz - olim - Vlim - 15, 1)
-    vlim = Int(floor(remainder/3))
+    vlim = Int(floor(remainder / 3))
     dlim = remainder - vlim
     header = ["Option", "Value", "Description", "Values"]
     vals = options.values
@@ -63,7 +72,7 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
         # Name in header
         out[i, 1] = "$k\n[$(opt.valid_types)]"
         vstr = String("$v")
-        if length(vstr) > vlim-1
+        if length(vstr) > vlim - 1
             ix = prevind(vstr, vlim)
             vstr = "$(vstr[1:ix])⋯"
         end
@@ -90,17 +99,20 @@ function Base.show(io::IO, t::MIME"text/plain", options::JutulConfig)
     cw[2] = vlim
     cw[3] = dlim
     cw[4] = Vlim
-    pretty_table(io,
+    return pretty_table(
+        io,
         out,
         title = "$(options.name)",
-        linebreaks = true,
-        header = header,
-        autowrap = true,
+        title_alignment = :l,
+        line_breaks = true,
+        column_labels = header,
+        auto_wrap = true,
         alignment = :l,
-        body_hlines = collect(1:n),
-        columns_width = cw,
-        crop = :none
-        )
+        table_format = TextTableFormat(horizontal_lines_at_data_rows = collect(1:n)),
+        fixed_data_column_widths = cw,
+        fit_table_in_display_horizontally = false,
+        fit_table_in_display_vertically = false
+    )
 end
 
 Base.iterate(opts::JutulConfig, arg...) = Base.iterate(opts.values, arg...)

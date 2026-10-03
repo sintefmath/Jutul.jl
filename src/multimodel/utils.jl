@@ -1,5 +1,4 @@
-
-function get_submodel_offsets(model::MultiModel, group::Union{Nothing,Integer} = nothing; is_equation = true)
+function get_submodel_offsets(model::MultiModel, group::Union{Nothing, Integer} = nothing; is_equation = true)
     if is_equation
         f = number_of_equations
     else
@@ -17,7 +16,7 @@ function get_submodel_offsets(model::MultiModel, group::Union{Nothing,Integer} =
     tot = 0
     for i in 1:n
         out[i] = tot
-        tot += dof[i]÷bz[i]
+        tot += dof[i] ÷ bz[i]
     end
     return out
 end
@@ -100,11 +99,11 @@ function add_cross_term!(model::MultiModel, ctm::CrossTermPair)
         end
         @assert haskey(model.models[ctm.source].equations, source_target_label)
     end
-    add_cross_term!(model.cross_terms, ctm)
+    return add_cross_term!(model.cross_terms, ctm)
 end
 
 function add_cross_term!(model, cross_term; kwarg...)
-    add_cross_term!(model.cross_terms, setup_cross_term(cross_term; kwarg...))
+    return add_cross_term!(model.cross_terms, setup_cross_term(cross_term; kwarg...))
 end
 
 select_linear_solver(model::MultiModel; kwarg...) = select_linear_solver_multimodel(model, first(model.models); kwarg...)

@@ -33,7 +33,7 @@ function partition_boundary(N, p; np = max(p), nc = maximum(N))
     boundary = map(1:np) do i
         p_i = findall(isequal(i), p)
         bnd = Vector{Int}()
-        interior_cells = BitArray(false for x = 1:nc)
+        interior_cells = BitArray(false for x in 1:nc)
         interior_cells[p_i] .= true
 
         for i in axes(N, 2)
@@ -61,7 +61,7 @@ function local_symrcm_ordering(g_i, neighbors)
     J = Vector{Int}()
 
     n = length(g_i)
-    n_est = length(g_i)*7 # ~7 point stencil for 3D
+    n_est = length(g_i) * 7 # ~7 point stencil for 3D
     sizehint!(I, n_est)
     sizehint!(J, n_est)
     for c in eachindex(g_i)
@@ -185,7 +185,7 @@ end
 
 function process_offset(i, counts)
     offset = 0
-    for k in 1:(i-1)
+    for k in 1:(i - 1)
         offset += counts[k]
     end
     return offset
@@ -194,7 +194,7 @@ end
 function expand_boundary_to_dof(x, base_partition, remapped_indices, counts, nc, block_size, layout)
     # offset = block_size*sum(counts[1:(process_no-1)])
     p_dof = Vector{Int}()
-    sizehint!(p_dof, block_size*nc)
+    sizehint!(p_dof, block_size * nc)
     for i in x
         process_i = base_partition[i]
         offset_i = process_offset(process_i, counts)
@@ -205,18 +205,18 @@ function expand_boundary_to_dof(x, base_partition, remapped_indices, counts, nc,
         n_local = counts[process_i]
         for b in 1:block_size
             mapped_ix = Jutul.alignment_linear_index(r_i, b, n_local, block_size, layout)
-            global_ix = offset_i*block_size + mapped_ix
+            global_ix = offset_i * block_size + mapped_ix
             # @info "$i -> $global_ix" new_ix mapped_ix n_local r_i offset_i process_i layout
             push!(p_dof, global_ix)
         end
     end
     p_dof = unique!(p_dof)
-    @assert length(p_dof) == block_size*length(x)
+    @assert length(p_dof) == block_size * length(x)
     return p_dof
 end
 
 function partition_degrees_of_freedom(base_partition, boundary, remapped_indices, counts, nc, block_size, layout)
-    tentative_dof_partition = variable_partition(block_size.*counts, block_size*nc)
+    tentative_dof_partition = variable_partition(block_size .* counts, block_size * nc)
 
     ix = 1:maximum(base_partition)
 

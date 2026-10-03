@@ -11,7 +11,7 @@ function plot_interactive_impl(d::DataDomain, data = missing; kwarg...)
         end
         data = [plot_d]
     end
-    plot_interactive_impl(mesh, data; kwarg...)
+    return plot_interactive_impl(mesh, data; kwarg...)
 end
 
 function plot_interactive_impl(model::MultiModel, states, model_key = nothing; kwarg...)
@@ -37,7 +37,7 @@ function plot_interactive_impl(model::SimulationModel, states; kwarg...)
     end
     mesh = physical_representation(model.data_domain)
     if isnothing(mesh)
-        @warn "No plotting possible. SimulationModel has .data_domain = nothing." 
+        @warn "No plotting possible. SimulationModel has .data_domain = nothing."
     else
         return plot_interactive_impl(mesh, states; kwarg...)
     end
@@ -45,9 +45,33 @@ end
 
 default_jutul_resolution() = (1600, 900)
 
-function plot_interactive_impl(grid, states;
+function interactive_view_angles(axis_view)
+    view_key = if axis_view isa Symbol
+        lowercase(String(axis_view))
+    elseif axis_view isa AbstractString
+        lowercase(axis_view)
+    else
+        throw(ArgumentError("axis_view must be a Symbol or String"))
+    end
+
+    if view_key == "default"
+        return (label = "Default", azimuth = 1.275π, elevation = 0.125π)
+    elseif view_key == "xz"
+        return (label = "XZ", azimuth = -0.5π, elevation = 0.0)
+    elseif view_key == "yz"
+        return (label = "YZ", azimuth = 0.0, elevation = 0.0)
+    elseif view_key == "xy"
+        return (label = "XY", azimuth = -0.5π, elevation = 0.5π)
+    else
+        throw(ArgumentError("Unsupported axis_view $(repr(axis_view)). Expected one of :default, :xz, :yz, or :xy"))
+    end
+end
+
+function plot_interactive_impl(
+        grid, states;
         plot_type = nothing,
         primitives = nothing,
+        cells = nothing,
         transparency = false,
         resolution = default_jutul_resolution(),
         alpha = 1.0,
@@ -60,10 +84,12 @@ function plot_interactive_impl(grid, states;
         row = 1,
         key = missing,
         edge_arg = NamedTuple(),
-        aspect = (1.0, 1.0, 1/3),
+        aspect = (1.0, 1.0, 1 / 3),
         colormap = :viridis,
         alphamap = :no_alpha_map,
+        axis_view = :default,
         z_is_depth = missing,
+        axis_args = (;),
         kwarg...
     )
     if ismissing(z_is_depth)
@@ -78,7 +104,7 @@ function plot_interactive_impl(grid, states;
     if states isa AbstractDict || states isa DataDomain
         states = [states]
     end
-    if states isa AbstractVecOrMat && eltype(states)<:AbstractFloat
+    if states isa AbstractVecOrMat && eltype(states) <: AbstractFloat
         states = [Dict(:data => states)]
     end
     if grid isa Integer
@@ -92,6 +118,19 @@ function plot_interactive_impl(grid, states;
         nc = number_of_cells(grid)
     end
     current_filter = collect(false for i in 1:nc)
+    cell_subset_filter = falses(nc)
+    if !isnothing(cells)
+        if eltype(cells) == Bool
+            @assert length(cells) == nc
+            @. cell_subset_filter = !cells
+        else
+            keep_cells = falses(nc)
+            for cell in cells
+                keep_cells[cell] = true
+            end
+            @. cell_subset_filter = !keep_cells
+        end
+    end
     if !has_primitives
         if isnothing(plot_type)
             plot_candidates = [:mesh, :meshscatter, :lines]
@@ -121,7 +160,7 @@ function plot_interactive_impl(grid, states;
     if states isa AbstractDict
         states = [states]
     end
-    if eltype(states)<:Number && (length(states) == nc || size(states, 1) == nc)
+    if eltype(states) <: Number && (length(states) == nc || size(states, 1) == nc)
         states = [Dict(:Data => states)]
     end
     data = states[1]
@@ -132,7 +171,7 @@ function plot_interactive_impl(grid, states;
         d = data[k]
         is_valid_vec = d isa AbstractVector && length(d) == nc
         is_valid_mat = d isa AbstractMatrix && size(d, 2) == nc
-        if eltype(d)<:Real && (is_valid_vec || is_valid_mat) 
+        if eltype(d) <: Real && (is_valid_vec || is_valid_mat)
             push!(labels, "$k")
             mv = Inf
             Mv = -Inf
@@ -143,7 +182,7 @@ function plot_interactive_impl(grid, states;
                 mv, Mv = my_minmax(di, mv, Mv)
             end
             if mv == Mv
-                Mv = 1.01*mv + 1e-12
+                Mv = 1.01 * mv + 1.0e-12
             end
             limits["$k"] = (mv, Mv)
             row_limits["$k"] = Dict{Int, Tuple}()
@@ -187,6 +226,14 @@ function plot_interactive_impl(grid, states;
     if ismissing(key)
         key = datakeys[1]
     elseif key isa Symbol
+        if !(key in datakeys)
+            pos = findfirst(startswith(string(key)), string.(datakeys))
+            if isnothing(pos)
+                error("Key $key not found in datakeys.")
+            end
+            key = datakeys[pos]
+        end
+
         key = "$key"
     end
     state_index = Observable{Int64}(step)
@@ -217,13 +264,14 @@ function plot_interactive_impl(grid, states;
     end
 
     function increment_index(inc = 1)
-        change_index(state_index.val + inc)
+        return change_index(state_index.val + inc)
     end
 
     fig[5, 3] = hgrid!(
         menu,
         menu_2,
-        ; tellheight = false, width = 300)
+        ; tellheight = false, width = 300
+    )
 
     sl_x = Slider(fig[5, 2], range = 1:nstates, value = state_index, snap = true)
 
@@ -245,31 +293,34 @@ function plot_interactive_impl(grid, states;
     is_3d = size(pts, 2) == 3
     ax_pos = fig[2, 1:3]
     if is_3d
-        ax = Axis3(ax_pos, title = fig_title, aspect = aspect, zreversed = z_is_depth)
+        view_preset = interactive_view_angles(axis_view)
+        axis_args = merge((; azimuth = view_preset.azimuth, elevation = view_preset.elevation), axis_args)
+        ax = Axis3(ax_pos; title = fig_title, aspect = aspect, zreversed = z_is_depth, axis_args...)
         if free_cam
             Camera3D(ax.scene)
         end
     else
-        ax = Axis(ax_pos, title = fig_title)
+        ax = Axis(ax_pos; title = fig_title, axis_args...)
     end
     cell_buffer = zeros(nc)
     # Selection of data
     ys = @lift(
-                mapper.Cells(
-                    select_data(
-                        cell_buffer,
-                        current_filter,
-                        states[$state_index],
-                        Symbol($prop_name),
-                        $row_index,
-                        $low,
-                        $hi,
-                        $lims,
-                        $transform_name,
-                        active_filters
-                        )
-                )::Vector{Float64}
+        mapper.Cells(
+            select_data(
+                cell_buffer,
+                current_filter,
+                states[$state_index],
+                Symbol($prop_name),
+                $row_index,
+                $low,
+                $hi,
+                $lims,
+                $transform_name,
+                cell_subset_filter,
+                active_filters
             )
+        )::Vector{Float64}
+    )
     # Selection of colormap
     colormap_name = Observable(colormap)
     alphamap_name = Observable(alphamap)
@@ -305,25 +356,28 @@ function plot_interactive_impl(grid, states;
         lims[] = get_limits(menu_cscale.selection[], state_index.val, prop_name.val, nextn, states, transform_name[])
     end
     # Top row
-    fig[1, :] = top_layout = GridLayout(2, 1, tellwidth = false)
+    has_two_rows = transparency
+    fig[1, :] = top_layout = GridLayout(1 + has_two_rows, 1, tellwidth = false)
     N_top = 1
 
     # Alpha map selector
     genlabel(l) = Label(fig, l, font = :bold)
-    top_layout[1, N_top] = genlabel("Alphamap")
+    top_layout[1, N_top] = genlabel("View")
     N_top += 1
-
-    alphamaps = ["no_alpha_map", "linear", "linear_scaled", "inv_linear", "inv_linear_scaled"]
-    amap_str = "$alphamap"
-    if !(amap_str in alphamaps)
-        push!(alphamaps, cmap_str)
-    end
-    top_layout[1, N_top] = lmap = GridLayout()
-    menu_amap = Menu(lmap[1, 1], options = alphamaps, prompt = amap_str)
-    on(menu_amap.selection) do s
-        alphamap_name[] = Symbol(s)
-    end
+    view_options = ["Default", "XZ", "YZ", "XY"]
+    menu_view = Menu(
+        top_layout[1, N_top],
+        options = view_options,
+        default = is_3d ? view_preset.label : "Default"
+    )
     N_top += 1
+    on(menu_view.selection) do s
+        if is_3d
+            preset = interactive_view_angles(s)
+            ax.azimuth[] = preset.azimuth
+            ax.elevation[] = preset.elevation
+        end
+    end
 
     top_layout[1, N_top] = top_buttons = GridLayout(tellwidth = true)
     N_top += 1
@@ -331,7 +385,7 @@ function plot_interactive_impl(grid, states;
     function reset_selection_slider!()
         low[] = 0.0
         hi[] = 1.0
-        set_close_to!(rs_v, 0.0, 1.0)
+        return set_close_to!(rs_v, 0.0, 1.0)
     end
 
     b_clear = Button(fig, label = "Clear all")
@@ -356,15 +410,16 @@ function plot_interactive_impl(grid, states;
     b_add_dynamic = Button(fig, label = "Add dynamic")
     on(b_add_dynamic.clicks) do _
         filter_prop_name = prop_name[]
-        push!(active_filters, (
+        push!(
+            active_filters, (
                 Symbol(filter_prop_name),
                 row_index[],
                 low[],
                 hi[],
                 limits[filter_prop_name],
-                transform_name[]
-                )
+                transform_name[],
             )
+        )
         reset_selection_slider!()
     end
     top_buttons[1, 1:5] = [genlabel("Filters"), b_clear, b_clear_last, b_add_static, b_add_dynamic]
@@ -419,7 +474,7 @@ function plot_interactive_impl(grid, states;
         "vik",
         "vikO",
         "viridis",
-        "winter"
+        "winter",
     ]
     cmap_str = "$colormap"
     if !(cmap_str in colormaps)
@@ -466,16 +521,16 @@ function plot_interactive_impl(grid, states;
         end
         lim_lo, lim_hi = transform_plot_limits(new_lims, transform_name)
         if !isfinite(lim_lo)
-            lim_lo = -1e30
+            lim_lo = -1.0e30
         end
         if !isfinite(lim_hi)
-            lim_hi = 1e30
+            lim_hi = 1.0e30
         end
         if lim_lo ≈ lim_hi
             lim_lo *= 0.999
-            lim_hi = lim_hi*1.001 + 1e-16
+            lim_hi = lim_hi * 1.001 + 1.0e-16
         end
-        return (lim_lo, lim_hi*1.000001)
+        return (lim_lo, lim_hi * 1.000001)
     end
     on(menu_cscale.selection) do s
         pname = prop_name[]
@@ -484,32 +539,23 @@ function plot_interactive_impl(grid, states;
     end
     N_top += 1
 
-    N_mid = 1
-    top_layout[2, N_mid] = genlabel("View")
-    N_mid += 1
-    menu_view = Menu(
-        top_layout[2, N_mid],
-        options = ["Default", "XZ", "YZ", "XY"]
-    )
-    N_mid += 1
-    on(menu_view.selection) do s
-        if s == "XZ"
-            az = -0.5π
-            el = 0.0
-        elseif s == "YZ"
-            az = 0
-            el = 0.0
-        elseif s == "XY"
-            az = -0.5π
-            el = 0.5π
-        elseif s == "Default"
-            az = 1.275π
-            el = 0.125π
-        end
-        ax.azimuth[] = az
-        ax.elevation[] = el
-    end
+    if has_two_rows
+        N_mid = 1
+        top_layout[2, N_mid] = genlabel("Alphamap")
+        N_mid += 1
 
+        alphamaps = ["no_alpha_map", "linear", "linear_scaled", "inv_linear", "inv_linear_scaled"]
+        amap_str = "$alphamap"
+        if !(amap_str in alphamaps)
+            push!(alphamaps, cmap_str)
+        end
+        top_layout[2, N_mid] = lmap = GridLayout()
+        menu_amap = Menu(lmap[1, 1], options = alphamaps, prompt = amap_str)
+        on(menu_amap.selection) do s
+            alphamap_name[] = Symbol(s)
+        end
+        N_mid += 1
+    end
 
     function loopy()
         start = state_index.val
@@ -518,15 +564,16 @@ function plot_interactive_impl(grid, states;
             start = 1
         end
         previndex = start
-        for i = start:nstates
+        for i in start:nstates
             newindex = increment_index()
-            if newindex > nstates || previndex != newindex-1
+            if newindex > nstates || previndex != newindex - 1
                 break
             end
             notify(state_index)
             previndex = newindex
-            sleep(1/30)
+            sleep(1 / 30)
         end
+        return
     end
 
     fig[5, 1] = buttongrid = GridLayout()
@@ -543,7 +590,7 @@ function plot_interactive_impl(grid, states;
     on(play.clicks) do n
         @async loopy()
     end
-    next =   Button(fig, label = "▶️")
+    next = Button(fig, label = "▶️")
     on(next.clicks) do n
         increment_index()
     end
@@ -558,7 +605,8 @@ function plot_interactive_impl(grid, states;
         # TODO: Not sure if this speeds things up
         tri_c = Makie.to_triangles(primitives.triangulation)
         pts_c = Makie.to_vertices(pts)
-        scat = Makie.mesh!(ax, pts_c, tri_c;
+        scat = Makie.mesh!(
+            ax, pts_c, tri_c;
             color = ys,
             colorrange = lims,
             highclip = :transparent,
@@ -571,17 +619,18 @@ function plot_interactive_impl(grid, states;
             Jutul.plot_mesh_edges!(ax, grid; color = edge_color, visible = edge_toggle.active, edge_arg...)
         end
     elseif plot_type == :meshscatter
-        sz = 0.8.*primitives.sizes
+        sz = 0.8 .* primitives.sizes
         npts, d = size(pts)
         if d < 3
             pts = hcat(pts, zeros(npts, 3 - d))
             sz = hcat(sz, ones(npts, 3 - d))
-        end 
+        end
         sizes = zeros(Makie.Vec3f, size(sz, 1))
         for i in eachindex(sizes)
             sizes[i] = Makie.Vec3f(sz[i, 1], sz[i, 2], sz[i, 3])
         end
-        scat = Makie.meshscatter!(ax, pts;
+        scat = Makie.meshscatter!(
+            ax, pts;
             color = ys,
             colorrange = lims,
             markersize = sizes,
@@ -594,7 +643,8 @@ function plot_interactive_impl(grid, states;
         x = pts[:, 1]
         y = pts[:, 2]
         z = pts[:, 3]
-        scat = Makie.lines!(ax, x, y, z,
+        scat = Makie.lines!(
+            ax, x, y, z,
             color = ys,
             linewidth = 15,
             transparency = transparency,
@@ -604,11 +654,12 @@ function plot_interactive_impl(grid, states;
         txt = primitives.top_text
         if !isnothing(txt)
             top = vec(pts[1, :])
-            text!(txt,
-                    position = Tuple([top[1], top[2], top[3] + 2.0]),
-                    space = :data,
-                    align = (:center, :baseline)
-                    )
+            text!(
+                txt,
+                position = Tuple([top[1], top[2], top[3] + 2.0]),
+                space = :data,
+                align = (:center, :baseline)
+            )
         end
         if primitives.marker_size > 0
             Makie.scatter!(ax, x, y, z, marker_size = primitives.marker_size, color = :black, alpha = 0.5, overdraw = true)
@@ -628,20 +679,21 @@ function plot_interactive_impl(grid, states;
     return fig
 end
 
-function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, active_filters)
+function select_data(buffer, current_filter, state, fld, ix, low, high, limits, transform_name, cell_subset_filter, active_filters)
     d = unpack(buffer, state[fld], ix)
     current_active = low > 0.0 || high < 1.0
     @. current_filter = false
     function update_filter!(M::AbstractMatrix, ix, arg...)
-        update_filter!(view(M, ix, :), ix, arg...)
+        return update_filter!(view(M, ix, :), ix, arg...)
     end
 
     function update_filter!(M::AbstractVector, ix, L, U, low, high)
         for i in eachindex(M)
-            val = (M[i] - L)/(U - L)
+            val = (M[i] - L) / (U - L)
             cell_hidden = val < low || val > high
             current_filter[i] |= cell_hidden
         end
+        return
     end
 
     for filt in active_filters
@@ -655,12 +707,15 @@ function select_data(buffer, current_filter, state, fld, ix, low, high, limits, 
         end
     end
 
+    @. current_filter |= cell_subset_filter
+
     function apply_filter!(M::AbstractVector)
         for i in eachindex(M)
             if current_filter[i]
                 M[i] = NaN
             end
         end
+        return
     end
     if transform_name != "none"
         for i in eachindex(d)
@@ -703,15 +758,15 @@ function generate_colormap(colormap_name, alphamap_name, base_alpha, low, high)
         elseif alphamap_name == :inv_linear
             F = x -> 1.0 - x
         elseif alphamap_name == :linear_scaled
-            F = x -> clamp((x - low)./(high-low), 0.0, 1.0)
+            F = x -> clamp((x - low) ./ (high - low), 0.0, 1.0)
         elseif alphamap_name == :inv_linear_scaled
-            F = x -> clamp(((1.0 - x) - high)./(low - high), 0.0, 1.0)
+            F = x -> clamp(((1.0 - x) - high) ./ (low - high), 0.0, 1.0)
         else
             error()
         end
         u = range(0, 1, length = n)
         for (i, c) in enumerate(cmap)
-            cmap[i] = Makie.RGBA{Float64}(c.r, c.g, c.b, base_alpha*F(u[i]))
+            cmap[i] = Makie.RGBA{Float64}(c.r, c.g, c.b, base_alpha * F(u[i]))
         end
     else
         for (i, c) in enumerate(cmap)
@@ -740,7 +795,7 @@ function symlog10(x)
     if x < 1.0 && x > -1.0
         transformed_val = x
     else
-        transformed_val = sign(x)*(log10(abs(x))+1)
+        transformed_val = sign(x) * (log10(abs(x)) + 1)
     end
     return transformed_val
 end
@@ -782,7 +837,7 @@ function transform_plot_limits(lims, name)
             hi = abs(hi)
         elseif name == "log10" || name == log
             if low < 0.0
-                low = -1e6
+                low = -1.0e6
             else
                 low = plot_transform(low, name)
             end
@@ -797,7 +852,7 @@ function transform_plot_limits(lims, name)
         end
     end
     if hi <= low
-        hi = low + 1e-12
+        hi = low + 1.0e-12
     end
     return (low, hi)
 end
@@ -839,7 +894,7 @@ function Jutul.plot_multimodel_interactive_impl(model, states, model_keys = keys
             valid_vector = v isa AbstractVector && length(v) == nc
             valid_matrix = v isa AbstractMatrix && size(v, 2) == nc
 
-            if valid_vector 
+            if valid_vector
                 push!(all_state_fields, (k, 1))
             elseif valid_matrix
                 push!(all_state_fields, (k, size(v, 1)))
@@ -858,7 +913,7 @@ function Jutul.plot_multimodel_interactive_impl(model, states, model_keys = keys
                 state_m = state[model_key]
                 if haskey(state_m, state_field)
                     old_data = state_m[state_field]
-                    data[:, offsets[i]:(offsets[i+1]-1)] = old_data
+                    data[:, offsets[i]:(offsets[i + 1] - 1)] = old_data
                 end
             end
             new_state[state_field] = data
@@ -890,16 +945,24 @@ function Jutul.plot_multimodel_interactive_impl(model, states, model_keys = keys
     cell_index = vcat(cell_index...)
 
     mapper = (
-                Cells = (cell_data) -> cell_data[cell_index],
-                Faces = (face_data) -> face_data[face_index],
-                indices = (Cells = cell_index, Faces = face_index)
-              )
+        Cells = (cell_data) -> cell_data[cell_index],
+        Faces = (face_data) -> face_data[face_index],
+        indices = (Cells = cell_index, Faces = face_index),
+    )
     acc_primitives = (points = points, triangulation = tri, mapper = mapper)
-    plot_interactive(total_number_of_cells, new_states, primitives = acc_primitives; kwarg...)
+    return plot_interactive(total_number_of_cells, new_states, primitives = acc_primitives; kwarg...)
+end
+
+function Jutul.makie_current_backend(; string = false)
+    b = Makie.current_backend()
+    if string
+        b = "$(b)"
+    end
+    return b
 end
 
 function Jutul.plotting_check_interactive(; warn = true)
-    backend_name = "$(Makie.current_backend())"
+    backend_name = Jutul.makie_current_backend(string = true)
     if !(backend_name in ("GLMakie", "WGLMakie"))
         if warn
             msg = "Currently active Makie backend $backend_name may not be interactive or fully supported.\nGLMakie (or WGLMakie) is recommended for Jutul's interactive plots. To install:\n\tusing Pkg; Pkg.add(\"GLMakie\")\nTo use:\n\tusing GLMakie\n\tGLMakie.activate!()\nYou can then retry your plotting command."
@@ -911,14 +974,14 @@ function Jutul.plotting_check_interactive(; warn = true)
 end
 
 function commercial_colormap()
-    blue =   (0, 0, 1)
-    cyan =   (0, 1, 1)
-    green =  (0, 1, 0)
+    blue = (0, 0, 1)
+    cyan = (0, 1, 1)
+    green = (0, 1, 0)
     yellow = (1, 1, 0)
-    red =    (1, 0, 0)
+    red = (1, 0, 0)
 
     function simple_interp(F_0, F_1, x)
-        v = F_0 .+ (F_1 .- F_0).*x
+        v = F_0 .+ (F_1 .- F_0) .* x
         return Makie.RGB(v...)
     end
     cmap = Vector{typeof(Makie.RGB(0, 0, 0))}()
@@ -926,7 +989,7 @@ function commercial_colormap()
     colors = (blue, cyan, green, yellow, red)
     for (i, nstep) in enumerate(nsteps)
         c1 = colors[i]
-        c2 = colors[i+1]
+        c2 = colors[i + 1]
         for dx in range(0.0, 1.0, nstep)
             push!(cmap, simple_interp(c1, c2, dx))
         end

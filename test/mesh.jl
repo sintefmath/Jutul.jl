@@ -22,9 +22,9 @@ using LinearAlgebra
         end
         @testset "$d-D IJK -> linear indexing" begin
             lix = 1
-            for k = 1:nz
-                for j = 1:ny
-                    for i = 1:nx
+            for k in 1:nz
+                for j in 1:ny
+                    for i in 1:nx
                         @test cell_index(g, (i, j, k)) == lix
                         lix += 1
                     end
@@ -33,9 +33,9 @@ using LinearAlgebra
         end
         @testset "$d-D linear -> IJK indexing" begin
             lix = 1
-            for k = 1:nz
-                for j = 1:ny
-                    for i = 1:nx
+            for k in 1:nz
+                for j in 1:ny
+                    for i in 1:nx
                         @test cell_ijk(g, lix) == (i, j, k)
                         lix += 1
                     end
@@ -53,7 +53,7 @@ using MAT
     G = UnstructuredMesh(g)
     @testset "basics" begin
         function test_faces(G, g)
-            for i = 1:number_of_faces(G)
+            for i in 1:number_of_faces(G)
                 f_ix = G.face_map[i]
                 if f_ix > 0
                     e = Faces()
@@ -81,7 +81,7 @@ using MAT
         end
         test_faces(G, g)
 
-        for i = 1:number_of_cells(G)
+        for i in 1:number_of_cells(G)
             c, v = Jutul.compute_centroid_and_measure(G, Cells(), i)
             c_mrst = G_raw["cells"]["centroids"][i, :]
             v_mrst = G_raw["cells"]["volumes"][i]
@@ -103,7 +103,7 @@ using MAT
     @testset "cartesian to unstructured" begin
         meshes_1d = [
             CartesianMesh((3,)),
-            CartesianMesh((3,), ([1.0, 3.0, 4.0], )),
+            CartesianMesh((3,), ([1.0, 3.0, 4.0],)),
         ]
         meshes_2d = [
             CartesianMesh((3, 2)),
@@ -116,7 +116,7 @@ using MAT
             CartesianMesh((9, 7, 5), origin = [0.2, 0.6, 10.1]),
             CartesianMesh((3, 2, 2), (10.0, 3.0, 5.0)),
             CartesianMesh((3, 2, 2), ([10.0, 5.0, π], 3.0, 5.0)),
-            CartesianMesh((100, 3, 7))
+            CartesianMesh((100, 3, 7)),
         ]
         for mdim in 1:3
             @testset "$(mdim)D conversion" begin
@@ -186,6 +186,49 @@ using MAT
     end
 end
 
+@testset "cell geometry with a collapsed edge" begin
+    # One hexahedron on a unit square, top depth z and thickness t at its four
+    # pillars, with the bottom node of pillar (2, 2) merged into the top node
+    # there (thickness 0): the two side faces at that pillar become triangles,
+    # as corner-point processing makes them. Thin and warped, the cell does
+    # not contain the mean of its face nodes, which the tetrahedra are built
+    # around, so their volumes must be summed with signs.
+    function collapsed_hex(z, t)
+        g = UnstructuredMesh(CartesianMesh((1, 1, 1), (1.0, 1.0, 1.0)))
+        pts = g.node_points
+        pillar(p) = (round(Int, p[1]) + 1, round(Int, p[2]) + 1)
+        for (k, p) in enumerate(pts)
+            i, j = pillar(p)
+            pts[k] = typeof(p)(p[1], p[2], z[i, j] + (p[3] < 0.5 ? 0.0 : t[i, j]))
+        end
+        at_pillar = findall(k -> pillar(pts[k]) == (2, 2), eachindex(pts))
+        top, bottom = sort(at_pillar, by = k -> pts[k][3])
+        B = g.boundary_faces
+        vals, pos = Int[], [1]
+        for f in 1:length(B.faces_to_nodes)
+            nodes = replace(collect(B.faces_to_nodes[f]), bottom => top)
+            nodes = [n for (k, n) in enumerate(nodes) if n != nodes[k == 1 ? end : k - 1]]
+            append!(vals, nodes)
+            push!(pos, pos[end] + length(nodes))
+        end
+        return UnstructuredMesh(
+            g.faces.cells_to_faces, B.cells_to_faces,
+            g.faces.faces_to_nodes, Jutul.IndirectionMap(vals, pos), pts,
+            g.faces.neighbors, B.neighbors
+        )
+    end
+    t = [0.01 0.01; 0.01 0.0]
+    # the exact volume is the mean thickness (unit footprint, planar sides)
+    for z in ([0.0 0.0; 0.0 0.0], [0.0 0.1; 0.1 0.3], [0.0 0.5; 0.2 2.0])
+        g = collapsed_hex(z, t)
+        @test length(g.boundary_faces.faces_to_nodes[1]) in (3, 4)
+        geo = tpfv_geometry(g)
+        @test geo.volumes[1] ≈ sum(t) / 4 rtol = 1.0e-10
+        c = geo.cell_centroids[:, 1]
+        @test 0 < c[1] < 1 && 0 < c[2] < 1 && minimum(z) <= c[3] <= maximum(z + t)
+    end
+end
+
 @testset "CoarseMesh" begin
     G = CartesianMesh((4, 1, 1))
     uG = UnstructuredMesh(G)
@@ -195,7 +238,7 @@ end
     geo = tpfv_geometry(G)
     geo_c = tpfv_geometry(CG)
 
-    @test geo.volumes[1] ≈ geo_c.volumes[1]/2
+    @test geo.volumes[1] ≈ geo_c.volumes[1] / 2
     # Make a trivial coarse grid and test
     CG2 = CoarseMesh(G, [1, 2, 3, 4])
     geo_c2 = tpfv_geometry(CG2)
@@ -289,6 +332,18 @@ end
                     @test dot(N, fc - cc) > 0
                 end
             end
+            @testset "logical indexing" begin
+                for c in 1:number_of_cells(m)
+                    @test cell_index(m, cell_ijk(m, c)) == c
+                end
+                if centerpoint
+                    @test cell_ijk(m, 1) == (1, 1, 1)
+                else
+                    @test cell_ijk(m, 1) == (1, 1, 1)
+                    @test cell_ijk(m, 2) == (1, 2, 1)
+                    @test cell_index(m, (2, 1); throw = false) === nothing
+                end
+            end
         end
     end
 end
@@ -341,4 +396,15 @@ end
         @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag1) == [1, 3, 5, 7]
         @test get_mesh_entity_tag(m3d, Cells(), :test_tag, :tag2) == [2, 4, 6, 8]
     end
+end
+
+@testset "extrude radial mesh indexing" begin
+    m2d = Jutul.RadialMeshes.radial_mesh(10, [0.2, 0.5, 1.0]; centerpoint = false)
+    m3d = Jutul.extrude_mesh(m2d, 2)
+    for c in 1:number_of_cells(m3d)
+        @test cell_index(m3d, cell_ijk(m3d, c)) == c
+    end
+    @test cell_ijk(m3d, 1) == (1, 1, 1)
+    @test cell_ijk(m3d, 22) == (1, 1, 2)
+    @test cell_index(m3d, (2, 1, 1); throw = false) === nothing
 end

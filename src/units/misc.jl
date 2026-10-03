@@ -11,9 +11,9 @@ function si_unit(::Val{:mol})
 end
 
 function si_unit(::Union{Val{:dalton}, Val{:Da}})
-    return 1.66053904020e-27
+    return 1.6605390402e-27
 end
 
 function si_unit(::Val{:darcy})
-    return 9.869232667160130e-13
+    return 9.86923266716013e-13
 end

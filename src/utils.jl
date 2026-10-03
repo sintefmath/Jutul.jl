@@ -3,6 +3,40 @@ export get_cell_faces, get_facepos, get_cell_neighbors
 
 const gravity_constant = 9.80665
 
+# Table formats used for report and configuration printing. PrettyTables v3 replaced the
+# v2 `TextFormat` presets (`tf_unicode_rounded`, `tf_markdown`) with `TextTableFormat`.
+const JUTUL_TABLE_FORMAT_UNICODE_ROUNDED = TextTableFormat(borders = text_table_borders__unicode_rounded)
+const JUTUL_TABLE_FORMAT_MARKDOWN = TextTableFormat(
+    borders = TextTableBorders(
+        up_right_corner = '|',
+        up_left_corner = '|',
+        bottom_left_corner = '|',
+        bottom_right_corner = '|',
+        up_intersection = '|',
+        left_intersection = '|',
+        right_intersection = '|',
+        middle_intersection = '|',
+        bottom_intersection = '|',
+        column = '|',
+        row = '-'
+    ),
+    horizontal_line_at_beginning = false,
+    horizontal_line_after_data_rows = false
+)
+
+"""
+    jutul_table_format_with_data_hlines(tf::TextTableFormat, hlines)
+
+Return a copy of `tf` with horizontal lines drawn after the data rows in `hlines`.
+PrettyTables v3 carries `horizontal_lines_at_data_rows` inside the immutable
+`TextTableFormat`, so this folds the old v2 `body_hlines` argument into the format.
+"""
+function jutul_table_format_with_data_hlines(tf::TextTableFormat, hlines)
+    fields = fieldnames(TextTableFormat)
+    vals = map(f -> f === :horizontal_lines_at_data_rows ? hlines : getfield(tf, f), fields)
+    return TextTableFormat(vals...)
+end
+
 function convert_to_immutable_storage(dct::AbstractDict)
     for (key, value) in dct
         dct[key] = convert_to_immutable_storage(value)
@@ -35,14 +69,14 @@ end
 
 function get_matrix_view(v0, n, m, transp = false, offset = 0)
     if size(v0, 2) == 1
-        r_l = view(v0, (offset+1):(offset + n*m))
+        r_l = view(v0, (offset + 1):(offset + n * m))
         if transp
             v = reshape(r_l, m, n)'
         else
             v = reshape(r_l, n, m)
         end
     else
-        v = view(v0, (offset+1):(offset+n), :)
+        v = view(v0, (offset + 1):(offset + n), :)
         if transp
             v = v'
         end
@@ -53,11 +87,12 @@ end
 function check_increment(dx, pvar, key)
     has_bad_values = any(!isfinite, dx)
     if has_bad_values
-        bad = findall(isfinite.(vec(dx)) .== false)
+        dx_host = Array(dx)
+        bad = findall(!isfinite, vec(dx_host))
         n_bad = length(bad)
         n = min(10, length(bad))
         bad = bad[1:n]
-        @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad, values: $(dx[bad])"
+        @warn "$key: $n_bad non-finite values found. Indices: (limited to 10) $bad, values: $(dx_host[bad])"
     end
     ok = !has_bad_values
     return ok
@@ -70,13 +105,13 @@ end
 
 function get_convergence_table(errors::AbstractDict, arg...)
     # Already a dict
-    conv_table_fn(errors, true, arg...)
+    return conv_table_fn(errors, true, arg...)
 end
 
 function get_convergence_table(errors, arg...)
     d = OrderedDict()
     d[:Base] = errors
-    conv_table_fn(d, false, arg...)
+    return conv_table_fn(d, false, arg...)
 end
 
 function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
@@ -108,7 +143,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     pos = 1
     # Loop over models
     for (model, equations) in model_errors
-        # Loop over equations 
+        # Loop over equations
         for (mix, eq) in enumerate(equations)
             criterions = eq.criterions
             tolerances = eq.tolerances
@@ -151,7 +186,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                     end
                     count_crit += 1
                     count_ok += e <= tol
-                    e_scale = e/tol
+                    e_scale = e / tol
                     if e_scale > worst_val
                         worst_val = e_scale
                         worst_tol = tol
@@ -164,7 +199,7 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                         worst_name = "$(UNDERLINE("$pref")) $mstr"
                     end
                 end
-                push!(body_hlines, pos-1)
+                push!(body_hlines, pos - 1)
             end
         end
     end
@@ -173,19 +208,19 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
     max_its = cfg[:max_nonlinear_iterations]
     if print_table
         if info_level == 3
-            s  = ". Non-converged:"
+            s = ". Non-converged:"
         else
-            s  = ". All criteria:"
+            s = ". All criteria:"
         end
     elseif count_crit == count_ok
         s = " ✔️"
     else
-        worst_print = @sprintf "%2.3e (ϵ = %g)" worst_val*worst_tol worst_tol
+        worst_print = @sprintf "%2.3e (ϵ = %g)" worst_val * worst_tol worst_tol
         s = ". Worst value:\n\t - $worst_name at $worst_print."
     end
     # @info "$(id)It. $iteration/$max_its: $count_ok/$count_crit criteria converged$s"
-    jutul_message("It. $(iteration-1)/$max_its", "$count_ok/$count_crit criteria converged$s", color = :cyan)
-    if print_table
+    jutul_message("It. $(iteration - 1)/$max_its", "$count_ok/$count_crit criteria converged$s", color = :cyan)
+    return if print_table
         m_offset = Int64(has_models)
         rpos = (4 + m_offset)
         nearly_factor = 10
@@ -193,22 +228,22 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
             if j == rpos
                 d = data[i, j]
                 t = tols[i]
-                return d > t && d > 10*t
+                return d > t && d > 10 * t
             else
                 return false
             end
         end
-        h1 = Highlighter(f = not_converged, crayon = crayon"red" )
+        h1 = TextHighlighter(not_converged, crayon"red")
         function nearly_converged(data, i, j)
             if j == rpos
                 d = data[i, j]
                 t = tols[i]
-                return d > t && d < nearly_factor*t
+                return d > t && d < nearly_factor * t
             else
                 return false
             end
         end
-        h2 = Highlighter(f = nearly_converged, crayon = crayon"yellow")
+        h2 = TextHighlighter(nearly_converged, crayon"yellow")
         function converged(data, i, j)
             if j == rpos
                 return data[i, j] <= tols[i]
@@ -216,40 +251,43 @@ function conv_table_fn(model_errors, has_models, info_level, iteration, cfg)
                 return false
             end
         end
-        h3 = Highlighter(f = converged, crayon = crayon"green")
-        highlighers = (h1, h2, h3)
-        pretty_table(tbl, header = header,
-                                alignment = alignment, 
-                                body_hlines = body_hlines,
-                                highlighters = highlighers,
-                                tf = fmt,
-                                formatters = ft_printf("%2.3e", [m_offset + 4]),
-                                crop=:none)
+        h3 = TextHighlighter(converged, crayon"green")
+        highlighers = [h1, h2, h3]
+        pretty_table(
+            tbl, column_labels = header,
+            alignment = alignment,
+            highlighters = highlighers,
+            table_format = jutul_table_format_with_data_hlines(fmt, body_hlines),
+            formatters = [fmt__printf("%2.3e", [m_offset + 4])],
+            fit_table_in_display_horizontally = false,
+            fit_table_in_display_vertically = false
+        )
     end
 end
 
 function initialize_report_stats(reports)
-    stats = Dict{Symbol, Union{Int64, Float64}}(:wasted_iterations => 0,
-                                                :iterations => 0,
-                                                :steps => length(reports),
-                                                :ministeps => 0,
-                                                :wasted_linearizations => 0,
-                                                :wasted_linear_iterations => 0,
-                                                :wasted_linear_precond_iterations => 0,
-                                                :linear_update => 0.0,
-                                                :linear_solve => 0.0,
-                                                :linear_setup => 0.0,
-                                                :linear_iterations => 0,
-                                                :linear_precond => 0.0,
-                                                :linear_precond_iterations => 0,
-                                                :linearizations => 0,
-                                                :finalize => 0.0,
-                                                :secondary => 0.0,
-                                                :equations => 0.0,
-                                                :update => 0.0,
-                                                :convergence => 0.0,
-                                                :io => 0.0,
-                                                :time => 0.0,
+    stats = Dict{Symbol, Union{Int64, Float64}}(
+        :wasted_iterations => 0,
+        :iterations => 0,
+        :steps => length(reports),
+        :ministeps => 0,
+        :wasted_linearizations => 0,
+        :wasted_linear_iterations => 0,
+        :wasted_linear_precond_iterations => 0,
+        :linear_update => 0.0,
+        :linear_solve => 0.0,
+        :linear_setup => 0.0,
+        :linear_iterations => 0,
+        :linear_precond => 0.0,
+        :linear_precond_iterations => 0,
+        :linearizations => 0,
+        :finalize => 0.0,
+        :secondary => 0.0,
+        :equations => 0.0,
+        :update => 0.0,
+        :convergence => 0.0,
+        :io => 0.0,
+        :time => 0.0,
     )
     return stats
 end
@@ -264,6 +302,7 @@ function outer_step_report_stats!(stats, outer_rep)
     for mini_rep in outer_rep[:ministeps]
         ministep_report_stats!(stats, mini_rep)
     end
+    return
 end
 
 function ministep_report_stats!(stats, mini_rep)
@@ -289,7 +328,7 @@ function ministep_report_stats!(stats, mini_rep)
     stats[:secondary] += s.secondary
     stats[:convergence] += s.convergence
 
-    if !mini_rep[:success]
+    return if !mini_rep[:success]
         stats[:wasted_iterations] += s.newtons
         stats[:wasted_linearizations] += s.linearizations
         stats[:wasted_linear_iterations] += s.linear_iterations
@@ -307,18 +346,18 @@ function summarize_report_stats(stats, per = false)
         linscale = itscale = miniscale = prescale = identity
     end
     summary = (
-                secondary = itscale(stats[:secondary]), # Not always updated, itscale
-                equations = linscale(stats[:equations]),
-                linear_system = linscale(stats[:linear_update]),
-                linear_solve = itscale(stats[:linear_solve] - stats[:linear_precond]),
-                linear_setup = itscale(stats[:linear_setup]),
-                linear_precond = prescale(stats[:linear_precond]),
-                update = itscale(stats[:update]),
-                convergence = linscale(stats[:convergence]),
-                io = miniscale(stats[:io]),
-                other = itscale(stats[:other_time]),
-                total = itscale(stats[:time])
-            )
+        secondary = itscale(stats[:secondary]), # Not always updated, itscale
+        equations = linscale(stats[:equations]),
+        linear_system = linscale(stats[:linear_update]),
+        linear_solve = itscale(stats[:linear_solve] - stats[:linear_precond]),
+        linear_setup = itscale(stats[:linear_setup]),
+        linear_precond = prescale(stats[:linear_precond]),
+        update = itscale(stats[:update]),
+        convergence = linscale(stats[:convergence]),
+        io = miniscale(stats[:io]),
+        other = itscale(stats[:other_time]),
+        total = itscale(stats[:time]),
+    )
     return summary
 end
 
@@ -343,12 +382,12 @@ function output_report_stats(stats)
             newtons = stats[:wasted_iterations],
             linearizations = stats[:wasted_linearizations],
             linear_iterations = stats[:wasted_linear_iterations],
-            linear_precond_iterations = stats[:wasted_linear_precond_iterations]
+            linear_precond_iterations = stats[:wasted_linear_precond_iterations],
         ),
         steps = stats[:steps],
         ministeps = stats[:ministeps],
         time_sum = totals,
-        time_each = each
+        time_each = each,
     )
     return out
 end
@@ -410,7 +449,7 @@ function stats_ministep(reports)
         linear_setup = linprep,
         linear_system = linear_system,
         linear_solve_precond = precond,
-        linear_solve_precond_iterations = precond_its
+        linear_solve_precond_iterations = precond_its,
     )
 end
 
@@ -468,14 +507,16 @@ function pick_time_unit(t, wide = is_wide_term())
         nanosec = "ns"
         picosec = "ps"
     end
-    units = [(24*3600, day),
-             (3600, hours),
-             # (60, min),
-             (1, sec),
-             (1e-3, millisec),
-             (1e-6, microsec),
-             (1e-9, nanosec),
-             (1e-12, picosec)]
+    units = [
+        (24 * 3600, day),
+        (3600, hours),
+        # (60, min),
+        (1, sec),
+        (1.0e-3, millisec),
+        (1.0e-6, microsec),
+        (1.0e-9, nanosec),
+        (1.0e-12, picosec),
+    ]
     for u in units
         if m > u[1]
             return u
@@ -487,18 +528,18 @@ end
 
 function autoformat_time(t::Float64; compact = true)
     u, s = pick_time_unit(t, !compact)
-    t_fmt = @sprintf("%.2f", t/u)
+    t_fmt = @sprintf("%.2f", t / u)
     return "$t_fmt $s"
 end
 
 function print_stats(reports::AbstractArray, io = stdout; kwarg...)
     stats = report_stats(reports)
-    print_stats(stats, io; kwarg...)
+    return print_stats(stats, io; kwarg...)
 end
 
-function print_stats(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded, kwarg...)
+function print_stats(stats, io = stdout; title = "", table_formatter = JUTUL_TABLE_FORMAT_UNICODE_ROUNDED, kwarg...)
     print_iterations(stats, io; title = title, table_formatter = table_formatter, kwarg...)
-    print_timing(stats, io; title = title, table_formatter = table_formatter)
+    return print_timing(stats, io; title = title, table_formatter = table_formatter)
 end
 
 function is_wide_term()
@@ -506,9 +547,10 @@ function is_wide_term()
     return dim > 90
 end
 
-function print_iterations(stats, io = stdout;
+function print_iterations(
+        stats, io = stdout;
         title = "",
-        table_formatter = tf_unicode_rounded,
+        table_formatter = JUTUL_TABLE_FORMAT_UNICODE_ROUNDED,
         scale = 1
     )
     flds = (:newtons, :linearizations, :linear_iterations, :linear_precond_iterations)
@@ -518,7 +560,7 @@ function print_iterations(stats, io = stdout;
     if scale == 1
         sf = identity
     else
-        sf = x -> x/scale
+        sf = x -> x / scale
     end
     nstep = sf(stats.steps)
     nmini = sf(stats.ministeps)
@@ -526,26 +568,27 @@ function print_iterations(stats, io = stdout;
     for (i, f) in enumerate(flds)
         waste = sf(stats[:wasted][f])
         raw = sf(stats[f])
-        data[i, 1] = raw/nstep         # Avg per step
-        data[i, 2] = raw/nmini         # Avg per mini
+        data[i, 1] = raw / nstep         # Avg per step
+        data[i, 2] = raw / nmini         # Avg per mini
         data[i, 3] = "$raw ($waste)"    # Total
     end
 
-    pretty_table(io, data;
-        header = (
+    return pretty_table(
+        io, data;
+        column_labels = [
             ["Avg/step", "Avg/ministep", "Total"],
-            ["$nstep steps", "$nmini ministeps", "(wasted)"]
-        ),
+            ["$nstep steps", "$nmini ministeps", "(wasted)"],
+        ],
         row_labels = names,
         title = title,
-        title_alignment = :c,
-        row_label_alignment = :l,
-        tf = table_formatter,
-        row_label_column_title = "Iteration type"
+        title_alignment = :l,
+        row_label_column_alignment = :l,
+        table_format = table_formatter,
+        stubhead_label = "Iteration type"
     )
 end
 
-function print_timing(stats, io = stdout; title = "", table_formatter = tf_unicode_rounded)
+function print_timing(stats, io = stdout; title = "", table_formatter = JUTUL_TABLE_FORMAT_UNICODE_ROUNDED)
     flds = collect(keys(stats.time_each))
     n = length(flds)
 
@@ -555,7 +598,7 @@ function print_timing(stats, io = stdout; title = "", table_formatter = tf_unico
         teach = stats.time_each[f]
         tsum = stats.time_sum[f]
         data[i, 1] = teach
-        data[i, 2] = 100*tsum/tot
+        data[i, 2] = 100 * tsum / tot
         data[i, 3] = tsum
     end
 
@@ -591,16 +634,16 @@ function print_timing(stats, io = stdout; title = "", table_formatter = tf_unico
         end
         return name
     end
-    pretty_table(io, data; header = (["Each", "Relative", "Total"], [s, "Percentage", s_t]),
+    return pretty_table(
+        io, data; column_labels = [["Each", "Relative", "Total"], [s, "Percentage", s_t]],
         row_labels = map(translate_for_table, flds),
-        formatters = (ft_printf("%3.4f", 1), ft_printf("%3.2f %%", 2), ft_printf("%3.4f", 3)),
+        formatters = [fmt__printf("%3.4f", [1]), fmt__printf("%3.2f %%", [2]), fmt__printf("%3.4f", [3])],
         title = title,
-        title_alignment = :c,
-        tf = table_formatter,
-        row_label_alignment = :l,
+        title_alignment = :l,
+        table_format = jutul_table_format_with_data_hlines(table_formatter, [n - 1]),
+        row_label_column_alignment = :l,
         alignment = [:r, :r, :r],
-        body_hlines = [n-1],
-        row_label_column_title = "Timing type"
+        stubhead_label = "Timing type"
     )
 end
 
@@ -610,7 +653,8 @@ states, reports = read_results(pth; read_states = true, read_reports = true)
 
 Read results from a given `output_path` provded to `simulate` or `simulator_config`.
 """
-function read_results(pth;
+function read_results(
+        pth;
         read_states = true,
         states = Vector{Dict{Symbol, Any}}(),
         read_reports = true,
@@ -698,7 +742,7 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
     if ministeps
         dt = Vector{Float64}()
         step_no = Vector{Int64}()
-        for (i, r) = enumerate(reports)
+        for (i, r) in enumerate(reports)
             for m in r[:ministeps]
                 if m[:success]
                     push!(dt, m[:dt])
@@ -710,7 +754,7 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
         n = length(reports)
         dt = zeros(n)
         step_no = zeros(Int64, n)
-        for (i, r) = enumerate(reports)
+        for (i, r) in enumerate(reports)
             t_loc = 0.0
             for m in r[:ministeps]
                 if m[:success]
@@ -721,8 +765,8 @@ function report_timesteps(reports; ministeps = false, extra_out = false)
             step_no[i] = i
         end
         if n > 1 && !reports[end][:ministeps][end][:success]
-            dt = resize!(dt, n-1)
-            step_no = resize!(step_no, n-1)
+            dt = resize!(dt, n - 1)
+            step_no = resize!(step_no, n - 1)
         end
     end
     if extra_out
@@ -777,7 +821,7 @@ function expand_to_ministeps(states, reports)
     return (ministates, dt, report_step_index)
 end
 
-function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
+function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where {T}
     # Create array of arrays where each entry contains the faces of that cell
     if length(N) == 0
         cell_faces = ones(T, 1)
@@ -795,7 +839,7 @@ function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where T
             cell_faces[i] = V
         end
         for i in 1:size(N, 1)
-            for j = 1:size(N, 2)
+            for j in 1:size(N, 2)
                 push!(cell_faces[N[i, j]], j)
             end
         end
@@ -810,7 +854,7 @@ end
 function get_cell_neighbors(N, nc = maximum(N), includeSelf = true)
     # Find faces in each array
     t = typeof(N[1])
-    cell_neigh = [Vector{t}() for i = 1:nc]
+    cell_neigh = [Vector{t}() for i in 1:nc]
     for i in 1:size(N, 2)
         push!(cell_neigh[N[1, i]], N[2, i])
         push!(cell_neigh[N[2, i]], N[1, i])
@@ -843,7 +887,7 @@ end
 function get_facesigns(N, faces, facepos, nc)
     facesigns = similar(faces)
     for c in 1:nc
-        for ix in facepos[c]:(facepos[c+1]-1)
+        for ix in facepos[c]:(facepos[c + 1] - 1)
             f = faces[ix]
             if N[2, f] == c
                 facesigns[ix] = -1
@@ -920,13 +964,18 @@ end
 
 Base.@propagate_inbounds function Base.getindex(m::IndirectionMap, ix::Int)
     p = m.pos
-    return view(m.vals, p[ix]:(p[ix+1]-1))
+    return view(m.vals, p[ix]:(p[ix + 1] - 1))
 end
 
-Base.length(m::IndirectionMap) = length(m.pos)-1
+Base.@propagate_inbounds function indirection_range(m::IndirectionMap, ix::Int)
+    p = m.pos
+    return p[ix]:(p[ix + 1] - 1)
+end
+
+Base.length(m::IndirectionMap) = length(m.pos) - 1
 
 function Base.show(io::IO, t::MIME"text/plain", m::IndirectionMap)
-    print(io, "IndirectionMap with $(length(m)) entities and total $(m.pos[end]-1) entries")
+    return print(io, "IndirectionMap with $(length(m)) entities and total $(length(m.vals)) entries")
 end
 
 function get_mat_testgrid(name)
@@ -1003,7 +1052,7 @@ function get_step_report_errors(k::Symbol, step_reports)
             end
         end
     end
-    data
+    return data
 end
 
 """
@@ -1064,20 +1113,20 @@ function step_report_convergence_matrix(step_reports, groups = missing)
         end
         group_index += 1
     end
-    (data = data, names = labels, equations = sublabels, groups = grouplabels)
+    return (data = data, names = labels, equations = sublabels, groups = grouplabels)
 end
 
 function print_step_report_convergence_matrix(step_reports, arg...; kwarg...)
-    print_step_report_convergence_matrix!(stdout, step_reports, arg...; kwarg...)
+    return print_step_report_convergence_matrix!(stdout, step_reports, arg...; kwarg...)
 end
 
 function print_step_report_convergence_matrix!(io, step_reports, groups = missing; show_it = true, kwarg...)
     print_num(x) = @sprintf("%1.2e", x)
     function fmt(val::Base.AbstractVecOrTuple, i, j)
-        join(map(print_num, val), " │ ")
+        return join(map(print_num, val), " │ ")
     end
     function fmt(val::Real, i, j)
-        print_num(val)
+        return print_num(val)
     end
     mat, names, equations, groups = step_report_convergence_matrix(step_reports, groups)
     subheader = map((x, y) -> "$x: $y", groups, equations)
@@ -1087,8 +1136,8 @@ function print_step_report_convergence_matrix!(io, step_reports, groups = missin
         rl = nothing
     end
 
-    karg = (formatters = fmt, header = (names, subheader), alignment = :c, row_labels = rl, kwarg...)
-    if io == stdout
+    karg = (formatters = [fmt], column_labels = [names, subheader], alignment = :c, row_labels = rl, kwarg...)
+    return if io == stdout
         pretty_table(mat; karg...)
     else
         pretty_table(io, mat; karg...)
@@ -1100,7 +1149,8 @@ end
 
 Write the reports to MAT files named "report_1", "report_2", ... to the given path.
 """
-function write_reports_to_mat_format(reports::Vector, path::String = jutul_output_path();
+function write_reports_to_mat_format(
+        reports::Vector, path::String = jutul_output_path();
         name = "report",
         config = missing,
         verbose = false
@@ -1153,7 +1203,7 @@ function get_mat_writable_file_from_report(report; config = missing)
                     for (cname, crit) in pairs(equation_vals.criterions)
                         for (name, e) in zip(crit.names, crit.errors)
                             if ismissing(config)
-                                tol = 1e-3
+                                tol = 1.0e-3
                             else
                                 model_tol = config[:tolerances][k]
                                 if haskey(model_tol, equation_vals.name)
@@ -1195,7 +1245,7 @@ function check_equal_perm(a, b)
     N == M || throw(ArgumentError("Lengths of a and b do not match ($N != $M)"))
     to_cyclic = i -> mod(i - 1, N) + 1
     start = a[1]
-    offset = findfirst(isequal(start), b)-1
+    offset = findfirst(isequal(start), b) - 1
     if isnothing(offset)
         is_equal = false
     else

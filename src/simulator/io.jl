@@ -1,14 +1,15 @@
 initialize_io(::Nothing) = nothing
 
 function initialize_io(path)
-    @assert isdir(path) "$path must be a valid directory for output."
+    return @assert isdir(path) "$path must be a valid directory for output."
 end
 
 function retrieve_output!(sim, states, reports, config, n)
-    retrieve_output!(states, reports, config, n)
+    return retrieve_output!(states, reports, config, n)
 end
 
-function retrieve_output!(states, reports, config, n;
+function retrieve_output!(
+        states, reports, config, n;
         read_reports = config[:output_reports],
         read_states = config[:output_states]
     )
@@ -23,13 +24,13 @@ function retrieve_output!(states, reports, config, n;
             states = states,
             verbose = config[:info_level] >= 0,
             range = 1:n
-            )
+        )
     end
     return (states, reports)
 end
 
 function get_output_state(sim::JutulSimulator)
-    get_output_state(sim.storage, sim.model)
+    return get_output_state(sim.storage, sim.model)
 end
 
 function get_output_report(sim, report, level)
@@ -71,7 +72,7 @@ function store_output!(states, reports, step, sim, config, report; substates = m
         end
         @tic "write" if file_out
             write_result_jld2(path, state, out_report, step)
-            for i in 1:(step-config[:in_memory_reports])
+            for i in 1:(step - config[:in_memory_reports])
                 # Only keep the last N time-step reports in memory. These
                 # will be read back before output anyway.
                 reports[i] = missing
@@ -80,13 +81,13 @@ function store_output!(states, reports, step, sim, config, report; substates = m
             push!(states, state)
         end
     end
-    report[:output_time] = t_out
+    return report[:output_time] = t_out
 end
 
 function write_result_jld2(path, state, report, step)
     step_path = joinpath(path, "jutul_$step.jld2")
     @debug "Writing to $step_path"
-    jldopen(step_path, "w") do file
+    return jldopen(step_path, "w") do file
         file["state"] = state
         file["report"] = report
         file["step"] = step

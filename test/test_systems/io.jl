@@ -8,13 +8,13 @@ function test_io()
 
     source = ScalarTestForce(1.0)
     forces = setup_forces(model, sources = source)
-    state0 = setup_state(model, Dict(:XVar=>0.0))
+    state0 = setup_state(model, Dict(:XVar => 0.0))
 
     out = tempname()
     sim = Simulator(model, state0 = state0)
     states, reports = simulate(sim, [1.0, 2.0], forces = forces, output_states = true, output_path = out, info_level = -1)
     states2, reports2 = read_results(out)
-    @testset "Test serialization of results" begin
+    return @testset "Test serialization of results" begin
         for (s_mem, s_file) in zip(states, states2)
             @test s_mem == s_file
         end
@@ -35,7 +35,7 @@ function test_restart()
 
     source = ScalarTestForce(1.0)
     forces = setup_forces(model, sources = source)
-    state0 = setup_state(model, Dict(:XVar=>0.0))
+    state0 = setup_state(model, Dict(:XVar => 0.0))
 
     out = tempname()
     sim = Simulator(model, state0 = state0)
@@ -43,7 +43,7 @@ function test_restart()
 
     states2, reports2 = simulate(sim, [1.0, 2.0], forces = forces, restart = 2, output_path = out, info_level = -1)
 
-    @testset "Test restart from stored results" begin
+    return @testset "Test restart from stored results" begin
         for (s_mem, s_file) in zip(states, states2)
             @test s_mem == s_file
         end
@@ -59,7 +59,7 @@ test_restart()
 
     source = ScalarTestForce(1.0)
     forces = setup_forces(model, sources = source)
-    state0 = setup_state(model, Dict(:XVar=>0.0))
+    state0 = setup_state(model, Dict(:XVar => 0.0))
     sim = Simulator(model, state0 = state0)
     out = tempname()
 
@@ -75,7 +75,8 @@ test_restart()
     end
     states, reports = simulate(sim, [1.0, 2.0], forces = forces, output_states = true, output_path = out, info_level = -1)
 
-    states2, reports2 = simulate(sim, [1.0, 2.0], forces = forces,
+    states2, reports2 = simulate(
+        sim, [1.0, 2.0], forces = forces,
         restart = false,
         output_path = out,
         info_level = -1,
@@ -83,7 +84,8 @@ test_restart()
         output_function = update_test_function
     )
 
-    states2_mem, reports2_mem = simulate(sim, [1.0, 2.0], forces = forces,
+    states2_mem, reports2_mem = simulate(
+        sim, [1.0, 2.0], forces = forces,
         restart = false,
         info_level = -1,
         state0 = state0,
@@ -99,7 +101,8 @@ test_restart()
         end
     end
 
-    states3, reports3 = simulate(sim, [1.0, 2.0], forces = forces,
+    states3, reports3 = simulate(
+        sim, [1.0, 2.0], forces = forces,
         restart = false,
         output_path = out,
         info_level = -11,
@@ -120,4 +123,3 @@ test_restart()
         end
     end
 end
-

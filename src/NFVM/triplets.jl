@@ -3,10 +3,10 @@ function duo_coefficients(t_i, t_j, l)
         t_i[1] t_j[1];
         t_i[2] t_j[2]
     ]
-    if abs(det(M)) < 1e-8
+    if abs(det(M)) < 1.0e-8
         α = β = Inf
     else
-        α, β = M\l
+        α, β = M \ l
     end
     return (α, β)
 end
@@ -17,15 +17,15 @@ function triplet_coefficients(t_i, t_j, t_k, l)
         t_i[2] t_j[2] t_k[2];
         t_i[3] t_j[3] t_k[3]
     ]
-    if abs(det(M)) < 1e-8
+    if abs(det(M)) < 1.0e-8
         α = β = γ = Inf
     else
-        α, β, γ = M\l
+        α, β, γ = M \ l
     end
     return (α, β, γ)
 end
 
-function find_minimizing_basis_inner(l::SVector{3, Num_t}, all_t, print = false, stop_early = true) where Num_t
+function find_minimizing_basis_inner(l::SVector{3, Num_t}, all_t, print = false, stop_early = true) where {Num_t}
     N = length(all_t)
     get_t(i) = all_t[i]
     # Intermediate variables
@@ -34,14 +34,14 @@ function find_minimizing_basis_inner(l::SVector{3, Num_t}, all_t, print = false,
     best_value = Inf
 
     ϵ = 0.0
-    for i in 1:(N-2)
+    for i in 1:(N - 2)
         t_i = get_t(i)
-        for j in (i+1):(N-1)
+        for j in (i + 1):(N - 1)
             t_j = get_t(j)
-            for k in (j+1):N
+            for k in (j + 1):N
                 t_k = get_t(k)
                 α, β, γ = triplet_coefficients(t_i, t_j, t_k, l)
-                # @info "$i $j $k" α β γ 
+                # @info "$i $j $k" α β γ
                 # @info "Vectors" t_i t_j t_k
                 if α ≥ ϵ && β ≥ ϵ && γ ≥ ϵ
                     ijk_value = max(α, β, γ)
@@ -70,7 +70,7 @@ function find_minimizing_basis_inner(l::SVector{3, Num_t}, all_t, print = false,
     return (best_triplet, best_triplet_W)
 end
 
-function find_minimizing_basis_inner(l::SVector{2, Num_t}, all_t, print = false, stop_early = true) where Num_t
+function find_minimizing_basis_inner(l::SVector{2, Num_t}, all_t, print = false, stop_early = true) where {Num_t}
     N = length(all_t)
     get_t(i) = all_t[i]
     # Intermediate variables
@@ -79,9 +79,9 @@ function find_minimizing_basis_inner(l::SVector{2, Num_t}, all_t, print = false,
     best_value = Inf
 
     ϵ = 0.0
-    for i in 1:(N-1)
+    for i in 1:(N - 1)
         t_i = get_t(i)
-        for j in (i+1):N
+        for j in (i + 1):N
             t_j = get_t(j)
             α, β = duo_coefficients(t_i, t_j, l)
             if α ≥ ϵ && β ≥ ϵ
@@ -113,7 +113,7 @@ end
 function candidate_vectors(x_t, x, i; normalize = true)
     t = x[i] - x_t
     if normalize
-        t = t./norm(t, 2)
+        t = t ./ norm(t, 2)
     end
     return t
 end
@@ -126,11 +126,11 @@ function candidate_vectors(x_t, x; normalize = true)
     return t
 end
 
-function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = false, verbose = false, stop_early = true, throw = true) where T
+function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = false, verbose = false, stop_early = true, throw = true) where {T}
     all_x = copy(all_x)
     all_t = candidate_vectors(x_t, all_x, normalize = true)
     l_norm = norm(l, 2)
-    l_bar = l/l_norm
+    l_bar = l / l_norm
     # https://en.wikipedia.org/wiki/Cosine_similarity
     # function F_sort(i)
     #     return abs(dot(x_t + l_bar, x_t + all_t[i]))
@@ -139,7 +139,7 @@ function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = f
     function F_sort(i)
         v1 = all_t[i]
         v2 = l_bar
-        dotnormed = dot(v1, v2)/(norm(v1)*norm(v2))
+        dotnormed = dot(v1, v2) / (norm(v1) * norm(v2))
         # Guard against noise
         dotnormed = clamp(dotnormed, 0.0, 1.0)
         out = acos(dotnormed)
@@ -158,7 +158,7 @@ function find_minimizing_basis(x_t::T, l::T, all_x::AbstractVector{T}; check = f
 
         function normalized_weight(i)
             t = candidate_vectors(x_t, all_x, ijk[i], normalize = false)
-            return l_norm*w[i]/norm(t, 2)
+            return l_norm * w[i] / norm(t, 2)
         end
         w = map(normalized_weight, eachindex(w))
     end
@@ -182,7 +182,7 @@ function reconstruct_l(indices, weights, x_t, all_x)
     l_r = zero(typeof(x_t))
     for (w, i) in zip(weights, indices)
         t = candidate_vectors(x_t, all_x, i, normalize = false)
-        next = w*t
+        next = w * t
         l_r = l_r .+ next
     end
     return l_r

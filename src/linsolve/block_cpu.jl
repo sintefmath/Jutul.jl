@@ -1,4 +1,4 @@
-function block_mul!(res, jac, Vt, N, x, α, β::T) where T
+function block_mul!(res, jac, Vt, N, x, α, β::T) where {T}
     @tic "spmv (block)" begin
         as_svec = (x) -> unsafe_reinterpret(Vt, x, length(x) ÷ N)
         res_v = as_svec(res)
@@ -22,7 +22,7 @@ function vector_residual(sys::LinearizedSystem{BlockMajorLayout})
 end
 
 function update_dx_from_vector!(sys::LinearizedSystem{BlockMajorLayout}, dx_from_solver; dx = sys.dx_buffer)
-    dx .= -reshape(dx_from_solver, size(dx))
+    return dx .= -reshape(dx_from_solver, size(dx))
 end
 
 function block_size(lsys::LinearizedSystem{S}) where {S <: BlockMajorLayout}

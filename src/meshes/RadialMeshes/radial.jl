@@ -28,9 +28,9 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
     angles = angles[2:end]
 
     for i in 2:length(angles)
-        δ = angles[i] - angles[i-1]
+        δ = angles[i] - angles[i - 1]
         δ > 0 || throw(ArgumentError("Angles entries must be in increasing order with entries between 0 and 1"))
-        abs(δ) > 1e-10 || throw(ArgumentError("Difference between entries below tolerance 1e-10 for entry $i ($(abs(δ)))."))
+        abs(δ) > 1.0e-10 || throw(ArgumentError("Difference between entries below tolerance 1e-10 for entry $i ($(abs(δ)))."))
     end
 
     nangle = length(angles)
@@ -57,7 +57,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
         point_lookup[(0, 0)] = length(node_points)
     end
 
-    # Cells 
+    # Cells
     Nradii = length(radii)
     Nangles = length(angles)
 
@@ -65,9 +65,9 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
 
     num_cells = get_radial_cell_index(Nradii, Nangles)
     if centerpoint
-        @assert num_cells == Nangles*Nradii
+        @assert num_cells == Nangles * Nradii
     else
-        @assert num_cells == Nangles*(Nradii - 1) + 1
+        @assert num_cells == Nangles * (Nradii - 1) + 1
     end
 
     # Make life easier by these intermediate arrays
@@ -116,7 +116,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
         push!(neighbors, (c1, c2))
         push!(face_node_pos, face_node_pos[end] + 2)
         # Positive normal direction outwards from center
-        push!(face_nodes, p1, p2)
+        return push!(face_nodes, p1, p2)
     end
 
     function add_bnd_face!(p1, p2, c)
@@ -128,7 +128,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
         push!(bnd_cells, c)
         push!(bnd_node_pos, bnd_node_pos[end] + 2)
         # Positive normal direction outwards from center
-        push!(bnd_nodes, p1, p2)
+        return push!(bnd_nodes, p1, p2)
     end
 
     # Faces with constant radius (going in circles around the center)
@@ -150,7 +150,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
                 else
                     c1 = get_radial_cell_index(radius_i, angle_i)
                 end
-                c2 = get_radial_cell_index(radius_i+1, angle_i)
+                c2 = get_radial_cell_index(radius_i + 1, angle_i)
                 add_face!(p1, p2, c1, c2)
             end
         end
@@ -173,7 +173,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
                 # Regular internal layer
                 c1 = get_radial_cell_index(radius_i, angle_i)
                 c2 = get_radial_cell_index(radius_i, angle_i_next)
-                p1 = point_lookup[(radius_i-1, angle_i)]
+                p1 = point_lookup[(radius_i - 1, angle_i)]
                 p2 = point_lookup[(radius_i, angle_i)]
                 add_face!(p1, p2, c1, c2)
             end
@@ -183,6 +183,23 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
 
     cells_faces, cells_facepos = cellmap_to_posmap(cells_to_faces)
     boundary_cells_faces, boundary_cells_facepos = cellmap_to_posmap(cells_to_boundary)
+    cell_map = if centerpoint
+        nothing
+    else
+        logical_cells = Int[]
+        sizehint!(logical_cells, num_cells)
+        for radius_i in 1:Nradii
+            angles_here = if radius_i == 1
+                1:1
+            else
+                1:Nangles
+            end
+            for angle_i in angles_here
+                push!(logical_cells, angle_i + (radius_i - 1) * Nangles)
+            end
+        end
+        logical_cells
+    end
 
     m = UnstructuredMesh(
         cells_faces,
@@ -197,6 +214,7 @@ function radial_mesh(angles, radii; centerpoint = false, kwarg...)
         neighbors,
         bnd_cells;
         structure = CartesianIndex(Nangles, Nradii),
+        cell_map = cell_map,
         kwarg...
     )
     return m

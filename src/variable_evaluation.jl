@@ -40,13 +40,13 @@ macro jutul_secondary(ex)
     args = def[:args]
     # Define filters to strip the type spec (if any)
     function myfilter(x::Symbol)
-        x
+        return x
     end
     function myfilter(x::Expr)
-        x.args[1]
+        return x.args[1]
     end
 
-    deps = tuple(map(myfilter, args[4:end-1])...)
+    deps = tuple(map(myfilter, args[4:(end - 1)])...)
     # Pick variable + model
     variable_sym = args[2]
     model_sym = args[3]
@@ -71,32 +71,34 @@ macro jutul_secondary(ex)
     tmp *= String(myfilter(model_sym))
 
     for s in deps
-        tmp *= ", state."*String(s)
+        tmp *= ", state." * String(s)
     end
     tmp *= ", ix)"
     upd_def[:body] = Meta.parse(tmp)
     ex_upd = combinedef(upd_def)
 
-    quote
+    return quote
         $ex
         $ex_dep
         $ex_upd
-    end |> esc 
+    end |> esc
 end
 
 function update_secondary_variables!(storage, model)
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(storage.state, model, vars)
+    return update_secondary_variables_state!(
+        evaluation_state(storage), model, vars
+    )
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
     if is_state0
-        s = storage.state0
+        s = evaluation_state0(storage)
     else
-        s = storage.state
+        s = evaluation_state(storage)
     end
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(s, model, vars)
+    return update_secondary_variables_state!(s, model, vars)
 end
 
 
@@ -117,17 +119,23 @@ end
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
     ctx = model.context
     var_pairs = pairs(vars)
-    M = length(var_pairs)
-    if M > 0
+    if ctx isa KernelAbstractionsContext && ctx.use_kernels_for_secondary
+        for (symbol, var) in var_pairs
+            @tic "$symbol" begin
+                KernelExecution.secondary_variable_loop!(state, model, symbol, ctx)
+            end
+        end
+    elseif length(var_pairs) > 0
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
         K = number_of_entities(model, first_var)
         mb = minbatch(ctx)
         N = nthreads(ctx)
         N_batches = clamp(K ÷ mb, 1, N)
+        tt = thread_type(ctx)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
-        if N_batches == 1
+        if N_batches == 1 || thread_type == :serial
             for (symbol, var) in var_pairs
                 @tic "$symbol" begin
                     v = state[symbol]
@@ -136,15 +144,18 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 end
             end
         else
-            @batch for i in 1:N_batches
+            function batch_update(i)
                 for (symbol, var) in var_pairs
                     v = state[symbol]
                     ix = entity_eachindex(v, i, N_batches)
                     update_secondary_variable!(v, var, model, state, ix)
                 end
+                return
             end
+            threaded_loop_minbatch(batch_update, N, N_batches, mb, tt)
         end
     end
+    return state
 end
 
 # Initializers
@@ -152,7 +163,7 @@ function select_secondary_variables!(model)
     svars = model.secondary_variables
     select_secondary_variables!(svars, model.domain, model)
     select_secondary_variables!(svars, model.system, model)
-    select_secondary_variables!(svars, model.formulation, model)
+    return select_secondary_variables!(svars, model.formulation, model)
 end
 
 
@@ -160,21 +171,21 @@ function select_primary_variables!(model::SimulationModel)
     pvars = model.primary_variables
     select_primary_variables!(pvars, model.domain, model)
     select_primary_variables!(pvars, model.system, model)
-    select_primary_variables!(pvars, model.formulation, model)
+    return select_primary_variables!(pvars, model.formulation, model)
 end
 
 function select_parameters!(model::SimulationModel)
     prm = model.parameters
     select_parameters!(prm, model.domain, model)
     select_parameters!(prm, model.system, model)
-    select_parameters!(prm, model.formulation, model)
+    return select_parameters!(prm, model.formulation, model)
 end
 
 function select_equations!(model::SimulationModel)
     eqs = model.equations
     select_equations!(eqs, model.domain, model)
     select_equations!(eqs, model.system, model)
-    select_equations!(eqs, model.formulation, model)
+    return select_equations!(eqs, model.formulation, model)
 end
 
 function select_minimum_output_variables!(model)
@@ -185,7 +196,7 @@ function select_minimum_output_variables!(model)
     end
     select_minimum_output_variables!(outputs, model.domain, model)
     select_minimum_output_variables!(outputs, model.system, model)
-    select_minimum_output_variables!(outputs, model.formulation, model)
+    return select_minimum_output_variables!(outputs, model.formulation, model)
 end
 
 select_minimum_output_variables!(outputs, ::Any, model) = nothing
@@ -215,7 +226,7 @@ end
 Get dependencies of variable when viewed as a secondary variable. Normally autogenerated with @jutul_secondary
 """
 function get_dependencies(svar, model)
-    Symbol[]
+    return tuple()
 end
 
 export update_secondary_variable!
@@ -229,7 +240,7 @@ end
 function map_level(primary_variables, secondary_variables, output_level)
     pkeys = [i for i in keys(primary_variables)]
     skeys = [i for i in keys(secondary_variables)]
-    if output_level == :all
+    return if output_level == :all
         out = vcat(pkeys, skeys)
     elseif output_level == :primary_variables
         out = pkeys
@@ -245,7 +256,7 @@ function select_output_variables!(model, output_level = :primary_variables)
     outputs = model.output_variables
     if !isnothing(output_level)
         if isa(output_level, Symbol)
-            output_level  = [output_level]
+            output_level = [output_level]
         end
         for levels in output_level
             mapped = map_level(model.primary_variables, model.secondary_variables, levels)
@@ -254,7 +265,7 @@ function select_output_variables!(model, output_level = :primary_variables)
             end
         end
     end
-    unique!(outputs)
+    return unique!(outputs)
 end
 
 function sort_secondary_variables!(model::JutulModel)
@@ -272,7 +283,7 @@ function build_variable_graph(model, primary = model.primary_variables, secondar
         push!(nodes, key)
         push!(edges, []) # No dependencies for parameters - they are static.
     end
-    for (key, var) in secondary
+    for (key, var) in pairs(secondary)
         dep = get_dependencies(var, model)
         push!(nodes, key)
         push!(edges, dep)
@@ -298,7 +309,8 @@ function sort_secondary_variables!(model::SimulationModel)
     secondary = model.secondary_variables
     param = model.parameters
 
-    isect = intersect(keys(primary), keys(secondary))
+    skeys = keys(secondary)
+    isect = intersect(keys(primary), skeys)
     if length(isect) > 0
         error("$isect found in both primary and secondary variables.")
     end
@@ -306,7 +318,7 @@ function sort_secondary_variables!(model::SimulationModel)
     if length(isect) > 0
         error("$isect found in both primary variables and parameters.")
     end
-    isect = intersect(keys(param), keys(secondary))
+    isect = intersect(keys(param), skeys)
     if length(isect) > 0
         error("$isect found in both parameters and secondary variables.")
     end
@@ -321,9 +333,16 @@ function sort_secondary_variables!(model::SimulationModel)
     order = order[order .> np]
     # Offset by primary variables
     @. order -= np
-    @. secondary.keys = secondary.keys[order]
-    @. secondary.vals = secondary.vals[order]
-    OrderedCollections.rehash!(secondary)
+    # Remove and re-add in evaluation order
+    skeys = collect(skeys)
+    svar_old = copy(secondary)
+    for k in skeys
+        delete!(secondary, k)
+    end
+    for i in order
+        k = skeys[i]
+        secondary[k] = svar_old[k]
+    end
     return model
 end
 
@@ -346,6 +365,5 @@ function sort_symbols(symbols, deps)
             add_edge!(graph, i, pos[])
         end
     end
-    reverse(topological_sort_by_dfs(graph))
+    return reverse(topological_sort_by_dfs(graph))
 end
-

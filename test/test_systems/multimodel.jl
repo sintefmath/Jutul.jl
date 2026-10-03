@@ -8,13 +8,13 @@ function test_multi(; use_groups = false, specialize_model = false, specialize_s
     modelA = SimulationModel(A, sys)
     sourceA = ScalarTestForce(1.0)
     forcesA = setup_forces(modelA, sources = sourceA)
-    state0A = setup_state(modelA, Dict(:XVar=>0.0))
+    state0A = setup_state(modelA, Dict(:XVar => 0.0))
     # Model B
     B = ScalarTestDomain()
     modelB = SimulationModel(B, sys)
     sourceB = ScalarTestForce(-1.0)
     forcesB = setup_forces(modelB, sources = sourceB)
-    state0B = setup_state(modelB, Dict(:XVar=>0.0))
+    state0B = setup_state(modelB, Dict(:XVar => 0.0))
 
     # Make a multimodel
     if use_groups
@@ -34,7 +34,7 @@ function test_multi(; use_groups = false, specialize_model = false, specialize_s
     XA = states[end][:A][:XVar]
     XB = states[end][:B][:XVar]
 
-    return XA[] ≈ 1/3 && XB[] ≈ -1/3
+    return XA[] ≈ 1 / 3 && XB[] ≈ -1 / 3
 end
 
 group_precond = GroupWisePreconditioner([TrivialPreconditioner(), TrivialPreconditioner()])
@@ -51,4 +51,3 @@ group_precond = GroupWisePreconditioner([TrivialPreconditioner(), TrivialPrecond
         # @test test_multi(use_groups = true, linear_solver = GenericKrylov(preconditioner = group_precond))
     end
 end
-

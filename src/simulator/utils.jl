@@ -19,17 +19,17 @@ function get_tstr(dT, lim = 3)
         count = 1
         for (u, s) in TIME_UNITS_FOR_PRINTING
             is_last = count == lim || s == last_unit_s
-            n = Int(floor(dT/u))
+            n = Int(floor(dT / u))
             if n > 0 || s == last_unit_s
-                is_last = is_last || dT - n*u <= 0.0
+                is_last = is_last || dT - n * u <= 0.0
                 if is_last
-                    n_str = @sprintf "%1.4g" dT/u
-                    finalizer = "";
+                    n_str = @sprintf "%1.4g" dT / u
+                    finalizer = ""
                 else
                     n_str = "$n"
                     finalizer = ", "
                 end
-                dT -= n*u
+                dT -= n * u
                 if n == 1
                     suffix = ""
                 else
@@ -69,6 +69,7 @@ function Base.show(io::IO, t::MIME"text/plain", @nospecialize(sim::JutulSimulato
             print(io, "\n\n")
         end
     end
+    return
 end
 
 function overwrite_by_kwargs(cfg; throw = true, kwarg...)
@@ -118,6 +119,7 @@ function Base.show(io::IO, ::MIME"text/plain", sr::SimResult)
                 print(io, "$prefix:$k => $(typeof(v))$s\n")
             end
         end
+        return
     end
     states = sr.states
     n = length(states)
@@ -130,7 +132,7 @@ function Base.show(io::IO, ::MIME"text/plain", sr::SimResult)
         print(io, "\n  reports (timing/debug information)\n")
         print_keys("    ", first(sr.reports))
     end
-    print_sim_result_timing(io, sr)
+    return print_sim_result_timing(io, sr)
 end
 
 function print_sim_result_timing(io, sr::SimResult)
@@ -144,7 +146,7 @@ function print_sim_result_timing(io, sr::SimResult)
             t = sum(x -> x[:total_time], sr.reports)
         end
     end
-    print(io, "\n  Completed at $(Dates.format(sr.start_timestamp, fmt)) after $(get_tstr(t)).")
+    return print(io, "\n  Completed at $(Dates.format(sr.start_timestamp, fmt)) after $(get_tstr(t)).")
 end
 
 function Base.show(io::IO, sr::SimResult)
@@ -154,7 +156,7 @@ function Base.show(io::IO, sr::SimResult)
     else
         s = "entries"
     end
-    print(io, "SimResult with $n $s")
+    return print(io, "SimResult with $n $s")
 end
 
 function evaluate_objective(G, case::JutulCase, result::SimResult; kwarg...)
