@@ -467,6 +467,17 @@ end
     @test resetup_amg!(aggressive, A, :memory) === aggressive
     @test aggressive.levels[1].P.ncol < regular.levels[1].P.ncol
 
+    device = setup_amg(
+        csr_matrix(A; backend = JLBackend()), aggressive_options
+    )
+    @test device.levels[1].P.ncol == aggressive.levels[1].P.ncol
+    device_x = JLArray(zeros(size(A, 1)))
+    device_b = JLArray(b)
+    for _ in 1:4
+        cycle!(device_x, device, device_b)
+    end
+    @test norm(b - A * Array(device_x)) < norm(b)
+
     wrapper = AMGPreconditioner(; aggressive_levels = 1, coarse_size = 12)
     @test wrapper.options.aggressive_levels == 1
     @test_throws ArgumentError setup_amg(

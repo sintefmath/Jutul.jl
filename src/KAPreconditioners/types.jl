@@ -95,7 +95,8 @@ independent hierarchy option whose default follows the coarsening method:
 piecewise constant for aggregation, classical for Ruge-Stuben, and Extended+i
 for HMIS. `aggressive_levels` applies a second coarsening pass to that many
 levels, starting at the finest level. Its default of zero disables aggressive
-coarsening.
+coarsening. Classical interpolation is promoted to Extended+i on aggressive
+levels to provide the required long-range stencil.
 """
 struct AMGOptions
     coarsening::AbstractCoarsening
