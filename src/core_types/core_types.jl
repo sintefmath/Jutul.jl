@@ -1769,7 +1769,8 @@ Abstract type for objective as a sum of function values on the form:
     F(model, state, dt, step_info, forces)
 
 evaluated for each step. This means that the objective is a sum of all of these
-values. If you want to only depend on a single step, you can look up
+values. If you want to only depend on a single step, you can look up the the
+`step_info[:step]` information to verify that you are operating on the correct step.
 """
 abstract type AbstractSumObjective <: AbstractJutulObjective end
 
