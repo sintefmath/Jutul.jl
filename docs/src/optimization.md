@@ -6,7 +6,7 @@ An example application from `JutulDarcy.jl` demonstrates many of these functions
 
 ## Objective functions
 
-There are two main types of objective functions supported in Jutul: Those that evaluated globally over all time-steps, and those who are evaluated locally (typically as a sum over all time-steps).
+There are two main types of objective functions supported in Jutul: Those that evaluated globally over all time-steps in one go, and those who are evaluated locally at each step (typically as a sum over all time-steps). The former is very general, but can be costly to evaluate during adjoint solves, and the latter is efficient, but constrains the format a bit.
 
 ```@docs
 Jutul.AbstractJutulObjective
@@ -20,21 +20,26 @@ These functions take in the `step_info` `Dict`, which is worth having a look at 
 Jutul.optimization_step_info
 ```
 
-### Global objectives
+### Sum objectives (sum over all states, or dependence on only a few states)
 
-These are objectives that are defined over the entire simulation time. This means that you define the objective function as a single function that takes in the solution for all time-steps together with forces, time-step information, initial state and input data used to set up the model (if any).
+The sum objective is the recommended way to pose your objective, as it is by far the fastest to evaluate. The sum objective consists of a sum of contributions over each step. From the perspective of the user, you write a function that is given the state at a specific step and returns the contribution of that step to the objective.
+
+```@docs
+Jutul.AbstractSumObjective
+Jutul.WrappedSumObjective
+```
+
+### Global objectives (objective of all states simultaneously)
+
+These are objectives that make use of all the states simultaneously. This means that you define the objective function as a single function that takes in the solution for all time-steps together with forces, time-step information, initial state and input data used to set up the model (if any). This is very general, and provides a lot of flexibility, but it can be fairly slow to evaluate. This is required for objectives where you e.g. want to normalize by values of the end state or take the cumulative difference between two responses.
 
 ```@docs
 Jutul.AbstractGlobalObjective
 Jutul.WrappedGlobalObjective
 ```
 
-### Local/sum objectives
-
-```@docs
-Jutul.AbstractSumObjective
-Jutul.WrappedSumObjective
-```
+!!! note "Slow performance"
+    Global objective functions are expensive to evaluate inside the adjoint solve. We **highly** recommend using the sum objective if it is possible to frame your objective as a sum over all time-steps.
 
 ## Generic optimization interface
 
