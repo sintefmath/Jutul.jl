@@ -476,6 +476,232 @@ function cf_split(
     return cf, coarse_map, nc
 end
 
+"""
+Build HYPRE's second strength graph for aggressive coarsening. Its vertices
+are the C points from the first split, and its edges are the direct and
+distance-two strong connections between those points (`S + S^2`).
+"""
+function second_strength_graph(
+        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, cf, coarse_map, nc::Integer
+    ) where {Tv, Ti}
+    nc = Int(nc)
+    row_columns = [Ti[] for _ in 1:nc]
+    marker = zeros(Int, nc)
+    @inbounds for i in 1:matrix_nrows(A)
+        cf[i] == 1 || continue
+        I = Int(coarse_map[i])
+        columns = row_columns[I]
+        for aidx in nzrange(A, i)
+            strong[aidx] || continue
+            j = Int(A.colval[aidx])
+            if cf[j] == 1
+                J = Int(coarse_map[j])
+                if J != I && marker[J] != I
+                    marker[J] = I
+                    push!(columns, Ti(J))
+                end
+            end
+            for bidx in nzrange(A, j)
+                strong[bidx] || continue
+                k = Int(A.colval[bidx])
+                cf[k] == 1 || continue
+                K = Int(coarse_map[k])
+                if K != I && marker[K] != I
+                    marker[K] = I
+                    push!(columns, Ti(K))
+                end
+            end
+        end
+        sort!(columns)
+    end
+
+    rowptr = Vector{Ti}(undef, nc + 1)
+    rowptr[1] = one(Ti)
+    @inbounds for I in 1:nc
+        rowptr[I + 1] = rowptr[I] + Ti(length(row_columns[I]))
+    end
+    colval = Vector{Ti}(undef, Int(rowptr[end] - one(Ti)))
+    @inbounds for I in 1:nc
+        copyto!(
+            colval, Int(rowptr[I]), row_columns[I], 1,
+            length(row_columns[I])
+        )
+    end
+    values = zeros(Tv, length(colval))
+    graph = csr_matrix(
+        rowptr, colval, values, nc, nc;
+        block_size = matrix_batch_size(A)
+    )
+    return graph, trues(length(colval))
+end
+
+function rebuild_coarse_map!(coarse_map, cf)
+    nc = 0
+    fill!(coarse_map, zero(eltype(coarse_map)))
+    @inbounds for i in eachindex(cf)
+        if cf[i] == 1
+            nc += 1
+            coarse_map[i] = nc
+        end
+    end
+    return nc
+end
+
+function has_interpolation_path(
+        A::StaticSparsityMatrixCSR, strong, cf, i,
+        ::ExtendedIInterpolation
+    )
+    @inbounds for aidx in nzrange(A, i)
+        strong[aidx] || continue
+        j = Int(A.colval[aidx])
+        cf[j] == 1 && return true
+        cf[j] == -1 || continue
+        for bidx in nzrange(A, j)
+            strong[bidx] && cf[Int(A.colval[bidx])] == 1 && return true
+        end
+    end
+    return false
+end
+
+function has_interpolation_path(
+        A::StaticSparsityMatrixCSR, strong, cf, i,
+        ::ClassicalInterpolation
+    )
+    @inbounds for aidx in nzrange(A, i)
+        strong[aidx] && cf[Int(A.colval[aidx])] == 1 && return true
+    end
+    return false
+end
+
+"""Promote uncovered F points so aggressive interpolation has no empty rows."""
+function repair_aggressive_split!(A, strong, cf, coarse_map, interpolation)
+    @inbounds for i in eachindex(cf)
+        cf[i] == -1 || continue
+        has_interpolation_path(A, strong, cf, i, interpolation) ||
+            (cf[i] = Int8(1))
+    end
+    return rebuild_coarse_map!(coarse_map, cf)
+end
+
+function aggressive_cf_split(
+        A::StaticSparsityMatrixCSR{Tv, Ti}, strong,
+        coarsening::Union{RugeStuben, HMIS}, interpolation,
+        reuse_cf = nothing, reuse_map = nothing
+    ) where {Tv, Ti}
+    first_cf, first_map, first_count = cf_split(
+        A, strong, coarsening
+    )
+    second_graph, second_strength = second_strength_graph(
+        A, strong, first_cf, first_map, first_count
+    )
+    second_cf, _, _ = cf_split(
+        second_graph, second_strength, coarsening
+    )
+
+    # HYPRE retains isolated first-pass C points. Create2ndS marks these
+    # specially because a second split has no graph information for them.
+    @inbounds for I in eachindex(second_cf)
+        isempty(nzrange(second_graph, I)) && (second_cf[I] = Int8(1))
+    end
+
+    n = matrix_nrows(A)
+    cf = host_buffer(reuse_cf, Int8, n)
+    coarse_map = host_buffer(reuse_map, Ti, n; zeroed = true)
+    @inbounds for i in 1:n
+        retained = first_cf[i] == 1 && second_cf[first_map[i]] == 1
+        cf[i] = retained ? Int8(1) : Int8(-1)
+    end
+    nc = repair_aggressive_split!(
+        A, strong, cf, coarse_map, interpolation
+    )
+    return cf, coarse_map, nc
+end
+
+function contracted_strength_graph(
+        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, aggregate, nc::Integer
+    ) where {Tv, Ti}
+    nc = Int(nc)
+    row_columns = [Ti[] for _ in 1:nc]
+    marker = zeros(Int, nc)
+    @inbounds for i in 1:matrix_nrows(A)
+        I = Int(aggregate[i])
+        columns = row_columns[I]
+        for aidx in nzrange(A, i)
+            strong[aidx] || continue
+            J = Int(aggregate[A.colval[aidx]])
+            if J != I && marker[J] != I
+                marker[J] = I
+                push!(columns, Ti(J))
+            end
+        end
+    end
+    rowptr = Vector{Ti}(undef, nc + 1)
+    rowptr[1] = one(Ti)
+    @inbounds for I in 1:nc
+        sort!(row_columns[I])
+        rowptr[I + 1] = rowptr[I] + Ti(length(row_columns[I]))
+    end
+    colval = Vector{Ti}(undef, Int(rowptr[end] - one(Ti)))
+    @inbounds for I in 1:nc
+        copyto!(
+            colval, Int(rowptr[I]), row_columns[I], 1,
+            length(row_columns[I])
+        )
+    end
+    graph = csr_matrix(
+        rowptr, colval, zeros(Tv, length(colval)), nc, nc;
+        block_size = matrix_batch_size(A)
+    )
+    return graph, trues(length(colval))
+end
+
+function aggressive_aggregation_split(
+        A::StaticSparsityMatrixCSR{Tv, Ti}, strong,
+        reuse_cf = nothing, reuse_map = nothing
+    ) where {Tv, Ti}
+    first_cf, first_map, first_count = aggregation_split(A, strong)
+    second_graph, second_strength = contracted_strength_graph(
+        A, strong, first_map, first_count
+    )
+    second_cf, second_map, second_count = aggregation_split(
+        second_graph, second_strength
+    )
+    n = matrix_nrows(A)
+    cf = host_buffer(reuse_cf, Int8, n)
+    coarse_map = host_buffer(reuse_map, Ti, n)
+    @inbounds for i in 1:n
+        first_aggregate = first_map[i]
+        cf[i] = if first_cf[i] == 1 && second_cf[first_aggregate] == 1
+            Int8(1)
+        else
+            Int8(-1)
+        end
+        coarse_map[i] = second_map[first_aggregate]
+    end
+    return cf, coarse_map, second_count
+end
+
+aggressive_interpolation(interpolation) = interpolation
+function aggressive_interpolation(interpolation::ClassicalInterpolation)
+    max_elements = if iszero(interpolation.max_elements)
+        typemax(Int)
+    else
+        interpolation.max_elements
+    end
+    return ExtendedIInterpolation(
+        interpolation.truncation, max_elements,
+        interpolation.norm_p, interpolation.rescale
+    )
+end
+
+function interpolation_for_level(options::AMGOptions, level_index::Integer)
+    return if level_index <= options.aggressive_levels
+        aggressive_interpolation(options.interpolation)
+    else
+        options.interpolation
+    end
+end
+
 @inline function accumulate_candidate!(
         cols::Vector{Ti}, vals::Vector{Tv},
         col::Ti, value::Tv
@@ -1597,6 +1823,8 @@ end
 function validate_setup_options(options::AMGOptions)
     options.cycle in (:V, :W) || throw(ArgumentError("cycle must be :V or :W"))
     options.max_levels >= 1 || throw(ArgumentError("max_levels must be positive"))
+    options.aggressive_levels >= 0 ||
+        throw(ArgumentError("aggressive_levels must be non-negative"))
     options.coarse_size >= 1 || throw(ArgumentError("coarse_size must be positive"))
     options.max_row_sum >= 0 || throw(ArgumentError("max_row_sum must be non-negative"))
     options.coarse_solver in (:lu, :spai0) ||
@@ -1649,6 +1877,7 @@ function build_hierarchy(
     for level_index in (length(prefix_levels) + 1):(options.max_levels - 1)
         n = matrix_nrows(current)
         n <= options.coarse_size && break
+        interpolation = interpolation_for_level(options, level_index)
         number_of_nonzeros = matrix_nonzeros(current)
         old = reuse_level(reuse_levels, level_index)
         symbolic_old = cpu_backend ? old : nothing
@@ -1705,6 +1934,17 @@ function build_hierarchy(
                 workspace.stage_coarse_map = cmap
             end
             nc = old.P.ncol
+        elseif level_index <= options.aggressive_levels
+            if options.coarsening isa Aggregation
+                cf, cmap, nc = aggressive_aggregation_split(
+                    current, strong, old_cf, old_map
+                )
+            else
+                cf, cmap, nc = aggressive_cf_split(
+                    current, strong, options.coarsening,
+                    interpolation, old_cf, old_map
+                )
+            end
         elseif options.coarsening isa Aggregation
             cf, cmap, nc = aggregation_split(
                 current, strong, old_cf, old_map,
@@ -1722,7 +1962,7 @@ function build_hierarchy(
         )
         P = build_prolongation(
             current, cf, cmap, nc, strong,
-            options.interpolation, old_P, workspace
+            interpolation, old_P, workspace
         )
         if !cpu_backend
             workspace.stage_cf = cf

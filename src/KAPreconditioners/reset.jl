@@ -84,7 +84,9 @@ function numeric_reset!(
     for l in 1:(length(H.levels) - 1)
         level = H.levels[l]
         if mode == :sparsity
-            update_prolongation!(level, H.options.interpolation)
+            update_prolongation!(
+                level, interpolation_for_level(H.options, l)
+            )
         end
         next = H.levels[l + 1]
         galerkin!(next.A, level.A, level.P, level.galerkin)
@@ -179,7 +181,9 @@ function partial_reset!(
     for l in 1:(cutoff - 1)
         level = H.levels[l]
         update_level_smoother!(level.smoother, level.A, H.options)
-        mode == :sparsity && update_prolongation!(level, H.options.interpolation)
+        mode == :sparsity && update_prolongation!(
+            level, interpolation_for_level(H.options, l)
+        )
         galerkin!(H.levels[l + 1].A, level.A, level.P, level.galerkin)
     end
     old_levels = H.levels

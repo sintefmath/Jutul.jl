@@ -93,13 +93,16 @@ default_interpolation(::HMIS) = ExtendedIInterpolation()
 Configuration for the backend-portable AMG hierarchy. Interpolation is an
 independent hierarchy option whose default follows the coarsening method:
 piecewise constant for aggregation, classical for Ruge-Stuben, and Extended+i
-for HMIS.
+for HMIS. `aggressive_levels` applies a second coarsening pass to that many
+levels, starting at the finest level. Its default of zero disables aggressive
+coarsening.
 """
 struct AMGOptions
     coarsening::AbstractCoarsening
     interpolation::AbstractInterpolation
     smoother::AbstractSmoother
     max_levels::Int
+    aggressive_levels::Int
     coarse_size::Int
     coarse_solver::Symbol
     coarse_steps::Int
@@ -113,6 +116,7 @@ function AMGOptions(;
         interpolation::AbstractInterpolation = default_interpolation(coarsening),
         smoother::AbstractSmoother = SPAI0(1, 1.0),
         max_levels::Integer = 20,
+        aggressive_levels::Integer = 0,
         coarse_size::Integer = 50,
         coarse_solver::Symbol = :lu,
         coarse_steps::Integer = 8,
@@ -122,7 +126,7 @@ function AMGOptions(;
     )
     return AMGOptions(
         coarsening, interpolation, smoother, Int(max_levels),
-        Int(coarse_size), coarse_solver, Int(coarse_steps),
+        Int(aggressive_levels), Int(coarse_size), coarse_solver, Int(coarse_steps),
         Float64(max_row_sum), Int(block_size), cycle
     )
 end

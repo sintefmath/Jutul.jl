@@ -415,6 +415,65 @@ end
     end
 end
 
+@testset "aggressive coarsening" begin
+    A = poisson_2d(20)
+    regular_options = AMGOptions(coarse_size = 12)
+    explicit_default = AMGOptions(coarse_size = 12, aggressive_levels = 0)
+    aggressive_options = AMGOptions(
+        coarse_size = 12, aggressive_levels = 1
+    )
+    regular = setup_amg(A, regular_options)
+    defaulted = setup_amg(A, explicit_default)
+    aggressive = setup_amg(A, aggressive_options)
+
+    @test AMGOptions().aggressive_levels == 0
+    @test regular.levels[1].cf == defaulted.levels[1].cf
+    @test regular.levels[1].P.rowptr == defaulted.levels[1].P.rowptr
+    @test regular.levels[1].P.colval == defaulted.levels[1].P.colval
+    @test aggressive.levels[1].P.ncol < regular.levels[1].P.ncol
+    @test all(i -> aggressive.levels[1].P.rowptr[i + 1] >
+        aggressive.levels[1].P.rowptr[i], 1:size(A, 1))
+
+    two_levels = setup_amg(
+        A, AMGOptions(coarse_size = 12, aggressive_levels = 2)
+    )
+    @test two_levels.levels[2].P.ncol < aggressive.levels[2].P.ncol
+
+    for coarsening in (RugeStuben(0.25), Aggregation(0.25))
+        standard = setup_amg(
+            A, AMGOptions(coarsening = coarsening, coarse_size = 12)
+        )
+        coarsened = setup_amg(
+            A, AMGOptions(
+                coarsening = coarsening, coarse_size = 12,
+                aggressive_levels = 1
+            )
+        )
+        @test coarsened.levels[1].P.ncol < standard.levels[1].P.ncol
+    end
+
+    b = ones(size(A, 1))
+    x = zeros(size(A, 1))
+    for _ in 1:4
+        cycle!(x, aggressive, b)
+    end
+    @test norm(b - A * x) < norm(b)
+
+    B = copy(A)
+    B[1, 1] *= 1.2
+    B[2, 2] *= 0.8
+    @test resetup_amg!(aggressive, B, :sparsity) === aggressive
+    test_galerkin(aggressive)
+    @test resetup_amg!(aggressive, A, :memory) === aggressive
+    @test aggressive.levels[1].P.ncol < regular.levels[1].P.ncol
+
+    wrapper = AMGPreconditioner(; aggressive_levels = 1, coarse_size = 12)
+    @test wrapper.options.aggressive_levels == 1
+    @test_throws ArgumentError setup_amg(
+        A, AMGOptions(aggressive_levels = -1)
+    )
+end
+
 @testset "coarse LU" begin
     @test AMGOptions().coarse_solver == :lu
     @test AMGOptions().coarse_size == 50

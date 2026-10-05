@@ -13,6 +13,11 @@ coarsening strategy, interpolation method, smoother configuration, and cycle
 type. These are not a public API and are subject to change without notice or
 major version bump.
 
+`aggressive_levels` defaults to zero. A positive value applies a HYPRE-style
+second coarsening pass on that many levels, starting with the finest. Classical
+interpolation is promoted to Extended+i on those levels because aggressive
+coarsening requires a long-range interpolation stencil.
+
 With `reuse=:partial_operators` or `:partial_sparsity`,
 `n_levels_partial_keep` controls how many leading levels retain their
 symbolic structure (default 3). `n_partial_keep` can shorten that prefix
