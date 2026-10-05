@@ -149,44 +149,6 @@ function aggregation_split(
     return cf, coarse_map, nagg
 end
 
-function cf_split(
-        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, ::AbstractCoarsening,
-        reuse_cf = nothing, reuse_map = nothing, workspace = nothing
-    ) where {Tv, Ti}
-    n = matrix_nrows(A)
-    cf = host_buffer(reuse_cf, Int8, n; zeroed = true)
-    offsets, sources = strong_transpose(A, strong, workspace)
-    measure = Vector{Ti}(undef, n)
-    @inbounds for i in 1:n
-        measure[i] = offsets[i + 1] - offsets[i]
-    end
-    order = degree_order(measure, Ti)
-    @inbounds for best in order
-        cf[best] == 0 || continue
-        cf[best] = 1
-        # Strong neighbors in either direction become F points.
-        for k in nzrange(A, best)
-            j = A.colval[k]
-            if strong[k] && cf[j] == 0
-                cf[j] = -1
-            end
-        end
-        for q in offsets[best]:(offsets[best + 1] - 1)
-            j = sources[q]
-            cf[j] == 0 && (cf[j] = -1)
-        end
-    end
-    coarse_map = host_buffer(reuse_map, Ti, n; zeroed = true)
-    nc = 0
-    @inbounds for i in 1:n
-        if cf[i] == 1
-            nc += 1
-            coarse_map[i] = nc
-        end
-    end
-    return cf, coarse_map, nc
-end
-
 @inline function bucket_remove!(
         i::Int, measure::Vector{Int}, head::Vector{Int},
         tail::Vector{Int}, next::Vector{Int}, prev::Vector{Int}
@@ -240,7 +202,7 @@ end
 end
 
 
-"""HYPRE-compatible RS first pass used by HMIS."""
+"""HYPRE-compatible RS first pass shared by classical RS and HMIS."""
 function hmis_rs_first_pass!(
         A::StaticSparsityMatrixCSR, strong, offsets, sources, cf,
         workspace = nothing
@@ -352,6 +314,90 @@ function hmis_rs_first_pass!(
         end
     end
     return cf
+end
+
+@inline function has_direct_strong_coarse_neighbor(A, strong, cf, i)
+    @inbounds for k in nzrange(A, i)
+        strong[k] && cf[Int(A.colval[k])] == 1 && return true
+    end
+    return false
+end
+
+function promote_uncovered_f_points!(A, strong, cf)
+    @inbounds for i in eachindex(cf)
+        cf[i] == -1 || continue
+        has_direct_strong_coarse_neighbor(A, strong, cf, i) ||
+            (cf[i] = Int8(1))
+    end
+    return cf
+end
+
+function incompatible_strong_f_neighbor!(marker, A, strong, cf, i)
+    @inbounds for k in nzrange(A, i)
+        j = Int(A.colval[k])
+        strong[k] && cf[j] == 1 && (marker[j] = i)
+    end
+    @inbounds for k in nzrange(A, i)
+        j = Int(A.colval[k])
+        strong[k] && cf[j] == -1 || continue
+        compatible = false
+        for q in nzrange(A, j)
+            l = Int(A.colval[q])
+            if strong[q] && marker[l] == i
+                compatible = true
+                break
+            end
+        end
+        compatible || return j
+    end
+    return 0
+end
+
+"""Enforce the classical RS common-C-neighbor condition for strong F-F edges."""
+function ruge_stuben_second_pass!(A, strong, cf, workspace = nothing)
+    n = matrix_nrows(A)
+    marker = host_buffer(
+        optional_property(workspace, :int1), Int, n; zeroed = true
+    )
+    @inbounds for i in 1:n
+        cf[i] == -1 || continue
+        provisional = 0
+        while cf[i] == -1
+            j = incompatible_strong_f_neighbor!(marker, A, strong, cf, i)
+            iszero(j) && break
+            if iszero(provisional)
+                # Match the classical RS heuristic: try making the first
+                # incompatible F neighbor coarse, then reconsider this row.
+                cf[j] = Int8(1)
+                provisional = j
+            else
+                # More than one incompatible neighbor makes i the cheaper
+                # coarse point. Restore the provisional point to F.
+                cf[provisional] = Int8(-1)
+                cf[i] = Int8(1)
+            end
+        end
+    end
+    return cf
+end
+
+function cf_split(
+        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, ::RugeStuben,
+        reuse_cf = nothing, reuse_map = nothing, workspace = nothing
+    ) where {Tv, Ti}
+    n = matrix_nrows(A)
+    cf = host_buffer(reuse_cf, Int8, n; zeroed = true)
+    offsets, sources = strong_transpose(A, strong, workspace)
+    hmis_rs_first_pass!(A, strong, offsets, sources, cf, workspace)
+    @inbounds for i in eachindex(cf)
+        cf[i] = cf[i] == 1 ? Int8(1) : Int8(-1)
+    end
+    promote_uncovered_f_points!(A, strong, cf)
+    ruge_stuben_second_pass!(A, strong, cf, workspace)
+
+    coarse_map = host_buffer(reuse_map, Ti, n; zeroed = true)
+    nc = rebuild_coarse_map!(coarse_map, cf)
+    return cf, coarse_map, nc
 end
 
 function hypre_randomized_measure(offsets, n::Int, workspace = nothing)

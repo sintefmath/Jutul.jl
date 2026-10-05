@@ -415,6 +415,56 @@ end
     end
 end
 
+@testset "Ruge-Stuben splitting invariants" begin
+    # A directed strength graph must not make a point fine merely because a
+    # coarse point depends on it. Every F point needs an outgoing strong path
+    # to a C point for classical interpolation.
+    directed = sparse(
+        [1, 1, 2, 3, 3, 4, 4],
+        [1, 2, 2, 1, 3, 1, 4],
+        [2.0, -1.0, 2.0, -1.0, 2.0, -1.0, 2.0], 4, 4
+    )
+    C = csr_matrix(directed)
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    cf, cmap, nc = KAPreconditioners.cf_split(C, strong, RugeStuben())
+    P = KAPreconditioners.build_prolongation(
+        C, cf, cmap, nc, strong, ClassicalInterpolation()
+    )
+    @test all(i -> P.rowptr[i + 1] > P.rowptr[i], eachindex(cf))
+    @test all(eachindex(cf)) do i
+        cf[i] == 1 || any(nzrange(C, i)) do k
+            strong[k] && cf[C.colval[k]] == 1
+        end
+    end
+
+    # The second RS pass enforces C2: strongly connected F points share a
+    # direct strong C neighbor. The first pass alone violates C2 on this graph.
+    edges = [(1, 3), (1, 5), (1, 7), (2, 4), (2, 6), (2, 8), (3, 4)]
+    rows, cols, values = collect(1:8), collect(1:8), fill(4.0, 8)
+    for (i, j) in edges
+        push!(rows, i, j)
+        push!(cols, j, i)
+        push!(values, -1.0, -1.0)
+    end
+    C = csr_matrix(sparse(rows, cols, values, 8, 8))
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    cf, = KAPreconditioners.cf_split(C, strong, RugeStuben())
+    for i in eachindex(cf)
+        cf[i] == -1 || continue
+        coarse = Set(
+            C.colval[k] for k in nzrange(C, i)
+                if strong[k] && cf[C.colval[k]] == 1
+        )
+        for k in nzrange(C, i)
+            j = C.colval[k]
+            strong[k] && cf[j] == -1 || continue
+            @test any(nzrange(C, j)) do q
+                strong[q] && C.colval[q] in coarse
+            end
+        end
+    end
+end
+
 @testset "aggressive coarsening" begin
     A = poisson_2d(20)
     regular_options = AMGOptions(coarse_size = 12)
