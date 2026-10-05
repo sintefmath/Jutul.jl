@@ -6,7 +6,8 @@ An example application from `JutulDarcy.jl` demonstrates many of these functions
 
 ## Objective functions
 
-There are two main types of objective functions supported in Jutul: Those that evaluated globally over all time-steps in one go, and those who are evaluated locally at each step (typically as a sum over all time-steps).
+There are two main types of objective functions supported in Jutul: Those that evaluated globally over all time-steps in one go, and those who are evaluated locally at each step (typically as a sum over all time-steps). The former is very general, but can be costly to evaluate during adjoint solves, and the latter is efficient, but constrains the format a bit.
+
 ```@docs
 Jutul.AbstractJutulObjective
 ```
