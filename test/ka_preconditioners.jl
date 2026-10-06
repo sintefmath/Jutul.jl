@@ -418,8 +418,10 @@ function test_numeric_interpolation_tuning(backend)
         drp = KAPreconditioners.backend_copy(backend, P.rowptr)
         dcv = KAPreconditioners.backend_copy(backend, P.colval)
         k! = KAPreconditioners.update_interpolation_p_kernel!(backend, 128)
-        k!(dp, drp, dcv, D.rowptr, D.colval, D.nzval, dcf, dmap, ds,
-            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6)
+        k!(
+            dp, drp, dcv, D.rowptr, D.colval, D.nzval, dcf, dmap, ds,
+            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6
+        )
         KAPreconditioners.synchronize_backend(backend)
         @test Array(dp) ≈ P.nzval
 
@@ -443,11 +445,14 @@ function test_numeric_interpolation_tuning(backend)
             end
         end
         DB = csr_matrix(B; backend = backend)
-        k!(dp, drp, dcv, DB.rowptr, DB.colval, DB.nzval, dcf, dmap, ds,
-            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6)
+        k!(
+            dp, drp, dcv, DB.rowptr, DB.colval, DB.nzval, dcf, dmap, ds,
+            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6
+        )
         KAPreconditioners.synchronize_backend(backend)
         @test Array(dp) ≈ expected
     end
+    return
 end
 
 @testset "Interpolation rescaling during numeric updates" begin
@@ -556,10 +561,12 @@ end
     @test nc == 3
     hmis = setup_amg(C, AMGOptions(coarsening = HMIS(0.25), coarse_size = 2, max_row_sum = 1.0))
     @test hmis.levels[1].P.ncol == 2
-    classical_hmis = setup_amg(C, AMGOptions(
-        coarsening = HMIS(0.25), interpolation = ClassicalInterpolation(),
-        coarse_size = 2, max_row_sum = 1.0
-    ))
+    classical_hmis = setup_amg(
+        C, AMGOptions(
+            coarsening = HMIS(0.25), interpolation = ClassicalInterpolation(),
+            coarse_size = 2, max_row_sum = 1.0
+        )
+    )
     @test classical_hmis.levels[1].cf == cf
     for i in eachindex(cf)
         cf[i] == -1 || continue
@@ -592,15 +599,19 @@ end
 
     A = poisson_2d(14)
     aggressive_interp = ExtendedIInterpolation(0.3, 2)
-    options = AMGOptions(aggressive_levels = 1, aggressive_num_paths = 2,
-        aggressive_interpolation = aggressive_interp, coarse_size = 8)
+    options = AMGOptions(
+        aggressive_levels = 1, aggressive_num_paths = 2,
+        aggressive_interpolation = aggressive_interp, coarse_size = 8
+    )
     @test KAPreconditioners.interpolation_for_level(options, 1) === aggressive_interp
     @test KAPreconditioners.interpolation_for_level(options, 2) === options.interpolation
     inherited = AMGOptions(coarsening = RugeStuben(), aggressive_levels = 1)
     @test KAPreconditioners.interpolation_for_level(inherited, 1) isa TwoStageExtendedIInterpolation
     @test KAPreconditioners.interpolation_for_level(inherited, 1).final.max_elements == 0
-    wrapper = AMGPreconditioner(; aggressive_levels = 1, aggressive_num_paths = 2,
-        aggressive_interpolation = aggressive_interp)
+    wrapper = AMGPreconditioner(;
+        aggressive_levels = 1, aggressive_num_paths = 2,
+        aggressive_interpolation = aggressive_interp
+    )
     @test wrapper.options.aggressive_num_paths == 2
     @test wrapper.options.aggressive_interpolation === aggressive_interp
     for backend in (CPU(), JLBackend())
@@ -630,9 +641,11 @@ function test_two_stage_interpolation(backend)
     # rows 2 and 6: each has effective diagonal 2.5 and numerator -0.5.
     # Consequently the endpoints receive nonzero distance-three weights.
     A = spdiagm(-1 => fill(-1.0, 6), 0 => fill(4.0, 7), 1 => fill(-1.0, 6))
-    options = AMGOptions(coarsening = RugeStuben(), aggressive_levels = 1,
+    options = AMGOptions(
+        coarsening = RugeStuben(), aggressive_levels = 1,
         aggressive_interpolation = TwoStageExtendedIInterpolation(), coarse_size = 1,
-        max_levels = 2)
+        max_levels = 2
+    )
     H = setup_amg(csr_matrix(A; backend), options)
     level = H.levels[1]
     plan = level.aggressive
@@ -643,10 +656,10 @@ function test_two_stage_interpolation(backend)
 
     # Uniform scaling must preserve strength and interpolation even below eps.
     for scale in (1.0e-20, 1.0e20)
-        scaled = setup_amg(csr_matrix(scale*A; backend), options)
+        scaled = setup_amg(csr_matrix(scale * A; backend), options)
         @test Array(scaled.levels[1].strength) == Array(level.strength)
         @test Array(scaled.levels[1].P.nzval) ≈ Array(level.P.nzval)
-        resetup_amg!(H, csr_matrix(scale*A; backend), :sparsity)
+        resetup_amg!(H, csr_matrix(scale * A; backend), :sparsity)
         @test Array(level.P.nzval) ≈ Array(scaled.levels[1].P.nzval)
     end
 
@@ -656,12 +669,16 @@ function test_two_stage_interpolation(backend)
     T = spdiagm(-1 => fill(-1.0, n - 1), 0 => fill(4.0, n), 1 => fill(-1.0, n - 1))
     E = spdiagm(-1 => fill(-1.0, n - 1), 1 => fill(-1.0, n - 1))
     A = kron(sparse(I, n, n), T) + kron(E, sparse(I, n, n))
-    B = A + spdiagm(0 => [0.2 + 0.1*sin(i) for i in 1:size(A, 1)])
+    B = A + spdiagm(0 => [0.2 + 0.1 * sin(i) for i in 1:size(A, 1)])
     for rescale in (false, true)
-        interpolation = TwoStageExtendedIInterpolation(max_elements = 2,
-            stage_max_elements = 2, rescale = rescale)
-        options = AMGOptions(aggressive_levels = 1, aggressive_interpolation = interpolation,
-            coarse_size = 1, max_levels = 2)
+        interpolation = TwoStageExtendedIInterpolation(
+            max_elements = 2,
+            stage_max_elements = 2, rescale = rescale
+        )
+        options = AMGOptions(
+            aggressive_levels = 1, aggressive_interpolation = interpolation,
+            coarse_size = 1, max_levels = 2
+        )
         H = setup_amg(csr_matrix(A; backend), options)
         fresh = setup_amg(csr_matrix(B; backend), options)
         P = H.levels[1].P
@@ -692,12 +709,15 @@ function test_two_stage_interpolation(backend)
         @test new_plan.P2.nzval === old_plan.P2.nzval
         @test Array(H.levels[1].P.nzval) ≈ Array(fresh.levels[1].P.nzval)
     end
+    return
 end
 
 @testset "Hypre two-stage aggressive interpolation" begin
     @test_throws ArgumentError TwoStageExtendedIInterpolation(stage_max_elements = -1)
-    @test_throws ArgumentError setup_amg(poisson_2d(3),
-        AMGOptions(interpolation = TwoStageExtendedIInterpolation()))
+    @test_throws ArgumentError setup_amg(
+        poisson_2d(3),
+        AMGOptions(interpolation = TwoStageExtendedIInterpolation())
+    )
     for backend in (CPU(), JLBackend())
         test_two_stage_interpolation(backend)
     end
@@ -719,8 +739,10 @@ end
     @test regular.levels[1].P.rowptr == defaulted.levels[1].P.rowptr
     @test regular.levels[1].P.colval == defaulted.levels[1].P.colval
     @test aggressive.levels[1].P.ncol < regular.levels[1].P.ncol
-    @test all(i -> aggressive.levels[1].P.rowptr[i + 1] >
-        aggressive.levels[1].P.rowptr[i], 1:size(A, 1))
+    @test all(
+        i -> aggressive.levels[1].P.rowptr[i + 1] >
+            aggressive.levels[1].P.rowptr[i], 1:size(A, 1)
+    )
 
     two_levels = setup_amg(
         A, AMGOptions(coarse_size = 12, aggressive_levels = 2)
