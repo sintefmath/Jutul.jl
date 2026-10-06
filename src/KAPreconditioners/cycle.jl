@@ -123,15 +123,20 @@ end
 
 """Apply one cycle to the current iterate without clearing it."""
 function cycle!(x::AbstractVector, H::AMGHierarchy, b::AbstractVector)
+    H.execution = nothing
     result = vcycle!(x, b, H, 1)
     return copy_result!(x, result)
 end
 cycle!(x::AbstractVector, H::AMGHierarchy, ::Any, b::AbstractVector) = cycle!(x, H, b)
 
+"""Backend hook for retaining an executable cycle across fixed-layout solves."""
+apply_amg_execution!(x, H, b, backend) = false
+
 """Apply the hierarchy as a linear preconditioner (`x` is cleared first)."""
 function apply!(x::AbstractVector, H::AMGHierarchy, b::AbstractVector)
     length(x) == size(H, 2) || throw(DimensionMismatch())
     length(b) == size(H, 1) || throw(DimensionMismatch())
+    apply_amg_execution!(x, H, b, H.backend) && return x
     # The zero-initial V-cycle writes every entry of x before reading it. This
     # saves both the finest SpMV and a separate clear of every level buffer.
     result = vcycle!(x, b, H, 1; residual = b, zero_initial = true)

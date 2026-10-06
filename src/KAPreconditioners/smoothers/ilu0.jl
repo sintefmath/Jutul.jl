@@ -42,7 +42,7 @@ end
 
 function level_schedule(
         rowptr::Vector{Ti}, colval::Vector{Ti}, n::Int;
-        upper::Bool = false
+        upper::Bool = false, partition_ids = nothing
     ) where {Ti}
     levels = zeros(Int, n)
     indices = if upper
@@ -59,7 +59,7 @@ function level_schedule(
             else
                 j < i
             end
-            if dependency
+            if dependency && (isnothing(partition_ids) || partition_ids[i] == partition_ids[j])
                 level = max(level, levels[j] + 1)
             end
         end

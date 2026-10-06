@@ -98,6 +98,7 @@ function numeric_reset!(
 end
 
 function replace_hierarchy!(H::AMGHierarchy, fresh::AMGHierarchy)
+    H.execution = nothing
     H.levels = fresh.levels
     H.workspace = fresh.workspace
     H.options = fresh.options
@@ -118,6 +119,7 @@ release_replaced_backend_storage!(backend) = nothing
 replaced_backend_storage_cleanup_threshold(backend) = 0
 
 function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
+    H.execution = nothing
     # The finest graph is fixed by the discretization. Rebuild all strength,
     # splitting, interpolation, and coarse symbolic data, but retain level 1's
     # structural arrays and use the supplied host values for symbolic setup.
@@ -186,6 +188,7 @@ function partial_reset!(
         galerkin!(H.levels[l + 1].A, level.A, level.P, level.galerkin)
     end
     old_levels = H.levels
+    H.execution = nothing
     cutoff_matrix = old_levels[cutoff].A
     host_cutoff = H.backend isa KernelAbstractions.CPU ? cutoff_matrix : host_csr(cutoff_matrix)
     replaced_bytes = Ref(0)

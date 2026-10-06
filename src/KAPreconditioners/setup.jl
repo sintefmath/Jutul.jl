@@ -2129,7 +2129,7 @@ function setup_amg(A::StaticSparsityMatrixCSR{Tv, Ti}, options::AMGOptions = AMG
         levels, workspace, options, matrix_backend(A),
         matrix_batch_size(levels[1].A),
         host_prefix(A.rowptr, matrix_nrows(A) + 1),
-        host_prefix(A.colval, matrix_nonzeros(A)), 0, Inf, 0
+        host_prefix(A.colval, matrix_nonzeros(A)), 0, Inf, 0, nothing
     )
 end
 

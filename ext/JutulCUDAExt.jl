@@ -314,6 +314,9 @@ function cuda_csr_solve_buffer_size(
     return Int(output[])
 end
 
+include("cuda_hybrid_gauss_seidel.jl")
+include("cuda_amg_execution.jl")
+
 function cuda_check_ilu_pivot(info, block::Bool)
     position = Ref{Cint}(1)
     if block

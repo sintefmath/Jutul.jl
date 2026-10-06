@@ -15,14 +15,14 @@ function smooth! end
 
 setup_smoother(
     A::SparseMatrixCSC,
-    config::Union{SPAI0, GaussSeidel, ILU0, DILU, VendorILU} = SPAI0(); kwargs...
+    config::Union{SPAI0, GaussSeidel, HybridGaussSeidel, ILU0, DILU, VendorILU} = SPAI0(); kwargs...
 ) =
     setup_smoother(csr_matrix(A), config; kwargs...)
 
 smoother_steps(config::AbstractSmoother) = config.steps
 
 Base.size(state::SPAI0State) = (length(state.diagonal), length(state.diagonal))
-Base.size(state::GaussSeidelState) = (state.n, state.n)
+Base.size(state::Union{GaussSeidelState, HybridGaussSeidelState}) = (state.n, state.n)
 Base.size(state::Union{ILU0State, DILUState, VendorILUState}) = (state.n, state.n)
 function Base.size(state::AbstractSmootherState, dimension::Integer)
     return if dimension == 1 || dimension == 2
@@ -32,7 +32,7 @@ function Base.size(state::AbstractSmootherState, dimension::Integer)
     end
 end
 Base.eltype(state::SPAI0State) = eltype(state.diagonal)
-Base.eltype(state::GaussSeidelState) = eltype(state.inverse_diagonal)
+Base.eltype(state::Union{GaussSeidelState, HybridGaussSeidelState}) = eltype(state.inverse_diagonal)
 Base.eltype(state::ILU0State) = eltype(state.factors)
 Base.eltype(state::DILUState) = eltype(state.values)
 Base.eltype(::VendorILUState{Tv}) where {Tv} = Tv
@@ -42,7 +42,7 @@ function smoother_damping(state::SPAI0State)
     return convert(T, state.config.damping)
 end
 
-function smoother_damping(state::Union{GaussSeidelState, ILU0State, DILUState})
+function smoother_damping(state::Union{GaussSeidelState, HybridGaussSeidelState, ILU0State, DILUState})
     T = matrix_real_type(eltype(state.inverse_diagonal))
     return convert(T, state.config.damping)
 end
@@ -190,7 +190,7 @@ ensure_smoother_buffer(buffer, prototype) =
 
 function update_level_smoother!(
         state::Union{
-            SPAI0State, GaussSeidelState, ILU0State, DILUState, VendorILUState,
+            SPAI0State, GaussSeidelState, HybridGaussSeidelState, ILU0State, DILUState, VendorILUState,
         },
         A::StaticSparsityMatrixCSR, options::AMGOptions
     )

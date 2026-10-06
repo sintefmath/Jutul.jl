@@ -90,6 +90,14 @@ function KAPreconditioners.setup_sparse_lu(
     }
     if applicable(KAPreconditioners.setup_preferred_sparse_lu, matrix)
         return KAPreconditioners.setup_preferred_sparse_lu(matrix)
+    elseif size(matrix, 1) <= 64
+        # Tiny AMG coarse systems are cheaper as one pivoted kernel on the
+        # caller's stream. RF uses the legacy stream and reconstructs its
+        # host factorization on every numerical update, despite fixed layout.
+        return invoke(
+            KAPreconditioners.setup_sparse_lu,
+            Tuple{StaticSparsityMatrixCSR}, matrix
+        )
     elseif Tv === Float64
         return setup_cuda_sparse_lu(matrix)
     else

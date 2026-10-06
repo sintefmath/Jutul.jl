@@ -40,6 +40,50 @@ struct GaussSeidel <: AbstractSmoother
 end
 
 """
+    HybridGaussSeidel(steps=1, damping=1.0; omega=1.0, partitions=0)
+
+Parallel hybrid symmetric Gauss-Seidel/SSOR, following hypre relaxation type 6.
+Each step applies forward and backward sweeps inside contiguous row partitions,
+with cross-partition values frozen at the start of the complete symmetric step.
+`damping` is hypre's relaxation weight and `omega` its outer weight.
+
+`partitions=0` uses one partition per Julia thread on CPU, one per multiprocessor
+on CUDA, and one partition on other devices. Counts are capped at the row count.
+Explicit positive counts give the same partitioning on all backends; `partitions=1`
+selects a global ordered symmetric sweep.
+CPU partitions run independently. CUDA retains partition dependency plans and
+runs both sweeps in one block, staging coefficients and, when they fit, indices
+in shared memory. Larger partitions use cached cuSPARSE triangular solves;
+other devices use dependency-level sweeps. Scalar matrices are supported,
+with zero diagonal rows skipped as in hypre. Unlike `GaussSeidel`, both AMG down
+and up smoothing are symmetric.
+
+Eligible CUDA AMG cycles are captured once and replayed across `:operators`
+and `:sparsity` updates. Symbolic hierarchy rebuilds invalidate the graph.
+
+The weighted formula follows hypre's host implementation on every backend.
+With unit weights and one partition it also matches hypre's device algorithm;
+hypre's native device implementation weights triangular corrections differently
+for nonunit damping and ignores the outer weight.
+"""
+struct HybridGaussSeidel <: AbstractSmoother
+    steps::Int
+    damping::Float64
+    omega::Float64
+    partitions::Int
+    function HybridGaussSeidel(steps::Integer = 1, damping::Real = 1.0;
+            omega::Real = 1.0, partitions::Integer = 0)
+        steps > 0 || throw(ArgumentError("Hybrid Gauss-Seidel steps must be positive"))
+        isfinite(damping) && 0 < damping < 2 || throw(ArgumentError(
+            "Hybrid Gauss-Seidel damping must be finite and in (0, 2)"))
+        isfinite(omega) && omega > 0 || throw(ArgumentError(
+            "Hybrid Gauss-Seidel omega must be finite and positive"))
+        partitions >= 0 || throw(ArgumentError("partitions must be non-negative"))
+        return new(Int(steps), Float64(damping), Float64(omega), Int(partitions))
+    end
+end
+
+"""
     ILU0(steps=1, damping=1.0)
 
 Level-scheduled incomplete LU factorization with zero fill. The symbolic level
@@ -101,6 +145,30 @@ mutable struct GaussSeidelState{D, C, B} <: AbstractSmootherState
     inverse_diagonal::D
     correction::D
     residual::D
+    config::C
+    backend::B
+    block_size::Int
+    n::Int
+end
+
+mutable struct HybridGaussSeidelState{D, RP, CV, HRP, HCV, PI, LR, UR, C, B} <: AbstractSmootherState
+    matrix::Any
+    inverse_diagonal::D
+    rowptr::RP
+    colval::CV
+    host_rowptr::HRP
+    host_colval::HCV
+    partition_ids::PI
+    partition_offsets::Vector{Int}
+    lower_offsets::Vector{Int}
+    lower_rows::LR
+    upper_offsets::Vector{Int}
+    upper_rows::UR
+    forward::Any
+    work::Any
+    residual::Any
+    kernels::Any
+    native::Any
     config::C
     backend::B
     block_size::Int

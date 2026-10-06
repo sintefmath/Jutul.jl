@@ -1144,6 +1144,185 @@ end
     end
 end
 
+function reference_hybrid_gs(A, b, initial, config, partitions; steps = config.steps)
+    x = copy(initial)
+    n = length(x)
+    base, extra = divrem(n, min(partitions, n))
+    for _ in 1:steps
+        frozen = copy(x)
+        first = 1
+        for p in 1:min(partitions, n)
+            last = first + base + (p <= extra) - 1
+            for rows in (first:last, last:-1:first), i in rows
+                iszero(A[i, i]) && continue
+                outside = b[i]
+                inside, old_inside = zero(eltype(x)), zero(eltype(x))
+                for j in 1:n
+                    i == j && continue
+                    if first <= j <= last
+                        inside -= A[i, j] * x[j]
+                        old_inside += A[i, j] * frozen[j]
+                    else
+                        outside -= A[i, j] * frozen[j]
+                    end
+                end
+                w, omega = config.damping, config.omega
+                x[i] = (1 - w*omega)*x[i] +
+                    w*(omega*outside + inside + (1 - omega)*old_inside)/A[i, i]
+            end
+            first = last + 1
+        end
+    end
+    return x
+end
+
+function test_hybrid_gauss_seidel(backend)
+    # Unequal partition sizes, signed and zero diagonals, and asymmetric
+    # cross-partition edges detect stale-value and backward-sweep errors.
+    A = sparse([4.0 -1 0 0.3 0 0 0; -2 5 -1 0 0 0 0; 0 -1 3 -0.5 0 0 0;
+        0 0.2 -1 -4 1 0 0; 0 0 0 -1 4 -1 0; 0 0 0 0 -2 5 1;
+        -0.2 0 0 0 0 -1 0])
+    rhs, initial = collect(1.0:7.0), sin.(collect(1.0:7.0))
+    device(v) = KAPreconditioners.backend_copy(backend, v)
+    C, b = csr_matrix(A; backend), device(rhs)
+    for partitions in (1, 3, 9), (w, omega) in ((1.0, 1.0), (0.7, 1.0), (1.2, 0.8))
+        config = HybridGaussSeidel(2, w; omega, partitions)
+        state = setup_smoother(C, config)
+        @test length(state.partition_offsets) - 1 == min(partitions, 7)
+        x = device(initial)
+        expected = reference_hybrid_gs(A, rhs, initial, config, partitions)
+        smooth!(x, state, C, b)
+        @test Array(x) ≈ expected
+        @test Array(x)[7] == initial[7]
+        # A precomputed residual must give exactly the same symmetric step.
+        x = device(initial)
+        r = device(rhs - A*initial)
+        KAPreconditioners.smooth_level!(x, C, b, state, 2; residual = r)
+        @test Array(x) ≈ expected
+        # Zero-initial application must overwrite poisoned persistent buffers.
+        fill!(state.forward, NaN)
+        fill!(state.work, NaN)
+        fill!(x, NaN)
+        KAPreconditioners.apply!(x, state, b)
+        @test Array(x) ≈ reference_hybrid_gs(A, rhs, zeros(7), config, partitions)
+        inverse_id, lower_id = objectid(state.inverse_diagonal), objectid(state.lower_rows)
+        native = state.native
+        B = 1.3A
+        for i in 1:6
+            B[i, i] += 0.1*i
+        end
+        B[1, 2] *= 0.9
+        D = csr_matrix(B; backend)
+        @test setup_smoother(D, config; reuse = state) === state
+        @test state.native === native
+        @test objectid(state.inverse_diagonal) == inverse_id
+        @test objectid(state.lower_rows) == lower_id
+        fill!(x, NaN)
+        KAPreconditioners.apply!(x, state, b)
+        @test Array(x) ≈ reference_hybrid_gs(B, rhs, zeros(7), config, partitions)
+        @test_throws ArgumentError update_smoother!(state, csr_matrix(spdiagm(0 => ones(7)); backend))
+    end
+    # One partition, unit weights: the SGS preconditioner is the symmetric
+    # triangular product, independently of the smoother implementation.
+    A = spdiagm(-1 => fill(-1.0, 6), 0 => fill(4.0, 7), 1 => fill(-1.0, 6))
+    C = csr_matrix(A; backend)
+    state = setup_smoother(C, HybridGaussSeidel(; partitions = 1))
+    x = device(fill(NaN, 7))
+    KAPreconditioners.apply!(x, state, b)
+    @test Array(x) ≈ UpperTriangular(Matrix(A)) \ (Diagonal(diag(A)) * (LowerTriangular(Matrix(A)) \ rhs))
+    auto = setup_smoother(C, HybridGaussSeidel())
+    auto_partitions = length(auto.partition_offsets) - 1
+    if backend isa CPU || backend isa JLBackend
+        @test auto_partitions == min(7, backend isa CPU ? Threads.nthreads() : 1)
+    end
+    KAPreconditioners.apply!(x, auto, b)
+    @test Array(x) ≈ reference_hybrid_gs(A, rhs, zeros(7), auto.config, auto_partitions)
+    # Larger automatic partitions must retain weighted within-partition GS
+    # and frozen cross-partition coupling, including after coefficient updates.
+    n_auto = 257
+    auto_matrix = spdiagm(-1 => fill(-1.0, n_auto-1),
+        0 => 3 .+ collect(1:n_auto)./n_auto, 1 => fill(-0.5, n_auto-1))
+    auto_matrix[1, 180], auto_matrix[185, 12] = 0.2, -0.3
+    auto_rhs = sin.(collect(1.0:n_auto))
+    auto_config = HybridGaussSeidel(2, 0.7; omega = 0.8)
+    auto = setup_smoother(csr_matrix(auto_matrix; backend), auto_config)
+    auto_partitions = length(auto.partition_offsets)-1
+    auto_native = auto.native
+    auto_x, auto_b = device(fill(NaN, n_auto)), device(auto_rhs)
+    for shift in (0.0, 0.2)
+        B = auto_matrix + spdiagm(0 => shift.*collect(1:n_auto)./n_auto)
+        update_smoother!(auto, csr_matrix(B; backend))
+        @test auto.native === auto_native
+        KAPreconditioners.apply!(auto_x, auto, auto_b)
+        @test Array(auto_x) ≈ reference_hybrid_gs(B, auto_rhs, zeros(n_auto),
+            auto_config, auto_partitions)
+    end
+    # Float32 weights and work must stay Float32 on accelerators.
+    single = setup_smoother(csr_matrix(Float32.(A); backend), HybridGaussSeidel(1, 0.8; partitions = 2))
+    y = device(fill(Float32(NaN), 7))
+    KAPreconditioners.apply!(y, single, device(Float32.(rhs)))
+    @test eltype(single.work) === Float32
+    @test Array(y) ≈ reference_hybrid_gs(Float32.(A), Float32.(rhs), zeros(Float32, 7),
+        single.config, 2) rtol = 1.0e-6
+
+    n = 6
+    T = spdiagm(-1 => fill(-1.0, n - 1), 0 => fill(4.0, n), 1 => fill(-1.0, n - 1))
+    E = spdiagm(-1 => fill(-1.0, n - 1), 1 => fill(-1.0, n - 1))
+    A = kron(sparse(I, n, n), T) + kron(E, sparse(I, n, n))
+    C = csr_matrix(A; backend)
+    H = setup_amg(C, AMGOptions(smoother = HybridGaussSeidel(; partitions = 2),
+        aggressive_levels = 1, coarse_size = 4))
+    b, x = device(ones(n*n)), device(fill(NaN, n*n))
+    KAPreconditioners.apply!(x, H, b)
+    @test norm(ones(n*n) - A*Array(x)) < n
+    # An executable cycle must agree with ordinary execution for changing RHS,
+    # and retain its storage across purely numerical hierarchy updates.
+    function check_execution(H, b)
+        expected = similar(b)
+        KAPreconditioners.vcycle!(expected, b, H, 1; residual = b, zero_initial = true)
+        actual = similar(b)
+        KAPreconditioners.apply!(actual, H, b)
+        @test Array(actual) ≈ Array(expected)
+    end
+    check_execution(H, device(sin.(collect(1.0:n*n))))
+    for mode in (:operators, :sparsity, :memory, :partial_sparsity)
+        execution = H.execution
+        B = copy(A)
+        # Nonuniform coefficient changes exercise normalized values, the
+        # interpolation/Galerkin operators, and renewed coarse pivoting.
+        nonzeros(B) .*= 1 .+ 0.05 .* sin.(collect(1:length(nonzeros(B))))
+        B += spdiagm(0 => fill(0.2, n*n))
+        resetup_amg!(H, csr_matrix(B; backend), mode; n_levels_partial_keep = 1)
+        if !isnothing(execution)
+            @test H.execution === (mode in (:operators, :sparsity) ? execution : nothing)
+        end
+        fill!(x, NaN)
+        KAPreconditioners.apply!(x, H, b)
+        @test all(isfinite, Array(x))
+        @test norm(ones(n*n) - B*Array(x)) < n
+        check_execution(H, device(cos.(collect(1.0:n*n))))
+    end
+    if !isnothing(H.execution)
+        # Stable graph buffers permit different vector allocations and aliasing
+        # of the external input/output, without changing the captured pointers.
+        rhs = device(ones(n*n))
+        KAPreconditioners.apply!(rhs, H, rhs)
+        @test Array(rhs) ≈ Array(x)
+    end
+end
+
+@testset "Hypre hybrid symmetric GS/SSOR" begin
+    @test_throws ArgumentError HybridGaussSeidel(0)
+    @test_throws ArgumentError HybridGaussSeidel(1, 2.0)
+    @test_throws ArgumentError HybridGaussSeidel(; omega = NaN)
+    @test_throws ArgumentError HybridGaussSeidel(; partitions = -1)
+    @test AMGPreconditioner(smoother_type = :hybrid_gauss_seidel).options.smoother isa HybridGaussSeidel
+    @test KASmootherPreconditioner(:hybrid_ssor).config isa HybridGaussSeidel
+    for backend in (CPU(), JLBackend())
+        test_hybrid_gauss_seidel(backend)
+    end
+end
+
 @testset "standalone ILU smoothers" begin
     A = poisson_2d(5)
     C = csr_matrix(A)

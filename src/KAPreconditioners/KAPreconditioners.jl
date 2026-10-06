@@ -24,6 +24,7 @@ include("smoothers/interface.jl")
 include("smoothers/spai0.jl")
 include("smoothers/gauss_seidel.jl")
 include("smoothers/ilu0.jl")
+include("smoothers/hybrid_gauss_seidel.jl")
 include("smoothers/vendor_ilu.jl")
 include("setup.jl")
 include("aggressive.jl")
@@ -57,7 +58,7 @@ apply_ka_smoother!(x, state, b) = apply!(x, state, b)
 export AbstractCoarsening, Aggregation, RugeStuben, HMIS
 export AbstractInterpolation, ConstantInterpolation, ClassicalInterpolation,
     ExtendedIInterpolation, TwoStageExtendedIInterpolation, AMGOptions, AMGHierarchy
-export AbstractSmoother, AbstractSmootherState, SPAI0, GaussSeidel, ILU0, DILU,
+export AbstractSmoother, AbstractSmootherState, SPAI0, GaussSeidel, HybridGaussSeidel, ILU0, DILU,
     VendorILU
 export csr_matrix
 export setup_smoother, update_smoother!, smooth!

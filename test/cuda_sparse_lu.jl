@@ -15,9 +15,7 @@ if CUDA.functional()
         b = collect(1.0:size(A, 1))
         backend = CUDA.CUDABackend()
         matrix = Jutul.KAPreconditioners.csr_matrix(A; backend)
-        F = isnothing(cudss_ext) ?
-            Jutul.KernelExecution.factorize_linear_system(lu, matrix) :
-            cuda_ext.setup_cuda_sparse_lu(matrix)
+        F = cuda_ext.setup_cuda_sparse_lu(matrix)
         @test F isa Jutul.KAPreconditioners.SparseLU
         @test F.factorization isa cuda_ext.CUDARFFactor
         rhs = CuArray(b)
@@ -51,7 +49,7 @@ if CUDA.functional()
         coarse = H.levels[end].coarse_solver
         @test coarse isa Jutul.KAPreconditioners.SparseLU
         factor_type = isnothing(cudss_ext) ?
-            cuda_ext.CUDARFFactor : cudss_ext.CUDSSSparseLUFactor
+            Jutul.KAPreconditioners.KASparseLUFactor : cudss_ext.CUDSSSparseLUFactor
         @test coarse.factorization isa factor_type
         b = CUDA.ones(Float64, size(A, 1))
         x = CUDA.zeros(Float64, size(A, 1))
@@ -95,6 +93,26 @@ if CUDA.functional()
     end
 
     if isnothing(cudss_ext)
+        @testset "CUDA tiny pivoted LU retains factor storage" begin
+            rows, cols = [1, 1, 2, 2], [1, 2, 1, 2]
+            A = sparse(rows, cols, [0.0, 2.0, 3.0, 4.0], 2, 2)
+            B = sparse(rows, cols, [5.0, 2.0, 3.0, 4.0], 2, 2)
+            matrix = Jutul.KAPreconditioners.csr_matrix(A; backend = CUDA.CUDABackend())
+            F = Jutul.KernelExecution.factorize_linear_system(lu, matrix)
+            original = F.factorization
+            @test original isa Jutul.KAPreconditioners.KASparseLUFactor
+            rhs = CuArray([1.0, 2.0])
+            x = similar(rhs)
+            for operator in (A, B)
+                Jutul.KAPreconditioners.resetup_sparse_lu!(F,
+                    Jutul.KAPreconditioners.csr_matrix(operator; backend = CUDA.CUDABackend()))
+                @test F.factorization === original
+                ldiv!(x, F, rhs)
+                @test Array(x) ≈ operator \ Array(rhs)
+            end
+            @test_throws SingularException Jutul.KAPreconditioners.setup_sparse_lu(
+                Jutul.KAPreconditioners.csr_matrix(sparse([1.0 2; 2 4]); backend = CUDA.CUDABackend()))
+        end
         @testset "CUDA Float32 sparse LU fallback" begin
             A = sparse(Float32[10 1; 1 10])
             matrix = Jutul.KAPreconditioners.csr_matrix(
