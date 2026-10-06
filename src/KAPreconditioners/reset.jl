@@ -40,23 +40,22 @@ function galerkin!(
     return coarse
 end
 
-prolongation_update_kernel(::ExtendedIInterpolation) =
-    update_extended_i_p_kernel!
-prolongation_update_kernel(::ClassicalInterpolation) =
-    update_classical_p_kernel!
-
 function update_prolongation!(
         level::AMGLevel,
-        interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation}
+        interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation, TwoStageExtendedIInterpolation}
     )
     A, P = level.A, level.P
     isnothing(P) && return level
-    kernel = prolongation_update_kernel(interpolation)
+    if !isnothing(level.aggressive)
+        update_aggressive_prolongation!(level, interpolation)
+        return level
+    end
     n = matrix_nrows(A)
-    k! = kernel(matrix_backend(A), matrix_kernel_block_size(A))
+    k! = update_interpolation_p_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(
         P.nzval, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval,
-        level.cf, level.coarse_map, level.strength, interpolation.rescale,
+        level.cf, level.coarse_map, level.strength,
+        interpolation isa ExtendedIInterpolation, interpolation.rescale,
         n; ndrange = n
     )
     return level
@@ -84,7 +83,9 @@ function numeric_reset!(
     for l in 1:(length(H.levels) - 1)
         level = H.levels[l]
         if mode == :sparsity
-            update_prolongation!(level, H.options.interpolation)
+            update_prolongation!(
+                level, interpolation_for_level(H.options, l)
+            )
         end
         next = H.levels[l + 1]
         galerkin!(next.A, level.A, level.P, level.galerkin)
@@ -179,7 +180,9 @@ function partial_reset!(
     for l in 1:(cutoff - 1)
         level = H.levels[l]
         update_level_smoother!(level.smoother, level.A, H.options)
-        mode == :sparsity && update_prolongation!(level, H.options.interpolation)
+        mode == :sparsity && update_prolongation!(
+            level, interpolation_for_level(H.options, l)
+        )
         galerkin!(H.levels[l + 1].A, level.A, level.P, level.galerkin)
     end
     old_levels = H.levels

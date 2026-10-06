@@ -13,6 +13,20 @@ coarsening strategy, interpolation method, smoother configuration, and cycle
 type. These are not a public API and are subject to change without notice or
 major version bump.
 
+`aggressive_levels` defaults to zero. A positive value applies a HYPRE-style
+second coarsening pass on that many levels, starting with the finest. RS/HMIS
+use two-stage Extended+i interpolation on those levels, composing fine-to-first
+coarse interpolation with partial interpolation to the final coarse set.
+
+`theta` defaults to 0.25 for `:ruge_stuben` and 0.5 for `:hmis`.
+`second_pass` overrides the classical RS second pass when the method is
+Ruge-Stuben. The shared `strength_type` can be `:signed_fallback` (default),
+`:signed`, or `:absolute`. `aggressive_num_paths` (default 1) controls the
+second strength graph for RS/HMIS. `aggressive_interpolation` accepts an
+`TwoStageExtendedIInterpolation(...)` configuration with independent factor and
+product truncation and row limits. Explicit `ExtendedIInterpolation(...)` selects
+the legacy distance-two path. See `AMGOptions` for these settings.
+
 With `reuse=:partial_operators` or `:partial_sparsity`,
 `n_levels_partial_keep` controls how many leading levels retain their
 symbolic structure (default 3). `n_partial_keep` can shorten that prefix
@@ -30,9 +44,9 @@ mutable struct AMGPreconditioner{O} <: JutulPreconditioner
     n_partial_keep::Int
 end
 
-function amg_coarsening(method::Symbol, theta)
+function amg_coarsening(method::Symbol, theta; second_pass::Bool = true)
     if method == :ruge_stuben
-        return KAPreconditioners.RugeStuben(theta)
+        return KAPreconditioners.RugeStuben(theta; second_pass = second_pass)
     elseif method == :aggregation
         return KAPreconditioners.Aggregation(theta)
     elseif method == :hmis
@@ -65,7 +79,8 @@ function AMGPreconditioner(
         cycle = :V,
         npre::Int = 1,
         npost::Int = npre,
-        theta = 0.5,
+        theta = nothing,
+        second_pass::Union{Nothing, Bool} = nothing,
         theta_agg = 0.25,
         coarse_size = 5,
         reuse::Symbol = :memory,
@@ -94,8 +109,19 @@ function AMGPreconditioner(
         if method == :aggregation
             coarsening = amg_coarsening(method, theta_agg)
         else
+            if isnothing(theta)
+                theta = method == :ruge_stuben ? 0.25 : 0.5
+            end
             coarsening = amg_coarsening(method, theta)
         end
+    end
+    if !isnothing(second_pass)
+        coarsening isa KAPreconditioners.RugeStuben || throw(
+            ArgumentError(
+                "second_pass only applies to RugeStuben coarsening"
+            )
+        )
+        coarsening = KAPreconditioners.RugeStuben(coarsening.theta; second_pass = second_pass)
     end
     options = KAPreconditioners.AMGOptions(;
         coarsening = coarsening,

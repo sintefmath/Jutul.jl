@@ -371,6 +371,112 @@ end
     @test sum(truncated_row) ≈ sum(full_row)
 end
 
+@testset "AMG interpolation tuning defaults" begin
+    @test ClassicalInterpolation().norm_p == ExtendedIInterpolation().norm_p == 1
+    @test ClassicalInterpolation().rescale
+    @test ExtendedIInterpolation(0.0, 0).max_elements == 0
+    @test AMGPreconditioner(:ruge_stuben).options.coarsening.theta == RugeStuben().theta
+    @test AMGPreconditioner(:hmis).options.coarsening.theta == HMIS().theta
+    @test !AMGPreconditioner(:ruge_stuben; second_pass = false).options.coarsening.second_pass
+    @test_throws ArgumentError AMGPreconditioner(:hmis; second_pass = false)
+
+    # A factor of 0.3 retains the weight 0.4 relative to a maximum of 1.
+    A = sparse([1, 1, 1, 2, 3], [1, 2, 3, 2, 3], [10.0, -1.0, -0.4, 1.0, 1.0], 3, 3)
+    C = csr_matrix(A)
+    cf, cmap = Int8[-1, 1, 1], Int32[0, 1, 2]
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    for interpolation in (ClassicalInterpolation, ExtendedIInterpolation)
+        P = KAPreconditioners.build_prolongation(C, cf, cmap, 2, strong, interpolation(0.3))
+        @test P.rowptr[2] - P.rowptr[1] == 2
+        # Explicit squared-magnitude truncation retains the previous semantics.
+        P2 = KAPreconditioners.build_prolongation(C, cf, cmap, 2, strong, interpolation(0.3, 0, 2))
+        @test P2.rowptr[2] - P2.rowptr[1] == 1
+        @test sum(P2.nzval[P2.rowptr[1]:(P2.rowptr[2] - 1)]) ≈ 0.14
+    end
+end
+
+function test_numeric_interpolation_tuning(backend)
+    # Include a strong F-F edge, weak entries, and a distance-two-only coarse
+    # point. The correct untruncated row sums are deliberately below one.
+    A = sparse(
+        [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 4, 5, 6],
+        [1, 2, 3, 4, 6, 1, 2, 3, 4, 5, 6, 3, 4, 5, 6],
+        [10.0, -2.0, -1.0, -1.5, -0.1, -1.0, 4.0, -0.5, -0.75, -2.0, 0.25, 1.0, 1.0, 1.0, 1.0],
+        6, 6
+    )
+    cf, cmap = Int8[-1, -1, 1, 1, 1, 1], Int32[0, 0, 1, 2, 3, 4]
+    C = csr_matrix(A)
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    for interpolation in (ClassicalInterpolation, ExtendedIInterpolation), rescale in (false, true)
+        config = interpolation(0.0, 1, 1, rescale)
+        P = KAPreconditioners.build_prolongation(C, cf, cmap, 4, strong, config)
+        D = csr_matrix(A; backend = backend)
+        dcf = KAPreconditioners.backend_copy(backend, cf)
+        dmap = KAPreconditioners.backend_copy(backend, cmap)
+        ds = KAPreconditioners.backend_copy(backend, strong)
+        dp = KAPreconditioners.backend_copy(backend, P.nzval)
+        drp = KAPreconditioners.backend_copy(backend, P.rowptr)
+        dcv = KAPreconditioners.backend_copy(backend, P.colval)
+        k! = KAPreconditioners.update_interpolation_p_kernel!(backend, 128)
+        k!(
+            dp, drp, dcv, D.rowptr, D.colval, D.nzval, dcf, dmap, ds,
+            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6
+        )
+        KAPreconditioners.synchronize_backend(backend)
+        @test Array(dp) ≈ P.nzval
+
+        # Change coefficients while retaining the old interpolation pattern.
+        B = copy(A)
+        B[1, 1] = 12.0
+        B[1, 3] = -1.2
+        B[2, 5] = -2.5
+        BC = csr_matrix(B)
+        full = KAPreconditioners.build_prolongation(BC, cf, cmap, 4, strong, interpolation(0.0, 0, 1, false))
+        expected = copy(P.nzval)
+        for i in 1:6
+            full_row = full.rowptr[i]:(full.rowptr[i + 1] - 1)
+            kept_row = P.rowptr[i]:(P.rowptr[i + 1] - 1)
+            for pidx in kept_row
+                q = findfirst(q -> full.colval[q] == P.colval[pidx], full_row)
+                expected[pidx] = full.nzval[full_row[q]]
+            end
+            if rescale && !isempty(kept_row)
+                expected[kept_row] .*= sum(full.nzval[full_row]) / sum(expected[kept_row])
+            end
+        end
+        DB = csr_matrix(B; backend = backend)
+        k!(
+            dp, drp, dcv, DB.rowptr, DB.colval, DB.nzval, dcf, dmap, ds,
+            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6
+        )
+        KAPreconditioners.synchronize_backend(backend)
+        @test Array(dp) ≈ expected
+    end
+    return
+end
+
+@testset "Interpolation rescaling during numeric updates" begin
+    test_numeric_interpolation_tuning(CPU())
+    test_numeric_interpolation_tuning(JLBackend())
+end
+
+@testset "AMG strength selection" begin
+    A = sparse([1, 1, 1, 2, 2, 3], [1, 2, 3, 2, 3, 3], [5.0, -1.0, 2.0, 3.0, 1.0, 1.0], 3, 3)
+    C = csr_matrix(A)
+    for backend in (CPU(), JLBackend()), mode in (:signed_fallback, :signed, :absolute)
+        D = csr_matrix(A; backend = backend)
+        strong = Array(KAPreconditioners.strength(D, 0.25, 1.0; strength_type = mode))
+        expected = KAPreconditioners.strength(C, 0.25, 1.0; strength_type = mode)
+        @test strong == expected
+        by_edge = Dict((i, Int(C.colval[k])) => strong[k] for i in 1:3 for k in nzrange(C, i))
+        @test by_edge[(1, 2)]
+        @test by_edge[(1, 3)] == (mode == :absolute)
+        @test by_edge[(2, 3)] == (mode != :signed)
+    end
+    @test AMGPreconditioner(; strength_type = :absolute).options.strength_type == :absolute
+    @test_throws ArgumentError setup_amg(A, AMGOptions(strength_type = :invalid))
+end
+
 @testset "Jutul simulation with KA AMG" begin
     grid = CartesianMesh((3, 3), (1.0, 1.0))
     model = SimulationModel(DiscretizedDomain(grid), SimpleHeatSystem())
@@ -413,6 +519,280 @@ end
         end
         @test norm(b - A * x) < r0
     end
+end
+
+@testset "Ruge-Stuben splitting invariants" begin
+    # A directed strength graph must not make a point fine merely because a
+    # coarse point depends on it. Every F point needs an outgoing strong path
+    # to a C point for classical interpolation.
+    directed = sparse(
+        [1, 1, 2, 3, 3, 4, 4],
+        [1, 2, 2, 1, 3, 1, 4],
+        [2.0, -1.0, 2.0, -1.0, 2.0, -1.0, 2.0], 4, 4
+    )
+    C = csr_matrix(directed)
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    cf, cmap, nc = KAPreconditioners.cf_split(C, strong, RugeStuben())
+    P = KAPreconditioners.build_prolongation(
+        C, cf, cmap, nc, strong, ClassicalInterpolation()
+    )
+    @test all(i -> P.rowptr[i + 1] > P.rowptr[i], eachindex(cf))
+    @test all(eachindex(cf)) do i
+        cf[i] == 1 || any(nzrange(C, i)) do k
+            strong[k] && cf[C.colval[k]] == 1
+        end
+    end
+
+    # The second RS pass enforces C2: strongly connected F points share a
+    # direct strong C neighbor. The first pass alone violates C2 on this graph.
+    edges = [(1, 3), (1, 5), (1, 7), (2, 4), (2, 6), (2, 8), (3, 4)]
+    rows, cols, values = collect(1:8), collect(1:8), fill(4.0, 8)
+    for (i, j) in edges
+        push!(rows, i, j)
+        push!(cols, j, i)
+        push!(values, -1.0, -1.0)
+    end
+    C = csr_matrix(sparse(rows, cols, values, 8, 8))
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    first_cf, _, first_nc = KAPreconditioners.cf_split(C, strong, RugeStuben(; second_pass = false))
+    @test first_nc == 2
+    @test first_cf[3] == first_cf[4] == -1
+    cf, _, nc = KAPreconditioners.cf_split(C, strong, RugeStuben())
+    @test nc == 3
+    hmis = setup_amg(C, AMGOptions(coarsening = HMIS(0.25), coarse_size = 2, max_row_sum = 1.0))
+    @test hmis.levels[1].P.ncol == 2
+    classical_hmis = setup_amg(
+        C, AMGOptions(
+            coarsening = HMIS(0.25), interpolation = ClassicalInterpolation(),
+            coarse_size = 2, max_row_sum = 1.0
+        )
+    )
+    @test classical_hmis.levels[1].cf == cf
+    for i in eachindex(cf)
+        cf[i] == -1 || continue
+        coarse = Set(
+            C.colval[k] for k in nzrange(C, i)
+                if strong[k] && cf[C.colval[k]] == 1
+        )
+        for k in nzrange(C, i)
+            j = C.colval[k]
+            strong[k] && cf[j] == -1 || continue
+            @test any(nzrange(C, j)) do q
+                strong[q] && C.colval[q] in coarse
+            end
+        end
+    end
+end
+
+@testset "Aggressive path counts and interpolation controls" begin
+    # C1 reaches C4 through two distinct F points and C5 directly. HYPRE
+    # gives the direct edge weight two in its path-count graph.
+    A = sparse([1, 1, 1, 2, 3], [2, 3, 5, 4, 4], fill(-1.0, 5), 5, 5)
+    C = csr_matrix(A)
+    cf, cmap = Int8[1, -1, -1, 1, 1], Int32[1, 0, 0, 2, 3]
+    for paths in (1, 2)
+        graph, _ = KAPreconditioners.second_strength_graph(C, trues(5), cf, cmap, 3, paths)
+        @test graph.colval == Int32[2, 3]
+    end
+    graph, _ = KAPreconditioners.second_strength_graph(C, trues(5), cf, cmap, 3, 3)
+    @test isempty(graph.colval)
+
+    A = poisson_2d(14)
+    aggressive_interp = ExtendedIInterpolation(0.3, 2)
+    options = AMGOptions(
+        aggressive_levels = 1, aggressive_num_paths = 2,
+        aggressive_interpolation = aggressive_interp, coarse_size = 8
+    )
+    @test KAPreconditioners.interpolation_for_level(options, 1) === aggressive_interp
+    @test KAPreconditioners.interpolation_for_level(options, 2) === options.interpolation
+    inherited = AMGOptions(coarsening = RugeStuben(), aggressive_levels = 1)
+    @test KAPreconditioners.interpolation_for_level(inherited, 1) isa TwoStageExtendedIInterpolation
+    @test KAPreconditioners.interpolation_for_level(inherited, 1).final.max_elements == 0
+    wrapper = AMGPreconditioner(;
+        aggressive_levels = 1, aggressive_num_paths = 2,
+        aggressive_interpolation = aggressive_interp
+    )
+    @test wrapper.options.aggressive_num_paths == 2
+    @test wrapper.options.aggressive_interpolation === aggressive_interp
+    for backend in (CPU(), JLBackend())
+        D = csr_matrix(A; backend = backend)
+        H = setup_amg(D, options)
+        P = H.levels[1].P
+        @test maximum(diff(Array(P.rowptr))) <= 2
+        previous = Array(P.nzval)
+        resetup_amg!(H, D, :sparsity)
+        @test Array(P.nzval) ≈ previous
+        test_galerkin(H)
+        b = KAPreconditioners.backend_copy(backend, ones(size(A, 1)))
+        x = KAPreconditioners.backend_zeros(backend, Float64, size(A, 1))
+        for _ in 1:4
+            cycle!(x, H, b)
+        end
+        @test norm(ones(size(A, 1)) - A * Array(x)) < sqrt(size(A, 1))
+    end
+    @test_throws ArgumentError setup_amg(A, AMGOptions(aggressive_num_paths = 0))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(aggressive_interpolation = ClassicalInterpolation()))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(coarsening = Aggregation(), aggressive_num_paths = 2))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(coarsening = Aggregation(), aggressive_interpolation = aggressive_interp))
+end
+
+function test_two_stage_interpolation(backend)
+    # A seven-point chain gives C1={2,4,6}, C2={4}. P2 uses the original
+    # rows 2 and 6: each has effective diagonal 2.5 and numerator -0.5.
+    # Consequently the endpoints receive nonzero distance-three weights.
+    A = spdiagm(-1 => fill(-1.0, 6), 0 => fill(4.0, 7), 1 => fill(-1.0, 6))
+    options = AMGOptions(
+        coarsening = RugeStuben(), aggressive_levels = 1,
+        aggressive_interpolation = TwoStageExtendedIInterpolation(), coarse_size = 1,
+        max_levels = 2
+    )
+    H = setup_amg(csr_matrix(A; backend), options)
+    level = H.levels[1]
+    plan = level.aggressive
+    @test Array(plan.rows) == [2, 4, 6]
+    @test findall(==(1), Array(level.cf)) == [4]
+    @test Array(level.P.nzval) ≈ [0.05, 0.2, 0.3, 1.0, 0.3, 0.2, 0.05]
+    @test sparse_prolongation(level.P) ≈ sparse_prolongation(plan.P1) * sparse_prolongation(plan.P2)
+
+    # Uniform scaling must preserve strength and interpolation even below eps.
+    for scale in (1.0e-20, 1.0e20)
+        scaled = setup_amg(csr_matrix(scale * A; backend), options)
+        @test Array(scaled.levels[1].strength) == Array(level.strength)
+        @test Array(scaled.levels[1].P.nzval) ≈ Array(level.P.nzval)
+        resetup_amg!(H, csr_matrix(scale * A; backend), :sparsity)
+        @test Array(level.P.nzval) ≈ Array(scaled.levels[1].P.nzval)
+    end
+
+    # Nonuniform coefficient changes exercise both factors and final-product
+    # truncation. With the same split/stencil, reuse must match a fresh build.
+    n = 12
+    T = spdiagm(-1 => fill(-1.0, n - 1), 0 => fill(4.0, n), 1 => fill(-1.0, n - 1))
+    E = spdiagm(-1 => fill(-1.0, n - 1), 1 => fill(-1.0, n - 1))
+    A = kron(sparse(I, n, n), T) + kron(E, sparse(I, n, n))
+    B = A + spdiagm(0 => [0.2 + 0.1 * sin(i) for i in 1:size(A, 1)])
+    for rescale in (false, true)
+        interpolation = TwoStageExtendedIInterpolation(
+            max_elements = 2,
+            stage_max_elements = 2, rescale = rescale
+        )
+        options = AMGOptions(
+            aggressive_levels = 1, aggressive_interpolation = interpolation,
+            coarse_size = 1, max_levels = 2
+        )
+        H = setup_amg(csr_matrix(A; backend), options)
+        fresh = setup_amg(csr_matrix(B; backend), options)
+        P = H.levels[1].P
+        pattern = (copy(Array(P.rowptr)), copy(Array(P.colval)))
+        before = copy(Array(P.nzval))
+        resetup_amg!(H, csr_matrix(B; backend), :sparsity)
+        @test (Array(P.rowptr), Array(P.colval)) == pattern
+        @test !(Array(P.nzval) ≈ before)
+        # Candidate ranking may change, so compare the retained entries with
+        # the complete product; preserve its full row sum when requested.
+        full = sparse_prolongation(fresh.levels[1].aggressive.product)
+        entries, all_columns, all_values = Array(P.rowptr), Array(P.colval), Array(P.nzval)
+        for i in 1:P.nrow
+            r = entries[i]:(entries[i + 1] - 1)
+            columns = all_columns[r]
+            expected = vec(Array(full[i, columns]))
+            if rescale && !iszero(sum(expected))
+                expected *= sum(full[i, :]) / sum(expected)
+            end
+            @test all_values[r] ≈ expected
+        end
+        @test KAPreconditioners.sparse_matrix(H.levels[2].A) ≈
+            sparse_prolongation(P)' * B * sparse_prolongation(P)
+        old_plan = H.levels[1].aggressive
+        resetup_amg!(H, csr_matrix(B; backend), :memory)
+        new_plan = H.levels[1].aggressive
+        @test new_plan.P1.nzval === old_plan.P1.nzval
+        @test new_plan.P2.nzval === old_plan.P2.nzval
+        @test Array(H.levels[1].P.nzval) ≈ Array(fresh.levels[1].P.nzval)
+    end
+    return
+end
+
+@testset "Hypre two-stage aggressive interpolation" begin
+    @test_throws ArgumentError TwoStageExtendedIInterpolation(stage_max_elements = -1)
+    @test_throws ArgumentError setup_amg(
+        poisson_2d(3),
+        AMGOptions(interpolation = TwoStageExtendedIInterpolation())
+    )
+    for backend in (CPU(), JLBackend())
+        test_two_stage_interpolation(backend)
+    end
+end
+
+@testset "aggressive coarsening" begin
+    A = poisson_2d(20)
+    regular_options = AMGOptions(coarse_size = 12)
+    explicit_default = AMGOptions(coarse_size = 12, aggressive_levels = 0)
+    aggressive_options = AMGOptions(
+        coarse_size = 12, aggressive_levels = 1
+    )
+    regular = setup_amg(A, regular_options)
+    defaulted = setup_amg(A, explicit_default)
+    aggressive = setup_amg(A, aggressive_options)
+
+    @test AMGOptions().aggressive_levels == 0
+    @test regular.levels[1].cf == defaulted.levels[1].cf
+    @test regular.levels[1].P.rowptr == defaulted.levels[1].P.rowptr
+    @test regular.levels[1].P.colval == defaulted.levels[1].P.colval
+    @test aggressive.levels[1].P.ncol < regular.levels[1].P.ncol
+    @test all(
+        i -> aggressive.levels[1].P.rowptr[i + 1] >
+            aggressive.levels[1].P.rowptr[i], 1:size(A, 1)
+    )
+
+    two_levels = setup_amg(
+        A, AMGOptions(coarse_size = 12, aggressive_levels = 2)
+    )
+    @test two_levels.levels[2].P.ncol < aggressive.levels[2].P.ncol
+
+    for coarsening in (RugeStuben(0.25), Aggregation(0.25))
+        standard = setup_amg(
+            A, AMGOptions(coarsening = coarsening, coarse_size = 12)
+        )
+        coarsened = setup_amg(
+            A, AMGOptions(
+                coarsening = coarsening, coarse_size = 12,
+                aggressive_levels = 1
+            )
+        )
+        @test coarsened.levels[1].P.ncol < standard.levels[1].P.ncol
+    end
+
+    b = ones(size(A, 1))
+    x = zeros(size(A, 1))
+    for _ in 1:4
+        cycle!(x, aggressive, b)
+    end
+    @test norm(b - A * x) < norm(b)
+
+    B = copy(A)
+    B[1, 1] *= 1.2
+    B[2, 2] *= 0.8
+    @test resetup_amg!(aggressive, B, :sparsity) === aggressive
+    test_galerkin(aggressive)
+    @test resetup_amg!(aggressive, A, :memory) === aggressive
+    @test aggressive.levels[1].P.ncol < regular.levels[1].P.ncol
+
+    device = setup_amg(
+        csr_matrix(A; backend = JLBackend()), aggressive_options
+    )
+    @test device.levels[1].P.ncol == aggressive.levels[1].P.ncol
+    device_x = JLArray(zeros(size(A, 1)))
+    device_b = JLArray(b)
+    for _ in 1:4
+        cycle!(device_x, device, device_b)
+    end
+    @test norm(b - A * Array(device_x)) < norm(b)
+
+    wrapper = AMGPreconditioner(; aggressive_levels = 1, coarse_size = 12)
+    @test wrapper.options.aggressive_levels == 1
+    @test_throws ArgumentError setup_amg(
+        A, AMGOptions(aggressive_levels = -1)
+    )
 end
 
 @testset "coarse LU" begin
