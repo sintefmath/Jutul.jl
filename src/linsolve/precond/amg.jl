@@ -116,9 +116,11 @@ function AMGPreconditioner(
         end
     end
     if !isnothing(second_pass)
-        coarsening isa KAPreconditioners.RugeStuben || throw(ArgumentError(
-            "second_pass only applies to RugeStuben coarsening"
-        ))
+        coarsening isa KAPreconditioners.RugeStuben || throw(
+            ArgumentError(
+                "second_pass only applies to RugeStuben coarsening"
+            )
+        )
         coarsening = KAPreconditioners.RugeStuben(coarsening.theta; second_pass = second_pass)
     end
     options = KAPreconditioners.AMGOptions(;

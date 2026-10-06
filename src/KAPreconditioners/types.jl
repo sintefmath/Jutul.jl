@@ -111,7 +111,8 @@ function TwoStageExtendedIInterpolation(;
     )
     return TwoStageExtendedIInterpolation(
         ExtendedIInterpolation(stage_truncation, stage_max_elements, norm_p, rescale),
-        ExtendedIInterpolation(truncation, max_elements, norm_p, rescale))
+        ExtendedIInterpolation(truncation, max_elements, norm_p, rescale)
+    )
 end
 
 """Hybrid modified independent-set coarsening."""

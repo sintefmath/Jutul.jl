@@ -745,7 +745,8 @@ aggressive_interpolation(interpolation) = interpolation
 function aggressive_interpolation(interpolation::Union{ClassicalInterpolation, ExtendedIInterpolation})
     return TwoStageExtendedIInterpolation(;
         truncation = interpolation.truncation, max_elements = interpolation.max_elements,
-        norm_p = interpolation.norm_p, rescale = interpolation.rescale)
+        norm_p = interpolation.norm_p, rescale = interpolation.rescale
+    )
 end
 
 function interpolation_for_level(options::AMGOptions, level_index::Integer)
@@ -1847,8 +1848,10 @@ function make_level(
             reallocation_tracker = reallocation_tracker
         )
     end
-    aggressive = isnothing(aggressive) ? nothing : aggressive_on_backend(aggressive, backend,
-        optional_property(old_level, :aggressive); reallocation_tracker = reallocation_tracker)
+    aggressive = isnothing(aggressive) ? nothing : aggressive_on_backend(
+            aggressive, backend,
+            optional_property(old_level, :aggressive); reallocation_tracker = reallocation_tracker
+        )
     return AMGLevel{Tv, Ti}(A, P, Pt, G, S, coarse_solver, r, xc, bc, cf_d, cm_d, st_d, aggressive)
 end
 
@@ -1894,8 +1897,11 @@ function validate_setup_options(options::AMGOptions)
     options.coarse_solver in (:lu, :spai0) ||
         throw(ArgumentError("coarse_solver must be :lu or :spai0"))
     aggregation = options.coarsening isa Aggregation
-    options.interpolation isa TwoStageExtendedIInterpolation && throw(ArgumentError(
-        "TwoStageExtendedIInterpolation is only valid for aggressive_interpolation"))
+    options.interpolation isa TwoStageExtendedIInterpolation && throw(
+        ArgumentError(
+            "TwoStageExtendedIInterpolation is only valid for aggressive_interpolation"
+        )
+    )
     constant = options.interpolation isa ConstantInterpolation
     aggregation == constant || throw(
         ArgumentError(
@@ -1906,13 +1912,17 @@ function validate_setup_options(options::AMGOptions)
     if !isnothing(aggressive)
         compatible = aggregation ? aggressive isa ConstantInterpolation :
             aggressive isa Union{ExtendedIInterpolation, TwoStageExtendedIInterpolation}
-        compatible || throw(ArgumentError(
-            "aggressive_interpolation must be ConstantInterpolation for aggregation or ExtendedIInterpolation/TwoStageExtendedIInterpolation for RS/HMIS"
-        ))
+        compatible || throw(
+            ArgumentError(
+                "aggressive_interpolation must be ConstantInterpolation for aggregation or ExtendedIInterpolation/TwoStageExtendedIInterpolation for RS/HMIS"
+            )
+        )
     end
-    aggregation && options.aggressive_num_paths != 1 && throw(ArgumentError(
-        "aggressive_num_paths only applies to RS and HMIS"
-    ))
+    aggregation && options.aggressive_num_paths != 1 && throw(
+        ArgumentError(
+            "aggressive_num_paths only applies to RS and HMIS"
+        )
+    )
     return nothing
 end
 
@@ -1978,8 +1988,10 @@ function build_hierarchy(
             workspace.stage_coarse_map
         )
         theta = options.coarsening.theta
-        strong = strength(current, theta, options.max_row_sum, old_strength;
-            strength_type = options.strength_type)
+        strong = strength(
+            current, theta, options.max_row_sum, old_strength;
+            strength_type = options.strength_type
+        )
         cpu_backend || (workspace.stage_strength = strong)
         reuse_split = false
         aggressive = nothing
@@ -2021,11 +2033,14 @@ function build_hierarchy(
                 )
             elseif staged
                 cf, cmap, nc, P, aggressive = build_aggressive_prolongation(
-                    current, strong, options, interpolation)
+                    current, strong, options, interpolation
+                )
             else
-                cf, cmap, nc = aggressive_cf_split(current, strong,
+                cf, cmap, nc = aggressive_cf_split(
+                    current, strong,
                     options.coarsening, interpolation, old_cf, old_map;
-                    num_paths = options.aggressive_num_paths)
+                    num_paths = options.aggressive_num_paths
+                )
             end
         elseif options.coarsening isa Aggregation
             cf, cmap, nc = aggregation_split(

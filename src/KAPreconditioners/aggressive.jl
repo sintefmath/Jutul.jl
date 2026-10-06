@@ -5,8 +5,10 @@
 function build_aggressive_prolongation(A, strong, options, interpolation::TwoStageExtendedIInterpolation)
     first_cf, first_map, first_count = cf_split(A, strong, options.coarsening)
     P1 = build_prolongation(A, first_cf, first_map, first_count, strong, interpolation.stage)
-    graph, graph_strength = second_strength_graph(A, strong, first_cf, first_map,
-        first_count, options.aggressive_num_paths)
+    graph, graph_strength = second_strength_graph(
+        A, strong, first_cf, first_map,
+        first_count, options.aggressive_num_paths
+    )
     second_cf, _, _ = cf_split(graph, graph_strength, options.coarsening)
     for I in eachindex(second_cf)
         isempty(nzrange(graph, I)) && (second_cf[I] = Int8(1))
@@ -32,7 +34,8 @@ end
 
 function prolongation_from_arrays(rp, cv, values, nrow, ncol)
     return Prolongation{eltype(values), eltype(cv), typeof(rp), typeof(cv), typeof(values)}(
-        rp, cv, values, nrow, ncol)
+        rp, cv, values, nrow, ncol
+    )
 end
 
 # Symbolic sparse product and its fixed numeric accumulation map. Retain the
@@ -86,16 +89,21 @@ function interpolation_product(P1, P2, interpolation)
 end
 
 function aggressive_on_backend(plan, backend, old = nothing; reallocation_tracker = nothing)
-    copy_array(key) = copy_reusing(optional_property(old, key), getproperty(plan, key), backend;
-        reallocation_tracker = reallocation_tracker)
-    copy_prolongation(key) = device_prolongation_reusing(getproperty(plan, key), backend,
-        optional_property(old, key); reallocation_tracker = reallocation_tracker)
+    copy_array(key) = copy_reusing(
+        optional_property(old, key), getproperty(plan, key), backend;
+        reallocation_tracker = reallocation_tracker
+    )
+    copy_prolongation(key) = device_prolongation_reusing(
+        getproperty(plan, key), backend,
+        optional_property(old, key); reallocation_tracker = reallocation_tracker
+    )
     return (;
         P1 = copy_prolongation(:P1), P2 = copy_prolongation(:P2),
         product = copy_prolongation(:product),
         first_cf = copy_array(:first_cf), first_map = copy_array(:first_map),
         rows = copy_array(:rows), offsets = copy_array(:offsets),
-        left = copy_array(:left), right = copy_array(:right), retained = copy_array(:retained))
+        left = copy_array(:left), right = copy_array(:right), retained = copy_array(:retained),
+    )
 end
 
 @kernel function update_partial_extended_p_kernel!(
@@ -115,7 +123,8 @@ end
                 original_sum = zero(eltype(pv))
                 @inbounds for p in firstp:lastp
                     diagonal, total, selected = interpolation_row_terms(
-                        arp, acv, av, cf, cmap, strong, i, pcv[p], true)
+                        arp, acv, av, cf, cmap, strong, i, pcv[p], true
+                    )
                     scale = !iszero(diagonal) ? -inv(diagonal) : one(eltype(pv))
                     pv[p] = scale * selected
                     kept_sum += pv[p]
@@ -132,8 +141,10 @@ end
     end
 end
 
-@kernel function interpolation_product_kernel!(values, @Const(p1), @Const(p2),
-        @Const(offsets), @Const(left), @Const(right), n)
+@kernel function interpolation_product_kernel!(
+        values, @Const(p1), @Const(p2),
+        @Const(offsets), @Const(left), @Const(right), n
+    )
     k = @index(Global)
     if k <= n
         value = zero(eltype(values))
@@ -144,8 +155,10 @@ end
     end
 end
 
-@kernel function truncate_product_kernel!(values, @Const(rp), @Const(full_values),
-        @Const(full_rp), @Const(retained), rescale, n)
+@kernel function truncate_product_kernel!(
+        values, @Const(rp), @Const(full_values),
+        @Const(full_rp), @Const(retained), rescale, n
+    )
     i = @index(Global)
     if i <= n
         original_sum = zero(eltype(values))
@@ -173,16 +186,22 @@ function update_aggressive_prolongation!(level, interpolation::TwoStageExtendedI
     update_interpolation_p_kernel!(backend, block_size)(
         P1.nzval, P1.rowptr, P1.colval, A.rowptr, A.colval, A.nzval,
         plan.first_cf, plan.first_map, level.strength, true,
-        interpolation.stage.rescale, P1.nrow; ndrange = P1.nrow)
+        interpolation.stage.rescale, P1.nrow; ndrange = P1.nrow
+    )
     update_partial_extended_p_kernel!(backend, block_size)(
         P2.nzval, P2.rowptr, P2.colval, plan.rows, A.rowptr, A.colval, A.nzval,
         level.cf, level.coarse_map, level.strength,
-        interpolation.stage.rescale, P2.nrow; ndrange = P2.nrow)
+        interpolation.stage.rescale, P2.nrow; ndrange = P2.nrow
+    )
     n = length(product.nzval)
-    interpolation_product_kernel!(backend, block_size)(product.nzval, P1.nzval, P2.nzval,
-        plan.offsets, plan.left, plan.right, n; ndrange = n)
-    truncate_product_kernel!(backend, block_size)(P.nzval, P.rowptr,
+    interpolation_product_kernel!(backend, block_size)(
+        product.nzval, P1.nzval, P2.nzval,
+        plan.offsets, plan.left, plan.right, n; ndrange = n
+    )
+    truncate_product_kernel!(backend, block_size)(
+        P.nzval, P.rowptr,
         product.nzval, product.rowptr, plan.retained, interpolation.final.rescale,
-        P.nrow; ndrange = P.nrow)
+        P.nrow; ndrange = P.nrow
+    )
     return level
 end
