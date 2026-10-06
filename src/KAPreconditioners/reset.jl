@@ -40,23 +40,18 @@ function galerkin!(
     return coarse
 end
 
-prolongation_update_kernel(::ExtendedIInterpolation) =
-    update_extended_i_p_kernel!
-prolongation_update_kernel(::ClassicalInterpolation) =
-    update_classical_p_kernel!
-
 function update_prolongation!(
         level::AMGLevel,
         interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation}
     )
     A, P = level.A, level.P
     isnothing(P) && return level
-    kernel = prolongation_update_kernel(interpolation)
     n = matrix_nrows(A)
-    k! = kernel(matrix_backend(A), matrix_kernel_block_size(A))
+    k! = update_interpolation_p_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(
         P.nzval, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval,
-        level.cf, level.coarse_map, level.strength, interpolation.rescale,
+        level.cf, level.coarse_map, level.strength,
+        interpolation isa ExtendedIInterpolation, interpolation.rescale,
         n; ndrange = n
     )
     return level

@@ -32,7 +32,7 @@ end
 
 @kernel function strength_kernel!(
         strong, @Const(rp), @Const(cv), @Const(av),
-        theta, max_row_sum, n
+        theta, max_row_sum, strength_mode, n
     )
     i = @index(Global)
     if i <= n
@@ -63,7 +63,8 @@ end
                     end
                 end
             end
-            use_signed = largest_opposite > 0
+            use_signed = strength_mode == 1 ||
+                (strength_mode == 0 && largest_opposite > 0)
             largest = if use_signed
                 largest_opposite
             else
@@ -142,90 +143,85 @@ end
     end
 end
 
-@inline function normalize_interpolation_row!(
-        values, first, last, row_sum,
-        rescale
-    )
-    if rescale && !iszero(row_sum)
-        @inbounds for index in first:last
-            values[index] /= row_sum
+# Membership in the complete, untruncated coarse stencil. Numeric updates
+# retain P's sparsity but must use the original stencil to compute weights.
+@inline function interpolation_candidate(arp, acv, cf, strong, i, target, extended)
+    @inbounds for k in arp[i]:(arp[i + 1] - 1)
+        strong[k] || continue
+        j = acv[k]
+        if cf[j] == 1 && j == target
+            return true
+        elseif extended && cf[j] == -1
+            for q in arp[j]:(arp[j + 1] - 1)
+                strong[q] && acv[q] == target && cf[target] == 1 && return true
+            end
         end
-    elseif iszero(row_sum)
-        count = last - first + 1
-        value = one(eltype(values)) / count
-        @inbounds for index in first:last
-            values[index] = value
-        end
-    end
-    return nothing
-end
-
-@inline function row_contains_column(columns, first, last, target)
-    @inbounds for index in first:last
-        columns[index] == target && return true
     end
     return false
 end
 
-@kernel function update_extended_i_p_kernel!(
-        pv, @Const(prp), @Const(pcv),
-        @Const(arp), @Const(acv), @Const(av),
-        @Const(cf), @Const(cmap), @Const(strong),
-        rescale, n
-    )
-    i = @index(Global)
-    if i <= n
-        firstp, lastp = prp[i], prp[i + 1] - 1
-        if firstp <= lastp
-            if cf[i] == 1
-                @inbounds pv[firstp] = one(eltype(pv))
-            else
-                diag_i = zero(eltype(pv))
-                @inbounds for aidx in arp[i]:(arp[i + 1] - 1)
-                    acv[aidx] == i && (diag_i += av[aidx])
+# Return the effective diagonal, the sum of all candidate numerators, and
+# the numerator for retained coarse column J. This matches candidate_weights!
+# without allocating candidate vectors on the device.
+@inline function interpolation_row_terms(arp, acv, av, cf, cmap, strong, i, J, extended)
+    T = eltype(av)
+    diagonal = zero(T)
+    total = zero(T)
+    selected = zero(T)
+    @inbounds for k in arp[i]:(arp[i + 1] - 1)
+        j, aij = acv[k], av[k]
+        if j == i
+            diagonal += aij
+        elseif cf[j] == 1 && interpolation_candidate(arp, acv, cf, strong, i, j, extended)
+            total += aij
+            cmap[j] == J && (selected += aij)
+        elseif strong[k] && cf[j] == -1
+            sign_j = 1
+            if extended
+                diag_j = zero(T)
+                for q in arp[j]:(arp[j + 1] - 1)
+                    acv[q] == j && (diag_j += av[q])
                 end
-                if iszero(diag_i)
-                    v = one(eltype(pv)) / (lastp - firstp + 1)
-                    @inbounds for pidx in firstp:lastp
-                        pv[pidx] = v
-                    end
-                else
-                    rowsum = zero(eltype(pv))
-                    @inbounds for pidx in firstp:lastp
-                        J = pcv[pidx]
-                        w = zero(eltype(pv))
-                        for aidx in arp[i]:(arp[i + 1] - 1)
-                            j = acv[aidx]
-                            if cmap[j] == J
-                                w -= av[aidx] / diag_i
-                            elseif strong[aidx] && cf[j] != 1
-                                diag_j = zero(eltype(pv))
-                                a_jJ = zero(eltype(pv))
-                                for aj in arp[j]:(arp[j + 1] - 1)
-                                    q = acv[aj]
-                                    q == j && (diag_j += av[aj])
-                                    cmap[q] == J && (a_jJ += av[aj])
-                                end
-                                !iszero(diag_j) && (w += (av[aidx] * a_jJ) / (diag_i * diag_j))
-                            end
-                        end
-                        pv[pidx] = w
-                        rowsum += w
-                    end
-                    normalize_interpolation_row!(
-                        pv, firstp, lastp, rowsum, rescale
-                    )
+                sign_j = real(diag_j) < 0 ? -1 : 1
+            end
+            denominator = zero(T)
+            coarse_sum = zero(T)
+            coupling = zero(T)
+            back = zero(T)
+            for q in arp[j]:(arp[j + 1] - 1)
+                l, ajl = acv[q], av[q]
+                l == j && continue
+                extended && sign_j * real(ajl) >= 0 && continue
+                if extended && l == i
+                    denominator += ajl
+                    back += ajl
+                elseif cf[l] == 1 &&
+                        interpolation_candidate(arp, acv, cf, strong, i, l, extended)
+                    denominator += ajl
+                    coarse_sum += ajl
+                    cmap[l] == J && (coupling += ajl)
                 end
             end
+            if abs(denominator) > eps(real(T))
+                distribute = aij / denominator
+                total += distribute * coarse_sum
+                selected += distribute * coupling
+                diagonal += distribute * back
+            else
+                diagonal += aij
+            end
+        else
+            diagonal += aij
         end
     end
+    return diagonal, total, selected
 end
 
-@kernel function update_classical_p_kernel!(
+@kernel function update_interpolation_p_kernel!(
         pv, @Const(prp), @Const(pcv),
         @Const(arp), @Const(acv), @Const(av),
         @Const(cf), @Const(cmap), @Const(strong),
-        rescale, n
+        extended, rescale, n
     )
     i = @index(Global)
     if i <= n
@@ -234,66 +230,25 @@ end
             if cf[i] == 1
                 @inbounds pv[firstp] = one(eltype(pv))
             else
-                effective_diagonal = zero(eltype(pv))
-                @inbounds for aidx in arp[i]:(arp[i + 1] - 1)
-                    j = acv[aidx]
-                    if j == i || !strong[aidx]
-                        effective_diagonal += av[aidx]
-                    elseif cf[j] == -1
-                        denominator = zero(eltype(pv))
-                        for aj in arp[j]:(arp[j + 1] - 1)
-                            q = acv[aj]
-                            if cf[q] == 1
-                                target = cmap[q]
-                                included = row_contains_column(
-                                    pcv, firstp, lastp, target
-                                )
-                                included && (denominator += av[aj])
-                            end
-                        end
-                        iszero(denominator) && (effective_diagonal += av[aidx])
+                kept_sum = zero(eltype(pv))
+                original_sum = zero(eltype(pv))
+                @inbounds for pidx in firstp:lastp
+                    diagonal, total, selected = interpolation_row_terms(
+                        arp, acv, av, cf, cmap, strong, i, pcv[pidx], extended
+                    )
+                    scale = abs(diagonal) > eps(real(eltype(pv))) ?
+                        -inv(diagonal) : one(eltype(pv))
+                    weight = scale * selected
+                    pv[pidx] = weight
+                    kept_sum += weight
+                    original_sum = scale * total
+                end
+                if rescale && abs(kept_sum) > eps(real(eltype(pv)))
+                    scale = original_sum / kept_sum
+                    @inbounds for pidx in firstp:lastp
+                        pv[pidx] *= scale
                     end
                 end
-                rowsum = zero(eltype(pv))
-                for pidx in firstp:lastp
-                    J = pcv[pidx]
-                    numerator = zero(eltype(pv))
-                    @inbounds for aidx in arp[i]:(arp[i + 1] - 1)
-                        j = acv[aidx]
-                        if strong[aidx] && cf[j] == 1 && cmap[j] == J
-                            numerator += av[aidx]
-                        elseif strong[aidx] && cf[j] == -1
-                            denominator = zero(eltype(pv))
-                            coupling = zero(eltype(pv))
-                            for aj in arp[j]:(arp[j + 1] - 1)
-                                q = acv[aj]
-                                if cf[q] == 1
-                                    target = cmap[q]
-                                    included = row_contains_column(
-                                        pcv, firstp, lastp, target
-                                    )
-                                    if included
-                                        denominator += av[aj]
-                                        target == J && (coupling += av[aj])
-                                    end
-                                end
-                            end
-                            if !iszero(denominator)
-                                numerator += av[aidx] * coupling / denominator
-                            end
-                        end
-                    end
-                    weight = if iszero(effective_diagonal)
-                        zero(eltype(pv))
-                    else
-                        -numerator / effective_diagonal
-                    end
-                    @inbounds pv[pidx] = weight
-                    rowsum += weight
-                end
-                normalize_interpolation_row!(
-                    pv, firstp, lastp, rowsum, rescale
-                )
             end
         end
     end

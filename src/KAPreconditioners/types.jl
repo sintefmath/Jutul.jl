@@ -23,20 +23,30 @@ struct Aggregation <: AbstractCoarsening
 end
 Aggregation(theta::Real = 0.25) = Aggregation(Float64(theta))
 
-"""Classical Ruge-Stuben C/F splitting."""
+"""
+    RugeStuben(theta=0.25; second_pass=true)
+
+Classical Ruge-Stuben C/F splitting. The second pass enforces the shared
+coarse-neighbor condition for classical interpolation. Disable it to use a
+cheaper first-pass split, preferably with Extended+i interpolation.
+"""
 struct RugeStuben <: AbstractCoarsening
     theta::Float64
+    second_pass::Bool
 end
-RugeStuben(theta::Real = 0.25) = RugeStuben(Float64(theta))
+RugeStuben(theta::Real = 0.25; second_pass::Bool = true) =
+    RugeStuben(Float64(theta), second_pass)
 
 """Piecewise-constant interpolation for unsmoothed aggregation."""
 struct ConstantInterpolation <: AbstractInterpolation end
 
 """
-    ClassicalInterpolation(truncation=0.0, max_elements=0, norm_p=2, rescale=false)
+    ClassicalInterpolation(truncation=0.0, max_elements=0, norm_p=1, rescale=true)
 
 Classical interpolation through strong coarse neighbors. A zero
-`max_elements` retains every candidate.
+`max_elements` retains every candidate. By default, truncation compares weight
+magnitudes to `truncation` times the largest magnitude, and rescaling preserves
+the untruncated row sum. Explicit `norm_p=p` compares the p-th powers instead.
 """
 struct ClassicalInterpolation <: AbstractInterpolation
     truncation::Float64
@@ -45,7 +55,7 @@ struct ClassicalInterpolation <: AbstractInterpolation
     rescale::Bool
     function ClassicalInterpolation(
             truncation::Real = 0.0, max_elements::Integer = 0,
-            norm_p::Integer = 2, rescale::Bool = false
+            norm_p::Integer = 1, rescale::Bool = true
         )
         parameters = interpolation_parameters(
             truncation, max_elements, norm_p; allow_unlimited = true
@@ -55,10 +65,12 @@ struct ClassicalInterpolation <: AbstractInterpolation
 end
 
 """
-    ExtendedIInterpolation(truncation=0.0, max_elements=4, norm_p=2, rescale=true)
+    ExtendedIInterpolation(truncation=0.0, max_elements=4, norm_p=1, rescale=true)
 
 Configuration for distance-two Extended+i interpolation. When `rescale` is
 enabled, truncation preserves the untruncated interpolation-row sum.
+A zero `max_elements` retains every candidate. `norm_p` has the same meaning
+as for `ClassicalInterpolation`.
 """
 struct ExtendedIInterpolation <: AbstractInterpolation
     truncation::Float64
@@ -67,10 +79,10 @@ struct ExtendedIInterpolation <: AbstractInterpolation
     rescale::Bool
     function ExtendedIInterpolation(
             truncation::Real = 0.0, max_elements::Integer = 4,
-            norm_p::Integer = 2, rescale::Bool = true
+            norm_p::Integer = 1, rescale::Bool = true
         )
         parameters = interpolation_parameters(
-            truncation, max_elements, norm_p; allow_unlimited = false
+            truncation, max_elements, norm_p; allow_unlimited = true
         )
         return new(parameters..., rescale)
     end
@@ -95,8 +107,18 @@ independent hierarchy option whose default follows the coarsening method:
 piecewise constant for aggregation, classical for Ruge-Stuben, and Extended+i
 for HMIS. `aggressive_levels` applies a second coarsening pass to that many
 levels, starting at the finest level. Its default of zero disables aggressive
-coarsening. Classical interpolation is promoted to Extended+i on aggressive
-levels to provide the required long-range stencil.
+coarsening. `aggressive_num_paths=1` retains every direct or distance-two path
+in the second strength graph; larger values require more paths and reduce
+aggressiveness. This option applies to RS and HMIS, not aggregation.
+`aggressive_interpolation=nothing` inherits ordinary interpolation, promoting
+classical to Extended+i. Supply `ExtendedIInterpolation(...)` to independently
+control truncation and row limits on aggressive levels.
+
+`strength_type` is shared by all coarsening methods: `:signed` uses only
+off-diagonal entries opposite in sign to the diagonal, `:absolute` uses all
+off-diagonal magnitudes, and the default `:signed_fallback` uses signed
+strength unless a row has no opposite-sign entries, then uses magnitudes.
+HMIS with classical interpolation receives the classical second-pass repair.
 """
 struct AMGOptions
     coarsening::AbstractCoarsening
@@ -104,10 +126,13 @@ struct AMGOptions
     smoother::AbstractSmoother
     max_levels::Int
     aggressive_levels::Int
+    aggressive_num_paths::Int
+    aggressive_interpolation::Union{Nothing, AbstractInterpolation}
     coarse_size::Int
     coarse_solver::Symbol
     coarse_steps::Int
     max_row_sum::Float64
+    strength_type::Symbol
     block_size::Int
     cycle::Symbol
 end
@@ -118,17 +143,21 @@ function AMGOptions(;
         smoother::AbstractSmoother = SPAI0(1, 1.0),
         max_levels::Integer = 20,
         aggressive_levels::Integer = 0,
+        aggressive_num_paths::Integer = 1,
+        aggressive_interpolation::Union{Nothing, AbstractInterpolation} = nothing,
         coarse_size::Integer = 50,
         coarse_solver::Symbol = :lu,
         coarse_steps::Integer = 8,
         max_row_sum::Real = 0.9,
+        strength_type::Symbol = :signed_fallback,
         block_size::Integer = 128,
         cycle::Symbol = :V
     )
     return AMGOptions(
         coarsening, interpolation, smoother, Int(max_levels),
-        Int(aggressive_levels), Int(coarse_size), coarse_solver, Int(coarse_steps),
-        Float64(max_row_sum), Int(block_size), cycle
+        Int(aggressive_levels), Int(aggressive_num_paths), aggressive_interpolation,
+        Int(coarse_size), coarse_solver, Int(coarse_steps),
+        Float64(max_row_sum), strength_type, Int(block_size), cycle
     )
 end
 

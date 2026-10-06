@@ -371,6 +371,107 @@ end
     @test sum(truncated_row) ≈ sum(full_row)
 end
 
+@testset "AMG interpolation tuning defaults" begin
+    @test ClassicalInterpolation().norm_p == ExtendedIInterpolation().norm_p == 1
+    @test ClassicalInterpolation().rescale
+    @test ExtendedIInterpolation(0.0, 0).max_elements == 0
+    @test AMGPreconditioner(:ruge_stuben).options.coarsening.theta == RugeStuben().theta
+    @test AMGPreconditioner(:hmis).options.coarsening.theta == HMIS().theta
+    @test !AMGPreconditioner(:ruge_stuben; second_pass = false).options.coarsening.second_pass
+    @test_throws ArgumentError AMGPreconditioner(:hmis; second_pass = false)
+
+    # A factor of 0.3 retains the weight 0.4 relative to a maximum of 1.
+    A = sparse([1, 1, 1, 2, 3], [1, 2, 3, 2, 3], [10.0, -1.0, -0.4, 1.0, 1.0], 3, 3)
+    C = csr_matrix(A)
+    cf, cmap = Int8[-1, 1, 1], Int32[0, 1, 2]
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    for interpolation in (ClassicalInterpolation, ExtendedIInterpolation)
+        P = KAPreconditioners.build_prolongation(C, cf, cmap, 2, strong, interpolation(0.3))
+        @test P.rowptr[2] - P.rowptr[1] == 2
+        # Explicit squared-magnitude truncation retains the previous semantics.
+        P2 = KAPreconditioners.build_prolongation(C, cf, cmap, 2, strong, interpolation(0.3, 0, 2))
+        @test P2.rowptr[2] - P2.rowptr[1] == 1
+        @test sum(P2.nzval[P2.rowptr[1]:(P2.rowptr[2] - 1)]) ≈ 0.14
+    end
+end
+
+function test_numeric_interpolation_tuning(backend)
+    # Include a strong F-F edge, weak entries, and a distance-two-only coarse
+    # point. The correct untruncated row sums are deliberately below one.
+    A = sparse(
+        [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 4, 5, 6],
+        [1, 2, 3, 4, 6, 1, 2, 3, 4, 5, 6, 3, 4, 5, 6],
+        [10.0, -2.0, -1.0, -1.5, -0.1, -1.0, 4.0, -0.5, -0.75, -2.0, 0.25, 1.0, 1.0, 1.0, 1.0],
+        6, 6
+    )
+    cf, cmap = Int8[-1, -1, 1, 1, 1, 1], Int32[0, 0, 1, 2, 3, 4]
+    C = csr_matrix(A)
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    for interpolation in (ClassicalInterpolation, ExtendedIInterpolation), rescale in (false, true)
+        config = interpolation(0.0, 1, 1, rescale)
+        P = KAPreconditioners.build_prolongation(C, cf, cmap, 4, strong, config)
+        D = csr_matrix(A; backend = backend)
+        dcf = KAPreconditioners.backend_copy(backend, cf)
+        dmap = KAPreconditioners.backend_copy(backend, cmap)
+        ds = KAPreconditioners.backend_copy(backend, strong)
+        dp = KAPreconditioners.backend_copy(backend, P.nzval)
+        drp = KAPreconditioners.backend_copy(backend, P.rowptr)
+        dcv = KAPreconditioners.backend_copy(backend, P.colval)
+        k! = KAPreconditioners.update_interpolation_p_kernel!(backend, 128)
+        k!(dp, drp, dcv, D.rowptr, D.colval, D.nzval, dcf, dmap, ds,
+            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6)
+        KAPreconditioners.synchronize_backend(backend)
+        @test Array(dp) ≈ P.nzval
+
+        # Change coefficients while retaining the old interpolation pattern.
+        B = copy(A)
+        B[1, 1] = 12.0
+        B[1, 3] = -1.2
+        B[2, 5] = -2.5
+        BC = csr_matrix(B)
+        full = KAPreconditioners.build_prolongation(BC, cf, cmap, 4, strong, interpolation(0.0, 0, 1, false))
+        expected = copy(P.nzval)
+        for i in 1:6
+            full_row = full.rowptr[i]:(full.rowptr[i + 1] - 1)
+            kept_row = P.rowptr[i]:(P.rowptr[i + 1] - 1)
+            for pidx in kept_row
+                q = findfirst(q -> full.colval[q] == P.colval[pidx], full_row)
+                expected[pidx] = full.nzval[full_row[q]]
+            end
+            if rescale && !isempty(kept_row)
+                expected[kept_row] .*= sum(full.nzval[full_row]) / sum(expected[kept_row])
+            end
+        end
+        DB = csr_matrix(B; backend = backend)
+        k!(dp, drp, dcv, DB.rowptr, DB.colval, DB.nzval, dcf, dmap, ds,
+            config isa ExtendedIInterpolation, rescale, 6; ndrange = 6)
+        KAPreconditioners.synchronize_backend(backend)
+        @test Array(dp) ≈ expected
+    end
+end
+
+@testset "Interpolation rescaling during numeric updates" begin
+    test_numeric_interpolation_tuning(CPU())
+    test_numeric_interpolation_tuning(JLBackend())
+end
+
+@testset "AMG strength selection" begin
+    A = sparse([1, 1, 1, 2, 2, 3], [1, 2, 3, 2, 3, 3], [5.0, -1.0, 2.0, 3.0, 1.0, 1.0], 3, 3)
+    C = csr_matrix(A)
+    for backend in (CPU(), JLBackend()), mode in (:signed_fallback, :signed, :absolute)
+        D = csr_matrix(A; backend = backend)
+        strong = Array(KAPreconditioners.strength(D, 0.25, 1.0; strength_type = mode))
+        expected = KAPreconditioners.strength(C, 0.25, 1.0; strength_type = mode)
+        @test strong == expected
+        by_edge = Dict((i, Int(C.colval[k])) => strong[k] for i in 1:3 for k in nzrange(C, i))
+        @test by_edge[(1, 2)]
+        @test by_edge[(1, 3)] == (mode == :absolute)
+        @test by_edge[(2, 3)] == (mode != :signed)
+    end
+    @test AMGPreconditioner(; strength_type = :absolute).options.strength_type == :absolute
+    @test_throws ArgumentError setup_amg(A, AMGOptions(strength_type = :invalid))
+end
+
 @testset "Jutul simulation with KA AMG" begin
     grid = CartesianMesh((3, 3), (1.0, 1.0))
     model = SimulationModel(DiscretizedDomain(grid), SimpleHeatSystem())
@@ -448,7 +549,18 @@ end
     end
     C = csr_matrix(sparse(rows, cols, values, 8, 8))
     strong = KAPreconditioners.strength(C, 0.25, 1.0)
-    cf, = KAPreconditioners.cf_split(C, strong, RugeStuben())
+    first_cf, _, first_nc = KAPreconditioners.cf_split(C, strong, RugeStuben(; second_pass = false))
+    @test first_nc == 2
+    @test first_cf[3] == first_cf[4] == -1
+    cf, _, nc = KAPreconditioners.cf_split(C, strong, RugeStuben())
+    @test nc == 3
+    hmis = setup_amg(C, AMGOptions(coarsening = HMIS(0.25), coarse_size = 2, max_row_sum = 1.0))
+    @test hmis.levels[1].P.ncol == 2
+    classical_hmis = setup_amg(C, AMGOptions(
+        coarsening = HMIS(0.25), interpolation = ClassicalInterpolation(),
+        coarse_size = 2, max_row_sum = 1.0
+    ))
+    @test classical_hmis.levels[1].cf == cf
     for i in eachindex(cf)
         cf[i] == -1 || continue
         coarse = Set(
@@ -463,6 +575,54 @@ end
             end
         end
     end
+end
+
+@testset "Aggressive path counts and interpolation controls" begin
+    # C1 reaches C4 through two distinct F points and C5 directly. HYPRE
+    # gives the direct edge weight two in its path-count graph.
+    A = sparse([1, 1, 1, 2, 3], [2, 3, 5, 4, 4], fill(-1.0, 5), 5, 5)
+    C = csr_matrix(A)
+    cf, cmap = Int8[1, -1, -1, 1, 1], Int32[1, 0, 0, 2, 3]
+    for paths in (1, 2)
+        graph, _ = KAPreconditioners.second_strength_graph(C, trues(5), cf, cmap, 3, paths)
+        @test graph.colval == Int32[2, 3]
+    end
+    graph, _ = KAPreconditioners.second_strength_graph(C, trues(5), cf, cmap, 3, 3)
+    @test isempty(graph.colval)
+
+    A = poisson_2d(14)
+    aggressive_interp = ExtendedIInterpolation(0.3, 2)
+    options = AMGOptions(aggressive_levels = 1, aggressive_num_paths = 2,
+        aggressive_interpolation = aggressive_interp, coarse_size = 8)
+    @test KAPreconditioners.interpolation_for_level(options, 1) === aggressive_interp
+    @test KAPreconditioners.interpolation_for_level(options, 2) === options.interpolation
+    inherited = AMGOptions(coarsening = RugeStuben(), aggressive_levels = 1)
+    @test KAPreconditioners.interpolation_for_level(inherited, 1) isa ExtendedIInterpolation
+    @test KAPreconditioners.interpolation_for_level(inherited, 1).max_elements == 0
+    wrapper = AMGPreconditioner(; aggressive_levels = 1, aggressive_num_paths = 2,
+        aggressive_interpolation = aggressive_interp)
+    @test wrapper.options.aggressive_num_paths == 2
+    @test wrapper.options.aggressive_interpolation === aggressive_interp
+    for backend in (CPU(), JLBackend())
+        D = csr_matrix(A; backend = backend)
+        H = setup_amg(D, options)
+        P = H.levels[1].P
+        @test maximum(diff(Array(P.rowptr))) <= 2
+        previous = Array(P.nzval)
+        resetup_amg!(H, D, :sparsity)
+        @test Array(P.nzval) ≈ previous
+        test_galerkin(H)
+        b = KAPreconditioners.backend_copy(backend, ones(size(A, 1)))
+        x = KAPreconditioners.backend_zeros(backend, Float64, size(A, 1))
+        for _ in 1:4
+            cycle!(x, H, b)
+        end
+        @test norm(ones(size(A, 1)) - A * Array(x)) < sqrt(size(A, 1))
+    end
+    @test_throws ArgumentError setup_amg(A, AMGOptions(aggressive_num_paths = 0))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(aggressive_interpolation = ClassicalInterpolation()))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(coarsening = Aggregation(), aggressive_num_paths = 2))
+    @test_throws ArgumentError setup_amg(A, AMGOptions(coarsening = Aggregation(), aggressive_interpolation = aggressive_interp))
 end
 
 @testset "aggressive coarsening" begin

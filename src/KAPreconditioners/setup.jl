@@ -19,8 +19,10 @@ end
 
 function strength(
         A::StaticSparsityMatrixCSR{Tv, Ti}, theta::Real, max_row_sum::Real = 1.0,
-        reuse = nothing
+        reuse = nothing; strength_type::Symbol = :signed_fallback
     ) where {Tv, Ti}
+    strength_type in (:signed_fallback, :signed, :absolute) ||
+        throw(ArgumentError("strength_type must be :signed_fallback, :signed or :absolute"))
     backend = matrix_backend(A)
     scalar_type = matrix_real_type(Tv)
     theta = convert(scalar_type, theta)
@@ -38,8 +40,10 @@ function strength(
         strong = backend_zeros(backend, Bool, number_of_nonzeros)
     end
     k! = strength_kernel!(backend, matrix_kernel_block_size(A))
+    strength_mode = strength_type == :signed ? UInt8(1) :
+        strength_type == :absolute ? UInt8(2) : UInt8(0)
     k!(
-        strong, A.rowptr, A.colval, A.nzval, theta, max_row_sum, n;
+        strong, A.rowptr, A.colval, A.nzval, theta, max_row_sum, strength_mode, n;
         ndrange = n
     )
     synchronize_backend(backend)
@@ -382,7 +386,7 @@ function ruge_stuben_second_pass!(A, strong, cf, workspace = nothing)
 end
 
 function cf_split(
-        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, ::RugeStuben,
+        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, coarsening::RugeStuben,
         reuse_cf = nothing, reuse_map = nothing, workspace = nothing
     ) where {Tv, Ti}
     n = matrix_nrows(A)
@@ -393,7 +397,7 @@ function cf_split(
         cf[i] = cf[i] == 1 ? Int8(1) : Int8(-1)
     end
     promote_uncovered_f_points!(A, strong, cf)
-    ruge_stuben_second_pass!(A, strong, cf, workspace)
+    coarsening.second_pass && ruge_stuben_second_pass!(A, strong, cf, workspace)
 
     coarse_map = host_buffer(reuse_map, Ti, n; zeroed = true)
     nc = rebuild_coarse_map!(coarse_map, cf)
@@ -525,14 +529,19 @@ end
 """
 Build HYPRE's second strength graph for aggressive coarsening. Its vertices
 are the C points from the first split, and its edges are the direct and
-distance-two strong connections between those points (`S + S^2`).
+distance-two strong connections between those points (`S + S^2`). An edge
+requires at least `num_paths` paths; a direct connection counts as two paths,
+as in HYPRE.
 """
 function second_strength_graph(
-        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, cf, coarse_map, nc::Integer
+        A::StaticSparsityMatrixCSR{Tv, Ti}, strong, cf, coarse_map, nc::Integer,
+        num_paths::Integer = 1
     ) where {Tv, Ti}
+    num_paths >= 1 || throw(ArgumentError("num_paths must be positive"))
     nc = Int(nc)
     row_columns = [Ti[] for _ in 1:nc]
     marker = zeros(Int, nc)
+    path_counts = zeros(Int, nc)
     @inbounds for i in 1:matrix_nrows(A)
         cf[i] == 1 || continue
         I = Int(coarse_map[i])
@@ -544,8 +553,10 @@ function second_strength_graph(
                 J = Int(coarse_map[j])
                 if J != I && marker[J] != I
                     marker[J] = I
+                    path_counts[J] = 0
                     push!(columns, Ti(J))
                 end
+                J != I && (path_counts[J] += 2)
             end
             for bidx in nzrange(A, j)
                 strong[bidx] || continue
@@ -554,10 +565,13 @@ function second_strength_graph(
                 K = Int(coarse_map[k])
                 if K != I && marker[K] != I
                     marker[K] = I
+                    path_counts[K] = 0
                     push!(columns, Ti(K))
                 end
+                K != I && (path_counts[K] += 1)
             end
         end
+        filter!(J -> path_counts[J] >= num_paths, columns)
         sort!(columns)
     end
 
@@ -632,13 +646,13 @@ end
 function aggressive_cf_split(
         A::StaticSparsityMatrixCSR{Tv, Ti}, strong,
         coarsening::Union{RugeStuben, HMIS}, interpolation,
-        reuse_cf = nothing, reuse_map = nothing
+        reuse_cf = nothing, reuse_map = nothing; num_paths::Integer = 1
     ) where {Tv, Ti}
     first_cf, first_map, first_count = cf_split(
         A, strong, coarsening
     )
     second_graph, second_strength = second_strength_graph(
-        A, strong, first_cf, first_map, first_count
+        A, strong, first_cf, first_map, first_count, num_paths
     )
     second_cf, _, _ = cf_split(
         second_graph, second_strength, coarsening
@@ -729,20 +743,16 @@ end
 
 aggressive_interpolation(interpolation) = interpolation
 function aggressive_interpolation(interpolation::ClassicalInterpolation)
-    max_elements = if iszero(interpolation.max_elements)
-        typemax(Int)
-    else
-        interpolation.max_elements
-    end
     return ExtendedIInterpolation(
-        interpolation.truncation, max_elements,
+        interpolation.truncation, interpolation.max_elements,
         interpolation.norm_p, interpolation.rescale
     )
 end
 
 function interpolation_for_level(options::AMGOptions, level_index::Integer)
     return if level_index <= options.aggressive_levels
-        aggressive_interpolation(options.interpolation)
+        isnothing(options.aggressive_interpolation) ?
+            aggressive_interpolation(options.interpolation) : options.aggressive_interpolation
     else
         options.interpolation
     end
@@ -1871,6 +1881,10 @@ function validate_setup_options(options::AMGOptions)
     options.max_levels >= 1 || throw(ArgumentError("max_levels must be positive"))
     options.aggressive_levels >= 0 ||
         throw(ArgumentError("aggressive_levels must be non-negative"))
+    options.aggressive_num_paths >= 1 ||
+        throw(ArgumentError("aggressive_num_paths must be positive"))
+    options.strength_type in (:signed_fallback, :signed, :absolute) ||
+        throw(ArgumentError("strength_type must be :signed_fallback, :signed or :absolute"))
     options.coarse_size >= 1 || throw(ArgumentError("coarse_size must be positive"))
     options.max_row_sum >= 0 || throw(ArgumentError("max_row_sum must be non-negative"))
     options.coarse_solver in (:lu, :spai0) ||
@@ -1882,6 +1896,17 @@ function validate_setup_options(options::AMGOptions)
             "ConstantInterpolation must be used with Aggregation, and Aggregation requires it"
         )
     )
+    aggressive = options.aggressive_interpolation
+    if !isnothing(aggressive)
+        compatible = aggregation ? aggressive isa ConstantInterpolation :
+            aggressive isa ExtendedIInterpolation
+        compatible || throw(ArgumentError(
+            "aggressive_interpolation must be ConstantInterpolation for aggregation or ExtendedIInterpolation for RS/HMIS"
+        ))
+    end
+    aggregation && options.aggressive_num_paths != 1 && throw(ArgumentError(
+        "aggressive_num_paths only applies to RS and HMIS"
+    ))
     return nothing
 end
 
@@ -1946,7 +1971,8 @@ function build_hierarchy(
             workspace.stage_coarse_map
         )
         theta = options.coarsening.theta
-        strong = strength(current, theta, options.max_row_sum, old_strength)
+        strong = strength(current, theta, options.max_row_sum, old_strength;
+            strength_type = options.strength_type)
         cpu_backend || (workspace.stage_strength = strong)
         reuse_split = false
         if reusable_split
@@ -1988,7 +2014,8 @@ function build_hierarchy(
             else
                 cf, cmap, nc = aggressive_cf_split(
                     current, strong, options.coarsening,
-                    interpolation, old_cf, old_map
+                    interpolation, old_cf, old_map;
+                    num_paths = options.aggressive_num_paths
                 )
             end
         elseif options.coarsening isa Aggregation
@@ -2001,6 +2028,11 @@ function build_hierarchy(
                 current, strong, options.coarsening,
                 old_cf, old_map, workspace
             )
+            if options.coarsening isa HMIS && interpolation isa ClassicalInterpolation
+                promote_uncovered_f_points!(current, strong, cf)
+                ruge_stuben_second_pass!(current, strong, cf, workspace)
+                nc = rebuild_coarse_map!(cmap, cf)
+            end
             nc == 0 && break
         end
         old_P = setup_reuse_buffer(
