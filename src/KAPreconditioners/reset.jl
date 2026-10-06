@@ -42,10 +42,14 @@ end
 
 function update_prolongation!(
         level::AMGLevel,
-        interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation}
+        interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation, TwoStageExtendedIInterpolation}
     )
     A, P = level.A, level.P
     isnothing(P) && return level
+    if !isnothing(level.aggressive)
+        update_aggressive_prolongation!(level, interpolation)
+        return level
+    end
     n = matrix_nrows(A)
     k! = update_interpolation_p_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(

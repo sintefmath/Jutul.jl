@@ -88,6 +88,32 @@ struct ExtendedIInterpolation <: AbstractInterpolation
     end
 end
 
+"""
+    TwoStageExtendedIInterpolation(; truncation=0.0, max_elements=0,
+        norm_p=1, rescale=true, stage_truncation=0.0, stage_max_elements=0)
+
+Hypre's two-stage Extended+i aggressive interpolation (`agg_interp_type=1`).
+Build P1 from fine points to the first coarse set, then partial Extended+i P2
+from that set to the final coarse set using the original matrix. Truncate the
+product P1*P2 with `truncation` and `max_elements`. The independent `stage_*`
+parameters control both factors (hypre's AggP12 controls); zero row limits
+mean unlimited. This variant is only valid for `aggressive_interpolation`.
+"""
+struct TwoStageExtendedIInterpolation <: AbstractInterpolation
+    stage::ExtendedIInterpolation
+    final::ExtendedIInterpolation
+end
+
+function TwoStageExtendedIInterpolation(;
+        truncation::Real = 0.0, max_elements::Integer = 0,
+        norm_p::Integer = 1, rescale::Bool = true,
+        stage_truncation::Real = 0.0, stage_max_elements::Integer = 0
+    )
+    return TwoStageExtendedIInterpolation(
+        ExtendedIInterpolation(stage_truncation, stage_max_elements, norm_p, rescale),
+        ExtendedIInterpolation(truncation, max_elements, norm_p, rescale))
+end
+
 """Hybrid modified independent-set coarsening."""
 struct HMIS <: AbstractCoarsening
     theta::Float64
@@ -110,9 +136,11 @@ levels, starting at the finest level. Its default of zero disables aggressive
 coarsening. `aggressive_num_paths=1` retains every direct or distance-two path
 in the second strength graph; larger values require more paths and reduce
 aggressiveness. This option applies to RS and HMIS, not aggregation.
-`aggressive_interpolation=nothing` inherits ordinary interpolation, promoting
-classical to Extended+i. Supply `ExtendedIInterpolation(...)` to independently
-control truncation and row limits on aggressive levels.
+`aggressive_interpolation=nothing` uses two-stage Extended+i, inheriting ordinary
+truncation and row limits for the final product while leaving both factors
+untruncated. Supply `TwoStageExtendedIInterpolation(...)` for independent factor
+and product controls. Explicit `ExtendedIInterpolation(...)` retains the legacy
+distance-two interpolation on the final split.
 
 `strength_type` is shared by all coarsening methods: `:signed` uses only
 off-diagonal entries opposite in sign to the diagonal, `:absolute` uses all
@@ -222,6 +250,7 @@ mutable struct AMGLevel{Tv, Ti}
     cf::Any
     coarse_map::Any
     strength::Any
+    aggressive::Any
 end
 
 """Host scratch and staging storage retained across symbolic rebuilds."""

@@ -597,8 +597,8 @@ end
     @test KAPreconditioners.interpolation_for_level(options, 1) === aggressive_interp
     @test KAPreconditioners.interpolation_for_level(options, 2) === options.interpolation
     inherited = AMGOptions(coarsening = RugeStuben(), aggressive_levels = 1)
-    @test KAPreconditioners.interpolation_for_level(inherited, 1) isa ExtendedIInterpolation
-    @test KAPreconditioners.interpolation_for_level(inherited, 1).max_elements == 0
+    @test KAPreconditioners.interpolation_for_level(inherited, 1) isa TwoStageExtendedIInterpolation
+    @test KAPreconditioners.interpolation_for_level(inherited, 1).final.max_elements == 0
     wrapper = AMGPreconditioner(; aggressive_levels = 1, aggressive_num_paths = 2,
         aggressive_interpolation = aggressive_interp)
     @test wrapper.options.aggressive_num_paths == 2
@@ -623,6 +623,84 @@ end
     @test_throws ArgumentError setup_amg(A, AMGOptions(aggressive_interpolation = ClassicalInterpolation()))
     @test_throws ArgumentError setup_amg(A, AMGOptions(coarsening = Aggregation(), aggressive_num_paths = 2))
     @test_throws ArgumentError setup_amg(A, AMGOptions(coarsening = Aggregation(), aggressive_interpolation = aggressive_interp))
+end
+
+function test_two_stage_interpolation(backend)
+    # A seven-point chain gives C1={2,4,6}, C2={4}. P2 uses the original
+    # rows 2 and 6: each has effective diagonal 2.5 and numerator -0.5.
+    # Consequently the endpoints receive nonzero distance-three weights.
+    A = spdiagm(-1 => fill(-1.0, 6), 0 => fill(4.0, 7), 1 => fill(-1.0, 6))
+    options = AMGOptions(coarsening = RugeStuben(), aggressive_levels = 1,
+        aggressive_interpolation = TwoStageExtendedIInterpolation(), coarse_size = 1,
+        max_levels = 2)
+    H = setup_amg(csr_matrix(A; backend), options)
+    level = H.levels[1]
+    plan = level.aggressive
+    @test Array(plan.rows) == [2, 4, 6]
+    @test findall(==(1), Array(level.cf)) == [4]
+    @test Array(level.P.nzval) ≈ [0.05, 0.2, 0.3, 1.0, 0.3, 0.2, 0.05]
+    @test sparse_prolongation(level.P) ≈ sparse_prolongation(plan.P1) * sparse_prolongation(plan.P2)
+
+    # Uniform scaling must preserve strength and interpolation even below eps.
+    for scale in (1.0e-20, 1.0e20)
+        scaled = setup_amg(csr_matrix(scale*A; backend), options)
+        @test Array(scaled.levels[1].strength) == Array(level.strength)
+        @test Array(scaled.levels[1].P.nzval) ≈ Array(level.P.nzval)
+        resetup_amg!(H, csr_matrix(scale*A; backend), :sparsity)
+        @test Array(level.P.nzval) ≈ Array(scaled.levels[1].P.nzval)
+    end
+
+    # Nonuniform coefficient changes exercise both factors and final-product
+    # truncation. With the same split/stencil, reuse must match a fresh build.
+    n = 12
+    T = spdiagm(-1 => fill(-1.0, n - 1), 0 => fill(4.0, n), 1 => fill(-1.0, n - 1))
+    E = spdiagm(-1 => fill(-1.0, n - 1), 1 => fill(-1.0, n - 1))
+    A = kron(sparse(I, n, n), T) + kron(E, sparse(I, n, n))
+    B = A + spdiagm(0 => [0.2 + 0.1*sin(i) for i in 1:size(A, 1)])
+    for rescale in (false, true)
+        interpolation = TwoStageExtendedIInterpolation(max_elements = 2,
+            stage_max_elements = 2, rescale = rescale)
+        options = AMGOptions(aggressive_levels = 1, aggressive_interpolation = interpolation,
+            coarse_size = 1, max_levels = 2)
+        H = setup_amg(csr_matrix(A; backend), options)
+        fresh = setup_amg(csr_matrix(B; backend), options)
+        P = H.levels[1].P
+        pattern = (copy(Array(P.rowptr)), copy(Array(P.colval)))
+        before = copy(Array(P.nzval))
+        resetup_amg!(H, csr_matrix(B; backend), :sparsity)
+        @test (Array(P.rowptr), Array(P.colval)) == pattern
+        @test !(Array(P.nzval) ≈ before)
+        # Candidate ranking may change, so compare the retained entries with
+        # the complete product; preserve its full row sum when requested.
+        full = sparse_prolongation(fresh.levels[1].aggressive.product)
+        entries, all_columns, all_values = Array(P.rowptr), Array(P.colval), Array(P.nzval)
+        for i in 1:P.nrow
+            r = entries[i]:(entries[i + 1] - 1)
+            columns = all_columns[r]
+            expected = vec(Array(full[i, columns]))
+            if rescale && !iszero(sum(expected))
+                expected *= sum(full[i, :]) / sum(expected)
+            end
+            @test all_values[r] ≈ expected
+        end
+        @test KAPreconditioners.sparse_matrix(H.levels[2].A) ≈
+            sparse_prolongation(P)' * B * sparse_prolongation(P)
+        old_plan = H.levels[1].aggressive
+        resetup_amg!(H, csr_matrix(B; backend), :memory)
+        new_plan = H.levels[1].aggressive
+        @test new_plan.P1.nzval === old_plan.P1.nzval
+        @test new_plan.P2.nzval === old_plan.P2.nzval
+        @test Array(H.levels[1].P.nzval) ≈ Array(fresh.levels[1].P.nzval)
+    end
+end
+
+@testset "Hypre two-stage aggressive interpolation" begin
+    @test_throws ArgumentError TwoStageExtendedIInterpolation(stage_max_elements = -1)
+    @test_throws ArgumentError setup_amg(poisson_2d(3),
+        AMGOptions(interpolation = TwoStageExtendedIInterpolation()))
+    for backend in (CPU(), JLBackend())
+        test_two_stage_interpolation(backend)
+    end
 end
 
 @testset "aggressive coarsening" begin

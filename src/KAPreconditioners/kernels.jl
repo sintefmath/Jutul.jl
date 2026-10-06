@@ -43,7 +43,7 @@ end
             row_sum += a
             cv[k] == i && (diag += a)
         end
-        usable_diagonal = abs(diag) >= eps(real(eltype(av)))
+        usable_diagonal = !iszero(diag)
         weakened = max_row_sum < one(max_row_sum) && usable_diagonal &&
             abs(row_sum) > abs(diag) * max_row_sum
         if weakened
@@ -202,7 +202,7 @@ end
                     cmap[l] == J && (coupling += ajl)
                 end
             end
-            if abs(denominator) > eps(real(T))
+            if !iszero(denominator)
                 distribute = aij / denominator
                 total += distribute * coarse_sum
                 selected += distribute * coupling
@@ -236,14 +236,14 @@ end
                     diagonal, total, selected = interpolation_row_terms(
                         arp, acv, av, cf, cmap, strong, i, pcv[pidx], extended
                     )
-                    scale = abs(diagonal) > eps(real(eltype(pv))) ?
+                    scale = !iszero(diagonal) ?
                         -inv(diagonal) : one(eltype(pv))
                     weight = scale * selected
                     pv[pidx] = weight
                     kept_sum += weight
                     original_sum = scale * total
                 end
-                if rescale && abs(kept_sum) > eps(real(eltype(pv)))
+                if rescale && !iszero(kept_sum)
                     scale = original_sum / kept_sum
                     @inbounds for pidx in firstp:lastp
                         pv[pidx] *= scale

@@ -742,11 +742,10 @@ function aggressive_aggregation_split(
 end
 
 aggressive_interpolation(interpolation) = interpolation
-function aggressive_interpolation(interpolation::ClassicalInterpolation)
-    return ExtendedIInterpolation(
-        interpolation.truncation, interpolation.max_elements,
-        interpolation.norm_p, interpolation.rescale
-    )
+function aggressive_interpolation(interpolation::Union{ClassicalInterpolation, ExtendedIInterpolation})
+    return TwoStageExtendedIInterpolation(;
+        truncation = interpolation.truncation, max_elements = interpolation.max_elements,
+        norm_p = interpolation.norm_p, rescale = interpolation.rescale)
 end
 
 function interpolation_for_level(options::AMGOptions, level_index::Integer)
@@ -785,7 +784,7 @@ function scale_candidate_weights!(
         values::Vector{Tv},
         effective_diagonal
     ) where {Tv}
-    if abs(effective_diagonal) > eps(real(Tv))
+    if !iszero(effective_diagonal)
         scale = -inv(effective_diagonal)
         @inbounds for q in eachindex(values)
             values[q] *= scale
@@ -853,7 +852,7 @@ function candidate_weights!(
                 end
                 included && (denominator += ajl)
             end
-            if abs(denominator) > eps(real(Tv))
+            if !iszero(denominator)
                 distribute = aij / denominator
                 for q in nzrange(A, j)
                     l = A.colval[q]
@@ -909,7 +908,7 @@ function candidate_weights!(
             cf[l] == 1 || continue
             candidate_present(cols, cmap[l]) && (denominator += A.nzval[q])
         end
-        if abs(denominator) > eps(real(Tv))
+        if !iszero(denominator)
             distribute = A.nzval[k] / denominator
             for q in nzrange(A, j)
                 l = A.colval[q]
@@ -1030,14 +1029,14 @@ end
 function build_prolongation(
         A::StaticSparsityMatrixCSR{Tv, Ti}, cf, cmap, nc, strong,
         interpolation::AbstractInterpolation,
-        reuse = nothing, workspace = nothing
+        reuse = nothing, workspace = nothing; rows = nothing
     ) where {Tv, Ti}
-    n = matrix_nrows(A)
+    n = isnothing(rows) ? matrix_nrows(A) : length(rows)
     diagonal = host_buffer(
         optional_property(workspace, :values),
-        Tv, n; zeroed = true
+        Tv, matrix_nrows(A); zeroed = true
     )
-    with_setup_rows(n) do i, _
+    with_setup_rows(matrix_nrows(A)) do i, _
         value = zero(Tv)
         @inbounds for k in nzrange(A, i)
             A.colval[k] == i && (value += A.nzval[k])
@@ -1057,16 +1056,17 @@ function build_prolongation(
         workspace.interpolation_vals
     end
     counts = host_buffer(optional_property(workspace, :ti1), Ti, n)
-    with_setup_rows(n) do i, tid
+    with_setup_rows(n) do row, tid
+        i = isnothing(rows) ? row : rows[row]
         if cf[i] == 1
-            @inbounds counts[i] = one(Ti)
+            @inbounds counts[row] = one(Ti)
         else
             candidate_cols, candidate_vals = scratch_cols[tid], scratch_vals[tid]
             selected = select_interpolation_candidates!(
                 candidate_cols, candidate_vals, A, i, cf, cmap, strong,
                 diagonal, interpolation
             )
-            @inbounds counts[i] = Ti(selected)
+            @inbounds counts[row] = Ti(selected)
         end
     end
 
@@ -1080,11 +1080,12 @@ function build_prolongation(
     end
     cols = host_buffer(old_cv, Ti, Int(rp[end] - one(Ti)))
     vals = host_buffer(old_pv, Tv, length(cols))
-    with_setup_rows(n) do i, tid
+    with_setup_rows(n) do row, tid
+        i = isnothing(rows) ? row : rows[row]
         if cf[i] == 1
             @inbounds begin
-                cols[rp[i]] = cmap[i]
-                vals[rp[i]] = one(Tv)
+                cols[rp[row]] = cmap[i]
+                vals[rp[row]] = one(Tv)
             end
         else
             candidate_cols, candidate_vals = scratch_cols[tid], scratch_vals[tid]
@@ -1106,12 +1107,12 @@ function build_prolongation(
                     # action of the untruncated row on a constant vector.
                     # Normalizing every row to one changes valid Ext+i
                     # weights even when no coefficient was discarded.
-                    abs(kept_sum) > eps(real(Tv)) &&
+                    !iszero(kept_sum) &&
                         (scale = original_sum / kept_sum)
                 end
                 sort_selected_columns!(candidate_cols, candidate_vals, count)
                 @inbounds for q in 1:count
-                    k = rp[i] + q - 1
+                    k = rp[row] + q - 1
                     cols[k] = candidate_cols[q]
                     vals[k] = candidate_vals[q] * scale
                 end
@@ -1766,6 +1767,7 @@ end
 function make_level(
         A_cpu::StaticSparsityMatrixCSR{Tv, Ti}, P_cpu, Pt_cpu, G_cpu, cf, cmap,
         strong, backend, options, old_level = nothing;
+        aggressive = nothing,
         reuse_A_structure::Bool = false,
         reallocation_tracker = nothing
     ) where {Tv, Ti}
@@ -1845,7 +1847,9 @@ function make_level(
             reallocation_tracker = reallocation_tracker
         )
     end
-    return AMGLevel{Tv, Ti}(A, P, Pt, G, S, coarse_solver, r, xc, bc, cf_d, cm_d, st_d)
+    aggressive = isnothing(aggressive) ? nothing : aggressive_on_backend(aggressive, backend,
+        optional_property(old_level, :aggressive); reallocation_tracker = reallocation_tracker)
+    return AMGLevel{Tv, Ti}(A, P, Pt, G, S, coarse_solver, r, xc, bc, cf_d, cm_d, st_d, aggressive)
 end
 
 function reuse_level(reuse_levels, level_index)
@@ -1890,6 +1894,8 @@ function validate_setup_options(options::AMGOptions)
     options.coarse_solver in (:lu, :spai0) ||
         throw(ArgumentError("coarse_solver must be :lu or :spai0"))
     aggregation = options.coarsening isa Aggregation
+    options.interpolation isa TwoStageExtendedIInterpolation && throw(ArgumentError(
+        "TwoStageExtendedIInterpolation is only valid for aggressive_interpolation"))
     constant = options.interpolation isa ConstantInterpolation
     aggregation == constant || throw(
         ArgumentError(
@@ -1899,9 +1905,9 @@ function validate_setup_options(options::AMGOptions)
     aggressive = options.aggressive_interpolation
     if !isnothing(aggressive)
         compatible = aggregation ? aggressive isa ConstantInterpolation :
-            aggressive isa ExtendedIInterpolation
+            aggressive isa Union{ExtendedIInterpolation, TwoStageExtendedIInterpolation}
         compatible || throw(ArgumentError(
-            "aggressive_interpolation must be ConstantInterpolation for aggregation or ExtendedIInterpolation for RS/HMIS"
+            "aggressive_interpolation must be ConstantInterpolation for aggregation or ExtendedIInterpolation/TwoStageExtendedIInterpolation for RS/HMIS"
         ))
     end
     aggregation && options.aggressive_num_paths != 1 && throw(ArgumentError(
@@ -1949,10 +1955,11 @@ function build_hierarchy(
         n = matrix_nrows(current)
         n <= options.coarse_size && break
         interpolation = interpolation_for_level(options, level_index)
+        staged = interpolation isa TwoStageExtendedIInterpolation
         number_of_nonzeros = matrix_nonzeros(current)
         old = reuse_level(reuse_levels, level_index)
         symbolic_old = cpu_backend ? old : nothing
-        reusable_split = pattern_matches_old && !isnothing(old) &&
+        reusable_split = !staged && pattern_matches_old && !isnothing(old) &&
             !isnothing(old.P) && size(old.A) == size(current) &&
             matrix_nonzeros(old.A) == number_of_nonzeros
         old_strength = if reusable_split && cpu_backend
@@ -1975,6 +1982,7 @@ function build_hierarchy(
             strength_type = options.strength_type)
         cpu_backend || (workspace.stage_strength = strong)
         reuse_split = false
+        aggressive = nothing
         if reusable_split
             old_strong = old.strength
             if cpu_backend
@@ -2011,12 +2019,13 @@ function build_hierarchy(
                 cf, cmap, nc = aggressive_aggregation_split(
                     current, strong, old_cf, old_map
                 )
+            elseif staged
+                cf, cmap, nc, P, aggressive = build_aggressive_prolongation(
+                    current, strong, options, interpolation)
             else
-                cf, cmap, nc = aggressive_cf_split(
-                    current, strong, options.coarsening,
-                    interpolation, old_cf, old_map;
-                    num_paths = options.aggressive_num_paths
-                )
+                cf, cmap, nc = aggressive_cf_split(current, strong,
+                    options.coarsening, interpolation, old_cf, old_map;
+                    num_paths = options.aggressive_num_paths)
             end
         elseif options.coarsening isa Aggregation
             cf, cmap, nc = aggregation_split(
@@ -2038,10 +2047,12 @@ function build_hierarchy(
         old_P = setup_reuse_buffer(
             cpu_backend, symbolic_old, :P, workspace.stage_prolongation
         )
-        P = build_prolongation(
-            current, cf, cmap, nc, strong,
-            interpolation, old_P, workspace
-        )
+        if !staged
+            P = build_prolongation(
+                current, cf, cmap, nc, strong,
+                interpolation, old_P, workspace
+            )
+        end
         if !cpu_backend
             workspace.stage_cf = cf
             workspace.stage_coarse_map = cmap
@@ -2075,6 +2086,7 @@ function build_hierarchy(
             levels, make_level(
                 current, P, Pt, G, cf, cmap, strong, backend,
                 options, old;
+                aggressive = aggressive,
                 reuse_A_structure = reuse_finest_structure &&
                     level_index == length(prefix_levels) + 1,
                 reallocation_tracker = reallocation_tracker
