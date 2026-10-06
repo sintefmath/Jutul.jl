@@ -139,8 +139,7 @@ aggressiveness. This option applies to RS and HMIS, not aggregation.
 `aggressive_interpolation=nothing` uses two-stage Extended+i, inheriting ordinary
 truncation and row limits for the final product while leaving both factors
 untruncated. Supply `TwoStageExtendedIInterpolation(...)` for independent factor
-and product controls. Explicit `ExtendedIInterpolation(...)` retains the legacy
-distance-two interpolation on the final split.
+and product controls.
 
 `strength_type` is shared by all coarsening methods: `:signed` uses only
 off-diagonal entries opposite in sign to the diagonal, `:absolute` uses all
