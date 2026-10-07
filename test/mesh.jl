@@ -271,6 +271,66 @@ import Jutul: cells_inside_bounding_box
     ]
     cells_2d = Jutul.find_enclosing_cells(G, trajectory)
     @test cells_2d == [1, 2, 7, 12]
+    @testset "extra output" begin
+        G = CartesianMesh((4, 4, 5), (100.0, 100.0, 100.0))
+        # Straight vertical trajectory through cell centers
+        traj = [12.5 12.5 -10.0; 12.5 12.5 110.0]
+        cells, extra = Jutul.find_enclosing_cells(G, traj, extra_out = true)
+        @test cells == [1, 17, 33, 49, 65]
+        @test extra[:lengths] ≈ fill(20.0, 5)
+        @test all(d -> d ≈ [0.0, 0.0, 1.0], extra[:direction])
+        @test [c[3] for c in extra[:centroids]] ≈ [10.0, 30.0, 50.0, 70.0, 90.0]
+        # Ends inside a cell
+        traj = [12.5 12.5 5.0; 12.5 12.5 30.0]
+        cells, extra = Jutul.find_enclosing_cells(G, traj, extra_out = true)
+        @test cells == [1, 17]
+        @test extra[:lengths] ≈ [15.0, 10.0]
+        @test extra[:centroids][2] ≈ [12.5, 12.5, 25.0]
+        # Entirely inside a single cell, and entirely outside the mesh
+        @test Jutul.find_enclosing_cells(G, [10.0 10.0 10.0; 12.0 12.0 12.0]) == [1]
+        @test isempty(Jutul.find_enclosing_cells(G, [10.0 10.0 -10.0; 12.0 12.0 -12.0]))
+        # Restricted to a subset of cells
+        traj = [12.5 12.5 -10.0; 12.5 12.5 110.0]
+        @test Jutul.find_enclosing_cells(G, traj, cells = [17, 33]) == [17, 33]
+        # Lengths sum to the trajectory length inside the mesh, also for
+        # perturbed meshes with non-planar faces.
+        traj = [50.0 25.0 1; 55 35.0 25; 65.0 40.0 50.0; 70.0 70.0 90.0]
+        total = sum(i -> norm(traj[i + 1, :] - traj[i, :]), 1:3)
+        cells, extra = Jutul.find_enclosing_cells(G, traj, extra_out = true)
+        @test sum(extra[:lengths]) ≈ total
+        @test sum(extra[:direction] .* extra[:lengths]) ≈ traj[end, :] - traj[1, :]
+        Gp = UnstructuredMesh(G)
+        for i in eachindex(Gp.node_points)
+            x, y, z = Gp.node_points[i]
+            Gp.node_points[i] += 3.0 * Jutul.SVector(sin(0.1 * y + z), cos(0.07 * x * z), sin(x))
+        end
+        cells_p, extra_p = Jutul.find_enclosing_cells(Gp, traj, extra_out = true)
+        @test sum(extra_p[:lengths]) ≈ total
+        @test allunique(cells_p)
+        # Non-planar (saddle) face crossed several times by one segment: Two
+        # stacked cells where the shared face is at z = 1.8 at corners (0, 0)
+        # and (10, 10) and z = 0.2 at the other corners. Along the diagonal,
+        # the (fan-triangulated) face height is 1.8 - 0.16x for x <= 5 and
+        # 1 + 0.16(x - 5) otherwise, so the line z = 1.4 crosses it at x = 2.5
+        # and x = 7.5.
+        Gs = UnstructuredMesh(CartesianMesh((1, 1, 2), (10.0, 10.0, 2.0)))
+        for i in eachindex(Gs.node_points)
+            x, y, z = Gs.node_points[i]
+            if z ≈ 1.0
+                Gs.node_points[i] = Jutul.SVector(x, y, x ≈ y ? 1.8 : 0.2)
+            end
+        end
+        traj = [1.0 1.0 1.4; 9.0 9.0 1.4]
+        cells, extra = Jutul.find_enclosing_cells(Gs, traj, extra_out = true)
+        @test cells == [1, 2]
+        @test extra[:lengths] ≈ [3.0, 5.0] .* sqrt(2)
+        # 2D
+        G2 = CartesianMesh((5, 5), (1.0, 2.0))
+        traj = [0.1 0.1; 0.25 0.4; 0.3 1.2]
+        cells, extra = Jutul.find_enclosing_cells(G2, traj, extra_out = true)
+        @test cells == [1, 2, 7, 12]
+        @test sum(extra[:lengths]) ≈ norm([0.15, 0.3]) + norm([0.05, 0.8])
+    end
     @testset "cells_inside_bounding_box" begin
         tm = convert(UnstructuredMesh, CartesianMesh((3, 3), (3.0, 3.0)))
         @test cells_inside_bounding_box(tm, [0.5, 0.5], [1.5, 1.5]) == [1, 2, 4, 5]
