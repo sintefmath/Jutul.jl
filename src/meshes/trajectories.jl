@@ -93,13 +93,15 @@ function find_enclosing_cells(
             boundary_normals[i] /= norm(boundary_normals[i], 2)
         end
     end
-    return find_enclosing_cells_impl(G, pts, active,
+    return find_enclosing_cells_impl(
+        G, pts, active,
         normals, face_centroids, cell_centroids, boundary_normals, boundary_centroids;
         atol = atol, extra_out = extra_out
     )
 end
 
-function find_enclosing_cells_impl(G::UnstructuredMesh, pts::AbstractVector{SVector{D, T_f}}, active::Vector{Bool},
+function find_enclosing_cells_impl(
+        G::UnstructuredMesh, pts::AbstractVector{SVector{D, T_f}}, active::Vector{Bool},
         normals, face_centroids, cell_centroids, boundary_normals, boundary_centroids;
         atol = 0.01,
         extra_out = false
@@ -152,7 +154,7 @@ function find_enclosing_cells_impl(G::UnstructuredMesh, pts::AbstractVector{SVec
     ncand = length(cand_faces)
     face_diam = ncand > 0 ? face_diam / ncand : one(T_f)
     scale = max(total_len, face_diam)
-    tol_s = 1e-8 * scale
+    tol_s = 1.0e-8 * scale
 
     # Bucket grid covering the bounding box of the trajectory. Bucket size is
     # chosen proportional to the mean face size so that each bucket contains
@@ -243,7 +245,7 @@ function find_enclosing_cells_impl(G::UnstructuredMesh, pts::AbstractVector{SVec
     group_before = Vector{Int}[]
     group_after = Vector{Int}[]
     function add_unique!(v, c)
-        if is_active(c) && !(c in v)
+        return if is_active(c) && !(c in v)
             push!(v, c)
         end
     end
@@ -257,10 +259,10 @@ function find_enclosing_cells_impl(G::UnstructuredMesh, pts::AbstractVector{SVec
         after = group_after[end]
         if f <= nf
             l, r = G.faces.neighbors[f]
-            if sd > 1e-12
+            if sd > 1.0e-12
                 add_unique!(before, l)
                 add_unique!(after, r)
-            elseif sd < -1e-12
+            elseif sd < -1.0e-12
                 add_unique!(before, r)
                 add_unique!(after, l)
             else
@@ -272,10 +274,10 @@ function find_enclosing_cells_impl(G::UnstructuredMesh, pts::AbstractVector{SVec
         else
             bf = f - nf
             c = G.boundary_faces.neighbors[bf]
-            if sd >= -1e-12
+            if sd >= -1.0e-12
                 add_unique!(before, c)
             end
-            if sd <= 1e-12
+            if sd <= 1.0e-12
                 add_unique!(after, c)
             end
         end
@@ -452,7 +454,7 @@ cosine of the angle between `d` and the local face normal at the intersection
 a fan around `center`, and a segment can intersect a non-planar face more than
 once. Segments that are parallel to the face are not considered intersecting.
 """
-function segment_face_intersections!(hits, a::SVector{3, T}, d::SVector{3, T}, node_points, nodes, center; ϵ = 1e-8) where T
+function segment_face_intersections!(hits, a::SVector{3, T}, d::SVector{3, T}, node_points, nodes, center; ϵ = 1.0e-8) where {T}
     nn = length(nodes)
     nh = length(hits)
     for i in 1:nn
@@ -484,7 +486,7 @@ function segment_face_intersections!(hits, a::SVector{3, T}, d::SVector{3, T}, n
     return hits
 end
 
-function segment_face_intersections!(hits, a::SVector{2, T}, d::SVector{2, T}, node_points, nodes, center; ϵ = 1e-8) where T
+function segment_face_intersections!(hits, a::SVector{2, T}, d::SVector{2, T}, node_points, nodes, center; ϵ = 1.0e-8) where {T}
     cross2(x, y) = x[1] * y[2] - x[2] * y[1]
     length(nodes) == 2 || throw(ArgumentError("Faces in 2D must have exactly two nodes."))
     p = node_points[nodes[1]]
@@ -510,7 +512,7 @@ end
 Area-weighted normal of a face, oriented by the node ordering (consistent with
 the normals used in `segment_face_intersections!`).
 """
-function face_area_vector(node_points::AbstractVector{SVector{3, T}}, nodes, center) where T
+function face_area_vector(node_points::AbstractVector{SVector{3, T}}, nodes, center) where {T}
     A = zero(SVector{3, T})
     nn = length(nodes)
     for i in 1:nn
@@ -519,7 +521,7 @@ function face_area_vector(node_points::AbstractVector{SVector{3, T}}, nodes, cen
     return A / 2
 end
 
-function face_area_vector(node_points::AbstractVector{SVector{2, T}}, nodes, center) where T
+function face_area_vector(node_points::AbstractVector{SVector{2, T}}, nodes, center) where {T}
     e = node_points[nodes[2]] - node_points[nodes[1]]
     return SVector{2, T}(e[2], -e[1])
 end
