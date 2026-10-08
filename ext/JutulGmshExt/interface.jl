@@ -81,15 +81,14 @@ function Jutul.mesh_from_gmsh(;
         gmsh.model.mesh.removeDuplicateNodes()
     end
     do_transform = reverse_z || process_at_origin
+    s_x = s_y = s_z = 0
+    r_x = r_y = r_z = 1
     if do_transform
         # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
         # which is sufficient here.
         M = ones(3, 4)
-        r_x = r_y = 1
         if reverse_z
             r_z = -1
-        else
-            r_z = 1
         end
         if process_at_origin
             _, pts0, = gmsh.model.mesh.getNodes()
@@ -97,7 +96,6 @@ function Jutul.mesh_from_gmsh(;
             # Shift the mesh so that the origin is at (0,0,0)
             s_x, s_y, s_z = -minimum(pts0, dims=2)
         else
-            s_x = s_y = s_z = 0
         end
         M = [
             r_x, 0.0, 0.0, s_x,
