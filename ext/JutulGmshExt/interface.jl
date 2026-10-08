@@ -104,7 +104,7 @@ function Jutul.mesh_from_gmsh(;
             0.0, r_y, 0.0, s_y,
             0.0, 0.0, r_z, s_z
         ]
-        gmsh.model.mesh.affineTransform(vec(M'))
+        gmsh.model.mesh.affineTransform(M)
         gmsh.model.mesh.generate()
     end
     node_tags, pts, = gmsh.model.mesh.getNodes()
@@ -179,6 +179,13 @@ function Jutul.mesh_from_gmsh(;
     c2b = IndirectionMap(bnd_cells_to_faces)
     f2n = IndirectionMap(int_faces_to_nodes)
     b2n = IndirectionMap(bnd_faces_to_nodes)
+    if process_at_origin
+        shift = convert(eltype(pts_s), -[s_x, s_y, s_z])
+        for (i, pt) in enumerate(pts_s)
+            new_pt = pt + shift
+            pts_s[i] = new_pt
+        end
+    end
     print_message("Mesh parsed successfully:\n    $(length(c2f)) cells\n    $(length(f2n)) internal faces\n    $(length(b2n)) boundary faces\n    $(length(pts_s)) nodes", verbose)
     return UnstructuredMesh(c2f, c2b, f2n, b2n, pts_s, int_neighbors, bnd_neighbors; kwarg...)
 end
