@@ -86,7 +86,6 @@ function Jutul.mesh_from_gmsh(;
     if do_transform
         # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
         # which is sufficient here.
-        M = ones(3, 4)
         if reverse_z
             r_z = -1
         end
