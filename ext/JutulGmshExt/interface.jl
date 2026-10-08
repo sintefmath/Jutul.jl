@@ -66,6 +66,7 @@ function Jutul.mesh_from_gmsh(;
         reverse_z = false,
         remove_duplicate_nodes = true,
         preserve_order = false,
+        process_at_origin = false,
         kwarg...
     )
     dim = gmsh.model.getDimension()
@@ -79,19 +80,35 @@ function Jutul.mesh_from_gmsh(;
     if remove_duplicate_nodes
         gmsh.model.mesh.removeDuplicateNodes()
     end
-    if reverse_z
+    do_transform = reverse_z || process_at_origin
+    if do_transform
         # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
         # which is sufficient here.
-        gmsh.model.mesh.affineTransform(
-            [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, -1.0, 0.0,
-            ]
-        )
+        M = ones(3, 4)
+        r_x = r_y = 1
+        if reverse_z
+            r_z = -1
+        else
+            r_z = 1
+        end
+        if process_at_origin
+            _, pts0, = gmsh.model.mesh.getNodes()
+            pts0 = reshape(pts0, Int(dim), :)
+            # Shift the mesh so that the origin is at (0,0,0)
+            s_x, s_y, s_z = -minimum(pts0, dims=2)
+        else
+            s_x = s_y = s_z = 0
+        end
+        M = [
+            r_x, 0.0, 0.0, s_x,
+            0.0, r_y, 0.0, s_y,
+            0.0, 0.0, r_z, s_z
+        ]
+        gmsh.model.mesh.affineTransform(vec(M'))
         gmsh.model.mesh.generate()
     end
     node_tags, pts, = gmsh.model.mesh.getNodes()
+    pts = reshape(pts, Int(dim), :)
     node_remap = Dict{UInt64, Int}()
     for (i, tag) in enumerate(node_tags)
         tag::UInt64
@@ -102,7 +119,6 @@ function Jutul.mesh_from_gmsh(;
         faces = Dict{UInt64, Int}(),
         cells = Dict{UInt64, Int}(),
     )
-    pts = reshape(pts, Int(dim), :)
     pts_s = collect(vec(reinterpret(SVector{3, Float64}, pts)))
 
     @assert size(pts, 2) == length(node_tags)
