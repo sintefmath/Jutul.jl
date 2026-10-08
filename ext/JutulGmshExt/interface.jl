@@ -65,6 +65,7 @@ function Jutul.mesh_from_gmsh(;
         verbose = false,
         reverse_z = false,
         remove_duplicate_nodes = true,
+        remove_duplicate_elements = true,
         preserve_order = false,
         process_at_origin = false,
         kwarg...
@@ -79,6 +80,9 @@ function Jutul.mesh_from_gmsh(;
     end
     if remove_duplicate_nodes
         gmsh.model.mesh.removeDuplicateNodes()
+    end
+    if remove_duplicate_elements
+        gmsh.model.mesh.removeDuplicateElements()
     end
     do_transform = reverse_z || process_at_origin
     s_x = s_y = s_z = 0
