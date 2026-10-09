@@ -59,7 +59,7 @@ function KernelAbstractionsContext(
         workgroupsize = 256,
         minbatch = 1000,
         reduce_memory = true,
-        use_vendor_linalg::Bool = true
+        use_vendor_linalg::Bool = false
     ) where {F, I, LF, LI}
     if !(backend isa KernelAbstractions.Backend)
         throw(ArgumentError("backend must be a KernelAbstractions.Backend"))
