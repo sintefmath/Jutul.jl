@@ -70,8 +70,11 @@ function update_smoother!(
     return state
 end
 
-vendor_ilu_vector(values::AbstractVector{<:Number}) = values
-function vendor_ilu_vector(values::AbstractVector)
+vendor_ilu_vector(values::AbstractVector) =
+    vendor_ilu_scalar_vector(logical_backend_buffer(values))
+
+vendor_ilu_scalar_vector(values::AbstractVector{<:Number}) = values
+function vendor_ilu_scalar_vector(values::AbstractVector)
     scalar_type = matrix_scalar_type(eltype(values))
     return reinterpret(scalar_type, values)
 end

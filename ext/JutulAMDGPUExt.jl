@@ -92,7 +92,7 @@ function roc_check_ilu_pivot(info, block::Bool)
         :rocsparse_csrilu0_zero_pivot
     getproperty(rocSPARSE, pivot)(rocSPARSE.handle(), info, position)
     position[] < 0 || error(
-        "Structural zero in vendor ILU factor at row $(position[])"
+        "Structural/numerical zero in vendor ILU factor at row $(position[])"
     )
     return nothing
 end
@@ -301,6 +301,10 @@ function KAPreconditioners.refactor_vendor_ilu!(
         factor.factor_info, rocSPARSE.rocsparse_solve_policy_auto,
         factor.factor_workspace
     )
+    # Values change between nonlinear iterations even when the symbolic
+    # analysis is reused. Check the numerical pivots after each factorization,
+    # before an invalid factor can reach later asynchronous solves.
+    roc_check_ilu_pivot(factor.factor_info, false)
     return factor
 end
 
@@ -316,6 +320,7 @@ function KAPreconditioners.refactor_vendor_ilu!(
         matrix.blockDim, factor.factor_info,
         rocSPARSE.rocsparse_solve_policy_auto, factor.factor_workspace
     )
+    roc_check_ilu_pivot(factor.factor_info, true)
     return factor
 end
 

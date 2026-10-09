@@ -23,7 +23,8 @@ end
             # A NaN input still propagates through the interpolation arithmetic.
             pos = 1
         else
-            pos = unsafe_trunc(Int, offset) + 1
+            index = offset isa AbstractFloat ? unsafe_trunc(Int, offset) : floor(Int, offset)
+            pos = index + 1
         end
     end
     return pos::Int
