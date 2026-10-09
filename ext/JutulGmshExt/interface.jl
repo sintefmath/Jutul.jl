@@ -121,13 +121,13 @@ function Jutul.mesh_from_gmsh(;
             _, pts0, = gmsh.model.mesh.getNodes()
             pts0 = reshape(pts0, Int(dim), :)
             # Shift the mesh so that the origin is at (0,0,0)
-            s_x, s_y, s_z = -minimum(pts0, dims=2)
+            s_x, s_y, s_z = -minimum(pts0, dims = 2)
         else
         end
         M = [
             r_x, 0.0, 0.0, s_x,
             0.0, r_y, 0.0, s_y,
-            0.0, 0.0, r_z, s_z
+            0.0, 0.0, r_z, s_z,
         ]
         gmsh.model.mesh.affineTransform(M)
         gmsh.model.mesh.generate()
