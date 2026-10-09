@@ -333,6 +333,7 @@ end
     test_for_split_timesteps([1.0], max_timestep = 0.25, deps = :case)
     test_for_split_timesteps([1.0], max_timestep = 0.25, deps = :parameters)
     test_for_split_timesteps([0.25, 1.0], max_timestep = 0.25, deps = :case)
+    test_for_split_timesteps([0.25, 1.0], max_timestep = 0.25, deps = :parameters)
 end
 
 import Jutul.DictOptimization as DictOptimization
