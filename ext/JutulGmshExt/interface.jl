@@ -99,38 +99,51 @@ function Jutul.mesh_from_gmsh(;
     if preserve_order
         # Grab initial cell tags to preserve order later.
         tag2cell = get_cell_tags()
+        renumber = gmsh.option.getNumber("Mesh.Renumber")
     else
         tag2cell = missing
-    end
-    if remove_duplicate_nodes
-        gmsh.model.mesh.removeDuplicateNodes()
-    end
-    if remove_duplicate_elements
-        gmsh.model.mesh.removeDuplicateElements()
+        renumber = missing
     end
     do_transform = reverse_z || process_at_origin
     s_x = s_y = s_z = 0
     r_x = r_y = r_z = 1
-    if do_transform
-        # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
-        # which is sufficient here.
-        if reverse_z
-            r_z = -1
+    try
+        if preserve_order
+            # Duplicate removal can renumber elements.
+            # Keep their original tags so tag2cell still identifies each cell.
+            gmsh.option.setNumber("Mesh.Renumber", 0)
         end
-        if process_at_origin
-            _, pts0, = gmsh.model.mesh.getNodes()
-            pts0 = reshape(pts0, Int(dim), :)
-            # Shift the mesh so that the origin is at (0,0,0)
-            s_x, s_y, s_z = -minimum(pts0, dims = 2)
-        else
+        if remove_duplicate_nodes
+            gmsh.model.mesh.removeDuplicateNodes()
         end
-        M = [
-            r_x, 0.0, 0.0, s_x,
-            0.0, r_y, 0.0, s_y,
-            0.0, 0.0, r_z, s_z,
-        ]
-        gmsh.model.mesh.affineTransform(M)
-        gmsh.model.mesh.generate()
+        if remove_duplicate_elements
+            gmsh.model.mesh.removeDuplicateElements()
+        end
+        if do_transform
+            # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
+            # which is sufficient here.
+            if reverse_z
+                r_z = -1
+            end
+            if process_at_origin
+                _, pts0, = gmsh.model.mesh.getNodes()
+                pts0 = reshape(pts0, Int(dim), :)
+                # Shift the mesh so that the origin is at (0,0,0)
+                s_x, s_y, s_z = -minimum(pts0, dims = 2)
+            end
+            M = [
+                r_x, 0.0, 0.0, s_x,
+                0.0, r_y, 0.0, s_y,
+                0.0, 0.0, r_z, s_z,
+            ]
+            # Transform the existing mesh without regenerating it: generation
+            # can reorder cell nodes and break shared-face orientation.
+            gmsh.model.mesh.affineTransform(M)
+        end
+    finally
+        if preserve_order
+            gmsh.option.setNumber("Mesh.Renumber", renumber)
+        end
     end
     node_tags, pts, = gmsh.model.mesh.getNodes()
     pts = reshape(pts, Int(dim), :)
@@ -152,6 +165,13 @@ function Jutul.mesh_from_gmsh(;
 
     cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose, remove_faces = remove_faces)
     neighbors = build_neighbors(cells_to_faces, faces_to_nodes, face_lookup)
+    if reverse_z
+        # Reflection reverses geometric orientation. Flip face winding after
+        # assigning neighbors to retain the left-to-right normal convention.
+        for face in faces_to_nodes
+            reverse!(face)
+        end
+    end
 
     # Make both of these in case we have rogue faces that are not connected to any cell.
     bnd_faces = Int[]
