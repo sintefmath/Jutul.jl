@@ -16,6 +16,10 @@ allowing quads to become triangles. Faces with fewer than three distinct vertice
 backtracking faces, and coincident faces within a cell are skipped. Cells with no
 remaining faces are omitted from the returned mesh.
 
+The returned mesh's `cell_map[i]` is the original index of cell `i` in the Gmsh
+cell ordering before preprocessing. Removed cells leave gaps in this mapping,
+regardless of `preserve_order`.
+
 To use this function, you need to have the Gmsh library installed and loaded by
 calling `using Gmsh`. Please note that, unlike Jutul, Gmsh is GPL licensed
 software, and you should comply with the license terms when using it in your
@@ -96,41 +100,45 @@ function Jutul.mesh_from_gmsh(;
     )
     dim = gmsh.model.getDimension()
     dim == 3 || error("Only 3D models are supported")
-    if preserve_order
-        # Grab initial cell tags to preserve order later.
-        tag2cell = get_cell_tags()
-    else
-        tag2cell = missing
-    end
-    if remove_duplicate_nodes
-        gmsh.model.mesh.removeDuplicateNodes()
-    end
-    if remove_duplicate_elements
-        gmsh.model.mesh.removeDuplicateElements()
-    end
+    # Record original indices before duplicate removal or face normalization.
+    tag2cell = get_cell_tags()
+    renumber = gmsh.option.getNumber("Mesh.Renumber")
     do_transform = reverse_z || process_at_origin
     s_x = s_y = s_z = 0
     r_x = r_y = r_z = 1
-    if do_transform
-        # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
-        # which is sufficient here.
-        if reverse_z
-            r_z = -1
+    try
+        # Duplicate removal can renumber elements. Keep their original tags so
+        # tag2cell still identifies each retained cell for cell_map.
+        gmsh.option.setNumber("Mesh.Renumber", 0)
+        if remove_duplicate_nodes
+            gmsh.model.mesh.removeDuplicateNodes()
         end
-        if process_at_origin
-            _, pts0, = gmsh.model.mesh.getNodes()
-            pts0 = reshape(pts0, Int(dim), :)
-            # Shift the mesh so that the origin is at (0,0,0)
-            s_x, s_y, s_z = -minimum(pts0, dims = 2)
-        else
+        if remove_duplicate_elements
+            gmsh.model.mesh.removeDuplicateElements()
         end
-        M = [
-            r_x, 0.0, 0.0, s_x,
-            0.0, r_y, 0.0, s_y,
-            0.0, 0.0, r_z, s_z,
-        ]
-        gmsh.model.mesh.affineTransform(M)
-        gmsh.model.mesh.generate()
+        if do_transform
+            # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
+            # which is sufficient here.
+            if reverse_z
+                r_z = -1
+            end
+            if process_at_origin
+                _, pts0, = gmsh.model.mesh.getNodes()
+                pts0 = reshape(pts0, Int(dim), :)
+                # Shift the mesh so that the origin is at (0,0,0)
+                s_x, s_y, s_z = -minimum(pts0, dims = 2)
+            end
+            M = [
+                r_x, 0.0, 0.0, s_x,
+                0.0, r_y, 0.0, s_y,
+                0.0, 0.0, r_z, s_z,
+            ]
+            # Transform the existing mesh without regenerating it: generation
+            # can reorder cell nodes and break shared-face orientation.
+            gmsh.model.mesh.affineTransform(M)
+        end
+    finally
+        gmsh.option.setNumber("Mesh.Renumber", renumber)
     end
     node_tags, pts, = gmsh.model.mesh.getNodes()
     pts = reshape(pts, Int(dim), :)
@@ -152,6 +160,13 @@ function Jutul.mesh_from_gmsh(;
 
     cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose, remove_faces = remove_faces)
     neighbors = build_neighbors(cells_to_faces, faces_to_nodes, face_lookup)
+    if reverse_z
+        # Reflection reverses geometric orientation. Flip face winding after
+        # assigning neighbors to retain the left-to-right normal convention.
+        for face in faces_to_nodes
+            reverse!(face)
+        end
+    end
 
     # Make both of these in case we have rogue faces that are not connected to any cell.
     bnd_faces = Int[]
@@ -175,29 +190,22 @@ function Jutul.mesh_from_gmsh(;
     bnd_neighbors, bnd_faces_to_nodes, bnd_cells_to_faces = split_boundary(neighbors, faces_to_nodes, cells_to_faces, bnd_faces, boundary = true)
     int_neighbors, int_faces_to_nodes, int_cells_to_faces = split_boundary(neighbors, faces_to_nodes, cells_to_faces, int_faces, boundary = false)
 
+    nc = length(int_cells_to_faces)
+    @assert length(remaps.cells) == nc "Each retained cell must have a Gmsh tag."
+    cell_map = zeros(Int, nc)
+    for (tag, cell_idx) in remaps.cells
+        cell_map[cell_idx] = tag2cell[tag]
+    end
     if preserve_order
-        # We have to remap cells here based on the original tags.
-        cell_tags = keys(remaps.cells)
-        nc = length(int_cells_to_faces)
-        if length(cell_tags) == nc
-            # Preserve the relative order of retained cells, closing gaps left
-            # by cells that were skipped during parsing.
-            cell_tags_sorted = sort(collect(cell_tags); by = tag -> tag2cell[tag])
-            cell_idx_to_new_idx = zeros(Int, nc)
-            new_idx_to_cell_idx = zeros(Int, nc)
-            for (new_cell_idx, tag) in enumerate(cell_tags_sorted)
-                current_cell_idx = remaps.cells[tag]
-                cell_idx_to_new_idx[current_cell_idx] = new_cell_idx
-                new_idx_to_cell_idx[new_cell_idx] = current_cell_idx
-            end
-            int_cells_to_faces = int_cells_to_faces[new_idx_to_cell_idx]
-            bnd_cells_to_faces = bnd_cells_to_faces[new_idx_to_cell_idx]
-            bnd_neighbors = cell_idx_to_new_idx[bnd_neighbors]
-            int_neighbors = map(lr -> (cell_idx_to_new_idx[lr[1]], cell_idx_to_new_idx[lr[2]]), int_neighbors)
-        else
-            # Warn about missing tags
-            @warn "Number of cell tags ($(length(cell_tags))) does not match number of cells ($nc), cannot preserve cell tags."
-        end
+        # Sort retained cells by their original indices, closing skipped gaps
+        # in the mesh connectivity while retaining them in cell_map.
+        new_idx_to_cell_idx = sortperm(cell_map)
+        cell_idx_to_new_idx = invperm(new_idx_to_cell_idx)
+        int_cells_to_faces = int_cells_to_faces[new_idx_to_cell_idx]
+        bnd_cells_to_faces = bnd_cells_to_faces[new_idx_to_cell_idx]
+        bnd_neighbors = cell_idx_to_new_idx[bnd_neighbors]
+        int_neighbors = map(lr -> (cell_idx_to_new_idx[lr[1]], cell_idx_to_new_idx[lr[2]]), int_neighbors)
+        cell_map = cell_map[new_idx_to_cell_idx]
     end
 
     c2f = IndirectionMap(int_cells_to_faces)
@@ -212,5 +220,5 @@ function Jutul.mesh_from_gmsh(;
         end
     end
     print_message("Mesh parsed successfully:\n    $(length(c2f)) cells\n    $(length(f2n)) internal faces\n    $(length(b2n)) boundary faces\n    $(length(pts_s)) nodes", verbose)
-    return UnstructuredMesh(c2f, c2b, f2n, b2n, pts_s, int_neighbors, bnd_neighbors; kwarg...)
+    return UnstructuredMesh(c2f, c2b, f2n, b2n, pts_s, int_neighbors, bnd_neighbors; cell_map = cell_map, kwarg...)
 end
