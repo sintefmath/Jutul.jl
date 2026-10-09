@@ -27,20 +27,24 @@ function normalize_face_nodes(nodes)
     end
 end
 
-function add_next!(faces, remap, tags, numpts, offset)
+function add_next!(faces, remap, tags, numpts, offset; remove_faces = true)
     vals = Int[]
     for j in 1:numpts
         push!(vals, remap[tags[offset + j]])
     end
-    face_nodes = normalize_face_nodes(vals)
-    if isnothing(face_nodes)
-        return false
+    if remove_faces
+        face_nodes = normalize_face_nodes(vals)
+        if isnothing(face_nodes)
+            return false
+        end
+    else
+        face_nodes = vals
     end
     push!(faces, face_nodes)
     return true
 end
 
-function parse_faces(remaps; verbose = false)
+function parse_faces(remaps; verbose = false, remove_faces = true)
     node_remap = remaps.nodes
     face_remap = remaps.faces
     faces = Vector{Int}[]
@@ -67,7 +71,7 @@ function parse_faces(remaps; verbose = false)
             nadded = 0
             for (i, etag) in enumerate(etags)
                 offset = (i - 1) * numpts
-                if add_next!(faces, node_remap, enodetags, numpts, offset)
+                if add_next!(faces, node_remap, enodetags, numpts, offset; remove_faces = remove_faces)
                     face_remap[etag] = length(faces)
                     nadded += 1
                 end
@@ -133,7 +137,7 @@ function print_message(msg, verbose)
     end
 end
 
-function parse_cells(remaps, faces, face_lookup; verbose = false)
+function parse_cells(remaps, faces, face_lookup; verbose = false, remove_faces = true)
     node_remap = remaps.nodes
     face_remap = remaps.faces
     cell_remap = remaps.cells
@@ -161,13 +165,16 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
                 @assert length(pt_range) == numpts
                 pts = map(i -> node_remap[enodetags[i]], pt_range)
                 cell = Tuple{Int, Int}[]
-                # Remove collapsed edges while preserving face orientation.
+                # Optionally remove collapsed edges while preserving orientation.
                 cell_face_nodes = Union{TRI_T, QUAD_T}[]
                 for face_t in (tris, quads)
                     for face in face_t
-                        face_pts = normalize_face_nodes(map(i -> pts[i + 1], face))
-                        if isnothing(face_pts)
-                            continue
+                        face_pts = map(i -> pts[i + 1], face)
+                        if remove_faces
+                            face_pts = normalize_face_nodes(face_pts)
+                            if isnothing(face_pts)
+                                continue
+                            end
                         end
                         push!(cell_face_nodes, face_pts)
                     end
@@ -176,11 +183,13 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
                 # when its node order is reversed.
                 sorted_cell_face_nodes = sort.(cell_face_nodes)
                 for (face_pts, face_pts_sorted) in zip(cell_face_nodes, sorted_cell_face_nodes)
-                    matching_face_count = count(nodes -> nodes == face_pts_sorted, sorted_cell_face_nodes)
-                    # Opposing faces can coincide when a cell pinches out. Skip
-                    # both occurrences so they cannot introduce extra neighbors.
-                    if matching_face_count > 1
-                        continue
+                    if remove_faces
+                        matching_face_count = count(nodes -> nodes == face_pts_sorted, sorted_cell_face_nodes)
+                        # Opposing faces can coincide when a cell pinches out. Skip
+                        # both occurrences so they cannot introduce extra neighbors.
+                        if matching_face_count > 1
+                            continue
+                        end
                     end
                     faceno = get(face_lookup, face_pts_sorted, 0)
                     if faceno == 0
@@ -194,7 +203,7 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
                     end
                     push!(cell, (faceno, sgn))
                 end
-                if isempty(cell)
+                if remove_faces && isempty(cell)
                     continue
                 end
                 cell_remap[etag] = length(cells) + 1

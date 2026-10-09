@@ -6,10 +6,10 @@ initialized and finalized automatically. Otherwise, the user is responsible for
 calling `Gmsh.initialize()` and `Gmsh.finalize()` before and after this
 function, respectively.
 
-Collapsed edges are removed from faces, allowing quads to become triangles.
-Faces with fewer than three distinct vertices, backtracking faces, and coincident
-faces within a cell are skipped. Cells with no remaining faces are omitted from
-the returned mesh.
+With `remove_faces = true` (the default), collapsed edges are removed from faces,
+allowing quads to become triangles. Faces with fewer than three distinct vertices,
+backtracking faces, and coincident faces within a cell are skipped. Cells with no
+remaining faces are omitted from the returned mesh.
 
 To use this function, you need to have the Gmsh library installed and loaded by
 calling `using Gmsh`. Please note that, unlike Jutul, Gmsh is GPL licensed
@@ -25,6 +25,9 @@ projects.
 - `z_is_depth::Bool`: Whether the z-coordinates represent depth (positive
   downwards), passed onto the mesh constructor.
 - `remove_duplicate_nodes::Bool`: Whether to remove duplicate nodes in the mesh.
+- `remove_faces::Bool`: Whether to normalize collapsed faces, skip invalid or
+  coincident faces within cells, and omit cells with no remaining faces. Defaults
+  to `true`.
 - `preserve_order::Bool`: Whether to preserve the original cell ordering based
   on the Gmsh tags.
 """
@@ -71,6 +74,7 @@ function Jutul.mesh_from_gmsh(;
         reverse_z = false,
         remove_duplicate_nodes = true,
         remove_duplicate_elements = true,
+        remove_faces = true,
         preserve_order = false,
         process_at_origin = false,
         kwarg...
@@ -128,10 +132,10 @@ function Jutul.mesh_from_gmsh(;
     pts_s = collect(vec(reinterpret(SVector{3, Float64}, pts)))
 
     @assert size(pts, 2) == length(node_tags)
-    faces_to_nodes = parse_faces(remaps, verbose = verbose)
+    faces_to_nodes = parse_faces(remaps, verbose = verbose, remove_faces = remove_faces)
     face_lookup = generate_face_lookup(faces_to_nodes)
 
-    cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose)
+    cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose, remove_faces = remove_faces)
     neighbors = build_neighbors(cells_to_faces, faces_to_nodes, face_lookup)
 
     # Make both of these in case we have rogue faces that are not connected to any cell.
