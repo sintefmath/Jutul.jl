@@ -1,10 +1,20 @@
 """
-    Jutul.mesh_from_gmsh("path/to/file.geo", manage_gmsh = true, verbose = false)
+    Jutul.mesh_from_gmsh("path/to/file.geo"; manage_gmsh = true, verbose = false)
+    Jutul.mesh_from_gmsh(; verbose = false)
 
 Convert Gmsh mesh file to Jutul mesh. If `manage_gmsh` is true, the Gmsh API is
 initialized and finalized automatically. Otherwise, the user is responsible for
 calling `Gmsh.initialize()` and `Gmsh.finalize()` before and after this
 function, respectively.
+
+Without a path, the currently loaded Gmsh model is converted, and the caller is
+responsible for initializing and finalizing Gmsh. Additional keyword arguments
+are forwarded to `UnstructuredMesh`.
+
+With `remove_faces = true` (the default), collapsed edges are removed from faces,
+allowing quads to become triangles. Faces with fewer than three distinct vertices,
+backtracking faces, and coincident faces within a cell are skipped. Cells with no
+remaining faces are omitted from the returned mesh.
 
 To use this function, you need to have the Gmsh library installed and loaded by
 calling `using Gmsh`. Please note that, unlike Jutul, Gmsh is GPL licensed
@@ -13,15 +23,28 @@ projects.
 
 # Keyword arguments
 - `argv::Vector{String}`: Command-line arguments to pass to Gmsh during
-  initialization. Example: `["-v", "2"]` to set verbosity level to 2.
-- `manage_gmsh::Bool`: Whether to initialize and finalize Gmsh automatically.
+  initialization when a path is provided. Defaults to `String[]`. Example:
+  `["-v", "2"]` to set verbosity level to 2.
+- `manage_gmsh::Bool`: Whether to initialize and finalize Gmsh automatically
+  when a path is provided. Defaults to `true`.
 - `verbose::Bool`: Whether to print messages about the mesh parsing process.
-- `reverse_z::Bool`: Whether to reverse the z-coordinates of the mesh nodes.
-- `z_is_depth::Bool`: Whether the z-coordinates represent depth (positive
-  downwards), passed onto the mesh constructor.
-- `remove_duplicate_nodes::Bool`: Whether to remove duplicate nodes in the mesh.
-- `preserve_order::Bool`: Whether to preserve the original cell ordering based
-  on the Gmsh tags.
+  Defaults to `false`.
+- `reverse_z::Bool`: Whether to negate the z-coordinates of the mesh nodes.
+  Defaults to `false`.
+- `z_is_depth::Bool`: Whether to interpret z-coordinates as depth (positive
+  downwards) in plots, passed onto the mesh constructor. Defaults to `false`.
+- `remove_duplicate_nodes::Bool`: Whether to merge duplicate nodes before
+  parsing the mesh. Defaults to `true`.
+- `remove_duplicate_elements::Bool`: Whether to remove duplicate mesh elements
+  before parsing the mesh. Defaults to `true`.
+- `remove_faces::Bool`: Whether to normalize collapsed faces, skip invalid or
+  coincident faces within cells, and omit cells with no remaining faces. Defaults
+  to `true`.
+- `preserve_order::Bool`: Whether to preserve the original relative ordering of
+  retained cells based on the Gmsh tags. Defaults to `false`.
+- `process_at_origin::Bool`: Whether to temporarily subtract each coordinate's
+  minimum during Gmsh processing, then restore the translation in the returned
+  mesh. Defaults to `false`.
 """
 function Jutul.mesh_from_gmsh(
         pth;
@@ -65,7 +88,10 @@ function Jutul.mesh_from_gmsh(;
         verbose = false,
         reverse_z = false,
         remove_duplicate_nodes = true,
+        remove_duplicate_elements = true,
+        remove_faces = true,
         preserve_order = false,
+        process_at_origin = false,
         kwarg...
     )
     dim = gmsh.model.getDimension()
@@ -79,19 +105,35 @@ function Jutul.mesh_from_gmsh(;
     if remove_duplicate_nodes
         gmsh.model.mesh.removeDuplicateNodes()
     end
-    if reverse_z
+    if remove_duplicate_elements
+        gmsh.model.mesh.removeDuplicateElements()
+    end
+    do_transform = reverse_z || process_at_origin
+    s_x = s_y = s_z = 0
+    r_x = r_y = r_z = 1
+    if do_transform
         # Note: Gmsh API lets us send only the first 3 rows of the 4 by 4 matrix
         # which is sufficient here.
-        gmsh.model.mesh.affineTransform(
-            [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, -1.0, 0.0,
-            ]
-        )
+        if reverse_z
+            r_z = -1
+        end
+        if process_at_origin
+            _, pts0, = gmsh.model.mesh.getNodes()
+            pts0 = reshape(pts0, Int(dim), :)
+            # Shift the mesh so that the origin is at (0,0,0)
+            s_x, s_y, s_z = -minimum(pts0, dims = 2)
+        else
+        end
+        M = [
+            r_x, 0.0, 0.0, s_x,
+            0.0, r_y, 0.0, s_y,
+            0.0, 0.0, r_z, s_z,
+        ]
+        gmsh.model.mesh.affineTransform(M)
         gmsh.model.mesh.generate()
     end
     node_tags, pts, = gmsh.model.mesh.getNodes()
+    pts = reshape(pts, Int(dim), :)
     node_remap = Dict{UInt64, Int}()
     for (i, tag) in enumerate(node_tags)
         tag::UInt64
@@ -102,14 +144,13 @@ function Jutul.mesh_from_gmsh(;
         faces = Dict{UInt64, Int}(),
         cells = Dict{UInt64, Int}(),
     )
-    pts = reshape(pts, Int(dim), :)
     pts_s = collect(vec(reinterpret(SVector{3, Float64}, pts)))
 
     @assert size(pts, 2) == length(node_tags)
-    faces_to_nodes = parse_faces(remaps, verbose = verbose)
+    faces_to_nodes = parse_faces(remaps, verbose = verbose, remove_faces = remove_faces)
     face_lookup = generate_face_lookup(faces_to_nodes)
 
-    cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose)
+    cells_to_faces = parse_cells(remaps, faces_to_nodes, face_lookup, verbose = verbose, remove_faces = remove_faces)
     neighbors = build_neighbors(cells_to_faces, faces_to_nodes, face_lookup)
 
     # Make both of these in case we have rogue faces that are not connected to any cell.
@@ -139,12 +180,12 @@ function Jutul.mesh_from_gmsh(;
         cell_tags = keys(remaps.cells)
         nc = length(int_cells_to_faces)
         if length(cell_tags) == nc
-            cell_tags_sorted = sort(collect(cell_tags))
+            # Preserve the relative order of retained cells, closing gaps left
+            # by cells that were skipped during parsing.
+            cell_tags_sorted = sort(collect(cell_tags); by = tag -> tag2cell[tag])
             cell_idx_to_new_idx = zeros(Int, nc)
             new_idx_to_cell_idx = zeros(Int, nc)
-            for tag in cell_tags_sorted
-                new_cell_idx = tag2cell[tag]
-                @assert new_cell_idx > 0 && new_cell_idx <= nc
+            for (new_cell_idx, tag) in enumerate(cell_tags_sorted)
                 current_cell_idx = remaps.cells[tag]
                 cell_idx_to_new_idx[current_cell_idx] = new_cell_idx
                 new_idx_to_cell_idx[new_cell_idx] = current_cell_idx
@@ -163,6 +204,13 @@ function Jutul.mesh_from_gmsh(;
     c2b = IndirectionMap(bnd_cells_to_faces)
     f2n = IndirectionMap(int_faces_to_nodes)
     b2n = IndirectionMap(bnd_faces_to_nodes)
+    if process_at_origin
+        shift = convert(eltype(pts_s), -[s_x, s_y, s_z])
+        for (i, pt) in enumerate(pts_s)
+            new_pt = pt + shift
+            pts_s[i] = new_pt
+        end
+    end
     print_message("Mesh parsed successfully:\n    $(length(c2f)) cells\n    $(length(f2n)) internal faces\n    $(length(b2n)) boundary faces\n    $(length(pts_s)) nodes", verbose)
     return UnstructuredMesh(c2f, c2b, f2n, b2n, pts_s, int_neighbors, bnd_neighbors; kwarg...)
 end
