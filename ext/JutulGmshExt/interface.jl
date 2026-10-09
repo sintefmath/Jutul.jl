@@ -1,10 +1,15 @@
 """
-    Jutul.mesh_from_gmsh("path/to/file.geo", manage_gmsh = true, verbose = false)
+    Jutul.mesh_from_gmsh("path/to/file.geo"; manage_gmsh = true, verbose = false)
+    Jutul.mesh_from_gmsh(; verbose = false)
 
 Convert Gmsh mesh file to Jutul mesh. If `manage_gmsh` is true, the Gmsh API is
 initialized and finalized automatically. Otherwise, the user is responsible for
 calling `Gmsh.initialize()` and `Gmsh.finalize()` before and after this
 function, respectively.
+
+Without a path, the currently loaded Gmsh model is converted, and the caller is
+responsible for initializing and finalizing Gmsh. Additional keyword arguments
+are forwarded to `UnstructuredMesh`.
 
 With `remove_faces = true` (the default), collapsed edges are removed from faces,
 allowing quads to become triangles. Faces with fewer than three distinct vertices,
@@ -18,18 +23,28 @@ projects.
 
 # Keyword arguments
 - `argv::Vector{String}`: Command-line arguments to pass to Gmsh during
-  initialization. Example: `["-v", "2"]` to set verbosity level to 2.
-- `manage_gmsh::Bool`: Whether to initialize and finalize Gmsh automatically.
+  initialization when a path is provided. Defaults to `String[]`. Example:
+  `["-v", "2"]` to set verbosity level to 2.
+- `manage_gmsh::Bool`: Whether to initialize and finalize Gmsh automatically
+  when a path is provided. Defaults to `true`.
 - `verbose::Bool`: Whether to print messages about the mesh parsing process.
-- `reverse_z::Bool`: Whether to reverse the z-coordinates of the mesh nodes.
-- `z_is_depth::Bool`: Whether the z-coordinates represent depth (positive
-  downwards), passed onto the mesh constructor.
-- `remove_duplicate_nodes::Bool`: Whether to remove duplicate nodes in the mesh.
+  Defaults to `false`.
+- `reverse_z::Bool`: Whether to negate the z-coordinates of the mesh nodes.
+  Defaults to `false`.
+- `z_is_depth::Bool`: Whether to interpret z-coordinates as depth (positive
+  downwards) in plots, passed onto the mesh constructor. Defaults to `false`.
+- `remove_duplicate_nodes::Bool`: Whether to merge duplicate nodes before
+  parsing the mesh. Defaults to `true`.
+- `remove_duplicate_elements::Bool`: Whether to remove duplicate mesh elements
+  before parsing the mesh. Defaults to `true`.
 - `remove_faces::Bool`: Whether to normalize collapsed faces, skip invalid or
   coincident faces within cells, and omit cells with no remaining faces. Defaults
   to `true`.
-- `preserve_order::Bool`: Whether to preserve the original cell ordering based
-  on the Gmsh tags.
+- `preserve_order::Bool`: Whether to preserve the original relative ordering of
+  retained cells based on the Gmsh tags. Defaults to `false`.
+- `process_at_origin::Bool`: Whether to temporarily subtract each coordinate's
+  minimum during Gmsh processing, then restore the translation in the returned
+  mesh. Defaults to `false`.
 """
 function Jutul.mesh_from_gmsh(
         pth;
