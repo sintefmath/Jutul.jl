@@ -538,7 +538,7 @@ function evaluate_residual_and_jacobian_for_state_pair(x, state, state0, F, obje
         case = setup_case(x, F, packed_steps, state0, :all)
     end
     case = reset_context_and_groups(case)
-    if step_info[:step] == 1
+    if step_info[:substep_global] == 1
         state0 = case.state0
     end
     sim = HelperSimulator(case, eltype(x), cache = cache, n_extra = 1)

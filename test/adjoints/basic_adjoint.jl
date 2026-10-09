@@ -215,6 +215,24 @@ function num_grad_generic(F, G, x0)
     return out
 end
 
+function num_grad_generic_central(F, G, x0; sim_kwarg...)
+    out = similar(x0)
+    ϵ = 1.0e-7
+    function objective_from_x(xi)
+        case = F(xi, missing)
+        r = simulate(case, info_level = -1; sim_kwarg...)
+        return Jutul.evaluate_objective(G, case, r)
+    end
+    for i in eachindex(x0)
+        x_minus = copy(x0)
+        x_plus = copy(x0)
+        x_minus[i] -= ϵ
+        x_plus[i] += ϵ
+        out[i] = (objective_from_x(x_plus) - objective_from_x(x_minus)) / (2 * ϵ)
+    end
+    return out
+end
+
 function test_for_timesteps(timesteps; atol = 5.0e-3, fmt = :case, global_objective = false, deps = :case, deps_ad = :jutul, kwarg...)
     # dx, dy, U0, k_val, srcval
     x = ones(5)
@@ -266,6 +284,27 @@ function test_for_timesteps(timesteps; atol = 5.0e-3, fmt = :case, global_object
     return @test dGdx_adj ≈ dGdx_num atol = atol
 end
 
+function test_for_split_timesteps(timesteps; deps = :case, max_timestep = 0.5, rtol = 1.0e-6, atol = 1.0e-8)
+    x = ones(5)
+    case = setup_poisson_test_case_from_vector(x, dt = timesteps)
+    states, reports = simulate(case, info_level = -1, output_substates = true, max_timestep = max_timestep)
+    F = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = :case)
+    G(model, state, dt, step_info, forces) = dt * state[:U][end]^2
+    dGdx_num = num_grad_generic_central(F, G, x, output_substates = true, max_timestep = max_timestep)
+    dGdx_adj = solve_adjoint_generic(
+        x, F, states, reports, G;
+        state0 = case.state0,
+        forces = case.forces,
+        deps = deps
+    )
+    if deps == :parameters
+        ix = [1, 2, 4]
+        dGdx_adj = dGdx_adj[ix]
+        dGdx_num = dGdx_num[ix]
+    end
+    return @test dGdx_adj ≈ dGdx_num atol = atol rtol = rtol
+end
+
 @testset "AdjointDI.solve_adjoint_generic" begin
     for global_obj in [true, false]
         @testset "global_objective=$global_obj" begin
@@ -288,6 +327,12 @@ end
             end
         end
     end
+end
+
+@testset "AdjointDI.solve_adjoint_generic split report-step regression" begin
+    test_for_split_timesteps([1.0], max_timestep = 0.25, deps = :case)
+    test_for_split_timesteps([1.0], max_timestep = 0.25, deps = :parameters)
+    test_for_split_timesteps([0.25, 1.0], max_timestep = 0.25, deps = :case)
 end
 
 import Jutul.DictOptimization as DictOptimization
