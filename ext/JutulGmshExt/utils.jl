@@ -1,13 +1,42 @@
+function normalize_face_nodes(nodes)
+    @assert length(nodes) <= 4 "normalize_face_nodes only supports up to four nodes, got $(length(nodes))."
+    # Remove zero-length edges without changing the face orientation. A quad
+    # with a collapsed edge becomes a triangle rather than a missing face.
+    distinct_nodes = Int[]
+    for node in nodes
+        if isempty(distinct_nodes) || node != last(distinct_nodes)
+            push!(distinct_nodes, node)
+        end
+    end
+    if length(distinct_nodes) > 1 && first(distinct_nodes) == last(distinct_nodes)
+        pop!(distinct_nodes)
+    end
+    # A non-adjacent repeated node describes a backtracking polygon, which
+    # cannot be repaired by removing zero-length edges.
+    if !allunique(distinct_nodes)
+        return nothing
+    end
+    n = length(distinct_nodes)
+    if n == 3
+        return TRI_T(distinct_nodes)
+    elseif n == 4
+        return QUAD_T(distinct_nodes)
+    else
+        # Faces that collapse to a line or point have no surface area.
+        return nothing
+    end
+end
+
 function add_next!(faces, remap, tags, numpts, offset)
     vals = Int[]
     for j in 1:numpts
         push!(vals, remap[tags[offset + j]])
     end
-    # Skip faces that collapsed when duplicate nodes were merged.
-    if !allunique(vals)
+    face_nodes = normalize_face_nodes(vals)
+    if isnothing(face_nodes)
         return false
     end
-    push!(faces, vals)
+    push!(faces, face_nodes)
     return true
 end
 
@@ -132,13 +161,12 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
                 @assert length(pt_range) == numpts
                 pts = map(i -> node_remap[enodetags[i]], pt_range)
                 cell = Tuple{Int, Int}[]
-                # Keep the original node order for face orientation, excluding
-                # faces that contain a repeated node after merging.
+                # Remove collapsed edges while preserving face orientation.
                 cell_face_nodes = Union{TRI_T, QUAD_T}[]
                 for face_t in (tris, quads)
                     for face in face_t
-                        face_pts = map(i -> pts[i + 1], face)
-                        if !allunique(face_pts)
+                        face_pts = normalize_face_nodes(map(i -> pts[i + 1], face))
+                        if isnothing(face_pts)
                             continue
                         end
                         push!(cell_face_nodes, face_pts)
@@ -261,6 +289,15 @@ function split_boundary(neighbors, faces_to_nodes, cells_to_faces, active_ix::Ve
         end
     end
     new_faces_to_nodes = map(copy, faces_to_nodes[active_ix])
+    if boundary
+        for (i, ix) in enumerate(active_ix)
+            # The face normal points from the left cell to the right cell.
+            # Reverse it when only the right cell remains, so it points outward.
+            if neighbors[1, ix] == 0
+                reverse!(new_faces_to_nodes[i])
+            end
+        end
+    end
     # Handle cells -> current type of faces
     new_cells_to_faces = Vector{Int}[]
     for cell_to_faces in cells_to_faces

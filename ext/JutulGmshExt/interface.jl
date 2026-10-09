@@ -6,8 +6,10 @@ initialized and finalized automatically. Otherwise, the user is responsible for
 calling `Gmsh.initialize()` and `Gmsh.finalize()` before and after this
 function, respectively.
 
-Faces with repeated nodes and coincident faces within a cell are skipped. Cells
-with no remaining faces are omitted from the returned mesh.
+Collapsed edges are removed from faces, allowing quads to become triangles.
+Faces with fewer than three distinct vertices, backtracking faces, and coincident
+faces within a cell are skipped. Cells with no remaining faces are omitted from
+the returned mesh.
 
 To use this function, you need to have the Gmsh library installed and loaded by
 calling `using Gmsh`. Please note that, unlike Jutul, Gmsh is GPL licensed
