@@ -3,7 +3,12 @@ function add_next!(faces, remap, tags, numpts, offset)
     for j in 1:numpts
         push!(vals, remap[tags[offset + j]])
     end
-    return push!(faces, vals)
+    # Skip faces that collapsed when duplicate nodes were merged.
+    if !allunique(vals)
+        return false
+    end
+    push!(faces, vals)
+    return true
 end
 
 function parse_faces(remaps; verbose = false)
@@ -30,12 +35,15 @@ function parse_faces(remaps; verbose = false)
             end
             @assert length(enodetags) == numpts * length(etags)
             print_message("Faces: Processing $(length(etags)) tags of type $name", verbose)
+            nadded = 0
             for (i, etag) in enumerate(etags)
                 offset = (i - 1) * numpts
-                add_next!(faces, node_remap, enodetags, numpts, offset)
-                face_remap[etag] = length(faces)
+                if add_next!(faces, node_remap, enodetags, numpts, offset)
+                    face_remap[etag] = length(faces)
+                    nadded += 1
+                end
             end
-            print_message("Added $(length(etags)) faces of type $name with $(length(unique(enodetags))) unique nodes", verbose)
+            print_message("Added $nadded faces of type $name with $(length(unique(enodetags))) unique nodes", verbose)
         end
     end
     return faces
@@ -117,33 +125,59 @@ function parse_cells(remaps, faces, face_lookup; verbose = false)
             print_message("Cells: Processing $(length(etags)) tags of type $name", verbose)
             @assert length(enodetags) == numpts * length(etags)
             nadded = 0
+            nc_before = length(cells)
             for (i, etag) in enumerate(etags)
                 offset = (i - 1) * numpts
                 pt_range = (offset + 1):(offset + numpts)
                 @assert length(pt_range) == numpts
                 pts = map(i -> node_remap[enodetags[i]], pt_range)
                 cell = Tuple{Int, Int}[]
+                # Keep the original node order for face orientation, excluding
+                # faces that contain a repeated node after merging.
+                cell_face_nodes = Union{TRI_T, QUAD_T}[]
                 for face_t in (tris, quads)
-                    for (fno, face) in enumerate(face_t)
+                    for face in face_t
                         face_pts = map(i -> pts[i + 1], face)
-                        face_pts_sorted = sort(face_pts)
-                        faceno = get(face_lookup, face_pts_sorted, 0)
-                        if faceno == 0
-                            nadded += 1
-                            push!(faces, face_pts)
-                            faceno = length(faces)
-                            face_lookup[face_pts_sorted] = faceno
-                            sgn = 1
-                        else
-                            sgn = check_equal_perm(face_pts, faces[faceno]) ? 1 : 2
+                        if !allunique(face_pts)
+                            continue
                         end
-                        push!(cell, (faceno, sgn))
+                        push!(cell_face_nodes, face_pts)
                     end
+                end
+                # Compare sorted node indices to recognize the same face even
+                # when its node order is reversed.
+                sorted_cell_face_nodes = sort.(cell_face_nodes)
+                for (face_pts, face_pts_sorted) in zip(cell_face_nodes, sorted_cell_face_nodes)
+                    matching_face_count = count(nodes -> nodes == face_pts_sorted, sorted_cell_face_nodes)
+                    # Opposing faces can coincide when a cell pinches out. Skip
+                    # both occurrences so they cannot introduce extra neighbors.
+                    if matching_face_count > 1
+                        continue
+                    end
+                    faceno = get(face_lookup, face_pts_sorted, 0)
+                    if faceno == 0
+                        nadded += 1
+                        push!(faces, face_pts)
+                        faceno = length(faces)
+                        face_lookup[face_pts_sorted] = faceno
+                        sgn = 1
+                    else
+                        sgn = check_equal_perm(face_pts, faces[faceno]) ? 1 : 2
+                    end
+                    push!(cell, (faceno, sgn))
+                end
+                if isempty(cell)
+                    continue
                 end
                 cell_remap[etag] = length(cells) + 1
                 push!(cells, cell)
             end
-            print_message("Added $(length(etags)) new cells of type $name and $nadded new faces.", verbose)
+            nc_added = length(cells) - nc_before
+            nc_skipped = length(etags) - nc_added
+            print_message("Added $nc_added new cells of type $name and $nadded new faces.", verbose)
+            if nc_skipped > 0
+                print_message("Skipped $nc_skipped cells without valid faces.", verbose)
+            end
         end
     end
     return cells

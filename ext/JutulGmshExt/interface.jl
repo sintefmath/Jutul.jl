@@ -6,6 +6,9 @@ initialized and finalized automatically. Otherwise, the user is responsible for
 calling `Gmsh.initialize()` and `Gmsh.finalize()` before and after this
 function, respectively.
 
+Faces with repeated nodes and coincident faces within a cell are skipped. Cells
+with no remaining faces are omitted from the returned mesh.
+
 To use this function, you need to have the Gmsh library installed and loaded by
 calling `using Gmsh`. Please note that, unlike Jutul, Gmsh is GPL licensed
 software, and you should comply with the license terms when using it in your
@@ -156,12 +159,12 @@ function Jutul.mesh_from_gmsh(;
         cell_tags = keys(remaps.cells)
         nc = length(int_cells_to_faces)
         if length(cell_tags) == nc
-            cell_tags_sorted = sort(collect(cell_tags))
+            # Preserve the relative order of retained cells, closing gaps left
+            # by cells that were skipped during parsing.
+            cell_tags_sorted = sort(collect(cell_tags); by = tag -> tag2cell[tag])
             cell_idx_to_new_idx = zeros(Int, nc)
             new_idx_to_cell_idx = zeros(Int, nc)
-            for tag in cell_tags_sorted
-                new_cell_idx = tag2cell[tag]
-                @assert new_cell_idx > 0 && new_cell_idx <= nc
+            for (new_cell_idx, tag) in enumerate(cell_tags_sorted)
                 current_cell_idx = remaps.cells[tag]
                 cell_idx_to_new_idx[current_cell_idx] = new_cell_idx
                 new_idx_to_cell_idx[new_cell_idx] = current_cell_idx
