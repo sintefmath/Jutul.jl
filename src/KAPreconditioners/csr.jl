@@ -69,18 +69,20 @@ backend_zeros(backend, ::Type{T}, n::Integer) where {T} =
 function csr_matrix(
         rowptr::AbstractVector{Ti}, colval::AbstractVector{Ti},
         nzval::AbstractVector{Tv}, nrow::Integer, ncol::Integer;
-        backend = nothing, block_size::Integer = 128
+        backend = nothing, block_size::Integer = 128,
+        use_vendor_linalg::Bool = true
     ) where {Tv, Ti <: Integer}
     return StaticSparsityMatrixCSR(
         nzval, colval, rowptr, Int(nrow), Int(ncol), backend;
-        nthreads = 1, minbatch = Int(block_size), thread_type = :serial
+        nthreads = 1, minbatch = Int(block_size), thread_type = :serial,
+        use_vendor_linalg = use_vendor_linalg
     )
 end
 
 function host_csr_from_csc(
         A::SparseMatrixCSC{Tv}, ::Type{Ti};
         reuse = nothing, cursor_reuse = nothing,
-        block_size::Integer = 128
+        block_size::Integer = 128, use_vendor_linalg::Bool = true
     ) where {Tv, Ti <: Integer}
     nrow, ncol = size(A)
     number_of_nonzeros = nnz(A)
@@ -136,7 +138,7 @@ function host_csr_from_csc(
     end
     return csr_matrix(
         rowptr, colval, nzval, nrow, ncol;
-        block_size = block_size
+        block_size = block_size, use_vendor_linalg = use_vendor_linalg
     )
 end
 
@@ -166,9 +168,11 @@ end
 function csr_matrix(
         A::SparseMatrixCSC{Tv}; backend = nothing,
         block_size::Integer = 128,
-        index_type::Type{Ti} = Int32
+        index_type::Type{Ti} = Int32, use_vendor_linalg::Bool = true
     ) where {Tv, Ti <: Integer}
-    host = host_csr_from_csc(A, Ti; block_size = block_size)
+    host = host_csr_from_csc(
+        A, Ti; block_size = block_size, use_vendor_linalg = use_vendor_linalg
+    )
     selected_backend = isnothing(backend) ? matrix_backend(host) : backend
     if selected_backend isa KernelAbstractions.CPU
         return host
@@ -206,7 +210,7 @@ function host_csr(A::StaticSparsityMatrixCSR)
     nzval = host_prefix(A.nzval, nnz(A))
     return csr_matrix(
         rowptr, colval, nzval, size(A, 1), size(A, 2);
-        block_size = matrix_batch_size(A)
+        block_size = matrix_batch_size(A), use_vendor_linalg = A.use_vendor_linalg
     )
 end
 
@@ -226,7 +230,7 @@ function host_csr_reusing(A::StaticSparsityMatrixCSR{Tv, Ti}, old) where {Tv, Ti
         nzval = host_prefix_reusing(old.nzval, A.nzval, nnz(A))
         return csr_matrix(
             rowptr, colval, nzval, size(A, 1), size(A, 2);
-            block_size = matrix_batch_size(A)
+            block_size = matrix_batch_size(A), use_vendor_linalg = A.use_vendor_linalg
         )
     end
     return host_csr(A)
@@ -252,6 +256,7 @@ function matrix_to_backend(A::StaticSparsityMatrixCSR, backend, block_size::Int)
     nzval = backend_copy(backend, host.nzval)
     return csr_matrix(
         rowptr, colval, nzval, size(host, 1), size(host, 2);
-        backend = backend, block_size = block_size
+        backend = backend, block_size = block_size,
+        use_vendor_linalg = A.use_vendor_linalg
     )
 end

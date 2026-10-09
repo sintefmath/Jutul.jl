@@ -7,11 +7,13 @@ using KernelAbstractions
 using AMDGPU
 using AMDGPU.rocSPARSE
 using LinearAlgebra
-using StaticArrays: StaticMatrix
+using StaticArrays: StaticMatrix, StaticVector
 
 KAPreconditioners.native_dense_lu(::ROCArray) = true
 
 const ROCSPARSEValue = Union{Float32, Float64, ComplexF32, ComplexF64}
+
+include("amdgpu_spmv.jl")
 
 struct ROCVendorILUFactor{M, I, D, W}
     matrix::M
@@ -388,12 +390,13 @@ end
 
 function KAPreconditioners.csr_matrix(
         A::ROCSparseMatrixCSR;
-        block_size::Integer = 128
+        block_size::Integer = 128, use_vendor_linalg::Bool = true
     )
     return StaticSparsityMatrixCSR(
         A.nzVal, A.colVal, A.rowPtr, size(A, 1), size(A, 2),
         KernelAbstractions.get_backend(A.nzVal);
-        nthreads = 1, minbatch = Int(block_size), thread_type = :serial
+        nthreads = 1, minbatch = Int(block_size), thread_type = :serial,
+        use_vendor_linalg = use_vendor_linalg
     )
 end
 

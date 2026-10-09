@@ -8,7 +8,7 @@ using CUDA.CUSPARSE: CuSparseMatrixBSR, CuSparseMatrixCSR
 using KernelAbstractions
 using LinearAlgebra
 using SparseArrays
-using StaticArrays: StaticMatrix
+using StaticArrays: StaticMatrix, StaticVector
 import Adapt
 import CUDA: KernelAdaptor
 import KernelAbstractions as KA
@@ -614,31 +614,26 @@ function KAPreconditioners.solve_vendor_ilu_factor!(
 end
 
 function cusparse_wrapper(A::StaticSparsityMatrixCSR{Tv, Ti}) where {Tv, Ti}
-    return CuSparseMatrixCSR{Tv, Ti}(A.rowptr, A.colval, A.nzval, size(A))
+    return CuSparseMatrixCSR{Tv, Ti}(
+        KAPreconditioners.logical_backend_buffer(A.rowptr),
+        KAPreconditioners.logical_backend_buffer(A.colval),
+        KAPreconditioners.logical_backend_buffer(A.nzval), size(A)
+    )
 end
 
 function KAPreconditioners.csr_matrix(
         A::CuSparseMatrixCSR;
-        block_size::Integer = 128
+        block_size::Integer = 128, use_vendor_linalg::Bool = true
     )
     return StaticSparsityMatrixCSR(
         A.nzVal, A.colVal, A.rowPtr, size(A, 1), size(A, 2),
         KernelAbstractions.get_backend(A.nzVal);
-        nthreads = 1, minbatch = Int(block_size), thread_type = :serial
+        nthreads = 1, minbatch = Int(block_size), thread_type = :serial,
+        use_vendor_linalg = use_vendor_linalg
     )
 end
 
-function LinearAlgebra.mul!(
-        y::CuArray{Tv, 1},
-        A::StaticSparsityMatrixCSR{
-            Tv, Ti, <:CuArray, <:CuArray, <:CuArray,
-        },
-        x::CuArray{Tv, 1}
-    ) where {Tv <: CUSPARSEValue, Ti}
-    length(y) == size(A, 1) || throw(DimensionMismatch())
-    length(x) == size(A, 2) || throw(DimensionMismatch())
-    return mul!(y, cusparse_wrapper(A), x)
-end
+include("cuda_spmv.jl")
 
 function Jutul.maybe_convert_evaluation_state(
         state::Jutul.ImmutableJutulStorage,

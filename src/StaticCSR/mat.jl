@@ -8,31 +8,39 @@ struct StaticSparsityMatrixCSR{Tv, Ti <: Integer, V, I, R, B} <: SparseArrays.Ab
     minbatch::Int
     thread_type::Symbol
     backend::B
+    use_vendor_linalg::Bool
+    # Each matrix owns its vendor setup. Numeric updates preserve this cache;
+    # constructing/adapting a matrix creates a fresh cache for its new storage.
+    vendor_linalg::Base.RefValue{Any}
     function StaticSparsityMatrixCSR(
             stored_transpose::SparseMatrixCSC{Tv, Ti};
             nthreads = Threads.nthreads(),
             minbatch = 1000,
-            thread_type = :batch
+            thread_type = :batch,
+            use_vendor_linalg::Bool = true
         ) where {Tv, Ti}
         nzval = nonzeros(stored_transpose)
         colval = SparseArrays.rowvals(stored_transpose)
         rowptr = SparseArrays.getcolptr(stored_transpose)
         m, n = reverse(size(stored_transpose))
         return new{Tv, Ti, typeof(nzval), typeof(colval), typeof(rowptr), Nothing}(
-            nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, nothing
+            nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, nothing,
+            use_vendor_linalg, Ref{Any}(nothing)
         )
     end
     function StaticSparsityMatrixCSR(
             nzval::V, colval::I, rowptr::R, m::Int, n::Int, backend::B;
             nthreads = 1,
             minbatch = 1,
-            thread_type = :serial
+            thread_type = :serial,
+            use_vendor_linalg::Bool = true
         ) where {
             Tv, Ti <: Integer, V <: AbstractVector{Tv},
             I <: AbstractVector{Ti}, R <: AbstractVector{Ti}, B,
         }
         return new{Tv, Ti, V, I, R, B}(
-            nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, backend
+            nzval, colval, rowptr, m, n, nthreads, minbatch, thread_type, backend,
+            use_vendor_linalg, Ref{Any}(nothing)
         )
     end
 end

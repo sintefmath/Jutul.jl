@@ -5,11 +5,27 @@ using SparseArrays
 using LinearAlgebra
 import Adapt
 
-@testset "KA CSR multiplication with zero beta" begin
+@testset "Allocation-free constant table lookup" begin
     for T in (Float32, Float64)
+        X = T[-3, -1, 1, 3, 5]
+        lookup = Jutul.interpolation_constant_lookup(X)
+        for x in T[-100, -3, -2, -1, 0, 1, 2, 3, 4, 5, 100]
+            expected = x <= X[1] + lookup.dx ? 1 :
+                min(floor(Int, (x - X[1]) / lookup.dx) + 1, length(X) - 1)
+            @test Jutul.first_lower(X, x, lookup) == expected
+        end
+        @test Jutul.first_lower(X, T(Inf), lookup) == length(X) - 1
+        @test Jutul.first_lower(X, T(-Inf), lookup) == 1
+        @test Jutul.first_lower(X, T(NaN), lookup) == 1
+    end
+end
+
+@testset "KA CSR multiplication with zero beta" begin
+    for T in (Float32, Float64), use_vendor_linalg in (false, true)
         context = KernelAbstractionsContext(
             KernelAbstractions.CPU();
-            float_type = T, index_type = Int32
+            float_type = T, index_type = Int32,
+            use_vendor_linalg = use_vendor_linalg
         )
         @test Jutul.linear_float_type(context) === T
         @test Jutul.linear_index_type(context) === Int32
@@ -18,6 +34,8 @@ import Adapt
             context,
             Jutul.StaticSparsityMatrixCSR(copy(matrix'))
         )
+        @test csr.use_vendor_linalg == use_vendor_linalg
+        @test adjoint(context).use_vendor_linalg == use_vendor_linalg
         result = fill(T(NaN), 2)
         mul!(result, csr, T[1, 2], one(T), zero(T))
         @test result == T[2, 6]
@@ -30,10 +48,13 @@ import Adapt
     mixed_context = KernelAbstractionsContext(
         KernelAbstractions.CPU();
         float_type = Float32, index_type = Int32,
-        linear_float_type = Float64, linear_index_type = Int64
+        linear_float_type = Float64, linear_index_type = Int64,
+        use_vendor_linalg = false
     )
     @test Jutul.linear_float_type(mixed_context) === Float64
     @test Jutul.linear_index_type(mixed_context) === Int64
+    @test !Jutul.linear_solver_context(mixed_context).use_vendor_linalg
+    @test KernelAbstractionsContext(CPU()).use_vendor_linalg
 end
 
 @testset "KA interpolation lookup precision" begin

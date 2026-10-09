@@ -5,7 +5,7 @@
                               matrix_layout=EquationMajorLayout(),
                               workgroupsize=256, minbatch=minbatch(nothing),
                               use_kernels_for_secondary=!is_cpu_backend,
-                              reduce_memory=true)
+                              reduce_memory=true, use_vendor_linalg=true)
 
 Execution context for a [`SimulationModel`](@ref) or [`MultiModel`](@ref) on a
 KernelAbstractions backend. Build the model and [`Simulator`](@ref) on the CPU,
@@ -30,6 +30,11 @@ system and solver storage, and default to the corresponding assembly types.
 With `reduce_memory=true`, TPFA conservation laws without face-variable fluxes
 use fused equation assembly, computing cell half-face flux values on the fly
 instead of retaining them in backend storage.
+
+`use_vendor_linalg=true` uses cuSPARSE on CUDA and rocSPARSE on AMDGPU for
+supported sparse matrix-vector products. Vendor descriptors, analysis and
+workspace are retained for repeated products with the same matrix, including
+in-place updates of its values. Set it to `false` to use KA kernels instead.
 """
 struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
     backend::B
@@ -38,6 +43,7 @@ struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
     minbatch::Int
     use_kernels_for_secondary::Bool
     reduce_memory::Bool
+    use_vendor_linalg::Bool
     nthreads::Int
 end
 
@@ -52,7 +58,8 @@ function KernelAbstractionsContext(
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
         minbatch = 1000,
-        reduce_memory = true
+        reduce_memory = true,
+        use_vendor_linalg::Bool = true
     ) where {F, I, LF, LI}
     if !(backend isa KernelAbstractions.Backend)
         throw(ArgumentError("backend must be a KernelAbstractions.Backend"))
@@ -88,7 +95,7 @@ function KernelAbstractionsContext(
     end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
-        use_kernels_for_secondary, reduce_memory, Int(nthreads)
+        use_kernels_for_secondary, reduce_memory, use_vendor_linalg, Int(nthreads)
     )
 end
 
@@ -122,7 +129,8 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-        reduce_memory = ctx.reduce_memory
+        reduce_memory = ctx.reduce_memory,
+        use_vendor_linalg = ctx.use_vendor_linalg
     )
 end
 
@@ -139,7 +147,8 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-        reduce_memory = ctx.reduce_memory
+        reduce_memory = ctx.reduce_memory,
+        use_vendor_linalg = ctx.use_vendor_linalg
     )
 end
 
@@ -166,10 +175,21 @@ function launch_threaded_loop(
     return kernel!(f; ndrange = n)
 end
 
+function wait_for_kernel(event, ctx::KernelAbstractionsContext)
+    if isnothing(event)
+        # ROCBackend queues work without returning an event. Waiting must still
+        # finish the launch and report device exceptions at the calling operation.
+        is_cpu_backend(ctx) || synchronize(ctx)
+    else
+        wait(event)
+    end
+    return nothing
+end
+
 function threaded_loop(f, n, ctx::KernelAbstractionsContext; do_wait = true)
     event = launch_threaded_loop(f, n, ctx)
-    if !isnothing(event) && do_wait
-        wait(event)
+    if do_wait && n > 0
+        wait_for_kernel(event, ctx)
     end
     return nothing
 end
@@ -180,11 +200,11 @@ function threaded_loop_minbatch(
         do_wait::Bool = true
     )
     if !is_cpu_backend(ctx)
-        return threaded_loop(f, n, ctx)
+        return threaded_loop(f, n, ctx; do_wait = do_wait)
     end
     event = launch_threaded_loop(f, n, ctx; cpu_minbatch = cpu_minbatch)
-    if !isnothing(event) && do_wait
-        wait(event)
+    if do_wait && n > 0
+        wait_for_kernel(event, ctx)
     end
     return nothing
 end
@@ -208,8 +228,8 @@ function secondary_variable_loop!(state, model, k::Symbol, ctx::KernelAbstractio
     dependencies = NamedTuple{deps}(ntuple(i -> state[deps[i]], length(deps)))
     kernel! = secondary_variable_update_kernel!(ctx.backend, ctx.workgroupsize)
     event = kernel!(dest, var, model, dependencies; ndrange = n)
-    if !isnothing(event) && do_wait
-        wait(event)
+    if do_wait
+        wait_for_kernel(event, ctx)
     end
     return event
 end
