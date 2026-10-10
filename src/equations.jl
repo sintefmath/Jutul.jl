@@ -240,7 +240,7 @@ function create_equation_caches(
             S, number_of_entities_source = remap_sparsity!(S, e, model)
             has_diagonal = number_of_entities == number_of_entities_total && is_self
             @assert number_of_entities_total > 0 && number_of_entities_source > 0 "nt=$number_of_entities_total ns=$number_of_entities_source for $T"
-            @tic "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map)
+            @tic "cache alloc" cache = GenericAutoDiffCache(T, equations_per_entity, e, S, number_of_entities_total, number_of_entities_source, has_diagonal = has_diagonal, global_map = global_map, context = model.context)
             caches[entity_as_symbol(e)] = cache
         end
     end
