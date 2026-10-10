@@ -40,6 +40,41 @@ end
     return @inbounds value(get_entries(c)[eqNo, index])
 end
 
+Base.size(pos::BlockJacobianPositions{I, ne, np}) where {I, ne, np} = (ne * np, size(pos.first_positions, 2))
+Base.IndexStyle(::Type{<:BlockJacobianPositions}) = IndexCartesian()
+
+@inline function Base.getindex(pos::BlockJacobianPositions{I, ne, np, adjoint}, row::Int, col::Int) where {I, ne, np, adjoint}
+    @boundscheck checkbounds(pos, row, col)
+    first = @inbounds pos.first_positions[1, col]
+    # Zero marks inactive connections, and must stay zero for every entry.
+    if first == 0
+        return zero(I)
+    end
+    equation, partial = divrem(row - 1, np)
+    offset = ifelse(adjoint, np * equation + partial, np * partial + equation)
+    return first + I(offset)
+end
+
+@inline function Base.setindex!(pos::BlockJacobianPositions{I}, value, row::Int, col::Int) where {I}
+    @boundscheck checkbounds(pos, row, col)
+    # Alignment may visit the whole block; retain only its first entry.
+    if row == 1
+        @inbounds pos.first_positions[1, col] = value
+    end
+    return pos
+end
+
+function Base.similar(pos::BlockJacobianPositions{I, ne, np, adjoint}) where {I, ne, np, adjoint}
+    first_positions = similar(pos.first_positions)
+    return BlockJacobianPositions{I, ne, np, adjoint, typeof(first_positions)}(first_positions)
+end
+
+function Adapt.adapt_structure(to, pos::BlockJacobianPositions{I, ne, np, adjoint}) where {I, ne, np, adjoint}
+    first_positions = Adapt.adapt(to, pos.first_positions)
+    T = eltype(first_positions)
+    return BlockJacobianPositions{T, ne, np, adjoint, typeof(first_positions)}(first_positions)
+end
+
 include("compact.jl")
 include("generic.jl")
 
@@ -151,11 +186,12 @@ function injective_alignment!(
 end
 
 function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, row_offset, column_offset, target_offset, source_offset, context, row_layout, col_layout; number_of_equations_for_entity = ne)
+    block = jpos isa BlockJacobianPositions
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
-        for e in 1:ne
-            for d in 1:np
+        for e in 1:ifelse(block, 1, ne)
+            for d in 1:ifelse(block, 1, np)
                 jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(
                     jac,
                     target, source,

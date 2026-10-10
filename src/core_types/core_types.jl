@@ -831,6 +831,20 @@ An AutoDiffCache is a type that holds both a set of AD values and a map into som
 global Jacobian.
 """
 abstract type JutulAutoDiffCache end
+
+"""Logical alignment matrix storing only the first scalar position of each block."""
+struct BlockJacobianPositions{I, ne, np, adjoint, P} <: AbstractMatrix{I}
+    first_positions::P
+end
+
+function allocate_jacobian_positions(I, ne, np, n, layout; context = nothing)
+    if layout isa BlockMajorLayout && 0 < ne <= np
+        first_positions = transfer(context, zeros(I, 1, n))
+        return BlockJacobianPositions{I, ne, np, represented_as_adjoint(layout), typeof(first_positions)}(first_positions)
+    else
+        return transfer(context, zeros(I, ne * np, n))
+    end
+end
 """
 Cache that holds an AD vector/matrix together with their positions.
 """
@@ -853,7 +867,11 @@ struct CompactAutoDiffCache{I, ∂x, E, P, ET} <: JutulAutoDiffCache where {I <:
     function CompactAutoDiffCache(
             equations_per_entity, n_entities, npartials_or_model = 1;
             entity = Cells(),
-            context = DefaultContext(),
+            context = if npartials_or_model isa JutulModel
+                npartials_or_model.context
+            else
+                DefaultContext()
+            end,
             tag = nothing,
             n_entities_pos = nothing,
             kwarg...
@@ -878,8 +896,7 @@ struct CompactAutoDiffCache{I, ∂x, E, P, ET} <: JutulAutoDiffCache where {I <:
             n_entities_pos = n_entities
         end
         I_t = nzval_index_type(context)
-        pos = Array{I_t, 2}(undef, equations_per_entity * npartials, n_entities_pos)
-        pos = transfer(context, pos)
+        pos = allocate_jacobian_positions(I_t, equations_per_entity, npartials, n_entities_pos, matrix_layout(context); context)
         return new{I, D, typeof(entries), typeof(pos), typeof(entity)}(
             entries, entity, pos, equations_per_entity, n_entities, npartials
         )
@@ -907,7 +924,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
             number_of_entities_target, number_of_entities_source, variable_map
         )
     end
-    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap()) where {I}
+    function GenericAutoDiffCache(T, nvalues_per_entity::I, entity::JutulEntity, sparsity::Vector{Vector{I}}, nt, ns; has_diagonal = true, global_map = TrivialGlobalMap(), context = DefaultContext()) where {I}
         @assert nt > 0
         @assert ns > 0
         counts = map(length, sparsity)
@@ -920,7 +937,7 @@ struct GenericAutoDiffCache{N, E, ∂x, A, P, M, D, VM} <: JutulAutoDiffCache wh
         pos = cumsum(vcat(1, counts))
         P = typeof(pos)
         variables = convert(P, variables)
-        algn = zeros(I, nvalues_per_entity * number_of_partials(T), num_entities_touched)
+        algn = allocate_jacobian_positions(I, nvalues_per_entity, number_of_partials(T), num_entities_touched, matrix_layout(context))
         if has_diagonal
             # Create indices into the self-diagonal part if requested, asserting that the diagonal is present
             m = length(sparsity)

@@ -81,10 +81,12 @@ function setup_cross_term_storage(ct::CrossTerm, eq_t, eq_s, model_t, model_s, s
     caches_t = create_equation_caches(model_t, n, N, storage_t, F_t!, ne_t, self_entity = e_t, ad = ad)
     caches_s = create_equation_caches(model_s, n, N, storage_s, F_s!, ne_s, self_entity = e_s, ad = ad)
     # Extra alignment - for off diagonal blocks
-    other_align_t = create_extra_alignment(caches_s, allocate = is_symm)
+    compact_offdiagonal = matrix_layout(model_t.context) == matrix_layout(model_s.context) &&
+        model_block_size(model_t) == model_block_size(model_s)
+    other_align_t = create_extra_alignment(caches_s, allocate = is_symm, compact = compact_offdiagonal)
     out = JutulStorage()
     if is_symm
-        other_align_s = create_extra_alignment(caches_t)
+        other_align_s = create_extra_alignment(caches_t, compact = compact_offdiagonal)
         active_source = cross_term_entities_source(ct, eq_s, model_s)
         source_entities = remap_impact(active_source, model_s, e_s)
         out[:source_entities] = source_entities
@@ -145,14 +147,16 @@ function remap_impact(active, model, entity)
     return active_mapped
 end
 
-function create_extra_alignment(cache; allocate = true)
+function create_extra_alignment(cache; allocate = true, compact = true)
     out = Dict{Symbol, Any}()
     for k in keys(cache)
         if k == :numeric
             continue
         end
         jp = cache[k].jacobian_positions
-        if allocate
+        if !compact && jp isa BlockJacobianPositions
+            next = zeros(eltype(jp), size(jp))
+        elseif allocate
             next = similar(jp)
         else
             next = jp
