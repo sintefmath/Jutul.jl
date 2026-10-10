@@ -128,7 +128,7 @@ end
         @test generic.jacobian_positions isa Jutul.BlockJacobianPositions
         extra = Jutul.create_extra_alignment((Cells = generic,))
         @test extra.Cells isa Jutul.BlockJacobianPositions
-        full = Jutul.create_extra_alignment((Cells = generic,); compact = false)
+        full = Jutul.create_extra_alignment((Cells = generic,); matching_layouts = false)
         @test full.Cells isa Matrix{Int}
         @test size(full.Cells) == size(generic.jacobian_positions)
 
