@@ -110,21 +110,29 @@ end
 
         # Include outer system offsets and an equation group inside a larger block.
         # Explicit zeros must be retained as part of the sparse pattern.
-        jac = sparse(repeat(1:4, 4), repeat(1:4, inner = 4),
-            fill(zero(SMatrix{np, np, Float64}), 16), 4, 4)
+        jac = sparse(
+            repeat(1:4, 4), repeat(1:4, inner = 4),
+            fill(zero(SMatrix{np, np, Float64}), 16), 4, 4
+        )
         target, source = [1, 2], [2, 1]
         equation_offset = ne < np ? 2 * (np - ne) : 0
-        Jutul.injective_alignment!(cache, nothing, jac, Cells(), context;
+        Jutul.injective_alignment!(
+            cache, nothing, jac, Cells(), context;
             target_index = target, source_index = source,
-            row_offset = 1, column_offset = 1, target_offset = equation_offset)
+            row_offset = 1, column_offset = 1, target_offset = equation_offset
+        )
         for i in 1:2, e in 1:ne, d in 1:np
-            expected = Jutul.find_jac_position(jac, target[i], source[i],
-                1, 1, equation_offset, 0, e, d, 2, 2, ne, np, context)
+            expected = Jutul.find_jac_position(
+                jac, target[i], source[i],
+                1, 1, equation_offset, 0, e, d, 2, 2, ne, np, context
+            )
             @test Jutul.get_jacobian_pos(cache, i, e, d) == expected
         end
 
-        generic = Jutul.GenericAutoDiffCache(eltype(cache.entries), ne,
-            Cells(), [[1, 2], [2]], 2, 2; context)
+        generic = Jutul.GenericAutoDiffCache(
+            eltype(cache.entries), ne,
+            Cells(), [[1, 2], [2]], 2, 2; context
+        )
         @test generic.jacobian_positions isa Jutul.BlockJacobianPositions
         extra = Jutul.create_extra_alignment((Cells = generic,))
         @test extra.Cells isa Jutul.BlockJacobianPositions
@@ -139,11 +147,15 @@ end
     end
 
     for layout in (Jutul.EquationMajorLayout(), Jutul.EntityMajorLayout())
-        cache = CompactAutoDiffCache(2, 3, 2;
-            context = DefaultContext(matrix_layout = layout))
+        cache = CompactAutoDiffCache(
+            2, 3, 2;
+            context = DefaultContext(matrix_layout = layout)
+        )
         @test cache.jacobian_positions isa Matrix{Int}
         @test size(cache.jacobian_positions) == (4, 3)
     end
-    @test Jutul.allocate_jacobian_positions(Int, 3, 2, 4,
-        Jutul.BlockMajorLayout()) isa Matrix{Int}
+    @test Jutul.allocate_jacobian_positions(
+        Int, 3, 2, 4,
+        Jutul.BlockMajorLayout()
+    ) isa Matrix{Int}
 end
