@@ -867,11 +867,7 @@ struct CompactAutoDiffCache{I, ∂x, E, P, ET} <: JutulAutoDiffCache where {I <:
     function CompactAutoDiffCache(
             equations_per_entity, n_entities, npartials_or_model = 1;
             entity = Cells(),
-            context = if npartials_or_model isa JutulModel
-                npartials_or_model.context
-            else
-                DefaultContext()
-            end,
+            context = ifelse(npartials_or_model isa JutulModel, () -> npartials_or_model.context, DefaultContext)(),
             tag = nothing,
             n_entities_pos = nothing,
             kwarg...
