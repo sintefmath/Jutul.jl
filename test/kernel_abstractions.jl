@@ -71,7 +71,7 @@ end
     @test Jutul.linear_float_type(mixed_context) === Float64
     @test Jutul.linear_index_type(mixed_context) === Int64
     @test !Jutul.linear_solver_context(mixed_context).use_vendor_linalg
-    @test KernelAbstractionsContext(CPU()).use_vendor_linalg
+    @test !KernelAbstractionsContext(CPU()).use_vendor_linalg
 end
 
 @testset "KA interpolation lookup precision" begin
