@@ -6,6 +6,23 @@ using StaticArrays
 import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
 
 @testset "CutCellMeshes" begin
+    @testset "Selected cells" begin
+        mesh = UnstructuredMesh(CartesianMesh((3, 2, 2), (3.0, 2.0, 2.0)))
+        plane = PlaneCut([1.5, 1, 1], [1, 0, 0])
+        cut, info = cut_mesh(mesh, plane; cells = [2], min_cut_fraction = 0.0, extra_out = true)
+        @test number_of_cells(cut) == number_of_cells(mesh)+1
+        @test count(==(2), info[:cell_index]) == 2
+        @test all(c -> count(==(c), info[:cell_index]) == 1, setdiff(1:12, [2]))
+        geometry = tpfv_geometry(cut)
+        @test sum(geometry.volumes) ≈ 12
+        @test all(>(0), geometry.volumes)
+        @test all(isfinite, geometry.cell_centroids)
+        @test cut_mesh(mesh, plane; cells = Int[]) === mesh
+        @test_throws ArgumentError cut_mesh(mesh, plane; cells = [0])
+        @test_throws ArgumentError cut_mesh(mesh, plane; cells = [13])
+        @test_throws ArgumentError cut_mesh(mesh, plane; cells = [2], partial_cut = :positive)
+    end
+
     @testset "PlaneCut construction" begin
         plane = PlaneCut([1.0, 2.0, 3.0], [0.0, 0.0, 2.0])
         @test plane.point == SVector{3, Float64}(1.0, 2.0, 3.0)

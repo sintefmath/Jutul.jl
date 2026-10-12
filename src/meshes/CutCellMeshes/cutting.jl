@@ -30,6 +30,8 @@ of the plane.
    - `:boundary_face_index`: Vector mapping each new boundary face to its
      original boundary face index.
    - `:new_faces`: Vector of indices of the interior faces added by cutting.
+- `cells`: Optional cell indices eligible for splitting by a `PlaneCut`.
+  Other cells are retained and their shared faces are updated for conformity.
 
 Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` if `extra_out=true`.
 """
@@ -129,7 +131,8 @@ function cut_mesh(
         clip_to_polygon::Bool = false,
         extra_out::Bool = false,
         partial_cut::Symbol = :none,
-        merge_faces::Bool = true
+        merge_faces::Bool = true,
+        cells = nothing
     ) where {T}
     @assert partial_cut in (:none, :positive, :negative) "partial_cut must be :none, :positive, or :negative"
     nc = number_of_cells(mesh)
@@ -150,7 +153,14 @@ function cut_mesh(
     # Classify all cells
     cut_cells = Int[]
     is_cut = falses(nc)
-    for c in 1:nc
+    candidates = cells
+    if isnothing(candidates)
+        candidates = 1:nc
+    else
+        partial_cut == :none || throw(ArgumentError("cells is only supported with partial_cut=:none"))
+        all(c -> 1 <= c <= nc, candidates) || throw(ArgumentError("cells must contain valid cell indices"))
+    end
+    for c in candidates
         nodes = cell_nodes(mesh, c)
         has_pos = false
         has_neg = false
