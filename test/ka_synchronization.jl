@@ -43,9 +43,11 @@ Jutul.KernelExecution.secondary_variable_update_kernel!(
     backend::EventlessTestBackend, workgroupsize
 ) = EventlessSecondaryLaunch(backend)
 function (kernel::EventlessSecondaryLaunch)(dest, var, model, dependencies; ndrange)
-    push!(kernel.backend.pending, () -> Jutul.update_secondary_variable!(
-        dest, var, model, dependencies, 1:ndrange
-    ))
+    push!(
+        kernel.backend.pending, () -> Jutul.update_secondary_variable!(
+            dest, var, model, dependencies, 1:ndrange
+        )
+    )
     return nothing
 end
 

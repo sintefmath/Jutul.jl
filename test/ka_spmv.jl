@@ -15,7 +15,7 @@ end
 
 function test_vendor_spmv(backend)
     @testset "Scalar SpMV $T $Ti vendor=$use_vendor_linalg" for
-            T in (Float32, Float64, ComplexF32, ComplexF64),
+        T in (Float32, Float64, ComplexF32, ComplexF64),
             Ti in (Int32, Int64), use_vendor_linalg in (true, false)
         context = KernelAbstractionsContext(
             backend; float_type = real(T), index_type = Ti, use_vendor_linalg
@@ -52,11 +52,13 @@ function test_vendor_spmv(backend)
     end
 
     @testset "Block SpMV $T $Ti vendor=$use_vendor_linalg" for
-            T in (Float32, Float64, ComplexF32, ComplexF64),
+        T in (Float32, Float64, ComplexF32, ComplexF64),
             Ti in (Int32, Int64), use_vendor_linalg in (true, false)
-        blocks = [SMatrix{2, 2, T}(1, 2, 3, 4),
-                  SMatrix{2, 2, T}(2, -1, 4, 3),
-                  SMatrix{2, 2, T}(3, 1, -2, 2)]
+        blocks = [
+            SMatrix{2, 2, T}(1, 2, 3, 4),
+            SMatrix{2, 2, T}(2, -1, 4, 3),
+            SMatrix{2, 2, T}(3, 1, -2, 2),
+        ]
         host = Jutul.StaticSparsityMatrixCSR(
             blocks, Ti[1, 3, 2], Ti[1, 3, 4], 2, 3, CPU()
         )
@@ -82,7 +84,7 @@ function test_vendor_spmv(backend)
         @test matrix.vendor_linalg[] === plan
     end
 
-    @testset "SpMV with reusable capacity buffers" for use_vendor_linalg in (true, false)
+    return @testset "SpMV with reusable capacity buffers" for use_vendor_linalg in (true, false)
         for block in (false, true)
             values = block ? [SMatrix{2, 2}(1.0, 2.0, 3.0, 4.0)] : [2.0]
             host = Jutul.StaticSparsityMatrixCSR(values, Int64[1], Int64[1, 2], 1, 1, CPU())

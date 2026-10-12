@@ -28,7 +28,7 @@ end
     # Check interpolation, knots and extrapolation with the same representation.
     FD = Jutul.ForwardDiff
     X, Y = [1.0, 2.0, 3.0], [300.0, 310.0, 320.0]
-    property(p, T) = SVector(2p + 3T, p*T)
+    property(p, T) = SVector(2p + 3T, p * T)
     table = Jutul.BilinearInterpolant(X, Y, [property(p, T) for p in X, T in Y])
     for p in (0.0, 1.0, 1.5, 2.0, 3.0, 4.0), T in (290.0, 300.0, 305.0, 320.0, 330.0)
         @test table(p, T) ≈ property(p, T)
