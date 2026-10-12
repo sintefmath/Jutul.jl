@@ -22,6 +22,20 @@ struct EmbeddedMesh <: Jutul.FiniteVolumeMesh
     intersection_cells::Vector{Int}
 end
 
+function Base.show(io::IO, mesh::EmbeddedMesh)
+    nc = number_of_cells(mesh)
+    nf = number_of_faces(mesh)
+    nb = number_of_boundary_faces(mesh)
+    return print(io, "EmbeddedMesh with $nc cells, $nf faces and $nb boundary faces")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", mesh::EmbeddedMesh)
+    show(io, mesh)
+    print(io, "\n  ", length(mesh.parent_faces), " parent faces; ",
+        length(mesh.intersection_neighbors), " intersections; ",
+        length(mesh.intersection_cells), " retained intersection cells")
+end
+
 """
     EmbeddedMesh(mesh::UnstructuredMesh, faces)
 
