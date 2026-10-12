@@ -874,7 +874,11 @@ function get_facepos(N, arg...)
     if length(N) == 0
         t = eltype(N)
         faces = zeros(t, 0)
-        facePos = ones(t, 2)
+        nc = 1
+        if !isempty(arg) && !isnothing(first(arg))
+            nc = first(arg)
+        end
+        facePos = ones(t, nc+1)
     else
         cell_faces = get_cell_faces(N, arg...)
         counts = [length(x) for x in cell_faces]

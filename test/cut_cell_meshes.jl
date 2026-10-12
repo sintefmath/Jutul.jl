@@ -6,6 +6,13 @@ using StaticArrays
 import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
 
 @testset "CutCellMeshes" begin
+    @testset "Isolated-cell face positions" begin
+        for nc in (0, 1, 3)
+            faces, positions = get_facepos(zeros(Int, 2, 0), nc)
+            @test isempty(faces)
+            @test positions == ones(Int, nc+1)
+        end
+    end
     @testset "Scale-independent edge intersections" begin
         for T in (Float32, Float64, BigFloat), scale in T.((1e-8, 1.0, 1e8))
             plane = PlaneCut(zero(SVector{3, T}), SVector{3, T}(1, 0, 0))
