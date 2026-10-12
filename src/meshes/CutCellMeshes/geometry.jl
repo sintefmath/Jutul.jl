@@ -35,12 +35,15 @@ function edge_plane_intersection(p1::SVector{3, T}, p2::SVector{3, T}, plane::Pl
     d1 = signed_distance(plane, p1)
     d2 = signed_distance(plane, p2)
     denom = d1 - d2
-    if abs(denom) < eps(T)
-        return (p1 + p2) / 2
+    # Distances have units of length: an absolute eps(T) would classify valid
+    # crossings on small meshes as parallel, particularly with Float32.
+    if abs(denom) <= eps(T)*max(abs(d1), abs(d2))
+        point = (p1 + p2) / 2
+    else
+        t = clamp(d1 / denom, zero(T), one(T))
+        point = p1 + t * (p2 - p1)
     end
-    t = d1 / denom
-    t = clamp(t, zero(T), one(T))
-    return p1 + t * (p2 - p1)
+    return point
 end
 
 """

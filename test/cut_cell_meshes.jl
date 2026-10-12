@@ -6,6 +6,18 @@ using StaticArrays
 import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
 
 @testset "CutCellMeshes" begin
+    @testset "Scale-independent edge intersections" begin
+        for T in (Float32, Float64, BigFloat), scale in T.((1e-8, 1.0, 1e8))
+            plane = PlaneCut(zero(SVector{3, T}), SVector{3, T}(1, 0, 0))
+            a = SVector{3, T}(-scale, 0, 0)
+            b = SVector{3, T}(3scale, scale, 0)
+            point = Jutul.CutCellMeshes.edge_plane_intersection(a, b, plane)
+            @test point ≈ SVector{3, T}(0, scale/4, 0) rtol = 8eps(T)
+        end
+        plane = PlaneCut(SVector(0.0, 0.0, 0.0), SVector(1.0, 0.0, 0.0))
+        @test Jutul.CutCellMeshes.edge_plane_intersection(
+            SVector(0.0, 0.0, 0.0), SVector(0.0, 1.0, 0.0), plane) == SVector(0.0, 0.5, 0.0)
+    end
     @testset "Selected cells" begin
         mesh = UnstructuredMesh(CartesianMesh((3, 2, 2), (3.0, 2.0, 2.0)))
         plane = PlaneCut([1.5, 1, 1], [1, 0, 0])
