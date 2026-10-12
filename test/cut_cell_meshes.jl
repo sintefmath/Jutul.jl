@@ -4,6 +4,7 @@ using LinearAlgebra
 using StaticArrays
 
 import Jutul.CutCellMeshes: PlaneCut, PolygonalSurface, cut_mesh
+include("cut_cell_geometry.jl")
 
 @testset "CutCellMeshes" begin
     @testset "Isolated-cell face positions" begin

@@ -8,7 +8,7 @@ struct PlaneCut{T <: Real}
     point::SVector{3, T}
     normal::SVector{3, T}
     function PlaneCut(point::SVector{3, T}, normal::SVector{3, T}) where {T <: Real}
-        n = normalize(normal)
+        n = unit_vector(normal)
         return new{T}(point, n)
     end
 end
@@ -45,19 +45,13 @@ end
 
 Compute the unit normal of a planar polygon from its vertices using Newell's method.
 """
-function polygon_normal(poly::Vector{SVector{3, T}}) where {T}
-    n = zero(SVector{3, T})
-    np = length(poly)
-    for i in 1:np
-        j = mod1(i + 1, np)
-        a = poly[i]
-        b = poly[j]
-        n += cross(a, b)
+function polygon_normal(poly::AbstractVector{SVector{3, T}}) where T
+    normal = polygon_area_vector(poly)
+    measure = stable_norm(normal)
+    if iszero(measure)
+        normal = SVector{3, T}(0, 0, 1)
+    else
+        normal /= measure
     end
-    nn = norm(n)
-    if nn < eps(T)
-        # Degenerate polygon: fallback to z-axis normal
-        return SVector{3, T}(0, 0, 1)
-    end
-    return n / nn
+    return normal
 end

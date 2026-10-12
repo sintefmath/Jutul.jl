@@ -15,14 +15,17 @@ Return +1, -1, or 0 depending on whether `pt` is on the positive side,
 negative side, or on the plane.
 """
 function classify_point(plane::PlaneCut, pt::SVector{3}; tol = 1.0e-12)
-    d = signed_distance(plane, pt)
-    if d > tol
-        return 1
-    elseif d < -tol
-        return -1
-    else
-        return 0
+    return classify_distance(signed_distance(plane, pt), tol)
+end
+
+function classify_distance(distance, tol)
+    side = 0
+    if distance > tol
+        side = 1
+    elseif distance < -tol
+        side = -1
     end
+    return side
 end
 
 """
@@ -156,8 +159,8 @@ function clip_face_by_plane(
         di = dists[i]
         dj = dists[j]
 
-        pi_side = di > tol ? 1 : (di < -tol ? -1 : 0)
-        pj_side = dj > tol ? 1 : (dj < -tol ? -1 : 0)
+        pi_side = classify_distance(di, tol)
+        pj_side = classify_distance(dj, tol)
 
         # Add current point to appropriate polygon(s)
         if pi_side >= 0
@@ -182,20 +185,8 @@ end
 
 Compute the area of a 3D planar polygon.
 """
-function polygon_area(poly::Vector{SVector{3, T}}) where {T}
-    n = length(poly)
-    if n < 3
-        return zero(T)
-    end
-    c = sum(poly) / n
-    area = zero(T)
-    for i in 1:n
-        j = mod1(i + 1, n)
-        a = poly[i] - c
-        b = poly[j] - c
-        area += norm(cross(a, b)) / 2
-    end
-    return area
+function polygon_area(poly::Vector{SVector{3, T}}) where T
+    return first(polygon_area_centroid(poly))
 end
 
 """
@@ -203,25 +194,10 @@ end
 
 Compute the centroid of a 3D planar polygon.
 """
-function polygon_centroid(poly::Vector{SVector{3, T}}) where {T}
-    n = length(poly)
-    if n == 0
-        return zero(SVector{3, T})
-    end
-    c = sum(poly) / n
-    total_area = zero(T)
-    centroid = zero(SVector{3, T})
-    for i in 1:n
-        j = mod1(i + 1, n)
-        a = poly[i] - c
-        b = poly[j] - c
-        tri_area = norm(cross(a, b)) / 2
-        tri_centroid = (poly[i] + poly[j] + c) / 3
-        total_area += tri_area
-        centroid += tri_centroid * tri_area
-    end
-    if total_area > 0
-        centroid /= total_area
+function polygon_centroid(poly::Vector{SVector{3, T}}) where T
+    area, centroid = polygon_area_centroid(poly)
+    if iszero(area)
+        centroid = zero(SVector{3, T})
     end
     return centroid
 end
@@ -274,13 +250,8 @@ Project a 3D point onto the cutting plane, returning 2D coordinates (u, v)
 in a local coordinate system on the plane.
 """
 function project_to_plane(pt::SVector{3, T}, plane::PlaneCut) where {T}
-    n = plane.normal
-    # Pick a reference direction not parallel to normal
-    ref = abs(n[1]) < 0.9 ? SVector{3, T}(1, 0, 0) : SVector{3, T}(0, 1, 0)
-    u = normalize(cross(n, ref))
-    v = cross(n, u)
-    d = pt - plane.point
-    return SVector{2, T}(dot(d, u), dot(d, v))
+    u, v = plane_basis(plane.normal)
+    return SVector{2, T}(project_to_plane(pt, plane.point, u, v))
 end
 
 """

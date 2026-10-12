@@ -539,20 +539,8 @@ end
 
 Compute unit normal of a planar polygon from 3D points using Newell's method.
 """
-function _polygon_normal_from_pts(pts::AbstractVector{SVector{3, T}}) where {T}
-    n = zero(SVector{3, T})
-    np = length(pts)
-    for i in 1:np
-        j = mod1(i + 1, np)
-        a = pts[i]
-        b = pts[j]
-        n += cross(a, b)
-    end
-    nn = norm(n)
-    if nn < eps(T)
-        return SVector{3, T}(0, 0, 1)
-    end
-    return n / nn
+function _polygon_normal_from_pts(pts::AbstractVector{SVector{3, T}}) where T
+    return polygon_normal(pts)
 end
 
 """
@@ -560,11 +548,8 @@ end
 
 Build an orthonormal (u, v) basis in the plane perpendicular to `normal`.
 """
-function _build_tangent_basis(normal::SVector{3, T}) where {T}
-    ref = abs(normal[1]) < T(0.9) ? SVector{3, T}(1, 0, 0) : SVector{3, T}(0, 1, 0)
-    u = normalize(cross(normal, ref))
-    v = cross(normal, u)
-    return (u, v)
+function _build_tangent_basis(normal::SVector{3, T}) where T
+    return plane_basis(normal)
 end
 
 """
@@ -573,21 +558,8 @@ end
 Ensure a 2D polygon has counter-clockwise winding order.
 Uses the signed area (shoelace formula).
 """
-function _ensure_ccw_2d(poly::Vector{SVector{2, T}}) where {T}
-    n = length(poly)
-    if n < 3
-        return poly
-    end
-    # Signed area: positive for CCW, negative for CW
-    area2 = zero(T)
-    for i in 1:n
-        j = mod1(i + 1, n)
-        area2 += poly[i][1] * poly[j][2] - poly[j][1] * poly[i][2]
-    end
-    if area2 < 0
-        return reverse(poly)
-    end
-    return poly
+function _ensure_ccw_2d(poly::Vector{SVector{2, T}}) where T
+    return orient_polygon(poly)
 end
 
 """
@@ -597,46 +569,9 @@ Compute the intersection of two 2D convex polygons using the
 Sutherland-Hodgman algorithm. Both polygons are reoriented to
 counter-clockwise winding before clipping. Returns a vector of 2D vertices.
 """
-function _polygon_intersection_2d(
-        subject::Vector{SVector{2, T}},
-        clip::Vector{SVector{2, T}}
-    ) where {T}
-    output = _ensure_ccw_2d(subject)
-    clip_ccw = _ensure_ccw_2d(clip)
-    nc = length(clip_ccw)
-    for i in 1:nc
-        if isempty(output)
-            return SVector{2, T}[]
-        end
-        input = output
-        output = SVector{2, T}[]
-        edge_start = clip_ccw[i]
-        edge_end = clip_ccw[mod1(i + 1, nc)]
-        # Edge direction and inward normal
-        edge_dir = edge_end - edge_start
-        # Inward normal (pointing into the clip polygon)
-        inward = SVector{2, T}(-edge_dir[2], edge_dir[1])
-
-        n_in = length(input)
-        for j in 1:n_in
-            current = input[j]
-            next = input[mod1(j + 1, n_in)]
-            d_curr = dot(current - edge_start, inward)
-            d_next = dot(next - edge_start, inward)
-            if d_curr >= 0  # current inside
-                push!(output, current)
-                if d_next < 0  # next outside
-                    # Compute intersection
-                    t = d_curr / (d_curr - d_next)
-                    push!(output, current + t * (next - current))
-                end
-            elseif d_next >= 0  # current outside, next inside
-                t = d_curr / (d_curr - d_next)
-                push!(output, current + t * (next - current))
-            end
-        end
-    end
-    return output
+function _polygon_intersection_2d(subject::Vector{SVector{2, T}}, clip::Vector{SVector{2, T}};
+        tolerance = zero(T)) where T
+    return clip_polygon(orient_polygon(subject), orient_polygon(clip), tolerance; clean = false)
 end
 
 """
@@ -760,41 +695,9 @@ Split a 2D polygon by a line defined by a point and an inward normal.
 Returns (inside, outside) where inside is the part on the inward side
 and outside is the part on the outward side.
 """
-function _split_polygon_by_line_2d(
-        poly::Vector{SVector{2, T}},
-        point_on_line::SVector{2, T},
-        inward_normal::SVector{2, T}
-    ) where {T}
-    n = length(poly)
-    inside = SVector{2, T}[]
-    outside = SVector{2, T}[]
-
-    for i in 1:n
-        j = mod1(i + 1, n)
-        pi = poly[i]
-        pj = poly[j]
-        di = dot(pi - point_on_line, inward_normal)
-        dj = dot(pj - point_on_line, inward_normal)
-
-        if di >= 0  # pi is inside
-            push!(inside, pi)
-            if dj < 0  # pj is outside → crossing
-                t = di / (di - dj)
-                inter = pi + t * (pj - pi)
-                push!(inside, inter)
-                push!(outside, inter)
-            end
-        else  # pi is outside
-            push!(outside, pi)
-            if dj >= 0  # pj is inside → crossing
-                t = di / (di - dj)
-                inter = pi + t * (pj - pi)
-                push!(outside, inter)
-                push!(inside, inter)
-            end
-        end
-    end
-    return (inside, outside)
+function _split_polygon_by_line_2d(poly::Vector{SVector{2, T}}, point_on_line::SVector{2, T},
+        inward_normal::SVector{2, T}; tolerance = zero(T)) where T
+    return split_polygon_by_line(poly, point_on_line, inward_normal; tolerance = tolerance, clean = false)
 end
 
 """
@@ -827,17 +730,8 @@ end
 
 Compute the area of a 2D polygon using the shoelace formula.
 """
-function _polygon_area_2d(poly::Vector{SVector{2, T}}) where {T}
-    n = length(poly)
-    if n < 3
-        return zero(T)
-    end
-    area2 = zero(T)
-    for i in 1:n
-        j = mod1(i + 1, n)
-        area2 += poly[i][1] * poly[j][2] - poly[j][1] * poly[i][2]
-    end
-    return abs(area2) / 2
+function _polygon_area_2d(poly::Vector{SVector{2, T}}) where T
+    return first(polygon_area_centroid(poly))
 end
 
 """

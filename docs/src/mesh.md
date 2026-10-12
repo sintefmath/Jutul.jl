@@ -198,6 +198,54 @@ fig
 
 ## Mesh generation
 
+### Shared planar and cut-cell geometry
+
+`Jutul.CutCellMeshes` provides mesh cutting and gluing together with geometry
+primitives for lower-dimensional surfaces. These primitives are also used by
+JutulDarcy's embedded fracture preprocessor. Geometry coordinates retain their
+floating-point type; tolerances are absolute lengths in the mesh's coordinate
+units.
+
+A `PlanarFrame` validates a simple planar boundary and stores its local axes
+and nonoverlapping convex parts. This allows concave surfaces to use the same
+clipping, integration and extrusion routines as convex ones:
+
+```julia
+using Jutul, StaticArrays
+import Jutul.CutCellMeshes as CCM
+vertices = SVector{3, Float64}[(0, 0, 0.5), (2, 0, 0.5), (2, 1, 0.5),
+    (1, 1, 0.5), (1, 2, 0.5), (0, 2, 0.5)]
+frame = CCM.PlanarFrame(vertices)
+area, centroid = CCM.polygon_parts_area_centroid(frame.parts, frame)
+points, faces = CCM.polygon_prism(frame.parts, frame, 0.1, 1e-9)
+```
+
+The existing `PlaneCut`, `PolygonalSurface`, `cut_mesh` and `glue_mesh`
+interfaces are unchanged. `plane_basis` defaults to their existing projection
+convention; `convention=:axis` instead projects the least-aligned Cartesian
+axis onto the plane. Planar area and centroid calculations support concave
+boundaries. Warped faces retain the face-center triangle fans used by Jutul's
+mesh geometry. Section loops with crossing or retraced fan segments can be
+resolved into positive-winding convex regions before clipping.
+
+`CellSpatialIndex` supplies repeated bounding-box and optional plane queries.
+Queries return candidate cell IDs, so an exact geometric check still follows.
+
+```@docs
+Jutul.CutCellMeshes.PlanarFrame
+Jutul.CutCellMeshes.plane_basis
+Jutul.CutCellMeshes.polygon_area_centroid
+Jutul.CutCellMeshes.polygon_parts_area_centroid
+Jutul.CutCellMeshes.convex_parts
+Jutul.CutCellMeshes.clip_polygon
+Jutul.CutCellMeshes.cell_section
+Jutul.CutCellMeshes.cell_average_distance
+Jutul.CutCellMeshes.BoundingBoxNode
+Jutul.CutCellMeshes.CellSpatialIndex
+Jutul.CutCellMeshes.query_cells
+Jutul.CutCellMeshes.polygon_prism
+```
+
 ### Gmsh support
 
 ```@docs
@@ -323,4 +371,3 @@ for (figno, pp) in enumerate(pairs(tags))
 end
 fig
 ```
-
