@@ -254,9 +254,17 @@ end
     end
 end
 
+# GPU extensions return true when a cached vendor product was performed.
+vendor_spmv!(y, A, x, alpha, beta) = false
+
 function LinearAlgebra.mul!(y::AbstractVector, A::StaticSparsityMatrixCSR, x::AbstractVector)
     length(y) == matrix_nrows(A) || throw(DimensionMismatch())
     length(x) == matrix_ncols(A) || throw(DimensionMismatch())
+    if A.use_vendor_linalg && vendor_spmv!(
+            logical_backend_buffer(y), A, logical_backend_buffer(x), 1, 0
+        )
+        return y
+    end
     n = matrix_nrows(A)
     k! = spmv_kernel!(matrix_backend(A), matrix_kernel_block_size(A))
     k!(y, A.rowptr, A.colval, A.nzval, x, n; ndrange = n)

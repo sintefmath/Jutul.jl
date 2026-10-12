@@ -294,7 +294,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
     end
     return StaticSparsityMatrixCSR(
         nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
-        nthreads = 1, minbatch = execution_size, thread_type = :serial
+        nthreads = 1, minbatch = execution_size, thread_type = :serial,
+        use_vendor_linalg = ctx.use_vendor_linalg
     )
 end
 
@@ -593,7 +594,8 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
             workgroupsize = ctx.workgroupsize,
             minbatch = minbatch(ctx),
             use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-            reduce_memory = reduce_memory
+            reduce_memory = reduce_memory,
+            use_vendor_linalg = ctx.use_vendor_linalg
         )
     end
     models = (;
@@ -1416,6 +1418,14 @@ function LinearAlgebra.mul!(
     ) where {
         Tv, Ti <: Integer, V, I, R, B <: KernelAbstractions.Backend,
     }
+    length(y) == size(A, 1) || throw(DimensionMismatch())
+    length(x) == size(A, 2) || throw(DimensionMismatch())
+    if A.use_vendor_linalg && KAPreconditioners.vendor_spmv!(
+            KAPreconditioners.logical_backend_buffer(y), A,
+            KAPreconditioners.logical_backend_buffer(x), alpha, beta
+        )
+        return y
+    end
     scalar_type = KAPreconditioners.matrix_scalar_type(eltype(y))
     alpha = convert(scalar_type, alpha)
     beta = convert(scalar_type, beta)
@@ -1514,7 +1524,8 @@ function transfer_csr_to_backend(
     return StaticSparsityMatrixCSR(
         values, columns, rows, size(matrix, 1), size(matrix, 2),
         reference.backend; nthreads = reference.nthreads,
-        minbatch = reference.minbatch, thread_type = reference.thread_type
+        minbatch = reference.minbatch, thread_type = reference.thread_type,
+        use_vendor_linalg = reference.use_vendor_linalg
     )
 end
 

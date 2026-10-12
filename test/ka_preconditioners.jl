@@ -8,6 +8,20 @@ using SparseArrays
 using Jutul.StaticArrays: SMatrix, SVector
 using Test
 
+@testset "Vendor ILU vectors from reusable buffers" begin
+    for backend in (CPU(), JLBackend()), T in (Float64, SVector{3, Float64})
+        unit = T <: Number ? one(T) : T(1, 1, 1)
+        allocation = KAPreconditioners.backend_copy(backend, fill(unit, 8))
+        prefix = KAPreconditioners.BackendBufferPrefix(view(allocation, 1:3), allocation)
+        values = KAPreconditioners.vendor_ilu_vector(prefix)
+        @test length(values) == 3 * (T <: Number ? 1 : 3)
+        @test Array(values) == ones(length(values))
+        fill!(values, 2.0)
+        @test Array(allocation)[1:3] == fill(2unit, 3)
+        @test Array(allocation)[4:8] == fill(unit, 5)
+    end
+end
+
 function object_id_or_zero(value)
     return if isnothing(value)
         UInt(0)

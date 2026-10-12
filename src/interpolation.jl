@@ -13,8 +13,19 @@ end
     if x <= x0 + dx
         pos = 1
     else
-        m = floor(Int, (x - x0) / dx) + 1
-        pos = min(m, n - 1)
+        offset = (x - x0) / dx
+        # Bound the positive coordinate before converting it. floor(Int, x)
+        # includes an allocating InexactError path, which becomes a malloc
+        # hostcall in AMDGPU property kernels, even for valid table inputs.
+        if offset >= n - 1
+            pos = n - 1
+        elseif !(offset >= zero(offset))
+            # A NaN input still propagates through the interpolation arithmetic.
+            pos = 1
+        else
+            index = offset isa AbstractFloat ? unsafe_trunc(Int, offset) : floor(Int, offset)
+            pos = index + 1
+        end
     end
     return pos::Int
 end

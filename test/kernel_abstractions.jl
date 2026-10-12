@@ -3,13 +3,46 @@ using Jutul
 using KernelAbstractions
 using SparseArrays
 using LinearAlgebra
+using Jutul.StaticArrays: SVector
 import Adapt
 
+@testset "Bounded constant table lookup" begin
+    for T in (Float32, Float64, Rational{Int}, BigFloat)
+        X = T[-3, -1, 1, 3, 5]
+        lookup = Jutul.interpolation_constant_lookup(X)
+        for x in T[-100, -3, -2, -1, 0, 1, 2, 3, 4, 5, 100]
+            expected = x <= X[1] + lookup.dx ? 1 :
+                min(floor(Int, (x - X[1]) / lookup.dx) + 1, length(X) - 1)
+            @test Jutul.first_lower(X, x, lookup) == expected
+        end
+        if T <: AbstractFloat
+            @test Jutul.first_lower(X, T(Inf), lookup) == length(X) - 1
+            @test Jutul.first_lower(X, T(-Inf), lookup) == 1
+            @test Jutul.first_lower(X, T(NaN), lookup) == 1
+        end
+    end
+end
+
+@testset "Bilinear table values and derivatives" begin
+    # CO2/brine properties store the phase values together in static vectors.
+    # Check interpolation, knots and extrapolation with the same representation.
+    FD = Jutul.ForwardDiff
+    X, Y = [1.0, 2.0, 3.0], [300.0, 310.0, 320.0]
+    property(p, T) = SVector(2p + 3T, p * T)
+    table = Jutul.BilinearInterpolant(X, Y, [property(p, T) for p in X, T in Y])
+    for p in (0.0, 1.0, 1.5, 2.0, 3.0, 4.0), T in (290.0, 300.0, 305.0, 320.0, 330.0)
+        @test table(p, T) ≈ property(p, T)
+        derivative = FD.jacobian(x -> table(x[1], x[2]), [p, T])
+        @test derivative ≈ [2.0 3.0; T p]
+    end
+end
+
 @testset "KA CSR multiplication with zero beta" begin
-    for T in (Float32, Float64)
+    for T in (Float32, Float64), use_vendor_linalg in (false, true)
         context = KernelAbstractionsContext(
             KernelAbstractions.CPU();
-            float_type = T, index_type = Int32
+            float_type = T, index_type = Int32,
+            use_vendor_linalg = use_vendor_linalg
         )
         @test Jutul.linear_float_type(context) === T
         @test Jutul.linear_index_type(context) === Int32
@@ -18,6 +51,8 @@ import Adapt
             context,
             Jutul.StaticSparsityMatrixCSR(copy(matrix'))
         )
+        @test csr.use_vendor_linalg == use_vendor_linalg
+        @test adjoint(context).use_vendor_linalg == use_vendor_linalg
         result = fill(T(NaN), 2)
         mul!(result, csr, T[1, 2], one(T), zero(T))
         @test result == T[2, 6]
@@ -30,10 +65,13 @@ import Adapt
     mixed_context = KernelAbstractionsContext(
         KernelAbstractions.CPU();
         float_type = Float32, index_type = Int32,
-        linear_float_type = Float64, linear_index_type = Int64
+        linear_float_type = Float64, linear_index_type = Int64,
+        use_vendor_linalg = false
     )
     @test Jutul.linear_float_type(mixed_context) === Float64
     @test Jutul.linear_index_type(mixed_context) === Int64
+    @test !Jutul.linear_solver_context(mixed_context).use_vendor_linalg
+    @test !KernelAbstractionsContext(CPU()).use_vendor_linalg
 end
 
 @testset "KA interpolation lookup precision" begin

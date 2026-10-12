@@ -1320,7 +1320,7 @@ function galerkin_structure(
     nzval = host_buffer(old_nzval, Tv, coarse_nnz; zeroed = true)
     Ac = csr_matrix(
         rowptr, colval, nzval, nc, nc;
-        block_size = matrix_batch_size(A)
+        block_size = matrix_batch_size(A), use_vendor_linalg = A.use_vendor_linalg
     )
     counts = host_buffer(
         optional_property(workspace, :ti1),
@@ -1657,7 +1657,8 @@ function owned_on_backend_reusing(
     )
     return csr_matrix(
         rp, cv, av, matrix_nrows(source), matrix_ncols(source);
-        backend = backend, block_size = block_size
+        backend = backend, block_size = block_size,
+        use_vendor_linalg = A.use_vendor_linalg
     )
 end
 
