@@ -74,20 +74,3 @@ function oscillation(distances, tol = 1.0e-6)
     return oscillation(δ1, δ2, δ3, tol)
 
 end
-
-"""
-    iterations_left(contraction_factor, dist)
-
-Estimate the number of iterations needed to converge from the distance `dist`
-(offset by one) given the contraction factor, rounded up and bounded below by
-zero. Not used by the convergence monitor itself.
-"""
-function iterations_left(contraction_factor, dist)
-
-    θ = contraction_factor
-    r = dist .+ 1
-    N = ceil.(-log.(r) ./ log.(θ))
-    N = max.(N, 0)
-    return N
-
-end

@@ -55,38 +55,6 @@ function set_convergence_monitor_relaxation!(
 
 end
 
-# function Jutul.select_nonlinear_relaxation_model___(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
-
-#     n = length(reports)-1
-
-#     if n > rel_type.warmup_iterations
-#         (; dw_decrease, dw_increase, w_max, w_min) = rel_type
-
-#         d, _ = compute_distance(reports[1][:errors]; pools=:all)
-#         distances = zeros(Float64, length(reports), length(d))
-#         for k in 1:(length(reports))
-#             d, _ = compute_distance(reports[k][:errors]; pools=:all)
-#             distances[k, :] .= d
-#         end
-#         status, _, _, oscillating = analyze_step(distances, 1, 8, 8, 0.1, 0.9, Inf)
-#         status = status[1]
-#         oscillating = oscillating[1]
-
-#         if oscillating
-#             ω = ω - dw_decrease
-#         elseif status >= 0
-#             ω = ω + dw_increase
-#         else
-#             @assert status == -1 "Unknown status: $status"
-#         end
-#         ω = clamp(ω, w_min, w_max)
-
-#     end
-
-#     return ω
-
-# end
-
 """
     Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
 
