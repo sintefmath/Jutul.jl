@@ -75,6 +75,9 @@ mock_errors(r) = [
         @test cut && length(reports) == 3
         @test all(cc.history[:status][2:3, :] .== -1)
         @test reports[end][:convergence_monitor][:status] == [-1, -1]
+        # Post-processing with default settings reproduces the cutting criterion
+        cm = CM.analyze_convergence(cc.history[:distance][1:3, :]; target_its = 6)
+        @test cm[:status] == cc.history[:status][1:3, :]
         # Bad, non-oscillating iterates leave the relaxation factor unchanged
         @test Jutul.select_nonlinear_relaxation_model(nothing, rel, reports, 0.8) == 0.8
         @test Jutul.select_nonlinear_relaxation_model(nothing, rel, reports[1:1], 0.8) == 0.8
