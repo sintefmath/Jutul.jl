@@ -1,11 +1,16 @@
 """
-    compute_contraction_factor(r, N)
+    θ, N, θ_target = compute_contraction_factor(distances, N_target)
 
-Compute contraction factor from a number of Newton iterate distances from
-convergence (defined with a user-prescribed distance metric). For more than two
-iterates, the contraction factor is estimated using least-squares assuming the
-iterates follow a geometric series: rₙ = Θⁿr₀. The function also computes the
-target contraction factor under this assumption assuming N iterations left.
+Estimate the contraction factor from a number of consecutive Newton iterate
+distances from convergence (rows of `distances`, one column per residual
+measure). The iterates are assumed to follow a geometric series, δₖ = θᵏ⁻¹δ₁,
+and θ is estimated by least-squares regression on the log-transformed distances
+(for two iterates, this reduces to θ = δ₂/δ₁).
+
+Returns the estimated contraction factor `θ`, the estimated number of iterations
+`N` needed to reach convergence (δ = 1) from the second-to-last iterate given
+`θ`, and the target contraction factor `θ_target` required to converge from the
+second-to-last iterate in `N_target` iterations.
 """
 function compute_contraction_factor(distances, N_target)
 
@@ -17,25 +22,25 @@ function compute_contraction_factor(distances, N_target)
     # ⇒ log(θ) ∑(k-1)² = ∑(k-1)log(rₖ/r₁)
     num, den = zeros(size(δ, 2)), 0.0
     for k in 1:n
-        num .+= (k - 1) .* log.(δ[k, :] ./ δ[1, :])
+        @views num .+= (k - 1) .* log.(δ[k, :] ./ δ[1, :])
         den += (k - 1)^2
     end
     θ = exp.(num ./ den)
     # Compute target contraction to converge in N iterations
-    θ_target = δ[end - 1, :] .^ (-1 / N_target)
-    N = -log.(δ[end - 1, :]) ./ log.(θ)
+    δ_prev = @view δ[end - 1, :]
+    θ_target = δ_prev .^ (-1 / N_target)
+    N = -log.(δ_prev) ./ log.(θ)
 
     return θ, N, θ_target
 
 end
 
 """
-    oscillation(distances, tol)
+    oscillation(distance_1, distance_2, distance_3, tol = 1.0e-6)
 
-Check if the recent distance history is oscillating. The function compares the
-last three distance vectors and returns `true` for entries where the middle
-iterate is a local minimum or maximum, up to the supplied tolerance. If fewer
-than three iterates are provided, the function returns `false` for all entries.
+Check if three consecutive distance vectors are oscillating. Returns `true` for
+entries where the middle iterate `distance_2` is a strict local minimum or
+maximum, with differences exceeding `tol`.
 """
 function oscillation(distance_1, distance_2, distance_3, tol = 1.0e-6)
 
@@ -51,20 +56,34 @@ function oscillation(distance_1, distance_2, distance_3, tol = 1.0e-6)
 
 end
 
+"""
+    oscillation(distances, tol = 1.0e-6)
+
+Check if the recent distance history is oscillating, using the last three rows
+of `distances` (see the three-argument method). If fewer than three iterates are
+provided, the function returns `false` for all entries.
+"""
 function oscillation(distances, tol = 1.0e-6)
 
     # Early return if we only have two iterates
-    (size(distances, 1) < 3) ? (return falses(size(distances, 2))) : nothing
+    if size(distances, 1) < 3
+        return falses(size(distances, 2))
+    end
     # Get last three iterates
-    δ1, δ2, δ3 = distances[end, :], distances[end - 1, :], distances[end - 2, :]
+    @views δ1, δ2, δ3 = distances[end, :], distances[end - 1, :], distances[end - 2, :]
     return oscillation(δ1, δ2, δ3, tol)
 
 end
 
+"""
+    iterations_left(contraction_factor, dist)
+
+Estimate the number of iterations needed to converge from the distance `dist`
+(offset by one) given the contraction factor, rounded up and bounded below by
+zero. Not used by the convergence monitor itself.
+"""
 function iterations_left(contraction_factor, dist)
 
-    # Compute number of iterations left if we should converge in
-    # target_iterations iterations
     θ = contraction_factor
     r = dist .+ 1
     N = ceil.(-log.(r) ./ log.(θ))
