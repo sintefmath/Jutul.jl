@@ -1,13 +1,13 @@
-Base.@kwdef struct ConvergenceMonitorRelaxation <: Jutul.NonLinearRelaxation
-    w_min::Float64 = 0.1
-    w_max::Float64 = 1.0
-    dw_decrease::Float64 = 0.2
-    dw_increase::Float64 = 0.1
-    warmup_iterations::Int = 4
+struct ConvergenceMonitorRelaxation <: Jutul.NonLinearRelaxation
+    w_min::Float64
+    w_max::Float64
+    dw_decrease::Float64
+    dw_increase::Float64
+    warmup_iterations::Int
 end
 
 """
-    ConvergenceMonitorRelaxation(; w_min = 0.1, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0)
+    ConvergenceMonitorRelaxation(; w_min = 0.1, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0, warmup_iterations = 4)
 
 Relaxation strategy based on convergence monitoring. Requires that the
  simulation has been configured with a `ConvergenceMonitorCuttingCriterion` so
