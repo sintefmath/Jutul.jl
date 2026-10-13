@@ -11,20 +11,20 @@ function compute_contraction_factor(distances, N_target)
 
     # Number of iterates used to estimate contraction factor
     δ = distances
-    n = size(δ,1)
+    n = size(δ, 1)
     # Use least-squares regression on log-transformed contraction factors:
     # minₖ ∑(θ^{k-1} - rₖ/r₁)² ~ minₖ ∑[(k-1)log(θ) - log(rₖ/r₁)]²
     # ⇒ log(θ) ∑(k-1)² = ∑(k-1)log(rₖ/r₁)
-    num, den = zeros(size(δ,2)), 0.0
-    for k = 1:n
-        num .+= (k-1).*log.(δ[k,:]./δ[1,:])
-        den += (k-1)^2
+    num, den = zeros(size(δ, 2)), 0.0
+    for k in 1:n
+        num .+= (k - 1) .* log.(δ[k, :] ./ δ[1, :])
+        den += (k - 1)^2
     end
-    θ = exp.(num./den)
+    θ = exp.(num ./ den)
     # Compute target contraction to converge in N iterations
-    θ_target = δ[end-1,:].^(-1/N_target)
-    N = -log.(δ[end-1,:])./log.(θ)
-    
+    θ_target = δ[end - 1, :] .^ (-1 / N_target)
+    N = -log.(δ[end - 1, :]) ./ log.(θ)
+
     return θ, N, θ_target
 
 end
@@ -37,12 +37,12 @@ last three distance vectors and returns `true` for entries where the middle
 iterate is a local minimum or maximum, up to the supplied tolerance. If fewer
 than three iterates are provided, the function returns `false` for all entries.
 """
-function oscillation(distance_1, distance_2, distance_3, tol=1e-6)
+function oscillation(distance_1, distance_2, distance_3, tol = 1.0e-6)
 
     δ1, δ2, δ3 = distance_1, distance_2, distance_3
     # Check if δ1 > δ2 < δ3 or δ1 < δ2 > δ3
-    gt_tol = (x,y) -> (x .- y) .> tol
-    lt_tol = (x,y) -> gt_tol(y,x)
+    gt_tol = (x, y) -> (x .- y) .> tol
+    lt_tol = (x, y) -> gt_tol(y, x)
     osc_1 = lt_tol(δ2, δ1) .&& lt_tol(δ2, δ3)
     osc_2 = gt_tol(δ2, δ1) .&& gt_tol(δ2, δ3)
     osc = osc_1 .|| osc_2
@@ -51,12 +51,12 @@ function oscillation(distance_1, distance_2, distance_3, tol=1e-6)
 
 end
 
-function oscillation(distances, tol=1e-6)
+function oscillation(distances, tol = 1.0e-6)
 
     # Early return if we only have two iterates
-    (size(distances,1) < 3) ? (return falses(size(distances,2))) : nothing
+    (size(distances, 1) < 3) ? (return falses(size(distances, 2))) : nothing
     # Get last three iterates
-    δ1, δ2, δ3 = distances[end,:], distances[end-1,:], distances[end-2,:]
+    δ1, δ2, δ3 = distances[end, :], distances[end - 1, :], distances[end - 2, :]
     return oscillation(δ1, δ2, δ3, tol)
 
 end
@@ -67,7 +67,7 @@ function iterations_left(contraction_factor, dist)
     # target_iterations iterations
     θ = contraction_factor
     r = dist .+ 1
-    N = ceil.(-log.(r)./log.(θ))
+    N = ceil.(-log.(r) ./ log.(θ))
     N = max.(N, 0)
     return N
 

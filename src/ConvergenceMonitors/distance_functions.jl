@@ -7,13 +7,14 @@ the report, applying `distance_function`, and optionally pooling the resulting
 distances. The function returns the distance values and the names of the
 residual measures or pools used in the computation.
 """
-function compute_distance(report;
-    distance_function = v -> max.(v, 1.0),
-    pools = nothing,
-    pooling_norm = Inf,
-    pooling_args = NamedTuple(),
+function compute_distance(
+        report;
+        distance_function = v -> max.(v, 1.0),
+        pools = nothing,
+        pooling_norm = Inf,
+        pooling_args = NamedTuple(),
     )
-    
+
     # Compute scaled residual measures
     measures = residual_measures(report)
     m, names = flatten_dict(measures)
@@ -29,7 +30,7 @@ function compute_distance(report;
 
 end
 
-function pool_distances(d, names::Vector{String}, pools::Vector{Vector{Int64}}, p=Inf; check_coverage=true, pool_names=nothing)
+function pool_distances(d, names::Vector{String}, pools::Vector{Vector{Int64}}, p = Inf; check_coverage = true, pool_names = nothing)
 
     if check_coverage
         pix = unique(vcat(pools...))
@@ -39,7 +40,7 @@ function pool_distances(d, names::Vector{String}, pools::Vector{Vector{Int64}}, 
     m_pooled = Vector{Float64}(undef, length(pools))
     pools_str = Vector{Vector{String}}(undef, length(pools))
     for (k, pool) in enumerate(pools)
-        mp = norm(max.(d[pool].-1, 0.0), p) .+ 1
+        mp = norm(max.(d[pool] .- 1, 0.0), p) .+ 1
         m_pooled[k] = mp
         pools_str[k] = names[pool]
     end
@@ -53,8 +54,10 @@ function pool_distances(d, names::Vector{String}, pools::Vector{Vector{Int64}}, 
 
 end
 
-function pool_distances(d, names::Vector{String}, pools::Union{Vector{String}, Vector{Regex}}, args...;
-    search_fn=contains, kwargs...)
+function pool_distances(
+        d, names::Vector{String}, pools::Union{Vector{String}, Vector{Regex}}, args...;
+        search_fn = contains, kwargs...
+    )
 
     pools_int = Vector{Vector{Int64}}(undef, length(pools))
     for (k, pool) in enumerate(pools)
@@ -72,6 +75,6 @@ function pool_distances(d, names::Vector{String}, pools::Symbol, args...; kwargs
     pools == :all || error("This version only supports :all, got: $pools")
     pools_int = [collect(1:length(names))]
     pool_names = ["AllMeasures"]
-    return pool_distances(d, names, pools_int, args...;  pool_names=pool_names, kwargs...)
+    return pool_distances(d, names, pools_int, args...; pool_names = pool_names, kwargs...)
 
 end
