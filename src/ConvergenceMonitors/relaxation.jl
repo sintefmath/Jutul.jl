@@ -10,9 +10,12 @@ end
     ConvergenceMonitorRelaxation(; w_min = 0.1, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0, warmup_iterations = 4)
 
 Relaxation strategy based on convergence monitoring. Requires that the
- simulation has been configured with a `ConvergenceMonitorCuttingCriterion` so
-that the convergence status is available in the reports. See corresponding
-iplementation of `select_nonlinear_relaxation_model` below for details.
+simulation has been configured with a `ConvergenceMonitorCuttingCriterion` so
+that the convergence status is available in the reports. The relaxation factor
+is kept in `[w_min, w_max]`, decreased by `dw_decrease` (default `dw`) and
+increased by `dw_increase` (default `dw/2`). The relaxation factor is not
+changed during the first `warmup_iterations` iterations. See
+`select_nonlinear_relaxation_model` for details.
 """
 function ConvergenceMonitorRelaxation(; w_min = 0.1, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0, warmup_iterations = 4)
     if isnothing(dw_increase)
@@ -28,8 +31,10 @@ end
     set_convergence_monitor_relaxation!(config; max_nonlinear_iterations = 50, convergence_monitor_args = NamedTuple(), relaxation_args...)
 
 Utility for setting `ConvergenceMonitorRelaxation` to the simulator config. This
-function also sets the a `ConvergenceMonitorCuttingCriterion` to the config --
-see `set_convergence_monitor_cutting_criterion!`.
+function also sets a `ConvergenceMonitorCuttingCriterion` to the config, with
+`convergence_monitor_args` passed to `set_convergence_monitor_cutting_criterion!`,
+while `relaxation_args` are passed to the `ConvergenceMonitorRelaxation`
+constructor.
 """
 function set_convergence_monitor_relaxation!(
         config;
@@ -45,19 +50,11 @@ function set_convergence_monitor_relaxation!(
     )
 
     rel = ConvergenceMonitorRelaxation(; relaxation_args...)
-    return config[:relaxation] = rel
+    config[:relaxation] = rel
+    return config
 
 end
 
-"""
-    Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
-
-Relaxation strategy based on convergence monitoring. The relaxation factor is
-decreased when the recent distance history is oscillating and increased when
-the monitored status is acceptable or good. Bad but non-oscillating iterates
-leave the relaxation factor unchanged. The status is recomputed from the recent
-distance-to-convergence history derived from the iteration reports.
-"""
 # function Jutul.select_nonlinear_relaxation_model___(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
 
 #     n = length(reports)-1
@@ -90,6 +87,15 @@ distance-to-convergence history derived from the iteration reports.
 
 # end
 
+"""
+    Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
+
+Relaxation strategy based on convergence monitoring. After the warmup
+iterations, the convergence monitor report of the previous iteration is used to
+update the relaxation factor: it is decreased if any unconverged measure is
+oscillating, and otherwise increased if no measure is classified as bad. Bad but
+non-oscillating iterates leave the relaxation factor unchanged.
+"""
 function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMonitorRelaxation, reports, ω)
 
     if length(reports) > rel_type.warmup_iterations
@@ -111,10 +117,8 @@ function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMon
 
         if oscillating
             ω = ω - dw_decrease
-        elseif status ∈ [:good, :ok]
+        elseif status in (:good, :ok)
             ω = ω + dw_increase
-        elseif status == :none
-            # No change
         else
             @assert status == :bad "Unknown status: $status"
         end
