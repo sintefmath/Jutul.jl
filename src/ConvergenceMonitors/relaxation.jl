@@ -94,8 +94,8 @@ function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMon
 
     if length(reports) > rel_type.warmup_iterations
         (; dw_decrease, dw_increase, w_max, w_min) = rel_type
-        
-        report = reports[end-1]
+
+        report = reports[end - 1]
         @assert haskey(report, :convergence_monitor)
         distance = report[:convergence_monitor][:distance]
         status = report[:convergence_monitor][:status]
