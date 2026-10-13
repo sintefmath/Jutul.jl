@@ -532,7 +532,7 @@ function Jutul.plot_explorer_impl(
             F = x -> x
         end
         @. cell_val_buffer = F(v)
-        @. cell_val_buffer_trunc = v
+        @. cell_val_buffer_trunc = F(v)
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
