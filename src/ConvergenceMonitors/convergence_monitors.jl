@@ -1,5 +1,7 @@
-function classify_iterate(distance, theta, theta_target, theta_slow, theta_fast;
-    oscillation=false, N_left=missing)
+function classify_iterate(
+        distance, theta, theta_target, theta_slow, theta_fast;
+        oscillation = false, N_left = missing
+    )
 
     # Shorthand notation
     θ, θt, θs, θf = theta, theta_target, theta_slow, theta_fast
@@ -25,14 +27,14 @@ function classify_iterate(distance, theta, theta_target, theta_slow, theta_fast;
     # If approximated number of iterations left is larger than prescribed max,
     # the corresponding measure shold be classified as bad
     status[ok .&& .!its_ok] .-= 1
-    
+
     @assert all([s ∈ (-1:1) for s in status])
 
     return status
 
 end
 
-function update_violation_count!(num_violations, status; strategy=:per_measure)
+function update_violation_count!(num_violations, status; strategy = :per_measure)
 
     fast = status .== 1
     slow = status .== -1
@@ -52,19 +54,19 @@ function update_violation_count!(num_violations, status; strategy=:per_measure)
 
 end
 
-function count_violations(status; strategy=:per_measure)
-    
+function count_violations(status; strategy = :per_measure)
+
     if strategy ∈ [:per_measure, :total]
         Nv = zeros(Int64, size(status))
     else
-        Nv = zeros(Int64, size(status,1))
+        Nv = zeros(Int64, size(status, 1))
     end
     # Loop over iterates
-    Nv_k = copy(Nv[1,:])
+    Nv_k = copy(Nv[1, :])
     for (k, sk) in enumerate(eachrow(status))
-        update_violation_count!(Nv_k, sk; strategy=strategy)
-        Nv[k,:] .= Nv_k
-        Nv_k = copy(Nv[k,:])
+        update_violation_count!(Nv_k, sk; strategy = strategy)
+        Nv[k, :] .= Nv_k
+        Nv_k = copy(Nv[k, :])
     end
 
     return Nv
@@ -76,39 +78,43 @@ function analyze_step(distances, memory, its_target, its_buffer, theta_fast, the
     # Shorthand notation
     θf, θs = theta_fast, theta_slow
     # Compute contraction factors and target contraction factors
-    k = size(distances,1)
+    k = size(distances, 1)
     if k == 1
         # Early return if we only have one iterate
-        θ, θt = fill(NaN, size(distances,2)), fill(NaN, size(distances,2))
-        osc = falses(size(distances,2))
-        status = zeros(Int64, size(distances,2))
+        θ, θt = fill(NaN, size(distances, 2)), fill(NaN, size(distances, 2))
+        osc = falses(size(distances, 2))
+        status = zeros(Int64, size(distances, 2))
         return status, θ, θt, osc
     end
     # Remaining iterations to target: max(N - j + 1 - margin, buffer), where
     # j = k - 1 is the zero-based index of the current iterate. The default
     # margin of 2 gives max(N - k, buffer).
     N_target = max(its_target - (k - 1) + 1 - its_margin, its_buffer)
-    δ = distances[max(k-memory,1):k, :]
+    δ = distances[max(k - memory, 1):k, :]
     θ, N, θt = compute_contraction_factor(δ, N_target)
     # Check for oscillations
-    osc = oscillation(distances[max(k-2,1):k,:])
+    osc = oscillation(distances[max(k - 2, 1):k, :])
     # Classify iterates
-    status = classify_iterate(δ[end,:], θ, θt, θs, θf;
-        oscillation=osc, N_left=(N, N_max))
+    status = classify_iterate(
+        δ[end, :], θ, θt, θs, θf;
+        oscillation = osc, N_left = (N, N_max)
+    )
     # Return
     return status, θ, θt, osc
 
 end
 
-function analyze_convergence(distance;
-    memory=1,
-    target_its=8,
-    iteration_buffer=2,
-    iteration_margin=2,
-    max_iterations_left=2*target_its,
-    theta_fast=0.1,
-    theta_slow=0.99,
-    strategy=:per_measure)
+function analyze_convergence(
+        distance;
+        memory = 1,
+        target_its = 8,
+        iteration_buffer = 2,
+        iteration_margin = 2,
+        max_iterations_left = 2 * target_its,
+        theta_fast = 0.1,
+        theta_slow = 0.99,
+        strategy = :per_measure
+    )
 
     # Shorthand notation
     θf, θs = theta_fast, theta_slow
@@ -118,11 +124,11 @@ function analyze_convergence(distance;
     osc = falses(size(distance))
     status = zeros(Int64, (size(distance)))
     # Loop over iterates
-    Nv_k = copy(Nv[1,:])
-    for k in 1:size(distance,1)
-        status[k,:], θ[k,:], θt[k,:], osc[k,:] = 
-        analyze_step(
-            distance[1:k,:],
+    Nv_k = copy(Nv[1, :])
+    for k in 1:size(distance, 1)
+        status[k, :], θ[k, :], θt[k, :], osc[k, :] =
+            analyze_step(
+            distance[1:k, :],
             memory,
             target_its,
             iteration_buffer,
@@ -131,9 +137,9 @@ function analyze_convergence(distance;
             max_iterations_left;
             its_margin = iteration_margin
         )
-        update_violation_count!(Nv_k, status[k,:]; strategy=strategy)
-        Nv[k,:] .= Nv_k
-        Nv_k = copy(Nv[k,:])
+        update_violation_count!(Nv_k, status[k, :]; strategy = strategy)
+        Nv[k, :] .= Nv_k
+        Nv_k = copy(Nv[k, :])
     end
     # Make convergence monitor dict
     cm = Dict()
@@ -148,13 +154,17 @@ function analyze_convergence(distance;
 
 end
 
-function analyze_convergence(step_reports::Vector; 
-    pools = nothing, pooling_args = NamedTuple(), names = nothing, kwargs...)
+function analyze_convergence(
+        step_reports::Vector;
+        pools = nothing, pooling_args = NamedTuple(), names = nothing, kwargs...
+    )
 
     distance = Vector{Vector{Float64}}(undef, length(step_reports))
     for (k, step) in enumerate(step_reports)
-        d, n = Jutul.ConvergenceMonitors.compute_distance(step[:errors];
-        pools=pools, pooling_args=pooling_args)
+        d, n = Jutul.ConvergenceMonitors.compute_distance(
+            step[:errors];
+            pools = pools, pooling_args = pooling_args
+        )
         names = isnothing(names) ? n : names
         distance[k] = d
     end
