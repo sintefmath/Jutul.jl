@@ -10,7 +10,11 @@
     memory = 1
     # Target number of nonlinear iterations for the timestep
     iteration_target = 8
+    # Lower bound on the number of remaining iterations used for the target
+    # contraction factor
     iteration_buffer = 2
+    # Margin subtracted from the remaining iterations, N - k + 1 - margin
+    iteration_margin = 2
     # Max number of estimated iterations left for iterate to be classified as ok
     max_iterations_left = 2*iteration_target
     # Contraction factor parameters
@@ -95,7 +99,7 @@ end
 
 function analyze_step(distances, cc::ConvergenceMonitorCuttingCriterion)
 
-    return analyze_step(distances, cc.memory, cc.iteration_target, cc.iteration_buffer, cc.fast, cc.slow, cc.max_iterations_left)
+    return analyze_step(distances, cc.memory, cc.iteration_target, cc.iteration_buffer, cc.fast, cc.slow, cc.max_iterations_left; its_margin = cc.iteration_margin)
 
 end
 

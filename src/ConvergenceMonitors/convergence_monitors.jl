@@ -71,7 +71,7 @@ function count_violations(status; strategy=:per_measure)
 
 end
 
-function analyze_step(distances, memory, its_target, its_buffer, theta_fast, theta_slow, N_max)
+function analyze_step(distances, memory, its_target, its_buffer, theta_fast, theta_slow, N_max; its_margin = 2)
 
     # Shorthand notation
     θf, θs = theta_fast, theta_slow
@@ -84,7 +84,10 @@ function analyze_step(distances, memory, its_target, its_buffer, theta_fast, the
         status = zeros(Int64, size(distances,2))
         return status, θ, θt, osc
     end
-    N_target = max(its_target-k, its_buffer)
+    # Remaining iterations to target: max(N - j + 1 - margin, buffer), where
+    # j = k - 1 is the zero-based index of the current iterate. The default
+    # margin of 2 gives max(N - k, buffer).
+    N_target = max(its_target - (k - 1) + 1 - its_margin, its_buffer)
     δ = distances[max(k-memory,1):k, :]
     θ, N, θt = compute_contraction_factor(δ, N_target)
     # Check for oscillations
@@ -101,6 +104,7 @@ function analyze_convergence(distance;
     memory=1,
     target_its=8,
     iteration_buffer=2,
+    iteration_margin=2,
     max_iterations_left=2*target_its,
     theta_fast=0.1,
     theta_slow=0.99,
@@ -124,7 +128,8 @@ function analyze_convergence(distance;
             iteration_buffer,
             θf,
             θs,
-            max_iterations_left
+            max_iterations_left;
+            its_margin = iteration_margin
         )
         update_violation_count!(Nv_k, status[k,:]; strategy=strategy)
         Nv[k,:] .= Nv_k
