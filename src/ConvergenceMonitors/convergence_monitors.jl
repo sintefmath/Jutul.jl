@@ -146,12 +146,12 @@ function analyze_step(distances, memory, its_target, its_buffer, theta_fast, the
 end
 
 """
-    cm = analyze_convergence(distance; memory = 1, target_its = 8, iteration_buffer = 2, iteration_margin = 2, max_iterations_left = 2*target_its, theta_fast = 0.1, theta_slow = 0.99, strategy = :per_measure)
+    cm = analyze_convergence(distance; memory = 1, target_its = 8, iteration_buffer = 2, iteration_margin = 2, max_iterations_left = 2*target_its, theta_fast = 0.1, theta_slow = 0.9, strategy = :per_measure)
 
 Post-process a distance history (one row per iterate, one column per measure)
 by applying `analyze_step` and `update_violation_count!` to each iterate, as
-done by `ConvergenceMonitorCuttingCriterion` during simulation. Note that the
-default `theta_slow` differs from that of `ConvergenceMonitorCuttingCriterion`.
+done by `ConvergenceMonitorCuttingCriterion` during simulation, with the same
+defaults.
 Returns a `Dict` with the distances, status, number of violations, contraction
 factors, target contraction factors and oscillation flags for all iterates.
 """
@@ -163,7 +163,7 @@ function analyze_convergence(
         iteration_margin = 2,
         max_iterations_left = 2 * target_its,
         theta_fast = 0.1,
-        theta_slow = 0.99,
+        theta_slow = 0.9,
         strategy = :per_measure
     )
 
