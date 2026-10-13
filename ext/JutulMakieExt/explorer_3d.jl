@@ -505,9 +505,9 @@ function Jutul.plot_explorer_impl(
     cell_val_buffer_trunc = zeros(nc)
 
     T_f = Float32
-    vertex_val_buffer = Observable(zeros(T_f, length(cell_to_vertex)))
+    vertex_val_buffer = Jutul.allocate_plot_buffer(zeros(T_f, length(cell_to_vertex)))
     if HAS_SENS
-        vertex_val_buffer_sens = Observable(zeros(T_f, length(cell_to_vertex)))
+        vertex_val_buffer_sens = Jutul.allocate_plot_buffer(zeros(T_f, length(cell_to_vertex)))
         vertex_values_sens = zeros(T_f, length(cell_to_vertex))
     end
     vertex_values = zeros(T_f, length(cell_to_vertex))
@@ -586,8 +586,7 @@ function Jutul.plot_explorer_impl(
                     @. vertex_values_sens = symlog10(vertex_values_sens)
                 end
             end
-            copyto!(vertex_val_buffer_sens[], vertex_values_sens)
-            notify(vertex_val_buffer_sens)
+            Jutul.update_plot_buffer!(vertex_val_buffer_sens, vertex_values_sens)
         end
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -1127,10 +1126,7 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
         end
     end
     @. vertex_vals = cell_vals[cell_to_vertex]
-    t_update = @elapsed begin
-        copyto!(vertex_val_buffer[], vertex_vals)
-        notify(vertex_val_buffer)
-    end
+    t_update = @elapsed Jutul.update_plot_buffer!(vertex_val_buffer, vertex_vals)
     if verbose
         jutul_message("plot_explorer", "Updated vertex buffer in $(round(t_update, sigdigits = 3)) seconds")
     end
