@@ -1,13 +1,11 @@
-# TODO: dispatch on model type (scalar model/multimodel)
-
 """
-    get_multimodel_residuals(report)
+    residual_measures(report, scaled = true)
 
-Get all residual norms for all equations of all models from a nonlinear
-iteration report, scaled by their respective toelrances. The function returns a
-dict of dicts with the residual norms for each equation on the form
+Get all residual norms for all equations of all models from a multimodel
+nonlinear iteration report, optionally scaled by their respective tolerances.
+The function returns a dict of dicts on the form
 
-    residuals[model][equation_type][equation][norm] = res/tol
+    measures[model][equation_type][equation][norm] = res/tol
 """
 function residual_measures(report, scaled = true)
 
@@ -25,14 +23,13 @@ function residual_measures(report, scaled = true)
 end
 
 """
-    get_model_residuals(report)
+    residual_measures(report::Vector, scaled = true)
 
+Get all residual norms for all equations of a single model from a nonlinear
+iteration report, optionally scaled by their respective tolerances. The
+function returns a dict of dicts on the form
 
-Get all residual norms for all equations of a model from a nonlinear
-iteration report, scaled by their respective toelrances. The function returns a
-dict of dicts with the residual norms for each equation on the form
-
-    residuals[equation_type][equation][norm] = res/tol
+    measures[equation_type][equation][norm] = res/tol
 """
 function residual_measures(report::Vector, scaled = true)
 
@@ -74,24 +71,25 @@ end
 """
     process_name(name)
 
-Process a names to be suibale as dictionary keys.
+Convert a name to a `Symbol` suitable as a dictionary key, replacing spaces by
+underscores and removing parentheses.
 """
 function process_name(name)
 
     name = string(name)
     name = replace(name, " " => "_", "(" => "", ")" => "")
-    return name = Symbol(name)
+    return Symbol(name)
 
 end
 
 """
-    flatten_dict(input_dict::Dict, separator::String = ".", trail = [])
+    flatten_dict(input_dict::Dict, separator::String = ".", trail = String[])
 
 Flatten a dict of dicts into a vector of values and a vector of names. The names
 are on the format `"key1<separator>key2<separator>key3"` and the values are the
 corresponding values in the dict.
 """
-function flatten_dict(input_dict::Dict, separator::String = ".", trail = [])
+function flatten_dict(input_dict::Dict, separator::String = ".", trail = String[])
     values = Float64[]
     names = String[]
 

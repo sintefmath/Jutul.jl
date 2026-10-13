@@ -1,6 +1,7 @@
 module ConvergenceMonitors
 
 using Jutul
+using LinearAlgebra
 
 export ConvergenceMonitorCuttingCriterion
 export compute_distance
