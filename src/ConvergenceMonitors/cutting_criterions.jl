@@ -16,7 +16,7 @@
     # Margin subtracted from the remaining iterations, N - k + 1 - margin
     iteration_margin = 2
     # Max number of estimated iterations left for iterate to be classified as ok
-    max_iterations_left = 2*iteration_target
+    max_iterations_left = 2 * iteration_target
     # Contraction factor parameters
     slow = 0.9
     fast = 0.1
@@ -42,8 +42,9 @@ function set_convergence_monitor_cutting_criterion!(config; max_nonlinear_iterat
             break
         end
     end
-    cc = ConvergenceMonitorCuttingCriterion(; 
-    iteration_target = iteration_target, kwargs...)
+    cc = ConvergenceMonitorCuttingCriterion(;
+        iteration_target = iteration_target, kwargs...
+    )
     config[:cutting_criterion] = cc
     return config[:max_nonlinear_iterations] = max_nonlinear_iterations
 
@@ -69,16 +70,16 @@ function Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt
     # Reset cc if first iteration
     (it == 1) ? reset!(cc, dist, max_iter) : nothing
     # Store distances
-    cc.history[:distance][it,:] .= dist
+    cc.history[:distance][it, :] .= dist
     # Analyze step
-    status, θ, θ_target, osc = analyze_step(cc.history[:distance][1:it,:], cc)
+    status, θ, θ_target, osc = analyze_step(cc.history[:distance][1:it, :], cc)
     # Update violation count
-    update_violation_count!(cc.num_violations, status; strategy=cc.strategy)
+    update_violation_count!(cc.num_violations, status; strategy = cc.strategy)
     # Update history
-    cc.history[:contraction_factor][it,:] .= θ
-    cc.history[:contraction_factor_target][it,:] .= θ_target
-    cc.history[:oscillation][it,:] .= osc
-    cc.history[:num_violations][it,:] .= cc.num_violations
+    cc.history[:contraction_factor][it, :] .= θ
+    cc.history[:contraction_factor_target][it, :] .= θ_target
+    cc.history[:oscillation][it, :] .= osc
+    cc.history[:num_violations][it, :] .= cc.num_violations
     # Check if the number of violations exceeds the limit, in which case the
     # timestep should be aborted
     if cc.strategy ∈ [:per_measure, :overall]
@@ -122,13 +123,13 @@ function reset!(cc::ConvergenceMonitorCuttingCriterion, template, max_iter)
     history[:status] = Array{Int}(undef, nc, length(template))
     history[:num_violations] = Array{Int}(undef, nc, length(template))
 
-    history[:contraction_factor][1,:] .= NaN
-    history[:contraction_factor_target][1,:] .= NaN
+    history[:contraction_factor][1, :] .= NaN
+    history[:contraction_factor_target][1, :] .= NaN
     history[:oscillation][1] = false
-    history[:status][1,:] .= 0
-    history[:num_violations][1,:] .= 0
-    
-    cc.history = history
+    history[:status][1, :] .= 0
+    history[:num_violations][1, :] .= 0
+
+    return cc.history = history
 
 end
 
@@ -158,19 +159,19 @@ Utility for printing the status of the convergence monitor.
 function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, names)
 
     # Get convergence monitor status and actual and target contraction factor
-    conv = cc.history[:distance][it,:] .<= 1.0
-    θ = cc.history[:contraction_factor][it,:]
-    θt = cc.history[:contraction_factor_target][it,:]
+    conv = cc.history[:distance][it, :] .<= 1.0
+    θ = cc.history[:contraction_factor][it, :]
+    θt = cc.history[:contraction_factor_target][it, :]
     θs = cc.slow
     θf = cc.fast
     Nv = cc.num_violations
-    Nv0 = cc.history[:num_violations][max(it-1,1),:]
+    Nv0 = cc.history[:num_violations][max(it - 1, 1), :]
     # Find index of worst-offending residual
     Δθ = θ .- θt
     Δθ[conv] .= 0
     _, worst_ix = findmax(Δθ)
     θ, θt = θ[worst_ix], θt[worst_ix]
-    osc = cc.history[:oscillation][it,:]
+    osc = cc.history[:oscillation][it, :]
     θf = cc.fast
     # Round values for printing
     round_local(x) = round(x; digits = 2)
@@ -200,7 +201,7 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, na
         status_it = maximum(Nv) == 0 ? 1 : status_it
     elseif cc.strategy == :total
         dnv = sum(Nv) - sum(Nv0)
-        status_it = (dnv < 0) - (dnv > 0) 
+        status_it = (dnv < 0) - (dnv > 0)
     end
 
     if status_it == 2
@@ -217,17 +218,17 @@ function print_convergence_status(cc::ConvergenceMonitorCuttingCriterion, it, na
     # Add reason and equation name
     if !isnan(status_it)
         worst = "\n\t\t Worst: " * worst
-        worst *= any(osc) ? "(oscillation) " : "" 
+        worst *= any(osc) ? "(oscillation) " : ""
         worst *= "(Measure: $(names[worst_ix]))"
     end
     # Concatenate
     status_str = [:divergent, :acceptable, :good, :nothing]
-    msg = "(It. $(it-1)): "
-    msg *= "status = $(status_str[Int(status_it+2)]), "
+    msg = "(It. $(it - 1)): "
+    msg *= "status = $(status_str[Int(status_it + 2)]), "
     msg *= "violations = $(maximum((cc.num_violations)))" * sym
     msg *= worst
     msg *= "."
     # Print message
-    Jutul.jutul_message("\tConvergence monitor", msg, color = color)
+    return Jutul.jutul_message("\tConvergence monitor", msg, color = color)
 
 end

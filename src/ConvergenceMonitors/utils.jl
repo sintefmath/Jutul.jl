@@ -9,7 +9,7 @@ dict of dicts with the residual norms for each equation on the form
 
     residuals[model][equation_type][equation][norm] = res/tol
 """
-function residual_measures(report, scaled=true)
+function residual_measures(report, scaled = true)
 
     models = keys(report)
 
@@ -34,7 +34,7 @@ dict of dicts with the residual norms for each equation on the form
 
     residuals[equation_type][equation][norm] = res/tol
 """
-function residual_measures(report::Vector, scaled=true)
+function residual_measures(report::Vector, scaled = true)
 
     measures = Dict()
 
@@ -58,13 +58,13 @@ function residual_measures(report::Vector, scaled=true)
                 if !haskey(equation_residuals, α)
                     equation_residuals[α] = Dict()
                 end
-                equation_residuals[α][res_norm] = r/scl
+                equation_residuals[α][res_norm] = r / scl
             end
 
         end
 
         measures[equation] = equation_residuals
-    
+
     end
 
     return measures
