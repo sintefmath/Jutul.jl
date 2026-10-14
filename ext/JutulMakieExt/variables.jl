@@ -93,5 +93,6 @@ function Jutul.plot_jutul_line_data(data; size = (1600, 900), linewidth = 2, reg
     if link
         linkaxes!(all_axes...)
     end
-    return display(GLMakie.Screen(), fig)
+    Jutul.independent_figure(fig)
+    return fig
 end

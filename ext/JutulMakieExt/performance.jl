@@ -164,15 +164,15 @@ end
 function Jutul.plot_linear_convergence(report; kwarg...)
     fig = Figure()
     ax = Axis(fig[1, 1], yscale = log10; ylabel = "Residual", xlabel = "Linear iterations", kwarg...)
-    plot_linear_convergence!(ax, report)
+    Jutul.plot_linear_convergence!(ax, report)
     return fig
 end
 
 function Jutul.plot_linear_convergence!(ax, report::AbstractDict)
     return if haskey(report, :ministeps)
-        plot_linear_convergence!(ax, report[:ministeps])
+        Jutul.plot_linear_convergence!(ax, report[:ministeps])
     elseif haskey(report, :steps)
-        plot_linear_convergence!(ax, report[:steps])
+        Jutul.plot_linear_convergence!(ax, report[:steps])
     elseif haskey(report, :linear_solver)
         r = report[:linear_solver].residuals
         lines!(ax, 1:length(r), r, alpha = 0.5)
@@ -181,7 +181,7 @@ end
 
 function Jutul.plot_linear_convergence!(ax, reports::Vector)
     for r in reports
-        plot_linear_convergence!(ax, r)
+        Jutul.plot_linear_convergence!(ax, r)
     end
     return
 end

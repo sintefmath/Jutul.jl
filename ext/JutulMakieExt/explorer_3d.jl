@@ -37,6 +37,7 @@ function Jutul.plot_explorer_impl(
             end
         else
             static = OrderedDict{String, Vector}()
+            static["Cell index"] = collect(1:number_of_cells(m))
         end
     end
     return Jutul.plot_explorer_impl(m, static, dynamic; kwarg...)
@@ -112,10 +113,6 @@ function preset_colors(name::Symbol)
         textcolor = :black
     else
         error("Unknown preset: $name")
-    end
-    if Jutul.makie_current_backend(string = true) == "WGLMakie" && ismissing(background_color)
-        cm = to_colormap(background_colormap)
-        background_color = cm[Int(floor(length(cm) / 2))]
     end
     if ismissing(hist_colormap)
         hist_colormap = colormap
@@ -307,7 +304,6 @@ function Jutul.plot_explorer_impl(
 
     fig = Figure(size = (1650, 1000), figure_padding = 0.0)
     lscene = LScene(fig[1:N, 1:N], scenekw = scene_arg, show_axis = show_axis)
-    mesh_scene = Scene(lscene.scene, scenekw = (clear = false,))
 
     left_grid_layout = GridLayout(fig[:, 2:5], 10, 5)
 
@@ -509,9 +505,9 @@ function Jutul.plot_explorer_impl(
     cell_val_buffer_trunc = zeros(nc)
 
     T_f = Float32
-    vertex_val_buffer = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
+    vertex_val_buffer = Jutul.allocate_plot_buffer(zeros(T_f, length(cell_to_vertex)))
     if HAS_SENS
-        vertex_val_buffer_sens = GLMakie.Buffer(zeros(T_f, length(cell_to_vertex)))
+        vertex_val_buffer_sens = Jutul.allocate_plot_buffer(zeros(T_f, length(cell_to_vertex)))
         vertex_values_sens = zeros(T_f, length(cell_to_vertex))
     end
     vertex_values = zeros(T_f, length(cell_to_vertex))
@@ -536,7 +532,7 @@ function Jutul.plot_explorer_impl(
             F = x -> x
         end
         @. cell_val_buffer = F(v)
-        @. cell_val_buffer_trunc = v
+        @. cell_val_buffer_trunc = F(v)
 
         bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
         bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
@@ -590,8 +586,7 @@ function Jutul.plot_explorer_impl(
                     @. vertex_values_sens = symlog10(vertex_values_sens)
                 end
             end
-            n = length(vertex_values_sens)
-            vertex_val_buffer_sens[1:n] = vertex_values_sens
+            Jutul.update_plot_buffer!(vertex_val_buffer_sens, vertex_values_sens)
         end
         # if do_map
         #     # out = tri.mapper.Cells(val_buffer)
@@ -715,6 +710,9 @@ function Jutul.plot_explorer_impl(
     end
     upvector = Vec3f(0, 0, 1.0 - 2.0 * zreversed)
     center = sum(points) ./ length(points)
+    if length(center) == 2
+        center = Vec3f(center[1], center[2], 0)
+    end
     cam = Makie.cam3d!(lscene.scene; upvector = upvector, lookat = center, camarg...)
     # w, h = size(scene_outer)
     # nearplane = 0.1f0
@@ -731,61 +729,75 @@ function Jutul.plot_explorer_impl(
 
     colors_clicks = Makie.wong_colors()
     max_clicked = length(colors_clicks)
-    on(events(fig).mousebutton, priority = 2) do event
-        is_left = event.button == Mouse.left
-        is_right = event.button == Mouse.middle
-        is_shift = ispressed(fig, Keyboard.left_shift) || ispressed(fig, Keyboard.right_shift)
-        if (is_left || is_right) && event.action == Mouse.press
-            plt, i = pick(fig)
-            if is_right
-                for plt in cell_outline
-                    delete!(mesh_scene, plt)
-                end
-                empty!(cell_outline)
-                selected_cells[] = Int[]
-                return Consume(false)
-            elseif plt == mplt || (HAS_SENS && plt == mplt_sens)
-                cell = cell_for_click(i)
-                if verbose
-                    jutul_message("plot_explorer", "Clicked cell: $cell")
-                end
-                for plt in cell_outline
-                    delete!(mesh_scene, plt)
-                end
-                empty!(cell_outline)
-                if is_shift
-                    if !(cell in selected_cells.val)
-                        push!(selected_cells.val, cell)
-                        while length(selected_cells.val) > max_clicked
-                            popfirst!(selected_cells.val)
-                        end
-                        notify(selected_cells)
+    # WGL picking waits for a browser response. Do it outside mousebutton
+    # notification so a release cannot overtake downstream press listeners.
+    # Keep selection mutations ordered when several browser picks overlap.
+    selection_lock = ReentrantLock()
+    function update_selection(position, clear_selection, is_shift)
+        if clear_selection
+            for plt in cell_outline
+                delete!(lscene.scene, plt)
+            end
+            empty!(cell_outline)
+            selected_cells[] = Int[]
+            return nothing
+        end
+        plt, i = pick(fig, position)
+        if plt == mplt || (HAS_SENS && plt == mplt_sens)
+            cell = cell_for_click(i)
+            if verbose
+                jutul_message("plot_explorer", "Clicked cell: $cell")
+            end
+            for plt in cell_outline
+                delete!(lscene.scene, plt)
+            end
+            empty!(cell_outline)
+            if is_shift
+                if !(cell in selected_cells.val)
+                    push!(selected_cells.val, cell)
+                    while length(selected_cells.val) > max_clicked
+                        popfirst!(selected_cells.val)
                     end
-                    selected_cells_idx = selected_cells.val
-                else
-                    selected_cells_idx = [cell]
-                    selected_cells[] = selected_cells_idx
+                    notify(selected_cells)
                 end
-                for (i, cell) in enumerate(selected_cells_idx)
-                    pp = plot_mesh_edges!(lscene.scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
-                    if ismissing(pp)
-                        verts = findall(isequal(cell), cell_to_vertex)
-                        new_tri = similar(ttri, 0)
-                        for t in ttri
-                            a, b, c = t
-                            if a in verts && b in verts && c in verts
-                                push!(new_tri, t)
-                            end
+                selected_cells_idx = selected_cells.val
+            else
+                selected_cells_idx = [cell]
+                selected_cells[] = selected_cells_idx
+            end
+            for (i, cell) in enumerate(selected_cells_idx)
+                pp = plot_mesh_edges!(lscene.scene, m, cells = [cell], color = colors_clicks[i], linewidth = 1.5, outer = false)
+                if ismissing(pp)
+                    verts = findall(isequal(cell), cell_to_vertex)
+                    new_tri = similar(ttri, 0)
+                    for t in ttri
+                        a, b, c = t
+                        if a in verts && b in verts && c in verts
+                            push!(new_tri, t)
                         end
-                        if length(new_tri) > 0
-                            pp = mesh!(lscene.scene, points, new_tri) #, color = colors_clicks[i], alpha = 0.5, transparency = true)
-                            push!(cell_outline, pp)
-                        end
-                    else
+                    end
+                    if length(new_tri) > 0
+                        pp = mesh!(lscene.scene, points, new_tri) #, color = colors_clicks[i], alpha = 0.5, transparency = true)
                         push!(cell_outline, pp)
                     end
+                else
+                    push!(cell_outline, pp)
                 end
             end
+        end
+        return nothing
+    end
+    on(events(fig).mousebutton, priority = 2) do event
+        is_left = event.button == Mouse.left
+        clear_selection = event.button == Mouse.middle
+        if (is_left || clear_selection) && event.action == Mouse.press && Makie.is_mouseinside(lscene.scene)
+            position = mouseposition(fig)
+            is_shift = ispressed(fig, Keyboard.left_shift) || ispressed(fig, Keyboard.right_shift)
+            errormonitor(
+                @async lock(selection_lock) do
+                    update_selection(position, clear_selection, is_shift)
+                end
+            )
         end
         return Consume(false)
     end
@@ -832,6 +844,7 @@ function Jutul.plot_explorer_impl(
     function sideplot_timeseries(selected_c::Vector{Int}, dyn_key::String, is_dyn::Bool)
         if !ismissing(al)
             delete!(al)
+            al = missing
         end
         if !ismissing(side_axis)
             empty!(side_axis)
@@ -863,7 +876,7 @@ function Jutul.plot_explorer_impl(
                 values = [dynamic_data[i][dyn_key][c] for i in 1:length(dynamic_data)]
                 scatterlines!(side_axis, values, color = colors_clicks[cno], overdraw = true, label = "$c", markersize = 4)
             end
-            al = axislegend("Cell", framevisible = false, backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0), labelcolor = main_color, titlecolor = main_color)
+            al = axislegend(side_axis, "Cell", framevisible = false, backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0), labelcolor = main_color, titlecolor = main_color)
         end
         return missing
     end
@@ -876,25 +889,26 @@ function Jutul.plot_explorer_impl(
     end
 
     if use_gradient
-        bgscene = Scene(lscene.blockscene)
-        bg_plt = missing
-        function draw_bg()
-            campixel!(bgscene)
-            w, h = size(bgscene) # get the size of the scene in pixels
-            # this draws a line at the scene window boundary
-            bg = [sin(i / w) + cos(j / h) for i in 1:w, j in 1:h]
-            bg_plt = image!(
-                bgscene, [0.5 * i / w + (1.0 - (j / h)^1.5) for i in 1:w, j in 1:h],
-                colormap = bgcmap,
-                colorrange = (minimum(bg), maximum(bg))
-            )
-            return translate!(bg_plt, 0, 0, -10000)
-        end
-        draw_bg()
-
-        on(lscene.scene.events.window_area) do s
-            delete!(bgscene, bg_plt)
-            draw_bg()
+        # The block scene has a pixel camera and renders before its 3D child on
+        # both GLMakie and WGLMakie. A later sibling would cover the geometry in WGL.
+        bgscene = lscene.blockscene
+        n = 128
+        background = [0.5 * i / n + (1.0 - (j / n)^1.5) for i in 1:n, j in 1:n]
+        colorrange = (sin(1 / n) + cos(1.0), sin(1.0) + cos(1 / n))
+        w, h = size(bgscene)
+        bg_plt = image!(
+            bgscene,
+            Makie.EndPoints(0.0, Float64(max(w, 1))),
+            Makie.EndPoints(0.0, Float64(max(h, 1))), background;
+            colormap = bgcmap, colorrange = colorrange
+        )
+        translate!(bg_plt, 0, 0, -10000)
+        # Resize the existing texture; deleting and recreating plots on every
+        # window event breaks live browser sessions and needlessly reallocates.
+        on(bgscene.viewport) do viewport
+            w, h = widths(viewport)
+            bg_plt[1] = Makie.EndPoints(0.0, Float64(max(w, 1)))
+            bg_plt[2] = Makie.EndPoints(0.0, Float64(max(h, 1)))
         end
     end
     return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!, color_information)
@@ -1112,21 +1126,9 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
         end
     end
     @. vertex_vals = cell_vals[cell_to_vertex]
-    n = length(vertex_vals)
-    t_update = @elapsed vertex_val_buffer[1:n] = vertex_vals
+    t_update = @elapsed Jutul.update_plot_buffer!(vertex_val_buffer, vertex_vals)
     if verbose
         jutul_message("plot_explorer", "Updated vertex buffer in $(round(t_update, sigdigits = 3)) seconds")
     end
     return vertex_val_buffer
-end
-
-function symlog10(x)
-    # Inspired by matplotlib.scale.SymmetricalLogScale
-    # https://matplotlib.org/stable/api/scale_api.html#matplotlib.scale.SymmetricalLogScale
-    if x < 1.0 && x > -1.0
-        transformed_val = x
-    else
-        transformed_val = sign(x) * (log10(abs(x)) + 1)
-    end
-    return transformed_val
 end

@@ -223,3 +223,7 @@ end
 function plot_linear_convergence!
 
 end
+
+# Backend-specific storage for frequently updated plot data.
+function allocate_plot_buffer end
+function update_plot_buffer! end
