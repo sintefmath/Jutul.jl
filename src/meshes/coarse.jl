@@ -36,10 +36,14 @@ function CoarseMesh(G, p)
     @assert minimum(p) > 0
     m = maximum(p)
     @assert m <= nc
-    for x in 1:m
-        @assert count(isequal(x), p) > 0 "Bad partition: Block $x is empty."
+    # Cells of each block, in increasing order, in one pass over the partition
+    cells_p = [Int[] for _ in 1:m]
+    for (cell, block) in enumerate(p)
+        push!(cells_p[block], cell)
     end
-    cells_p = map(i -> findall(isequal(i), p), 1:m)
+    for x in 1:m
+        @assert !isempty(cells_p[x]) "Bad partition: Block $x is empty."
+    end
     # Partition internal faces
     coarse_faces = OrderedDict{Tuple{Int, Int}, Vector{Int}}()
     for (faceno, npair) in enumerate(G.faces.neighbors)
