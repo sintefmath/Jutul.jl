@@ -28,6 +28,13 @@ end
 function threaded_loop(F, N, threads::Symbol; do_wait = true)
     return if N == 1
         F(1)
+    elseif threads in (:threads, :threads_static) && Threads.nthreads() == 1
+        # Spawning and waiting for a task has a noticeable overhead when called
+        # often for small loops (e.g. for models with many small wells), so
+        # loop directly when there is only a single thread.
+        for i in 1:N
+            F(i)
+        end
     elseif threads == :threads
         Threads.@threads for i in 1:N
             F(i)
