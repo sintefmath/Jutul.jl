@@ -122,4 +122,23 @@ test_restart()
             end
         end
     end
+
+    function step_test_function(state, report, step)
+        state = copy(state)
+        state[:OutputStep] = step
+        return state
+    end
+    for pth in (nothing, out)
+        states4, = simulate(
+            sim, [1.0, 2.0, 3.0], forces = forces,
+            restart = false,
+            output_path = pth,
+            info_level = -1,
+            state0 = state0,
+            output_function = step_test_function
+        )
+        @testset "Test output function with step argument" begin
+            @test [s[:OutputStep] for s in states4] == [1, 2, 3]
+        end
+    end
 end

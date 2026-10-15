@@ -68,7 +68,7 @@ function store_output!(states, reports, step, sim, config, report; substates = m
         @tic "output report" out_report = get_output_report(sim, report, config[:report_level])
         F = config[:output_function]
         if !ismissing(F)
-            state = F(state, out_report)
+            state = apply_output_function(F, state, out_report, step)
         end
         @tic "write" if file_out
             write_result_jld2(path, state, out_report, step)
@@ -82,6 +82,15 @@ function store_output!(states, reports, step, sim, config, report; substates = m
         end
     end
     return report[:output_time] = t_out
+end
+
+function apply_output_function(F, state, report, step)
+    if applicable(F, state, report, step)
+        out = F(state, report, step)
+    else
+        out = F(state, report)
+    end
+    return out
 end
 
 function write_result_jld2(path, state, report, step)
