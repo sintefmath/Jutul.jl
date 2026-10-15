@@ -17,7 +17,7 @@ end
 minbatch(x, n) = max(n ÷ nthreads(x), minbatch(x))
 
 function thread_type(context::JutulContext)
-    return :threads
+    return :batch
 end
 
 function threaded_loop(F, N, context::JutulContext; do_wait = true)
@@ -26,12 +26,10 @@ function threaded_loop(F, N, context::JutulContext; do_wait = true)
 end
 
 function threaded_loop(F, N, threads::Symbol; do_wait = true)
-    return if N == 1
-        F(1)
-    elseif threads in (:threads, :threads_static) && Threads.nthreads() == 1
-        # Spawning and waiting for a task has a noticeable overhead when called
-        # often for small loops (e.g. for models with many small wells), so
-        # loop directly when there is only a single thread.
+    threads in (:serial, :threads, :threads_static, :batch) || throw(ArgumentError("Unknown thread_type $threads"))
+    return if N == 1 || threads == :serial || Threads.nthreads() == 1
+        # Loop directly for serial runs: spawning and waiting for tasks has a
+        # noticeable overhead when called often for small loops.
         for i in 1:N
             F(i)
         end
@@ -45,10 +43,6 @@ function threaded_loop(F, N, threads::Symbol; do_wait = true)
         end
     elseif threads == :batch
         @batch for i in 1:N
-            F(i)
-        end
-    elseif threads == :serial
-        for i in 1:N
             F(i)
         end
     else
