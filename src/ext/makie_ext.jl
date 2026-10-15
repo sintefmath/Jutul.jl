@@ -11,7 +11,10 @@ export plot_cumulative_solve, plot_cumulative_solve!
 Launch an interactive plot of a mesh with the given `vector_of_dicts` (or just a
 dict). Each dict can have cell data either as vectors (one value per cell) or
 matrices (one column per cell). For 3D plots, use `axis_view = :default|:xz|:yz|:xy`
-to set the initial camera preset programmatically.
+to set the initial camera preset programmatically. The optional keyword
+`step_labels` gives the step number displayed for each entry (e.g. report step
+numbers when only some steps are stored). The `step` keyword is always an index
+into `vector_of_dicts`.
 """
 function plot_interactive(arg...; kwarg...)
     check_plotting_availability(interactive = true)
@@ -35,7 +38,9 @@ suited for interactive exploration and full screen usage. It also has prettier
 defaults than `plot_interactive` and is the recommended way to quickly visualize
 a mesh and its data. This plotter supports static data (via the `static`
 argument), dynamic data (via the `dynamic` argument), and sensitivity data (via
-the `sens` argument, plotted using a special colormap).
+the `sens` argument, plotted using a special colormap). The optional keyword
+`step_labels` gives the step number displayed for each entry in `dynamic` (e.g.
+report step numbers when only some steps are stored).
 """
 function plot_explorer(arg...; kwarg...)
     check_plotting_availability(interactive = true)

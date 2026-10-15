@@ -81,6 +81,7 @@ function plot_interactive_impl(
         new_window = get(ENV, "CI", "false") == "false",
         edge_color = nothing,
         step = 1,
+        step_labels = missing,
         row = 1,
         key = missing,
         edge_arg = NamedTuple(),
@@ -236,12 +237,20 @@ function plot_interactive_impl(
 
         key = "$key"
     end
+    if !ismissing(step_labels)
+        length(step_labels) == nstates || throw(ArgumentError("step_labels must have one entry per state ($nstates), was $(length(step_labels))."))
+    end
     state_index = Observable{Int64}(step)
     function generate_title(base, ix)
-        if length(base) == 0
-            return "Step $(ix[])/$nstates"
+        if ismissing(step_labels)
+            step_str = "$(ix[])/$nstates"
         else
-            return "$base step $(ix[])/$nstates"
+            step_str = "$(step_labels[ix[]]) ($(ix[])/$nstates)"
+        end
+        if length(base) == 0
+            return "Step $step_str"
+        else
+            return "$base step $step_str"
         end
     end
     fig_title = Observable{String}(generate_title(title, state_index))

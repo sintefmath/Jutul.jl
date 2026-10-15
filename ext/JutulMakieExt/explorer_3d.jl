@@ -144,6 +144,7 @@ function Jutul.plot_explorer_impl(
         show_axis = false,
         aspect = missing,
         step::Int = 1,
+        step_labels = missing,
         key = missing,
         plot_pause = 1.0 / 30.0,
         verbose = false,
@@ -231,6 +232,9 @@ function Jutul.plot_explorer_impl(
     else
         Nstep = 1
         dyn_keys = ["No dynamic data"]
+    end
+    if !ismissing(step_labels) && HAS_DYNAMIC_DATA
+        length(step_labels) == Nstep || throw(ArgumentError("step_labels must have one entry per dynamic data step ($Nstep), was $(length(step_labels))."))
     end
 
     function match_key(key; soft = false)
@@ -415,7 +419,11 @@ function Jutul.plot_explorer_impl(
             step_idx = step_slider.selected_index
             idx_stepgl += 1
 
-            tlabel = @lift string("Dynamic data step: ", $step_idx, "/$Nstep")
+            if ismissing(step_labels)
+                tlabel = @lift string("Dynamic data step: ", $step_idx, "/$Nstep")
+            else
+                tlabel = @lift string("Dynamic data step: ", step_labels[$step_idx], " (", $step_idx, "/$Nstep)")
+            end
             Label(step_grid_layout[lpos_tstep, 1:5], tlabel, halign = :left, color = main_color)
             wb = 100
 
@@ -860,7 +868,7 @@ function Jutul.plot_explorer_impl(
                 xticklabelcolor = main_color,
                 yticklabelcolor = main_color,
                 ylabel = "$dyn_key",
-                xlabel = "Step index",
+                xlabel = ismissing(step_labels) ? "Step index" : "Step",
                 ygridvisible = false,
                 xgridvisible = false,
                 topspinevisible = false,
@@ -874,7 +882,8 @@ function Jutul.plot_explorer_impl(
             )
             for (cno, c) in enumerate(selected_c)
                 values = [dynamic_data[i][dyn_key][c] for i in 1:length(dynamic_data)]
-                scatterlines!(side_axis, values, color = colors_clicks[cno], overdraw = true, label = "$c", markersize = 4)
+                steps = ismissing(step_labels) ? eachindex(values) : step_labels
+                scatterlines!(side_axis, steps, values, color = colors_clicks[cno], overdraw = true, label = "$c", markersize = 4)
             end
             al = axislegend(side_axis, "Cell", framevisible = false, backgroundcolor = RGBAf(0.0, 0.0, 0.0, 0.0), labelcolor = main_color, titlecolor = main_color)
         end
