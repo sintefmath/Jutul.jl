@@ -135,7 +135,7 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
         tt = thread_type(ctx)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
-        if N_batches == 1 || thread_type == :serial
+        if N_batches == 1 || tt == :serial
             for (symbol, var) in var_pairs
                 @tic "$symbol" begin
                     v = state[symbol]
@@ -152,7 +152,7 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 end
                 return
             end
-            threaded_loop_minbatch(batch_update, N, N_batches, mb, tt)
+            threaded_loop(batch_update, N_batches, tt)
         end
     end
     return state
