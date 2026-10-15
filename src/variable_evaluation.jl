@@ -131,11 +131,12 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
         K = number_of_entities(model, first_var)
         mb = minbatch(ctx)
         N = nthreads(ctx)
-        N_batches = clamp(K ÷ mb, 1, N)
+        # Up to four batches per thread, of at least minbatch / 4 entities
+        N_batches = K < 2mb ? 1 : clamp(4K ÷ mb, 1, 4N)
         tt = thread_type(ctx)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
-        if N_batches == 1 || thread_type == :serial
+        if N_batches == 1 || tt == :serial
             for (symbol, var) in var_pairs
                 @tic "$symbol" begin
                     v = state[symbol]
@@ -152,7 +153,10 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 end
                 return
             end
-            threaded_loop_minbatch(batch_update, N, N_batches, mb, tt)
+            # Thread t takes batches t, t + N, ...: its share is spread over the
+            # entities, as the cost per entity may vary with the state (e.g.
+            # where a plume or front is)
+            threaded_loop(t -> foreach(batch_update, t:N:N_batches), N, tt)
         end
     end
     return state
