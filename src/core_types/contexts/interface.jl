@@ -17,7 +17,7 @@ end
 minbatch(x, n) = max(n ÷ nthreads(x), minbatch(x))
 
 function thread_type(context::JutulContext)
-    return :threads
+    return :batch
 end
 
 function threaded_loop(F, N, context::JutulContext; do_wait = true)
