@@ -609,10 +609,10 @@ function update_smoother!(
     rows = state.factor_rows
     offsets = state.factor_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
                 j = colval[k]
                 if j < i
@@ -642,25 +642,25 @@ function update_smoother!(
     ) where {Tv, Ti}
     require_same_smoother_pattern(state, A)
     copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
-    values = state.values
+    dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    diagonal_positions = state.diagonal_positions
-    transpose_positions = state.transpose_positions
+    diagonal_index = state.diagonal_positions
+    transpose_index = state.transpose_positions
     rows = state.factor_rows
     offsets = state.factor_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
-            diagonal = values[diagonal_positions[i]]
+            i = rows[level_start + q - 1]
+            diagonal = dilu_values[diagonal_index[i]]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
                 j = colval[k]
-                opposite = transpose_positions[k]
+                opposite = transpose_index[k]
                 if j < i && !iszero(opposite)
-                    diagonal -= values[k] * inverse_diagonal[j] * values[opposite]
+                    diagonal -= dilu_values[k] * inverse_diagonal[j] * dilu_values[opposite]
                 end
             end
             inverse_diagonal[i] = inv(diagonal)
@@ -751,10 +751,10 @@ function ilu_solve_cpu!(x, state::ILU0State, b, work)
     rows = state.factor_rows
     offsets = state.factor_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             value = b[i]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
@@ -767,10 +767,10 @@ function ilu_solve_cpu!(x, state::ILU0State, b, work)
     rows = state.upper_rows
     offsets = state.upper_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             value = work[i]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
@@ -792,21 +792,21 @@ function ilu_solve!(
 end
 
 function ilu_solve_cpu!(x, state::DILUState, b, work)
-    values = state.values
+    dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
     rows = state.factor_rows
     offsets = state.factor_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             value = b[i]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
-                j < i && (value -= values[k] * work[j])
+                j < i && (value -= dilu_values[k] * work[j])
             end
             @inbounds work[i] = inverse_diagonal[i] * value
         end
@@ -815,14 +815,14 @@ function ilu_solve_cpu!(x, state::DILUState, b, work)
     rows = state.upper_rows
     offsets = state.upper_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             correction = zero(eltype(x))
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
-                j > i && (correction += values[k] * x[j])
+                j > i && (correction += dilu_values[k] * x[j])
             end
             @inbounds x[i] = damping * (
                 work[i] - inverse_diagonal[i] * correction
@@ -921,10 +921,10 @@ function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
     rows = state.factor_rows
     offsets = state.factor_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             value = b[i]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
@@ -938,10 +938,10 @@ function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
     rows = state.upper_rows
     offsets = state.upper_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             value = work[i]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
@@ -967,22 +967,22 @@ function ilu_smooth_result!(
 end
 
 function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
-    values = state.values
+    dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
     rows = state.factor_rows
     offsets = state.factor_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             value = b[i]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
                 value -= A.nzval[k] * x[j]
-                j < i && (value -= values[k] * work[j])
+                j < i && (value -= dilu_values[k] * work[j])
             end
             @inbounds work[i] = inverse_diagonal[i] * value
         end
@@ -991,16 +991,16 @@ function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
     rows = state.upper_rows
     offsets = state.upper_offsets
     for level in 1:(length(offsets) - 1)
-        first = offsets[level]
-        count = offsets[level + 1] - first
+        level_start = offsets[level]
+        count = offsets[level + 1] - level_start
         @batch for q in 1:count
-            i = rows[first + q - 1]
+            i = rows[level_start + q - 1]
             value = work[i]
             diagonal_inverse = inverse_diagonal[i]
             @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
                 j = colval[k]
                 j > i && (
-                    value -= diagonal_inverse * values[k] * correction[j]
+                    value -= diagonal_inverse * dilu_values[k] * correction[j]
                 )
             end
             delta = damping * value
