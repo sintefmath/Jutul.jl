@@ -609,9 +609,6 @@ function update_smoother!(
     rows = state.factor_rows
     offsets = state.factor_offsets
     for level in 1:(length(offsets) - 1)
-        # Locals used inside @batch must not share a name with a global (e.g.
-        # Base.first or Base.values). Polyester then leaves them captured in a
-        # closure, which @cfunction rejects on platforms like aarch64 macOS.
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
