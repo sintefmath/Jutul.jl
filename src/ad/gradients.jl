@@ -20,8 +20,8 @@ where the last term is omitted for step n = N and G is the objective function.
 
 Reports should contain one successful ministep per stored state. Missing
 ministep states produce a warning by default; set `strict = true` to throw an
-`ArgumentError` instead. For subdivided
-report steps, simulate with `output_substates = true` and pass a `SimResult` to
+`ArgumentError` instead. For subdivided report steps, simulate with
+`output_substates = true` and pass a `SimResult` to
 the case overload, or explicitly expand states, timesteps and forces with
 `expand_to_ministeps` before calling this method.
 """

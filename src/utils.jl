@@ -825,7 +825,7 @@ function check_adjoint_report_states(states, reports; allow_substates = true, st
     for (state, report) in zip(states, reports)
         split_step = count(m -> m[:success], report[:ministeps]) > 1
         if split_step && !(allow_substates && haskey(state, :substates))
-            message = "Adjoint reports contain multiple successful ministeps per report step without matching states, so gradients may be inconsistent with the forward solve. Simulate with output_substates = true and use solve_adjoint_sensitivities(case, result, G), or expand states, timesteps and forces with expand_to_ministeps first. Set strict = true to reject these inputs."
+            message = "Adjoint inputs contain multiple successful ministeps without matching states; gradients may be inconsistent. Simulate with output_substates = true and pass the result to the case overload, or use expand_to_ministeps. Set strict = true to reject these inputs."
             if strict
                 throw(ArgumentError(message))
             else

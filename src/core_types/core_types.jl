@@ -1700,9 +1700,7 @@ function AdjointPackedResult(r::SimResult, case::JutulCase; strict = false)
 end
 
 function AdjointPackedResult(r::SimResult, forces; strict = false)
-    check_adjoint_report_states(r.states, r.reports[eachindex(r.states)]; strict = strict)
-    states, dt, report_step_ix = expand_to_ministeps(r)
-    return AdjointPackedResult(states, dt, forces, report_step_ix)
+    return AdjointPackedResult(r.states, r.reports[eachindex(r.states)], forces; strict = strict)
 end
 
 function AdjointPackedResult(states, dt::Vector{Float64}, forces; strict = false)
