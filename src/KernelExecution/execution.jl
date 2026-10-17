@@ -54,7 +54,8 @@ function Adapt.adapt_storage(
     if target_type === T
         converted = a
     else
-        converted = map(value -> convert(target_type, value), a)
+        converted = similar(a, target_type)
+        map!(value -> convert(target_type, value), converted, a)
     end
     if isbitstype(target_type)
         return Adapt.adapt(ctx.backend, converted)
