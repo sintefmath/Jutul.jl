@@ -40,6 +40,18 @@ using Jutul, Test
     @test_throws ArgumentError opt.dF!(similar(opt.x0), opt.x0)
     opt.data[:strict] = false
     @test_logs (:warn, r"multiple successful ministeps") opt.dF!(similar(opt.x0), opt.x0)
+    dopt = DictParameters(
+        Dict("K" => copy(parameters[:K])),
+        (p, step) -> JutulCase(model, dt, forces; state0, parameters = Dict(:K => p["K"])); verbose = false
+    )
+    free_optimization_parameters!(dopt; rel_min = 0.5, rel_max = 2.0)
+    problem = Jutul.optimization_problem(
+        dopt, objective; strict = true,
+        simulator = opt.data[:sim], config = opt.data[:sim_config]
+    )
+    @test_throws "multiple successful ministeps" problem()
+    problem.cache[:strict] = false
+    @test_logs (:warn, r"multiple successful ministeps") problem(; gradient = false)
     fine = forward(parameters; substates = true)
     grad = solve_adjoint_sensitivities(case, fine, objective; strict = true)
     ss, ts, ix = Jutul.expand_to_ministeps(fine)
