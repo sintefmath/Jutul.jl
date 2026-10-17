@@ -202,7 +202,7 @@ function num_grad_generic(F, G, x0)
     ϵ = 1.0e-12
     function objective_from_x(xi)
         case = F(xi, missing)
-        r = simulate(case, info_level = -1)
+        r = simulate(case, info_level = -1, output_substates = true)
         return Jutul.evaluate_objective(G, case, r)
     end
     G0 = objective_from_x(x0)
@@ -237,7 +237,7 @@ function test_for_timesteps(timesteps; atol = 5.0e-3, fmt = :case, global_object
     # dx, dy, U0, k_val, srcval
     x = ones(5)
     case = setup_poisson_test_case_from_vector(x, dt = timesteps)
-    states, reports = simulate(case, info_level = -1)
+    states, reports = simulate(case, info_level = -1, output_substates = true)
 
     F = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = fmt)
     F_num = (x, step_info) -> setup_poisson_test_case_from_vector(x, dt = timesteps, fmt = :case)
@@ -540,12 +540,12 @@ end;
     dt_i = report_timesteps(r.reports, ministeps = true)
     @test length(pr) == length(dt_i)
 
-    r2 = simulate(case, info_level = -1, output_substates = false, max_timestep = 0.5)
+    r2 = simulate(case, info_level = -1, output_substates = true, max_timestep = 0.5)
     pr2 = Jutul.AdjointPackedResult(r2, case)
-    @test length(pr2) == length(case.dt)
+    @test length(pr2) == length(dt_i)
 
     pr3 = Jutul.AdjointPackedResult(r2, missing)
-    @test length(pr3) == length(case.dt)
+    @test length(pr3) == length(dt_i)
     @test ismissing(pr3.forces)
     @test ismissing(pr3[2].forces)
 end
