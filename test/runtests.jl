@@ -1,8 +1,6 @@
 using Jutul
 # include("linalg/linear_operators.jl")
 include("test_systems/runtests.jl")
-include("cross_term_preparation.jl")
-include("matrix_row_view.jl")
 include("mesh.jl")
 include("embedded_meshes.jl")
 include("cut_cell_meshes.jl")
