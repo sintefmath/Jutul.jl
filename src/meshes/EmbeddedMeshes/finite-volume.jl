@@ -8,10 +8,11 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
-    T_hf = zeros(eltype(face_areas), length(faces))
+    # Allow permeability and aperture to carry dual numbers for differentiation
+    T_hf = zeros(promote_type(eltype(face_areas), eltype(perm), eltype(aperture)), length(faces))
     Nn_hf = Vector{SVector{dim, Float64}}(undef, length(faces))
     nc = length(facepos) - 1
-    if isa(perm, AbstractFloat)
+    if perm isa Real
         perm = repeat([perm], 1, nc)
     else
         perm::AbstractVecOrMat
