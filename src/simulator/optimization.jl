@@ -158,6 +158,8 @@ end
 
 
 function gradient_opt!(dFdx, x, data)
+    # This optimization path uses report states directly in the adjoint solve.
+    check_adjoint_report_states(data[:states], data[:reports]; allow_substates = false)
     (; state0, parameters, forces, dt) = data[:case]
     G = data[:G]
     targets = data[:targets]

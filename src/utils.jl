@@ -821,6 +821,16 @@ function expand_to_ministeps(states, reports)
     return (ministates, dt, report_step_index)
 end
 
+function check_adjoint_report_states(states, reports; allow_substates = true)
+    for (state, report) in zip(states, reports)
+        split_step = count(m -> m[:success], report[:ministeps]) > 1
+        if split_step && !(allow_substates && haskey(state, :substates))
+            throw(ArgumentError("Adjoint reports contain multiple successful ministeps per report step. Simulate with output_substates = true and use solve_adjoint_sensitivities(case, result, G), or expand states, timesteps and forces with expand_to_ministeps first."))
+        end
+    end
+    return nothing
+end
+
 function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where {T}
     # Create array of arrays where each entry contains the faces of that cell
     if length(N) == 0

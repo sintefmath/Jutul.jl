@@ -17,6 +17,11 @@ Solves the adjoint equations: For model equations F the gradient with respect to
 Given Lagrange multipliers λₙ from the adjoint equations
     (∂Fₙ / ∂xₙ)ᵀ λₙ = - (∂J / ∂xₙ)ᵀ - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
 where the last term is omitted for step n = N and G is the objective function.
+
+Reports must contain one successful ministep per stored state. For subdivided
+report steps, simulate with `output_substates = true` and pass a `SimResult` to
+the case overload, or explicitly expand states, timesteps and forces with
+`expand_to_ministeps` before calling this method.
 """
 function solve_adjoint_sensitivities(
         model, states, reports_or_timesteps, G;
@@ -30,6 +35,9 @@ function solve_adjoint_sensitivities(
         info_level = 0,
         kwarg...
     )
+    if !(eltype(reports_or_timesteps) <: Real)
+        check_adjoint_report_states(states, reports_or_timesteps; allow_substates = false)
+    end
     # One simulator object for the equations with respect to primary (at previous time-step)
     # One simulator object for the equations with respect to parameters
     set_global_timer!(extra_timing)
@@ -101,6 +109,7 @@ function solve_adjoint_sensitivities(case::JutulCase, some_kind_of_result, G; kw
         simresult = some_kind_of_result
     end
     simresult::SimResult
+    check_adjoint_report_states(simresult.states, simresult.reports[eachindex(simresult.states)])
     states, dt, step_ix = expand_to_ministeps(simresult)
     forces = case.forces
     if forces isa Vector
