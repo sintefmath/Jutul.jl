@@ -116,16 +116,22 @@ function FusedEquationAssemblyStorage{T}(
     )
 end
 
-struct ConservationLawTPFAStorage{A, HC, HF, S, F}
+struct ConservationLawTPFAStorage{A, HC, HF, S, F, E}
     accumulation::A
     accumulation_symbol::Symbol
     half_face_flux_cells::HC
     half_face_flux_faces::HF
     sources::S
     fused_equation_assembly::F
+    "Sparsity with respect to entities other than cells and faces, e.g. from cross terms"
+    extra_sparsity::E
 end
 
-function ConservationLawTPFAStorage(model, eq::ConservationLaw; ad = true, kwarg...)
+function ConservationLawTPFAStorage(acc, acc_symbol, hf_cells, hf_faces, src, fused)
+    return ConservationLawTPFAStorage(acc, acc_symbol, hf_cells, hf_faces, src, fused, nothing)
+end
+
+function ConservationLawTPFAStorage(model, eq::ConservationLaw; ad = true, extra_sparsity = nothing, kwarg...)
     number_of_equations = number_of_equations_per_entity(model, eq)
     D, ctx = model.domain, model.context
     cell_entity = Cells()
@@ -152,14 +158,26 @@ function ConservationLawTPFAStorage(model, eq::ConservationLaw; ad = true, kwarg
     else
         hf_faces = nothing
     end
+    # The hard-coded TPFA pattern covers dependencies on cells and faces. Keep
+    # any extra sparsity (from cross terms) with respect to other entities so
+    # that it can be included when declaring the Jacobian pattern.
+    if !isnothing(extra_sparsity)
+        extra_sparsity = Dict{Symbol, Any}(
+            k => v for (k, v) in pairs(extra_sparsity)
+            if !(k in (:Cells, :Faces)) && any(!isempty, v)
+        )
+        if isempty(extra_sparsity)
+            extra_sparsity = nothing
+        end
+    end
     return ConservationLawTPFAStorage(
-        acc, conserved_symbol(eq), hf_cells, hf_faces, src, nothing
+        acc, conserved_symbol(eq), hf_cells, hf_faces, src, nothing, extra_sparsity
     )
 end
 
 function setup_equation_storage(model, eq::ConservationLaw{<:Any, <:TwoPointPotentialFlowHardCoded, <:Any, <:Any}, storage; extra_sparsity = nothing, kwarg...)
     # Maybe check that the sparsity matches the default?
-    return ConservationLawTPFAStorage(model, eq; kwarg...)
+    return ConservationLawTPFAStorage(model, eq; extra_sparsity = extra_sparsity, kwarg...)
 end
 
 "Update positions of law's derivatives in global Jacobian"
@@ -624,9 +642,22 @@ function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawTPFAStor
 end
 
 function declare_pattern(model, e::ConservationLaw, e_s::ConservationLawTPFAStorage, entity)
-    @warn "Using hard-coded conservation law for entity $entity may give incorrect Jacobian. Assuming no dependence upon this entity for conservation law."
     I = Vector{Int64}()
     J = Vector{Int64}()
+    k = entity_as_symbol(entity)
+    extra = e_s.extra_sparsity
+    if !isnothing(extra) && haskey(extra, k)
+        # Dependencies on other entities can only enter through cross terms.
+        for (i, deps) in enumerate(extra[k])
+            for j in deps
+                push!(I, i)
+                push!(J, j)
+            end
+        end
+        I, J = map_ij_to_active(I, J, model.domain, entity)
+    else
+        @warn "Using hard-coded conservation law for entity $entity may give incorrect Jacobian. Assuming no dependence upon this entity for conservation law."
+    end
     return (I, J)
 end
 
