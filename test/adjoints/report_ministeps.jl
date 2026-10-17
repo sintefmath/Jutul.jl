@@ -1,6 +1,6 @@
 using Jutul, Test
 
-@testset "Adjoints require the forward ministeps" begin
+@testset "Adjoints warn or reject missing forward ministeps" begin
     sys = VariablePoissonSystem(time_dependent = true)
     grid = CartesianMesh((3, 1), (1.0, 1.0))
     domain = DiscretizedDomain(grid, (poisson = Jutul.PoissonDiscretization(grid),))
@@ -21,15 +21,30 @@ using Jutul, Test
     end
     coarse = forward(parameters)
     @test length(report_timesteps(coarse.reports; ministeps = true)) == 8
-    @test_throws ArgumentError solve_adjoint_sensitivities(model, coarse.states, coarse.reports, objective; state0, parameters, forces)
-    @test_throws ArgumentError solve_adjoint_sensitivities(case, coarse, objective)
-    @test_throws ArgumentError Jutul.AdjointPackedResult(coarse, forces)
+    @test_logs (:warn, r"multiple successful ministeps") solve_adjoint_sensitivities(model, coarse.states, coarse.reports, objective; state0, parameters, forces)
+    @test_throws ArgumentError solve_adjoint_sensitivities(model, coarse.states, coarse.reports, objective; state0, parameters, forces, strict = true)
+    @test_logs (:warn, r"multiple successful ministeps") solve_adjoint_sensitivities(case, coarse, objective)
+    @test_throws ArgumentError solve_adjoint_sensitivities(case, coarse, objective; strict = true)
+    @test_logs (:warn, r"multiple successful ministeps") Jutul.AdjointPackedResult(coarse, forces)
+    @test_throws ArgumentError Jutul.AdjointPackedResult(coarse, forces; strict = true)
+    @test_throws ArgumentError Jutul.AdjointsDI.solve_adjoint_generic(
+        [1.0], (x, step) -> case,
+        coarse.states, coarse.reports, objective; strict = true
+    )
     # Legacy optimization also consumes report states directly.
-    @test_throws ArgumentError Jutul.gradient_opt!(zeros(1), zeros(1), Dict(:states => coarse.states, :reports => coarse.reports))
+    opt = setup_parameter_optimization(
+        case, objective; strict = true, print = false,
+        timestep_selectors = [TimestepSelector(initial_absolute = 0.25, max = 0.25)]
+    )
+    opt.F!(opt.x0)
+    @test_throws ArgumentError opt.dF!(similar(opt.x0), opt.x0)
+    opt.data[:strict] = false
+    @test_logs (:warn, r"multiple successful ministeps") opt.dF!(similar(opt.x0), opt.x0)
     fine = forward(parameters; substates = true)
-    grad = solve_adjoint_sensitivities(case, fine, objective)
+    grad = solve_adjoint_sensitivities(case, fine, objective; strict = true)
     ss, ts, ix = Jutul.expand_to_ministeps(fine)
-    explicit = solve_adjoint_sensitivities(model, ss, ts, objective; state0, parameters, forces)
+    explicit = solve_adjoint_sensitivities(model, ss, ts, objective; state0, parameters, forces, strict = true)
+    @test length(Jutul.AdjointPackedResult(fine, case; strict = true)) == 8
     @test grad[:K] ≈ explicit[:K]
     function value(params)
         s, t, ix = Jutul.expand_to_ministeps(forward(params; substates = true))
@@ -43,6 +58,6 @@ using Jutul, Test
     @test isapprox(grad[:K][1], numerical; rtol = 1.0e-6)
     # A failed retry does not count as an additional successful ministep.
     reports = [Dict(:ministeps => [Dict(:success => false, :dt => 0.1), Dict(:success => true, :dt => t)]) for t in ts]
-    single = solve_adjoint_sensitivities(model, ss, reports, objective; state0, parameters, forces)
+    single = solve_adjoint_sensitivities(model, ss, reports, objective; state0, parameters, forces, strict = true)
     @test single[:K] ≈ explicit[:K]
 end
