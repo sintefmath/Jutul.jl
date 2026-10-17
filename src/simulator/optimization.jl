@@ -20,6 +20,7 @@ end
         print = 1,
         copy_case = true,
         param_obj = false,
+        strict = false,
         kwarg...
     )
 
@@ -34,6 +35,9 @@ Generally calling either of the functions will mutate the data Dict. The options
 - `dF_o(dFdx, x)`: evaluate gradient of objective, mutating `dFdx` (may trigger evaluation of `F_o`)
 - `F_and_dF(F, dFdx, x)`: evaluate `F` and/or `dF`. If `nothing` is passed for
   an entry, the corresponding entry is skipped.
+
+Missing forward ministep states warn by default; set `strict = true` to reject
+these inputs when evaluating an adjoint gradient.
 
 """
 function setup_parameter_optimization(model, state0, param, dt, forces, G, arg...; kwarg...)
@@ -51,6 +55,7 @@ function setup_parameter_optimization(
         param_obj = true,
         use_sparsity = true,
         store_all_solves = false,
+        strict = false,
         kwarg...
     )
     if copy_case
@@ -150,6 +155,7 @@ function setup_parameter_optimization(
     end
     data[:x_hash] = hash(Inf)
     data[:include_state0] = include_state0
+    data[:strict] = strict
     F = x -> objective_opt!(x, data, print)
     dF = (dFdx, x) -> gradient_opt!(dFdx, x, data)
     F_and_dF = (F, dFdx, x) -> objective_and_gradient_opt!(F, dFdx, x, data, print)
@@ -157,7 +163,9 @@ function setup_parameter_optimization(
 end
 
 
-function gradient_opt!(dFdx, x, data)
+function gradient_opt!(dFdx, x, data; strict = get(data, :strict, false))
+    # This optimization path uses report states directly in the adjoint solve.
+    check_adjoint_report_states(data[:states], data[:reports]; allow_substates = false, strict = strict)
     (; state0, parameters, forces, dt) = data[:case]
     G = data[:G]
     targets = data[:targets]
