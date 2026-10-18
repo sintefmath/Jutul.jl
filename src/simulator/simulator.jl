@@ -624,7 +624,8 @@ function solve_ministep(
     # Finalize (either reset state or proceed to next step)
     report[:finalize_time] = @elapsed if finalize
         if done
-            report[:post_update] = update_after_step!(sim, dt, forces; time = cur_time + dt)
+            needs_change = any(x -> x isa VariableChangeTimestepSelector, cfg[:timestep_selectors])
+            report[:post_update] = update_after_step!(sim, dt, forces; time = cur_time + dt, change_report = needs_change)
         else
             reset_state_to_previous_state!(sim)
         end
