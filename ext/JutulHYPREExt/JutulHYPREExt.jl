@@ -199,8 +199,10 @@ function Jutul.local_hypre_copy!(dst::Vector{HYPRE.HYPRE_Complex}, src::HYPRE.HY
 end
 
 function Jutul.local_hypre_copy!(dst::HYPRE.HYPREVector, src::Vector{HYPRE.HYPRE_Complex}, ix::Vector{HYPRE.HYPRE_BigInt})
-    hypre_check(dst, src, ix)
-    copy!(dst, src)
+    # Same as HYPRE.jl's copy!, but with the cached indices: copy! allocates them on every call.
+    nvalues = hypre_check(dst, src, ix)
+    HYPRE.@check HYPRE.HYPRE_IJVectorInitialize(dst)
+    HYPRE.@check HYPRE.HYPRE_IJVectorSetValues(dst, nvalues, ix, src)
     return dst
 end
 
