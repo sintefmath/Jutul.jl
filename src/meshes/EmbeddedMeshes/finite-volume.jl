@@ -186,7 +186,8 @@ function compute_intersection_trans_dfm(T_hf, N, intersections)
     nf = diff(face_pos)
     cells = vcat([fill(i, nf[i]) for i in 1:length(nf)]...)
 
-    T = Float64[]
+    Tv = eltype(T_hf)
+    T = Tv[]
     intersection_faces = Int[]
     for ix_cells in intersections
         # Find all faces belonging to this intersection
@@ -196,8 +197,8 @@ function compute_intersection_trans_dfm(T_hf, N, intersections)
                 push!(ix_faces, face)
             end
         end
-        den = 0.0
-        T_ix = zeros(Float64, length(ix_faces))
+        den = zero(Tv)
+        T_ix = zeros(Tv, length(ix_faces))
         counted = Set{Int64}()
         for (fno, f) in enumerate(ix_faces)
             ci = N[1, f]
