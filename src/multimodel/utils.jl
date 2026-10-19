@@ -51,22 +51,6 @@ function group_index(model, symbol)
 end
 
 export setup_cross_term, add_cross_term!
-function prepare_model_for_simulation(model::MultiModel{label}) where label
-    cross_terms = map(model.cross_terms) do pair
-        ct = prepare_cross_term(pair.cross_term, model[pair.target], model[pair.source])
-        return CrossTermPair(pair.target, pair.source,
-            pair.target_equation, pair.source_equation, ct)
-    end
-    if all(i -> cross_terms[i] === model.cross_terms[i], eachindex(cross_terms))
-        return model
-    end
-    return MultiModel{label, typeof(model.models), typeof(cross_terms),
-        typeof(model.groups), typeof(model.context), typeof(model.group_lookup),
-        typeof(model.group_execution)}(
-        model.models, cross_terms, model.groups, model.context, model.reduction,
-        model.specialize_ad, model.group_lookup, model.group_execution)
-end
-
 function setup_cross_term(cross_term::CrossTerm; target::Symbol, source::Symbol, equation, source_equation = equation)
     @assert target != source
     return CrossTermPair(target, source, equation, source_equation, cross_term)

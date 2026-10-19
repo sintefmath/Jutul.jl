@@ -14,16 +14,6 @@ function has_symmetry
 
 end
 
-"""
-    prepare_cross_term(cross_term, target_model, source_model)
-
-Configure a cross term once when constructing a simulator, after the variable
-definitions are finalized. Applications can capture typed constitutive
-evaluators here instead of inspecting model definitions in entity kernels.
-The default returns the cross term unchanged.
-"""
-prepare_cross_term(ct::CrossTerm, target_model, source_model) = ct
-
 
 function prepare_cross_term_in_entity!(
         i,

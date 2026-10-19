@@ -17,14 +17,6 @@ struct Simulator{E, M, S} <: JutulSimulator
 end
 
 """
-    prepare_model_for_simulation(model)
-
-Resolve model metadata needed during evaluation before simulator storage is
-allocated. The default returns `model` unchanged.
-"""
-prepare_model_for_simulation(model::JutulModel) = model
-
-"""
     Simulator(model; <kwarg>)
 
 Set up a simulator object for a `model` that can be used by [`simulate!`](@ref).
@@ -33,7 +25,6 @@ To avoid manually instantiating the simulator, the non-mutating
 """
 function Simulator(model; extra_timing = false, executor = default_executor(), kwarg...)
     model::JutulModel
-    model = prepare_model_for_simulation(model)
     set_global_timer!(extra_timing)
     storage = simulator_storage(model; kwarg...)
     storage::AbstractJutulStorage
