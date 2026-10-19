@@ -999,18 +999,21 @@ function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, reco
     return
 end
 
-function update_after_step!(storage, model, dt, forces; kwarg...)
+function update_after_step!(storage, model, dt, forces; change_report = true, kwarg...)
     state = storage.state
     state0 = storage.state0
     report = OrderedDict{Symbol, Any}()
     defs = storage.variable_definitions
     pvar = defs.primary_variables
-    for k in keys(pvar)
-        report[k] = variable_change_report(state[k], state0[k], pvar[k], model.context)
-    end
     svar = defs.secondary_variables
-    for k in keys(svar)
-        report[k] = variable_change_report(state[k], state0[k], svar[k], model.context)
+    # Only VariableChangeTimestepSelector reads these; they cost a pass over every variable.
+    if change_report
+        for k in keys(pvar)
+            report[k] = variable_change_report(state[k], state0[k], pvar[k], model.context)
+        end
+        for k in keys(svar)
+            report[k] = variable_change_report(state[k], state0[k], svar[k], model.context)
+        end
     end
     update_after_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_after_step!(storage, model.system, model, dt, forces; kwarg...)
