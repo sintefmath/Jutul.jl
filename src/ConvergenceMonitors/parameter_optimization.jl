@@ -121,34 +121,52 @@ function replay_cutting_criterion(distance, checked; num_violations_cut = 3, kwa
 end
 
 """
-    ev = evaluate_convergence_monitor(data; censored = :failed, kwargs...)
+    ev = evaluate_convergence_monitor(data; censored = :failed, redo_iterations = nothing, kwargs...)
 
 Evaluate the cutting criterion with parameters `kwargs` (see
 `replay_cutting_criterion`) on the ministep `data` from
 `convergence_monitor_data`. Returns a named tuple with
 
-- `wasted_iterations`: number of linear solves spent on ministeps that do not
+- `iterations`: estimated total number of iterations (linear solves), i.e., the
+  iterations of the successful ministeps that are not cut, plus the wasted
+  iterations, plus `redo_iterations` for each false rejection to cover the
+  interval of the rejected ministep again with a smaller timestep.
+- `wasted_iterations`: number of iterations spent on ministeps that do not
   converge, either because they fail or because they are cut.
 - `false_rejections`: number of successful ministeps that would be cut.
 - `true_rejections`: number of failed ministeps that would be cut.
 - `missed_rejections`: number of failed ministeps that would not be cut.
+
+A falsely rejected ministep that would have converged after many iterations
+can thus reduce the estimated total number of iterations. The default
+`redo_iterations` is twice the mean number of iterations of the successful
+ministeps, since a cut by default halves the timestep. Failed ministeps must be
+redone regardless of the cutting criterion, and this cost is therefore not
+included.
 
 Censored ministeps are treated as failed if `censored = :failed`, and ignored
 if `censored = :exclude`. Since the iterations after the early stop are
 unknown, the wasted iterations of a censored ministep that would not be cut is
 a lower bound.
 """
-function evaluate_convergence_monitor(data; censored = :failed, kwargs...)
+function evaluate_convergence_monitor(data; censored = :failed, redo_iterations = nothing, kwargs...)
 
     censored in (:failed, :exclude) || error("Unknown option censored = $censored")
-    wasted, false_rej, true_rej, missed = 0, 0, 0, 0
+    if isnothing(redo_iterations)
+        redo_iterations = default_redo_iterations(data)
+    end
+    useful, wasted, redo = 0, 0, 0.0
+    false_rej, true_rej, missed = 0, 0, 0
     for d in data
         d.outcome == :censored && censored == :exclude && continue
         k = replay_cutting_criterion(d.distance, d.checked; kwargs...)
         if d.outcome == :converged
-            if !isnothing(k)
+            if isnothing(k)
+                useful += d.solves[end]
+            else
                 false_rej += 1
                 wasted += d.solves[k]
+                redo += redo_iterations
             end
         elseif isnothing(k)
             missed += 1
@@ -160,22 +178,29 @@ function evaluate_convergence_monitor(data; censored = :failed, kwargs...)
     end
 
     return (
-        wasted_iterations = wasted, false_rejections = false_rej,
-        true_rejections = true_rej, missed_rejections = missed,
+        iterations = useful + wasted + redo, wasted_iterations = wasted,
+        false_rejections = false_rej, true_rejections = true_rej, missed_rejections = missed,
     )
+
+end
+
+function default_redo_iterations(data)
+
+    conv = [d.solves[end] for d in data if d.outcome == :converged]
+    return isempty(conv) ? 0.0 : 2 * sum(conv) / length(conv)
 
 end
 
 """
     opt = optimize_convergence_monitor(reports, parameters::NamedTuple;
         distance_function_args = NamedTuple(),
-        false_rejection_cost = nothing,
+        redo_iterations = nothing,
         censored = :failed,
         kwargs...
     )
 
-Find the convergence monitor parameters that minimize the number of wasted
-iterations and false rejections for the ministeps in the timestep `reports` of
+Find the convergence monitor parameters that minimize the estimated total
+number of iterations for the ministeps in the timestep `reports` of
 a simulation, or of an ensemble of simulations (see `convergence_monitor_data`
 for accepted formats), in which case the statistics are summed over all
 ensemble members. The cutting criterion is replayed
@@ -198,14 +223,14 @@ in `parameters`, e.g.,
 
 in which case the keyword argument `distance_function_args` is ignored.
 
-The parameter combinations are ranked by the objective
-
-    wasted_iterations + false_rejection_cost * false_rejections
-
-where `false_rejection_cost` defaults to the mean number of iterations of the
-successful ministeps, i.e., the cost of solving a falsely rejected ministep
-again. See `evaluate_convergence_monitor` for the definition of wasted
-iterations and false rejections, and the handling of `censored` ministeps.
+The parameter combinations are ranked by the estimated total number of
+iterations, which accounts for the iterations saved by cutting failing
+ministeps early, and for the cost of false rejections: the iterations spent
+before the cut plus `redo_iterations` to redo the ministep with a smaller
+timestep, minus the iterations the ministep would have needed to converge.
+Ties are broken by the number of false rejections. See
+`evaluate_convergence_monitor` for details, including the default
+`redo_iterations` and the handling of `censored` ministeps.
 
 The analysis assumes that the iterates do not depend on the convergence monitor
 parameters. The reports should therefore preferably be generated without
@@ -214,14 +239,15 @@ large `num_violations_cut`) so that no ministeps are censored.
 
 Returns a named tuple with fields
 
-- `best`: the parameter combination with the lowest objective.
-- `results`: all parameter combinations sorted by objective.
-- `pareto`: the Pareto front in wasted iterations and false rejections, sorted
-  by false rejections, with the best-ranked parameter combination for each
-  point (other combinations attaining the same point can be found in
-  `results`).
+- `best`: the parameter combination with the fewest estimated iterations.
+- `results`: all parameter combinations sorted by estimated iterations.
+- `pareto`: the Pareto front in estimated iterations and false rejections,
+  sorted by false rejections, with the best-ranked parameter combination for
+  each point (other combinations attaining the same point can be found in
+  `results`). Since the cost of false rejections is estimated, settings with
+  fewer false rejections are less sensitive to the redo model.
 - `reference`: the evaluation without any cuts.
-- `false_rejection_cost`: the cost used in the objective.
+- `redo_iterations`: the iterations used to redo a falsely rejected ministep.
 - `data`: the ministep data from `convergence_monitor_data` for the best
   distance function arguments.
 - `distance_function_args`: the best distance function arguments.
@@ -232,7 +258,7 @@ The best parameters can be applied to a simulator config with
 function optimize_convergence_monitor(
         reports, parameters::NamedTuple;
         distance_function_args = NamedTuple(),
-        false_rejection_cost = nothing,
+        redo_iterations = nothing,
         censored = :failed,
         kwargs...
     )
@@ -244,9 +270,8 @@ function optimize_convergence_monitor(
             for dargs in dargs_list
     ]
     data = first(data_list)
-    if isnothing(false_rejection_cost)
-        conv = [d.solves[end] for d in data if d.outcome == :converged]
-        false_rejection_cost = isempty(conv) ? 0.0 : sum(conv) / length(conv)
+    if isnothing(redo_iterations)
+        redo_iterations = default_redo_iterations(data)
     end
     fixed = values(kwargs)
     names = keys(parameters)
@@ -257,29 +282,30 @@ function optimize_convergence_monitor(
         prm = merge(fixed, NamedTuple{names}(map((v, i) -> v[i], values(parameters), ix)))
         k = isnothing(darg_pos) ? 1 : ix[darg_pos]
         cc_prm = Base.structdiff(prm, NamedTuple{(:distance_function_args,)})
-        ev = evaluate_convergence_monitor(data_list[k]; censored = censored, cc_prm...)
-        objective = ev.wasted_iterations + false_rejection_cost * ev.false_rejections
-        push!(results, (parameters = prm, ev..., objective = objective))
+        ev = evaluate_convergence_monitor(
+            data_list[k]; censored = censored, redo_iterations = redo_iterations, cc_prm...
+        )
+        push!(results, (parameters = prm, ev...))
         push!(data_index, k)
     end
-    perm = sortperm(results, by = r -> (r.objective, r.false_rejections))
+    perm = sortperm(results, by = r -> (r.iterations, r.false_rejections))
     results, data_index = results[perm], data_index[perm]
-    # Pareto front in (wasted iterations, false rejections)
+    # Pareto front in (estimated iterations, false rejections)
+    point(r) = (r.iterations, r.false_rejections)
     dominated(r) = any(
-        o -> o.wasted_iterations <= r.wasted_iterations &&
-            o.false_rejections <= r.false_rejections &&
-            (o.wasted_iterations, o.false_rejections) != (r.wasted_iterations, r.false_rejections),
+        o -> all(point(o) .<= point(r)) && point(o) != point(r),
         results
     )
-    pareto = unique(r -> (r.wasted_iterations, r.false_rejections), filter(!dominated, results))
+    pareto = unique(point, filter(!dominated, results))
     sort!(pareto, by = r -> r.false_rejections)
     reference = evaluate_convergence_monitor(
-        data; censored = censored, num_violations_cut = typemax(Int), fixed...
+        data; censored = censored, redo_iterations = redo_iterations,
+        num_violations_cut = typemax(Int), fixed...
     )
 
     return (
         best = first(results), results = results, pareto = pareto,
-        reference = reference, false_rejection_cost = false_rejection_cost,
+        reference = reference, redo_iterations = redo_iterations,
         data = data_list[first(data_index)],
         distance_function_args = dargs_list[first(data_index)],
     )
