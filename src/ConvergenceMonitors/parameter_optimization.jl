@@ -217,6 +217,10 @@ Returns a named tuple with fields
 - `reference`: the evaluation without any cuts.
 - `false_rejection_cost`: the cost used in the objective.
 - `data`: the ministep data from `convergence_monitor_data`.
+- `distance_function_args`: the distance function arguments used.
+
+The best parameters can be applied to a simulator config with
+`set_convergence_monitor_cutting_criterion!(config, opt)`.
 """
 function optimize_convergence_monitor(
         reports, parameters::NamedTuple;
@@ -256,6 +260,7 @@ function optimize_convergence_monitor(
     return (
         best = first(results), results = results, pareto = pareto,
         reference = reference, false_rejection_cost = false_rejection_cost, data = data,
+        distance_function_args = distance_function_args,
     )
 
 end
