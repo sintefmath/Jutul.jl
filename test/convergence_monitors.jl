@@ -101,6 +101,8 @@ mock_errors(r) = [
         ]
         data = CM.convergence_monitor_data(reports)
         @test [d.outcome for d in data] == [:converged, :failed, :censored]
+        first_data = CM.convergence_monitor_data(reports; ministeps = :first)
+        @test [(d.step, d.ministep) for d in first_data] == [(1, 1), (2, 1)]
         # Replay cuts stagnating iterates at the same iteration as online
         @test CM.replay_cutting_criterion(data[2].distance, data[2].checked; target_its = 6, num_violations_cut = 1) == 3
         opt = CM.optimize_convergence_monitor(reports, (num_violations_cut = [1, 2],); target_its = 6)
