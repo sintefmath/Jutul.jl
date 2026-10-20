@@ -114,5 +114,16 @@ mock_errors(r) = [
         ens = CM.optimize_convergence_monitor([reports, reports], (num_violations_cut = [1, 2],); target_its = 6)
         @test [d.member for d in ens.data] == [1, 1, 1, 2, 2, 2]
         @test (ens.best.wasted_iterations, ens.results[2].false_rejections) == (14, 2)
+        # Optimal parameters can be set directly to the config
+        opt = CM.optimize_convergence_monitor(
+            reports, (num_violations_cut = [1, 2], theta_slow = [0.95]);
+            target_its = 6, distance_function_args = (pools = :all,)
+        )
+        cfg = Dict{Symbol, Any}(:timestep_selectors => [IterationTimestepSelector(8)])
+        cc = CM.set_convergence_monitor_cutting_criterion!(cfg, opt)[:cutting_criterion]
+        @test (cc.num_violations_cut, cc.slow, cc.iteration_target) == (2, 0.95, 6)
+        @test cc.distance_function_args == (pools = :all,)
+        cc = CM.set_convergence_monitor_cutting_criterion!(cfg, opt.results[2]; fast = 0.2)[:cutting_criterion]
+        @test (cc.num_violations_cut, cc.fast) == (1, 0.2)
     end
 end
