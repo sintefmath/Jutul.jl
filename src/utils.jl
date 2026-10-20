@@ -821,6 +821,22 @@ function expand_to_ministeps(states, reports)
     return (ministates, dt, report_step_index)
 end
 
+function check_adjoint_report_states(states, reports; allow_substates = true, strict = false)
+    for (state, report) in zip(states, reports)
+        split_step = count(m -> m[:success], report[:ministeps]) > 1
+        if split_step && !(allow_substates && haskey(state, :substates))
+            message = "Adjoint inputs contain multiple successful ministeps without matching states; gradients may be inconsistent. Simulate with output_substates = true and pass the result to the case overload, or use expand_to_ministeps. Set strict = true to reject these inputs."
+            if strict
+                throw(ArgumentError(message))
+            else
+                @warn message maxlog = 1
+            end
+            return nothing
+        end
+    end
+    return nothing
+end
+
 function get_cell_faces(N::AbstractMatrix{T}, nc = nothing) where {T}
     # Create array of arrays where each entry contains the faces of that cell
     if length(N) == 0

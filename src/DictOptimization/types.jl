@@ -186,7 +186,8 @@ struct JutulOptimizationProblem
             allow_errors::Bool = false,
             gradient_scaling = false,
             randomized_start = false,
-            output_path = nothing
+            output_path = nothing,
+            strict = false
         )
         if !isnothing(output_path)
             mkpath(output_path)
@@ -206,6 +207,7 @@ struct JutulOptimizationProblem
 
         # Set up a cache for forward/backward sim
         adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config, info_level = info_level)
+        adj_cache[:strict] = strict
 
         if solution_history isa Symbol
             solution_history in (:full, :x) || error("solution_history must be :full or :x if a Symbol. Got $solution_history.")

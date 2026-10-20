@@ -63,7 +63,7 @@ function solve_and_differentiate_for_optimization(
             error("First simulation failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate.")
         end
     else
-        packed_steps = Jutul.AdjointPackedResult(result, case)
+        packed_steps = Jutul.AdjointPackedResult(result, case; strict = get(adj_cache, :strict, false))
         packed_steps = Jutul.AdjointsDI.set_packed_result_dynamic_values!(packed_steps, case)
 
         # Evaluate the objective function

@@ -9,9 +9,10 @@ function solve_adjoint_generic(
         state0 = missing,
         forces = missing,
         info_level = 0,
+        strict = false,
         kwarg...
     )
-    packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces)
+    packed_steps = AdjointPackedResult(states, reports_or_timesteps, forces; strict = strict)
     Jutul.set_global_timer!(extra_timing)
     N = length(states)
     # Allocation part
@@ -49,8 +50,8 @@ function solve_adjoint_generic(
     end
 end
 
-function solve_adjoint_generic!(∇G, X, F, storage, states, dt, G; kwarg...)
-    packed_steps = AdjointPackedResult(states, dt, missing)
+function solve_adjoint_generic!(∇G, X, F, storage, states, dt, G; strict = false, kwarg...)
+    packed_steps = AdjointPackedResult(states, dt, missing; strict = strict)
     return solve_adjoint_generic!(∇G, X, F, storage, packed_steps, G; kwarg...)
 end
 

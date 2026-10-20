@@ -1695,20 +1695,20 @@ function Base.length(r::AdjointPackedResult)
     return length(r.states)
 end
 
-function AdjointPackedResult(r::SimResult, case::JutulCase)
-    return AdjointPackedResult(r, case.forces)
+function AdjointPackedResult(r::SimResult, case::JutulCase; strict = false)
+    return AdjointPackedResult(r, case.forces; strict = strict)
 end
 
-function AdjointPackedResult(r::SimResult, forces)
-    states, dt, report_step_ix = expand_to_ministeps(r)
-    return AdjointPackedResult(states, dt, forces, report_step_ix)
+function AdjointPackedResult(r::SimResult, forces; strict = false)
+    return AdjointPackedResult(r.states, r.reports[eachindex(r.states)], forces; strict = strict)
 end
 
-function AdjointPackedResult(states, dt::Vector{Float64}, forces)
+function AdjointPackedResult(states, dt::Vector{Float64}, forces; strict = false)
     return AdjointPackedResult(states, dt, forces, eachindex(dt, states))
 end
 
-function AdjointPackedResult(states, reports, forces)
+function AdjointPackedResult(states, reports, forces; strict = false)
+    check_adjoint_report_states(states, reports; strict = strict)
     states, dt, report_step_ix = expand_to_ministeps(states, reports)
     return AdjointPackedResult(states, dt, forces, report_step_ix)
 end
