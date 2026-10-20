@@ -2,6 +2,24 @@ using Jutul, Test, ForwardDiff
 import Jutul: unit_box_bfgs
 import Jutul.LBFGS: box_bfgs
 
+@testset "LBFGS QP bounds" begin
+    for n in (1, 3)
+        for (lb, ub) in ((0.0, 1.0), ([0.0], [1.0]), (zeros(n), ones(n)))
+            for target in (-0.5, 0.37, 1.5)
+                f = x -> (sum(abs2, x .- target), 2 .* (x .- target))
+                v, x, history = Jutul.LBFGS.optimize_bound_constrained(
+                    fill(0.8, n), f, lb, ub;
+                    grad_tol = 1.0e-8,
+                    obj_rel_tol = -Inf,
+                    print = 0
+                )
+                @test x ≈ fill(clamp(target, 0.0, 1.0), n) atol = 1.0e-8
+                @test v ≈ f(x)[1]
+            end
+        end
+    end
+end
+
 function Rosenbrock(u0, lb, ub, n; scale = true)
     @assert length(u0) == n
     if scale

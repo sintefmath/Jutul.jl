@@ -523,12 +523,12 @@ end
 
 function handle_bounds!(lb, ub, n)
     if length(lb) == 1
-        lb = fill(lb, n)
+        lb = fill(only(lb), n)
     elseif length(lb) != n
         error("Length of lower bound vector does not match number of variables.")
     end
     if length(ub) == 1
-        ub = fill(ub, n)
+        ub = fill(only(ub), n)
     elseif length(ub) != n
         error("Length of upper bound vector does not match number of variables.")
     end
