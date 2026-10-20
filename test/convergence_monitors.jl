@@ -82,4 +82,33 @@ mock_errors(r) = [
         @test Jutul.select_nonlinear_relaxation_model(nothing, rel, reports, 0.8) == 0.8
         @test Jutul.select_nonlinear_relaxation_model(nothing, rel, reports[1:1], 0.8) == 0.8
     end
+    @testset "parameter optimization" begin
+        function mock_ministep(r, success; solved = fill(true, length(r)))
+            steps = [
+                Dict{Symbol, Any}(:errors => mock_errors([x, x]), :converged => x <= 1, :solved => s)
+                    for (x, s) in zip(r, solved)
+            ]
+            return Dict{Symbol, Any}(:steps => steps, :success => success)
+        end
+        reports = [
+            Dict(:ministeps => [mock_ministep([1.0e3, 9.0e2, 8.0e2, 0.5], true; solved = [true, true, true, false])]),
+            Dict(
+                :ministeps => [
+                    mock_ministep([1.0e3, 9.0e2, 8.0e2, 7.0e2, 6.0e2], false; solved = [true, true, true, true, false]),
+                    mock_ministep([1.0e3, 9.0e2, 8.0e2], false),
+                ]
+            ),
+        ]
+        data = CM.convergence_monitor_data(reports)
+        @test [d.outcome for d in data] == [:converged, :failed, :censored]
+        # Replay cuts stagnating iterates at the same iteration as online
+        @test CM.replay_cutting_criterion(data[2].distance, data[2].checked; target_its = 6, num_violations_cut = 1) == 3
+        opt = CM.optimize_convergence_monitor(reports, (num_violations_cut = [1, 2],); target_its = 6)
+        r1, r2 = opt.results[2], opt.results[1]
+        @test (r1.wasted_iterations, r1.false_rejections, r1.true_rejections) == (9, 1, 2)
+        @test (r2.wasted_iterations, r2.false_rejections, r2.missed_rejections) == (7, 0, 1)
+        @test opt.best.parameters.num_violations_cut == 2 && length(opt.pareto) == 1
+        @test opt.reference.wasted_iterations == 7
+        @test CM.evaluate_convergence_monitor(data; censored = :exclude, target_its = 6).wasted_iterations == 4
+    end
 end
