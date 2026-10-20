@@ -1,6 +1,17 @@
 export convert_to_immutable_storage, convert_to_mutable_storage, gravity_constant, report_stats, print_stats
 export get_cell_faces, get_facepos, get_cell_neighbors
 
+"""
+    matrix_row_view(matrix, row)
+
+Return a row view. Transposes and real adjoints use their parent's column
+directly, keeping reductions over `EquationMajorLayout` residuals on the
+array's original backend.
+"""
+matrix_row_view(A::AbstractMatrix, row) = view(A, row, :)
+matrix_row_view(A::Transpose{<:Any, <:AbstractMatrix}, row) = view(parent(A), :, row)
+matrix_row_view(A::Adjoint{<:Real, <:AbstractMatrix}, row) = view(parent(A), :, row)
+
 const gravity_constant = 9.80665
 
 # Table formats used for report and configuration printing. PrettyTables v3 replaced the
