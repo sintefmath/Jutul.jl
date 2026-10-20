@@ -73,6 +73,50 @@ function set_convergence_monitor_cutting_criterion!(config; max_nonlinear_iterat
 end
 
 """
+    set_convergence_monitor_cutting_criterion!(config, parameters::NamedTuple; max_nonlinear_iterations = 50, kwargs...)
+
+Set a `ConvergenceMonitorCuttingCriterion` with parameters from
+`optimize_convergence_monitor` to the simulator config. `parameters` can be the
+full result of the optimizer (using the best parameters and the distance
+function arguments of the optimization), an entry of its `results` or `pareto`
+fields, or a named tuple of parameters with the names used by the optimizer.
+Additional `kwargs` are passed to the `ConvergenceMonitorCuttingCriterion`
+constructor and take precedence. See `convergence_monitor_arguments` for the
+translation of the parameter names.
+"""
+function set_convergence_monitor_cutting_criterion!(config, parameters::NamedTuple; kwargs...)
+
+    args = convergence_monitor_arguments(parameters)
+    return set_convergence_monitor_cutting_criterion!(config; args..., kwargs...)
+
+end
+
+"""
+    args = convergence_monitor_arguments(parameters::NamedTuple)
+
+Translate parameters from `optimize_convergence_monitor` (the full result, an
+entry of its `results` or `pareto` fields, or a named tuple of parameters) to
+keyword arguments for the `ConvergenceMonitorCuttingCriterion` constructor,
+e.g., for use as `convergence_monitor_args` in
+`set_convergence_monitor_relaxation!`. The parameters `target_its`,
+`theta_fast` and `theta_slow` are renamed to `iteration_target`, `fast` and
+`slow`, respectively, while the remaining names are unchanged.
+"""
+function convergence_monitor_arguments(parameters::NamedTuple)
+
+    if haskey(parameters, :best)
+        args = convergence_monitor_arguments(parameters.best)
+        return merge((distance_function_args = parameters.distance_function_args,), args)
+    elseif haskey(parameters, :parameters)
+        return convergence_monitor_arguments(parameters.parameters)
+    end
+    renamed = (target_its = :iteration_target, theta_fast = :fast, theta_slow = :slow)
+    names = map(k -> get(renamed, k, k), keys(parameters))
+    return NamedTuple{names}(values(parameters))
+
+end
+
+"""
     Jutul.cutting_criterion(cc::ConvergenceMonitorCuttingCriterion, sim, dt, forces, it, max_iter, cfg, e, step_reports, relaxation)
 
 Cutting criterion based on monitoring convergence. The function computes the
