@@ -164,7 +164,9 @@ function extract_submesh(g::UnstructuredMesh, cells; kwarg...)
         new_neighbors,
         new_boundary_cells;
         structure = g.structure,
-        cell_map = cells,
+        # Preserve original grid indices when extracting an already active or
+        # previously extracted mesh. `cells` indexes the current mesh only.
+        cell_map = isnothing(g.cell_map) ? collect(cells) : [g.cell_map[c] for c in cells],
         kwarg...
     )
 end
