@@ -1,19 +1,22 @@
 """
-    data = convergence_monitor_data(reports; distance_function_args = NamedTuple())
+    data = convergence_monitor_data(reports; distance_function_args = NamedTuple(), ministeps = :all)
 
 Extract the data needed to replay the convergence monitor cutting criterion
 offline for all ministeps (successful and failed) in the timestep `reports` of
 a simulation. The reports can be given as a vector of timestep reports or a
 simulation result with a `reports` property, or, for an ensemble of
-simulations, as a vector of these. For each ministep, the function returns a
-named tuple with fields
+simulations, as a vector of these. With `ministeps = :first`, only the first
+ministep of each timestep is included. These start from the end of a report
+step, and therefore depend less on earlier cuts within the timestep. For each
+ministep, the function returns a named tuple with fields
 
 - `member`, `step`, `ministep`: ensemble member (one for a single simulation),
   timestep and ministep number.
 - the fields returned by `ministep_convergence_data`.
 """
-function convergence_monitor_data(reports; distance_function_args = NamedTuple())
+function convergence_monitor_data(reports; distance_function_args = NamedTuple(), ministeps = :all)
 
+    ministeps in (:all, :first) || error("Unknown option ministeps = $ministeps")
     reports = report_list(reports)
     ensemble = !isempty(reports) && !(first(reports) isa AbstractDict)
     members = ensemble ? map(report_list, reports) : [reports]
@@ -22,6 +25,7 @@ function convergence_monitor_data(reports; distance_function_args = NamedTuple()
         for (step_no, report) in enumerate(member_reports)
             haskey(report, :ministeps) || continue
             for (ministep_no, ministep) in enumerate(report[:ministeps])
+                ministeps == :first && ministep_no > 1 && break
                 d = ministep_convergence_data(ministep; distance_function_args = distance_function_args)
                 isnothing(d) && continue
                 push!(data, (member = member, step = step_no, ministep = ministep_no, d...))
@@ -169,6 +173,7 @@ end
 """
     opt = optimize_convergence_monitor(reports, parameters::NamedTuple;
         distance_function_args = NamedTuple(),
+        ministeps = :all,
         censored = :failed,
         kwargs...
     )
@@ -195,7 +200,9 @@ in `parameters`, e.g.,
 
     parameters = (num_violations_cut = 1:5, distance_function_args = [(;), (pools = :all,)])
 
-in which case the keyword argument `distance_function_args` is ignored.
+in which case the keyword argument `distance_function_args` is ignored. With
+`ministeps = :first`, only the first ministep of each timestep is analyzed (see
+`convergence_monitor_data`).
 
 The parameter combinations are ranked by the number of wasted iterations, with
 ties broken by the number of false rejections, which is otherwise reported as a
@@ -229,6 +236,7 @@ The best parameters can be applied to a simulator config with
 function optimize_convergence_monitor(
         reports, parameters::NamedTuple;
         distance_function_args = NamedTuple(),
+        ministeps = :all,
         censored = :failed,
         kwargs...
     )
@@ -236,7 +244,7 @@ function optimize_convergence_monitor(
     # Compute distances once for each candidate distance function
     dargs_list = get(parameters, :distance_function_args, [distance_function_args])
     data_list = [
-        convergence_monitor_data(reports; distance_function_args = dargs)
+        convergence_monitor_data(reports; distance_function_args = dargs, ministeps = ministeps)
             for dargs in dargs_list
     ]
     data = first(data_list)
