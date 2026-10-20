@@ -7,15 +7,7 @@ a simulation (e.g., `result.reports`). For each ministep, the function returns
 a named tuple with fields
 
 - `step`, `ministep`: timestep and ministep number.
-- `outcome`: `:converged` for successful ministeps, `:failed` for ministeps that
-  failed after reaching the maximum number of iterations or due to an exception,
-  and `:censored` for ministeps that were stopped early (e.g., by a cutting
-  criterion), for which it is unknown if they would have converged.
-- `distance`: distance from convergence for each iteration (see
-  `compute_distance`, to which `distance_function_args` are passed).
-- `checked`: whether the cutting criterion is evaluated at each iteration (i.e.,
-  the iteration did not converge and did not throw an exception).
-- `solves`: cumulative number of linear solves after each iteration.
+- the fields returned by `ministep_convergence_data`.
 """
 function convergence_monitor_data(reports; distance_function_args = NamedTuple())
 
@@ -23,33 +15,9 @@ function convergence_monitor_data(reports; distance_function_args = NamedTuple()
     for (step_no, report) in enumerate(reports)
         haskey(report, :ministeps) || continue
         for (ministep_no, ministep) in enumerate(report[:ministeps])
-            haskey(ministep, :steps) || continue
-            steps = ministep[:steps]
-            n = something(findfirst(s -> !haskey(s, :errors), steps), length(steps) + 1) - 1
-            n > 0 || continue
-            distance = reduce(
-                vcat,
-                [compute_distance(s[:errors]; distance_function_args...)[1]' for s in steps[1:n]]
-            )
-            checked = [!get(s, :converged, false) && !haskey(s, :failure_exception) for s in steps[1:n]]
-            solves = cumsum([Int(get(s, :solved, false)) for s in steps])
-            # The last iteration of a ministep that reached the maximum number
-            # of iterations is not solved, so a failed ministep with a solved
-            # last iteration and no exception must have been stopped early
-            last = steps[end]
-            if ministep[:success]
-                outcome = :converged
-            elseif get(last, :solved, false) && !haskey(last, :failure_exception)
-                outcome = :censored
-            else
-                outcome = :failed
-            end
-            push!(
-                data, (
-                    step = step_no, ministep = ministep_no, outcome = outcome,
-                    distance = distance, checked = checked, solves = solves,
-                )
-            )
+            d = ministep_convergence_data(ministep; distance_function_args = distance_function_args)
+            isnothing(d) && continue
+            push!(data, (step = step_no, ministep = ministep_no, d...))
         end
     end
 
@@ -58,29 +26,86 @@ function convergence_monitor_data(reports; distance_function_args = NamedTuple()
 end
 
 """
-    k = replay_cutting_criterion(distance, checked; num_violations_cut = 3, strategy = :per_measure, kwargs...)
+    d = ministep_convergence_data(ministep; distance_function_args = NamedTuple())
+
+Extract the data needed to replay the convergence monitor cutting criterion
+offline for a ministep report. Returns `nothing` if the ministep has no
+iterations with residuals, and otherwise a named tuple with fields
+
+- `outcome`: `:converged` for successful ministeps, `:failed` for ministeps that
+  failed after reaching the maximum number of iterations or due to an exception,
+  and `:censored` for ministeps that were stopped early (e.g., by a cutting
+  criterion), for which it is unknown if they would have converged.
+- `distance`: distance from convergence for each iteration (see
+  `compute_distance`, to which `distance_function_args` are passed).
+- `names`: names of the measures (columns of `distance`).
+- `checked`: whether the cutting criterion is evaluated at each iteration (i.e.,
+  the iteration did not converge and did not throw an exception).
+- `solves`: cumulative number of linear solves after each iteration.
+"""
+function ministep_convergence_data(ministep; distance_function_args = NamedTuple())
+
+    haskey(ministep, :steps) || return nothing
+    steps = ministep[:steps]
+    n = something(findfirst(s -> !haskey(s, :errors), steps), length(steps) + 1) - 1
+    n > 0 || return nothing
+    dist = [compute_distance(s[:errors]; distance_function_args...) for s in steps[1:n]]
+    distance = reduce(vcat, [first(d)' for d in dist])
+    names = last(first(dist))
+    checked = [!get(s, :converged, false) && !haskey(s, :failure_exception) for s in steps[1:n]]
+    solves = cumsum([Int(get(s, :solved, false)) for s in steps])
+    # The last iteration of a ministep that reached the maximum number of
+    # iterations is not solved, so a failed ministep with a solved last
+    # iteration and no exception must have been stopped early
+    final = steps[end]
+    if ministep[:success]
+        outcome = :converged
+    elseif get(final, :solved, false) && !haskey(final, :failure_exception)
+        outcome = :censored
+    else
+        outcome = :failed
+    end
+
+    return (
+        outcome = outcome, distance = distance, names = names,
+        checked = checked, solves = solves,
+    )
+
+end
+
+"""
+    nv = violation_count(distance; num_violations_cut = 3, strategy = :per_measure, kwargs...)
+
+Compute the number of violations after each iteration of a distance history
+(one row per iteration, one column per measure) that is compared to
+`num_violations_cut` by the `ConvergenceMonitorCuttingCriterion`, i.e., the
+maximum over the measures, or the sum for `strategy = :total`. The remaining
+keyword arguments are passed to `analyze_convergence`.
+"""
+function violation_count(distance; num_violations_cut = 3, strategy = :per_measure, kwargs...)
+
+    Nv = analyze_convergence(distance; strategy = strategy, kwargs...)[:num_violations]
+    if strategy == :total
+        return vec(sum(Nv, dims = 2))
+    else
+        return vec(maximum(Nv, dims = 2))
+    end
+
+end
+
+"""
+    k = replay_cutting_criterion(distance, checked; num_violations_cut = 3, kwargs...)
 
 Replay the `ConvergenceMonitorCuttingCriterion` on a distance history (one row
 per iteration, one column per measure) and return the iteration at which the
 ministep would be cut, or `nothing` if it would not be cut. The cutting
 criterion is only evaluated at iterations where `checked` is true. The
-remaining keyword arguments are passed to `analyze_convergence`.
+remaining keyword arguments are passed to `violation_count`.
 """
-function replay_cutting_criterion(distance, checked; num_violations_cut = 3, strategy = :per_measure, kwargs...)
+function replay_cutting_criterion(distance, checked; num_violations_cut = 3, kwargs...)
 
-    Nv = analyze_convergence(distance; strategy = strategy, kwargs...)[:num_violations]
-    for k in axes(distance, 1)
-        checked[k] || continue
-        nv = view(Nv, k, :)
-        if strategy == :total
-            cut = sum(nv) > num_violations_cut
-        else
-            cut = any(nv .> num_violations_cut)
-        end
-        cut && return k
-    end
-
-    return nothing
+    nv = violation_count(distance; kwargs...)
+    return findfirst(k -> checked[k] && nv[k] > num_violations_cut, eachindex(nv))
 
 end
 
