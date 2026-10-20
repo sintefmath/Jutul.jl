@@ -3,27 +3,38 @@
 
 Extract the data needed to replay the convergence monitor cutting criterion
 offline for all ministeps (successful and failed) in the timestep `reports` of
-a simulation (e.g., `result.reports`). For each ministep, the function returns
-a named tuple with fields
+a simulation. The reports can be given as a vector of timestep reports or a
+simulation result with a `reports` property, or, for an ensemble of
+simulations, as a vector of these. For each ministep, the function returns a
+named tuple with fields
 
-- `step`, `ministep`: timestep and ministep number.
+- `member`, `step`, `ministep`: ensemble member (one for a single simulation),
+  timestep and ministep number.
 - the fields returned by `ministep_convergence_data`.
 """
 function convergence_monitor_data(reports; distance_function_args = NamedTuple())
 
+    reports = report_list(reports)
+    ensemble = !isempty(reports) && !(first(reports) isa AbstractDict)
+    members = ensemble ? map(report_list, reports) : [reports]
     data = []
-    for (step_no, report) in enumerate(reports)
-        haskey(report, :ministeps) || continue
-        for (ministep_no, ministep) in enumerate(report[:ministeps])
-            d = ministep_convergence_data(ministep; distance_function_args = distance_function_args)
-            isnothing(d) && continue
-            push!(data, (step = step_no, ministep = ministep_no, d...))
+    for (member, member_reports) in enumerate(members)
+        for (step_no, report) in enumerate(member_reports)
+            haskey(report, :ministeps) || continue
+            for (ministep_no, ministep) in enumerate(report[:ministeps])
+                d = ministep_convergence_data(ministep; distance_function_args = distance_function_args)
+                isnothing(d) && continue
+                push!(data, (member = member, step = step_no, ministep = ministep_no, d...))
+            end
         end
     end
 
     return data
 
 end
+
+report_list(reports::AbstractVector) = reports
+report_list(result) = result.reports
 
 """
     d = ministep_convergence_data(ministep; distance_function_args = NamedTuple())
@@ -165,7 +176,9 @@ end
 
 Find the convergence monitor parameters that minimize the number of wasted
 iterations and false rejections for the ministeps in the timestep `reports` of
-a simulation (e.g., `result.reports`). The cutting criterion is replayed
+a simulation, or of an ensemble of simulations (see `convergence_monitor_data`
+for accepted formats), in which case the statistics are summed over all
+ensemble members. The cutting criterion is replayed
 offline on the residuals stored in the reports for all combinations of the
 parameter values in `parameters`, e.g.,
 

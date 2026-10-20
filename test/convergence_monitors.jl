@@ -110,5 +110,9 @@ mock_errors(r) = [
         @test opt.best.parameters.num_violations_cut == 2 && length(opt.pareto) == 1
         @test opt.reference.wasted_iterations == 7
         @test CM.evaluate_convergence_monitor(data; censored = :exclude, target_its = 6).wasted_iterations == 4
+        # Ensembles are handled by summing over the members
+        ens = CM.optimize_convergence_monitor([reports, reports], (num_violations_cut = [1, 2],); target_its = 6)
+        @test [d.member for d in ens.data] == [1, 1, 1, 2, 2, 2]
+        @test (ens.best.wasted_iterations, ens.results[2].false_rejections) == (14, 2)
     end
 end
