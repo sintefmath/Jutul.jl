@@ -190,7 +190,13 @@ Valid parameters are `num_violations_cut` and the keyword arguments of
 `strategy`). Parameters that are not varied can be fixed with `kwargs`, and
 `target_its` should match the target of the `IterationTimestepSelector` used
 in the simulation. The distance from convergence is computed with
-`distance_function_args` (see `compute_distance`).
+`distance_function_args` (see `compute_distance`). The distance function can
+also be optimized by including a vector of candidate `distance_function_args`
+in `parameters`, e.g.,
+
+    parameters = (num_violations_cut = 1:5, distance_function_args = [(;), (pools = :all,)])
+
+in which case the keyword argument `distance_function_args` is ignored.
 
 The parameter combinations are ranked by the objective
 
@@ -216,8 +222,9 @@ Returns a named tuple with fields
   `results`).
 - `reference`: the evaluation without any cuts.
 - `false_rejection_cost`: the cost used in the objective.
-- `data`: the ministep data from `convergence_monitor_data`.
-- `distance_function_args`: the distance function arguments used.
+- `data`: the ministep data from `convergence_monitor_data` for the best
+  distance function arguments.
+- `distance_function_args`: the best distance function arguments.
 
 The best parameters can be applied to a simulator config with
 `set_convergence_monitor_cutting_criterion!(config, opt)`.
@@ -230,20 +237,33 @@ function optimize_convergence_monitor(
         kwargs...
     )
 
-    data = convergence_monitor_data(reports; distance_function_args = distance_function_args)
+    # Compute distances once for each candidate distance function
+    dargs_list = get(parameters, :distance_function_args, [distance_function_args])
+    data_list = [
+        convergence_monitor_data(reports; distance_function_args = dargs)
+            for dargs in dargs_list
+    ]
+    data = first(data_list)
     if isnothing(false_rejection_cost)
         conv = [d.solves[end] for d in data if d.outcome == :converged]
         false_rejection_cost = isempty(conv) ? 0.0 : sum(conv) / length(conv)
     end
     fixed = values(kwargs)
+    names = keys(parameters)
+    darg_pos = findfirst(==(:distance_function_args), names)
     results = []
-    for vals in Iterators.product(values(parameters)...)
-        prm = merge(fixed, NamedTuple{keys(parameters)}(vals))
-        ev = evaluate_convergence_monitor(data; censored = censored, prm...)
+    data_index = Int[]
+    for ix in Iterators.product((eachindex(v) for v in values(parameters))...)
+        prm = merge(fixed, NamedTuple{names}(map((v, i) -> v[i], values(parameters), ix)))
+        k = isnothing(darg_pos) ? 1 : ix[darg_pos]
+        cc_prm = Base.structdiff(prm, NamedTuple{(:distance_function_args,)})
+        ev = evaluate_convergence_monitor(data_list[k]; censored = censored, cc_prm...)
         objective = ev.wasted_iterations + false_rejection_cost * ev.false_rejections
         push!(results, (parameters = prm, ev..., objective = objective))
+        push!(data_index, k)
     end
-    sort!(results, by = r -> (r.objective, r.false_rejections))
+    perm = sortperm(results, by = r -> (r.objective, r.false_rejections))
+    results, data_index = results[perm], data_index[perm]
     # Pareto front in (wasted iterations, false rejections)
     dominated(r) = any(
         o -> o.wasted_iterations <= r.wasted_iterations &&
@@ -259,8 +279,9 @@ function optimize_convergence_monitor(
 
     return (
         best = first(results), results = results, pareto = pareto,
-        reference = reference, false_rejection_cost = false_rejection_cost, data = data,
-        distance_function_args = distance_function_args,
+        reference = reference, false_rejection_cost = false_rejection_cost,
+        data = data_list[first(data_index)],
+        distance_function_args = dargs_list[first(data_index)],
     )
 
 end

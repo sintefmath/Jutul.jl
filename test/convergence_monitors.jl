@@ -125,5 +125,17 @@ mock_errors(r) = [
         @test cc.distance_function_args == (pools = :all,)
         cc = CM.set_convergence_monitor_cutting_criterion!(cfg, opt.results[2]; fast = 0.2)[:cutting_criterion]
         @test (cc.num_violations_cut, cc.fast) == (1, 0.2)
+        # The distance function can be optimized as well
+        scaled = (distance_function = v -> max.(v ./ 1.0e3, 1.0),)
+        opt = CM.optimize_convergence_monitor(
+            reports, (num_violations_cut = [1], distance_function_args = [(pools = :all,), scaled]);
+            target_its = 6
+        )
+        @test length(opt.results) == 2 && opt.best.parameters.distance_function_args === scaled
+        @test (opt.best.wasted_iterations, opt.best.false_rejections) == (7, 0)
+        @test (opt.results[2].wasted_iterations, opt.results[2].false_rejections) == (9, 1)
+        @test opt.distance_function_args === scaled && all(d -> maximum(d.distance) == 1.0, opt.data)
+        cc = CM.set_convergence_monitor_cutting_criterion!(cfg, opt)[:cutting_criterion]
+        @test cc.distance_function_args === scaled
     end
 end
