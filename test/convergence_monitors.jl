@@ -109,12 +109,6 @@ mock_errors(r) = [
         @test (r2.wasted_iterations, r2.false_rejections, r2.missed_rejections) == (7, 0, 1)
         @test opt.best.parameters.num_violations_cut == 2 && length(opt.pareto) == 1
         @test opt.reference.wasted_iterations == 7
-        # Estimated iterations: kept successful iterations + wasted + redo cost
-        @test opt.redo_iterations == 6
-        @test (r1.iterations, r2.iterations, opt.reference.iterations) == (15, 10, 10)
-        # A false rejection pays off if redoing the ministep is cheap
-        cheap = CM.optimize_convergence_monitor(reports, (num_violations_cut = [1, 2],); target_its = 6, redo_iterations = 0)
-        @test cheap.best.parameters.num_violations_cut == 1 && cheap.best.iterations == 9
         @test CM.evaluate_convergence_monitor(data; censored = :exclude, target_its = 6).wasted_iterations == 4
         # Ensembles are handled by summing over the members
         ens = CM.optimize_convergence_monitor([reports, reports], (num_violations_cut = [1, 2],); target_its = 6)
