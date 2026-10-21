@@ -52,6 +52,8 @@ end
             Jutul.StaticSparsityMatrixCSR(copy(matrix'))
         )
         @test csr.use_vendor_linalg == use_vendor_linalg
+        @test Jutul.nthreads(csr) == Jutul.nthreads(context)
+        @test csr.thread_type == :batch
         @test adjoint(context).use_vendor_linalg == use_vendor_linalg
         result = fill(T(NaN), 2)
         mul!(result, csr, T[1, 2], one(T), zero(T))
