@@ -17,9 +17,7 @@ function diagonal_precond!(Diag, A::SparseMatrixCSC, spai::SPAI0Preconditioner)
         spai.buffer = zeros(length(D))
     end
     buf = spai.buffer
-    @inbounds for i in eachindex(D)
-        D[i] = zero(eltype(D))
-    end
+    fill!(buf, zero(eltype(buf)))
     rows = rowvals(A)
     vals = nonzeros(A)
     for col in axes(A, 2)
