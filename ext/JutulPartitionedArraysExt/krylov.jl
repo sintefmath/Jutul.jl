@@ -52,12 +52,16 @@ function inner_krylov(bsolver, lsolve, simulator, simulators, cfg, b, verbose, a
     t_op = @elapsed op = Jutul.parray_linear_system_operator(simulators, length(b))
     t_prec = @elapsed P = parray_preconditioner_linear_operator(simulator, lsolve, b)
     @tic "communication" consistent!(b) |> wait
-    # TODO: Fix left preconditioning support
 
     max_it = cfg.max_iterations
     l_arg = (bsolver, op, b)
+    if cfg.precond_side == :right
+        preconditioner_arg = (N = P,)
+    else
+        preconditioner_arg = (M = P,)
+    end
     l_kwarg = (
-        M = P,
+        preconditioner_arg...,
         verbose = 0 * Int(verbose),
         itmax = max_it,
         history = true,
