@@ -490,6 +490,22 @@ import Jutul.DictOptimization as DictOptimization
         @test prm_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
         @test prm_opt["U0"] ≈ prm_truth["U0"] atol = 0.01
 
+        @testset "lbfgsb_qp with one scalar parameter" begin
+            for scale in (false, true)
+                dprm_scalar = DictParameters(prm, setup_poisson_test_case_from_dict, verbose = false)
+                free_optimization_parameter!(dprm_scalar, "k_val", abs_max = 10.0, abs_min = 0.1)
+                prm_scalar_opt = optimize(
+                    dprm_scalar, poisson_mismatch_objective;
+                    optimizer = :lbfgsb_qp,
+                    scale = scale,
+                    max_it = 25,
+                    info_level = -1
+                )
+                @test prm_scalar_opt["k_val"] isa Float64
+                @test prm_scalar_opt["k_val"] ≈ prm_truth["k_val"] atol = 0.01
+            end
+        end
+
         # Test with LBFGSB.jl optimizer
         prm_opt2 = optimize(dprm, poisson_mismatch_objective, max_it = 25, info_level = -1, optimizer = :lbfgsb)
 
