@@ -75,8 +75,12 @@ function same_smoother_pattern(state, A::StaticSparsityMatrixCSR)
     matrix_nrows(A) == state.n || return false
     matrix_ncols(A) == state.n || return false
     matrix_nonzeros(A) == length(state.host_colval) || return false
-    if A.rowptr === state.rowptr && A.colval === state.colval
-        return true
+    # Symbolic setup can recycle the same CSR arrays for a different graph.
+    # Compare their contents against the retained snapshot, even when the
+    # buffers are identical. Numeric updates keep their separate fast path.
+    if A.rowptr isa Vector && A.colval isa Vector
+        return same_prefix(A.rowptr, state.host_rowptr, state.n + 1) &&
+            same_prefix(A.colval, state.host_colval, matrix_nonzeros(A))
     end
     rowptr = host_prefix(A.rowptr, matrix_nrows(A) + 1)
     colval = host_prefix(A.colval, matrix_nonzeros(A))

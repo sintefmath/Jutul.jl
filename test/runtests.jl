@@ -1,6 +1,7 @@
 using Jutul
 include("linalg/ilu.jl")
 include("linalg/preconditioners.jl")
+include("linalg/smoother_reuse.jl")
 # include("linalg/linear_operators.jl")
 include("test_systems/runtests.jl")
 include("mesh.jl")
