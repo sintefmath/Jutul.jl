@@ -6,9 +6,11 @@ using Jutul, Test, LinearAlgebra, SparseArrays
             A = sparse(T[4.2 0.3 0 0; 0.3 5.1 0.7 0; 0 0.7 6.4 0.2; 0 0 0.2 7.3])
             context = DefaultContext()
             model = SimulationModel(ScalarTestDomain(), ScalarTestSystem(); context)
-            tolerance = T == Float32 ? 2e-5 : 1e-11
-            solver = GenericKrylov(method; relative_tolerance = tolerance/10,
-                absolute_tolerance = zero(T), precond_side = method == :cg ? :left : :right)
+            tolerance = T == Float32 ? 2.0e-5 : 1.0e-11
+            solver = GenericKrylov(
+                method; relative_tolerance = tolerance / 10,
+                absolute_tolerance = zero(T), precond_side = method == :cg ? :left : :right
+            )
             residual = zeros(T, 4)
             increment = zeros(T, 4)
             system = Jutul.LinearizedSystem(A, residual, increment, nonzeros(A),
