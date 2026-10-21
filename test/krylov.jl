@@ -13,16 +13,20 @@ using Jutul, Test, LinearAlgebra, SparseArrays
             )
             residual = zeros(T, 4)
             increment = zeros(T, 4)
-            system = Jutul.LinearizedSystem(A, residual, increment, nonzeros(A),
-                residual, increment, Jutul.EquationMajorLayout())
+            system = Jutul.LinearizedSystem(
+                A, residual, increment, nonzeros(A),
+                residual, increment, Jutul.EquationMajorLayout()
+            )
             workspace = nothing
             for rhs in (T[1, 2, 3, 4], T[-2, 3, 1, 0.5], zeros(T, 4))
                 system.r_buffer .= rhs
-                result = Jutul.linear_solve!(system, solver, context, model,
-                    nothing, 1.0, nothing)
+                result = Jutul.linear_solve!(
+                    system, solver, context, model,
+                    nothing, 1.0, nothing
+                )
                 @test result.ok
                 @test all(isfinite, system.dx_buffer)
-                @test norm(A*system.dx_buffer + rhs) <= tolerance*max(norm(rhs), one(T))
+                @test norm(A * system.dx_buffer + rhs) <= tolerance * max(norm(rhs), one(T))
                 @test eltype(solver.storage.x) == T
                 if isnothing(workspace)
                     workspace = solver.storage
@@ -39,10 +43,10 @@ end
     context = DefaultContext()
     model = SimulationModel(ScalarTestDomain(), ScalarTestSystem(); context)
     system = Jutul.LinearizedSystem(A, ones(8))
-    solver = GenericKrylov(:gmres; min_iterations = 2, relative_tolerance = 1e-10)
+    solver = GenericKrylov(:gmres; min_iterations = 2, relative_tolerance = 1.0e-10)
     result = Jutul.linear_solve!(system, solver, context, model, nothing, 1.0, nothing)
     @test result.iterations >= 2
-    @test norm(A*system.dx_buffer + ones(8)) < 1e-9
+    @test norm(A * system.dx_buffer + ones(8)) < 1.0e-9
 end
 
 # Also run this block when the optional distributed extension has been loaded.
@@ -66,11 +70,13 @@ let extension = Base.get_extension(Jutul, :JutulPartitionedArraysExt)
                     end
                     return y
                 end
-                op = Jutul.LinearOperator(Float64, 8, 8, false, false,
-                    apply_diagonal!)
+                op = Jutul.LinearOperator(
+                    Float64, 8, 8, false, false,
+                    apply_diagonal!
+                )
                 Jutul.Krylov.krylov_solve!(workspace, op, rhs; history = true)
                 @test workspace.stats.solved
-                @test norm(diagonal .* workspace.x - rhs) < 1e-7
+                @test norm(diagonal .* workspace.x - rhs) < 1.0e-7
             end
         end
     end
