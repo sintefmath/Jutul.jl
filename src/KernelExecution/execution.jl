@@ -295,7 +295,9 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
     end
     return StaticSparsityMatrixCSR(
         nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
-        nthreads = 1, minbatch = execution_size, thread_type = :serial,
+        nthreads = is_cpu_backend(ctx) ? nthreads(ctx) : 1,
+        minbatch = execution_size,
+        thread_type = is_cpu_backend(ctx) ? :batch : :serial,
         use_vendor_linalg = ctx.use_vendor_linalg
     )
 end
