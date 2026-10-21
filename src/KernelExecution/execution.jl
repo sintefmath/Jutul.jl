@@ -1438,6 +1438,30 @@ function LinearAlgebra.mul!(
     return y
 end
 
+function LinearAlgebra.mul!(
+        y::AbstractVector,
+        A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, B},
+        x::AbstractVector, alpha::Number, beta::Number
+    ) where {
+        Tv, Ti <: Integer, V <: Vector, I <: Vector, R <: Vector,
+        B <: KernelAbstractions.CPU,
+    }
+    length(y) == size(A, 1) || throw(DimensionMismatch())
+    length(x) == size(A, 2) || throw(DimensionMismatch())
+    scalar_type = KAPreconditioners.matrix_scalar_type(eltype(y))
+    alpha = convert(scalar_type, alpha)
+    beta = convert(scalar_type, beta)
+    KAPreconditioners.foreach_cpu_row(size(A, 1), A.minbatch) do row
+        value_row = KAPreconditioners.csr_row_product(A, x, row, eltype(y))
+        if iszero(beta)
+            @inbounds y[row] = alpha * value_row
+        else
+            @inbounds y[row] = alpha * value_row + beta * y[row]
+        end
+    end
+    return y
+end
+
 mutable struct HostBackendFactorization{F, V}
     factorization::F
     right_hand_side::V
