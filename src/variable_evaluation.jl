@@ -144,6 +144,17 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 end
             end
         else
+            if ctx isa KernelAbstractionsContext && KernelExecution.is_cpu_backend(ctx) &&
+                    vars isa NamedTuple && tt == :batch && K >= 16_384 &&
+                    Threads.nthreads(:default) > 1 &&
+                    all(number_of_entities(model, var) == K for var in values(vars))
+                # Keep dependent cell properties in cache across variables.
+                # The existing minbatch controls tile size as well as workers.
+                definitions = map((symbol, var) -> (Val(symbol), var), keys(vars), values(vars))
+                tiles = max(N_batches, cld(K, mb))
+                update_secondary_variable_tiles!(state, model, definitions, N_batches, tiles)
+                return state
+            end
             function batch_update(i)
                 for (symbol, var) in var_pairs
                     v = state[symbol]
@@ -156,6 +167,25 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
         end
     end
     return state
+end
+
+function update_secondary_variable_tiles!(state, model, definitions::Tuple, workers, tiles)
+    function update_worker(worker)
+        for tile in load_balanced_interval(worker, tiles, workers)
+            foreach(definitions) do (symbol, variable)
+                update_secondary_variable_tile!(state, model, symbol, variable, tile, tiles)
+            end
+        end
+    end
+    threaded_loop(update_worker, workers, :batch)
+    return nothing
+end
+
+@inline function update_secondary_variable_tile!(state, model, ::Val{K}, variable, tile, tiles) where K
+    target = state[K]
+    indices = entity_eachindex(target, tile, tiles)
+    update_secondary_variable!(target, variable, model, state, indices)
+    return nothing
 end
 
 # Initializers
