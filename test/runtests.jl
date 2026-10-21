@@ -1,5 +1,6 @@
 using Jutul
 include("krylov.jl")
+include("linalg/ilu.jl")
 # include("linalg/linear_operators.jl")
 include("test_systems/runtests.jl")
 include("mesh.jl")

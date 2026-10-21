@@ -77,7 +77,7 @@ end
 
 function ilu_apply!(x::AbstractArray{F}, f::AbstractILUFactorization, y::AbstractArray{F}) where {F <: Real}
     T = eltype(f)
-    if T == Float64
+    if T <: Real
         ldiv!(x, f, y)
     else
         N = size(T, 1)
