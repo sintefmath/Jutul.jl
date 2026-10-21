@@ -14,9 +14,9 @@ multimodel application can select host evaluation, device assembly, or fully
 host-side execution per submodel through
 `DeviceExecutionMode`.
 
-`minbatch` is the smallest CPU loop that is worth submitting to
-KernelAbstractions. Smaller CPU loops execute directly on the calling thread;
-device backends always launch kernels.
+`minbatch` is the minimum number of entries per CPU batch. CPU loops use
+Polyester and execute directly when there is only one batch; accelerator
+backends launch KernelAbstractions kernels.
 
 `use_kernels_for_secondary` controls whether secondary properties use
 KernelAbstractions kernels. It defaults to `false` for the CPU backend, where
@@ -128,6 +128,7 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         matrix_layout = adjoint(matrix_layout(ctx)),
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
+        nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
         reduce_memory = ctx.reduce_memory,
         use_vendor_linalg = ctx.use_vendor_linalg
@@ -146,6 +147,7 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         matrix_layout = matrix_layout(ctx),
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
+        nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
         reduce_memory = ctx.reduce_memory,
         use_vendor_linalg = ctx.use_vendor_linalg
@@ -165,10 +167,9 @@ function launch_threaded_loop(
     if n <= 0
         return nothing
     end
-    if is_cpu_backend(ctx) && n <= cpu_minbatch
-        @inbounds for index in 1:n
-            f(index)
-        end
+    if is_cpu_backend(ctx)
+        batches = clamp(n ÷ cpu_minbatch, 1, nthreads(ctx))
+        threaded_loop_minbatch(f, n, batches, cpu_minbatch, :batch)
         return nothing
     end
     kernel! = threaded_loop_kernel(ctx.backend, ctx.workgroupsize)

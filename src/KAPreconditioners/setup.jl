@@ -998,7 +998,7 @@ end
 
 function with_setup_rows(f, n::Int)
     if Threads.nthreads() > 1 && n >= 4_096
-        Threads.@threads :static for i in 1:n
+        @batch for i in 1:n
             f(i, Threads.threadid())
         end
     else
