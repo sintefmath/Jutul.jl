@@ -18,7 +18,6 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "Usage" => "usage.md",
-        "CPU hybrid Gauss–Seidel" => "hybrid_gauss_seidel.md",
         "optimization.md",
         "mesh.md",
         "units.md",
