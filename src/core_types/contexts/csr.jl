@@ -11,6 +11,7 @@ export ParallelCSRContext
     ParalellCSRContext(thread_type = :serial)
 
 A context that uses a CSR sparse matrix format together with threads.
+See [`secondary_scheme`](@ref) for secondary-variable scheduling.
 """
 struct ParallelCSRContext <: CPUJutulContext
     matrix_layout
@@ -18,12 +19,14 @@ struct ParallelCSRContext <: CPUJutulContext
     nthreads::Integer
     partitioner::JutulPartitioner
     thread_type::Symbol
+    secondary_scheme::Symbol
     function ParallelCSRContext(
             nthreads = Threads.nthreads();
             partitioner = MetisPartitioner(),
             matrix_layout = EquationMajorLayout(),
             minbatch = minbatch(nothing),
-            thread_type = :batch
+            thread_type = :batch,
+            secondary_scheme = :flat
         )
         maxthreads = Threads.nthreads()
         if nthreads > maxthreads
@@ -31,7 +34,8 @@ struct ParallelCSRContext <: CPUJutulContext
             nthreads = maxthreads
         end
         thread_type in (:threads, :threads_static, :batch, :serial) || throw(ArgumentError("thread_type must be :threads, :serial, :threads_static or :batch"))
-        return new(matrix_layout, minbatch, nthreads, partitioner, thread_type)
+        check_secondary_scheme(secondary_scheme)
+        return new(matrix_layout, minbatch, nthreads, partitioner, thread_type, secondary_scheme)
     end
 end
 
@@ -42,6 +46,15 @@ end
 
 nthreads(ctx::ParallelCSRContext) = ctx.nthreads
 minbatch(ctx::ParallelCSRContext) = ctx.minbatch
+secondary_scheme(ctx::ParallelCSRContext) = ctx.secondary_scheme
+
+function Base.adjoint(c::ParallelCSRContext)
+    return ParallelCSRContext(
+        nthreads(c); matrix_layout = adjoint(matrix_layout(c)),
+        minbatch = minbatch(c), partitioner = c.partitioner,
+        thread_type = thread_type(c), secondary_scheme = secondary_scheme(c)
+    )
+end
 
 function thread_type(context::ParallelCSRContext)
     return context.thread_type

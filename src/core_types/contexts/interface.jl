@@ -1,5 +1,13 @@
 export minbatch
 
+secondary_scheme(::JutulContext) = :flat
+
+function check_secondary_scheme(scheme)
+    scheme in (:flat, :fused, :strided) ||
+        throw(ArgumentError("secondary_scheme must be :flat, :fused or :strided"))
+    return scheme
+end
+
 function minbatch(x::Any)
     nt = nthreads(x)
     if nt == 1
