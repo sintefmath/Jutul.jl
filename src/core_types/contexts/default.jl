@@ -16,6 +16,8 @@ matrix_layout(c::DefaultContext) = c.matrix_layout
 secondary_scheme(c::DefaultContext) = c.secondary_scheme
 
 function Base.adjoint(c::DefaultContext)
-    return DefaultContext(; matrix_layout = adjoint(matrix_layout(c)),
-        minbatch = minbatch(c), nthreads = nthreads(c), secondary_scheme = secondary_scheme(c))
+    return DefaultContext(;
+        matrix_layout = adjoint(matrix_layout(c)),
+        minbatch = minbatch(c), nthreads = nthreads(c), secondary_scheme = secondary_scheme(c)
+    )
 end

@@ -28,27 +28,31 @@ Jutul.secondary_scheme(m::TileModel{C, V, Symbol}) where {C, V} = m.scheme
 function Jutul.update_secondary_variable!(out, ::TileScalar, m::TileModel, s, ix)
     Threads.atomic_add!(s.calls[1], 1)
     for i in ix
-        out[i] = 2*s.input[i] + 1
+        out[i] = 2 * s.input[i] + 1
     end
+    return
 end
 function Jutul.update_secondary_variable!(out, ::TileComponents, m::TileModel, s, ix)
     Threads.atomic_add!(s.calls[2], 1)
     for i in ix
         out[1, i] = s.scaled[i]^2
-        out[2, i] = s.scaled[i]*s.input[i]
+        out[2, i] = s.scaled[i] * s.input[i]
     end
+    return
 end
 function Jutul.update_secondary_variable!(out, ::TileFaces, m::TileModel, s, ix)
     Threads.atomic_add!(s.calls[3], 1)
     for i in ix
-        out[i] = 3*s.face_input[i]
+        out[i] = 3 * s.face_input[i]
     end
+    return
 end
 function Jutul.update_secondary_variable!(out, ::TileFaceComponents, m::TileModel, s, ix)
     Threads.atomic_add!(s.calls[4], 1)
     for i in ix
         out[i] = s.faces[i]^2
     end
+    return
 end
 
 @testset "Secondary schemes preserve entity-local values and derivatives" begin
@@ -59,9 +63,11 @@ end
         if T <: Jutul.ForwardDiff.Dual
             input = [Jutul.ForwardDiff.Dual{Nothing}(x, 1.0) for x in range(0.1, 1.0; length = nc)]
         end
-        make_state() = (input = input, scaled = zeros(T, nc), components = zeros(T, 2, nc),
+        make_state() = (
+            input = input, scaled = zeros(T, nc), components = zeros(T, 2, nc),
             face_input = T.(range(0.2, 0.8; length = nf)), faces = zeros(T, nf),
-            face_components = zeros(T, nf), calls = [Threads.Atomic{Int}(0) for _ in 1:4])
+            face_components = zeros(T, nf), calls = [Threads.Atomic{Int}(0) for _ in 1:4],
+        )
         reference = make_state()
         serial = TileModel(KernelAbstractionsContext(CPU(); nthreads = 1), vars, TileDomain(nc, nf))
         for (name, var) in pairs(vars)
@@ -113,10 +119,14 @@ struct TileTestContext <: Jutul.JutulContext end
         @test secondary_scheme(constructor()) == :flat
     end
     for scheme in (:flat, :fused, :strided)
-        contexts = (DefaultContext(; minbatch = 512, secondary_scheme = scheme),
+        contexts = (
+            DefaultContext(; minbatch = 512, secondary_scheme = scheme),
             ParallelCSRContext(; minbatch = 512, thread_type = :serial, secondary_scheme = scheme),
-            KernelAbstractionsContext(CPU(); minbatch = 512, secondary_scheme = scheme,
-                linear_float_type = Float32, linear_index_type = Int32))
+            KernelAbstractionsContext(
+                CPU(); minbatch = 512, secondary_scheme = scheme,
+                linear_float_type = Float32, linear_index_type = Int32
+            ),
+        )
         for ctx in contexts
             @test ctx.secondary_scheme == secondary_scheme(ctx) == scheme
             @test secondary_scheme(adjoint(ctx)) == scheme

@@ -201,7 +201,7 @@ function update_secondary_variable_tiles!(state, model, vars::NamedTuple)
     return nothing
 end
 
-function update_secondary_variable_tiles!(state, model, vars::NamedTuple{names}, count) where names
+function update_secondary_variable_tiles!(state, model, vars::NamedTuple{names}, count) where {names}
     count == 0 && return nothing
     ctx = model.context
     tiles = cld(count, minbatch(ctx))
@@ -214,12 +214,13 @@ function update_secondary_variable_tiles!(state, model, vars::NamedTuple{names},
                 update_secondary_variable_tile!(state, model, vars, name, indices)
             end
         end
+        return
     end
     threaded_loop(update_worker, workers, thread_type(ctx))
     return nothing
 end
 
-@inline function update_secondary_variable_tile!(state, model, vars, ::Val{name}, indices) where name
+@inline function update_secondary_variable_tile!(state, model, vars, ::Val{name}, indices) where {name}
     update_secondary_variable!(state[name], vars[name], model, state, indices)
     return nothing
 end

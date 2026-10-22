@@ -49,9 +49,11 @@ minbatch(ctx::ParallelCSRContext) = ctx.minbatch
 secondary_scheme(ctx::ParallelCSRContext) = ctx.secondary_scheme
 
 function Base.adjoint(c::ParallelCSRContext)
-    return ParallelCSRContext(nthreads(c); matrix_layout = adjoint(matrix_layout(c)),
+    return ParallelCSRContext(
+        nthreads(c); matrix_layout = adjoint(matrix_layout(c)),
         minbatch = minbatch(c), partitioner = c.partitioner,
-        thread_type = thread_type(c), secondary_scheme = secondary_scheme(c))
+        thread_type = thread_type(c), secondary_scheme = secondary_scheme(c)
+    )
 end
 
 function thread_type(context::ParallelCSRContext)
