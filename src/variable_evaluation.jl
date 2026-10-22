@@ -175,15 +175,21 @@ function update_secondary_variable_tiles!(state, model, vars::NamedTuple{names},
     ctx = model.context
     tiles = cld(count, ctx.secondary_variable_tile_size)
     workers = min(tiles, nthreads(ctx), max(1, count ÷ minbatch(ctx)))
+    variable_names = map(Val, names)
     function update_worker(worker)
         for tile in load_balanced_interval(worker, tiles, workers)
             indices = load_balanced_interval(tile, count, tiles)
-            foreach(names, values(vars)) do name, variable
-                update_secondary_variable!(state[name], variable, model, state, indices)
+            foreach(variable_names) do name
+                update_secondary_variable_tile!(state, model, vars, name, indices)
             end
         end
     end
     threaded_loop(update_worker, workers, thread_type(ctx))
+    return nothing
+end
+
+@inline function update_secondary_variable_tile!(state, model, vars, ::Val{name}, indices) where name
+    update_secondary_variable!(state[name], vars[name], model, state, indices)
     return nothing
 end
 
