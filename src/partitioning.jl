@@ -26,9 +26,19 @@ function generate_lookup(partitioner, A, n)
     return partition_to_lookup(p, n)
 end
 
+"""
+    MetisPartitioner(algorithm = :KWAY; objective = :cut)
+
+Partition with METIS. `objective = :cut` minimizes the (weighted) edge cut,
+`:vol` the total communication volume, i.e. the number of ghost cells.
+"""
 struct MetisPartitioner <: JutulPartitioner
     algorithm::Symbol
-    MetisPartitioner(m = :KWAY) = new(m)
+    objective::Symbol
+    function MetisPartitioner(m = :KWAY; objective = :cut)
+        objective in (:cut, :vol) || throw(ArgumentError("objective must be :cut or :vol, was $objective"))
+        return new(m, objective)
+    end
 end
 
 function partition(mp::MetisPartitioner, A::AbstractSparseMatrix, m; kwarg...)
@@ -42,7 +52,7 @@ function partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
     elseif n == m
         p = collect(1:m)
     else
-        p = Metis.partition(g, m; alg = alg, kwarg...)
+        p = metis_partition(mp, g, m; alg = alg, kwarg...)
     end
     for x in 1:m
         @assert count(isequal(x), p) > 0 "Partitioning of array with $n entries into $m blocks failed: Block $x is empty."
@@ -482,7 +492,20 @@ end
 
 function partition_hypergraph_implementation(hg, n, mp::MetisPartitioner)
     g_metis = hypergraph_to_metis_format(hg)
-    return Metis.partition(g_metis, n; alg = mp.algorithm)
+    return metis_partition(mp, g_metis, n)
+end
+
+# Metis.jl passes a global options array to METIS, so set the objective only for this call.
+function metis_partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
+    lib = Metis.LibMetis
+    ix = Int(lib.METIS_OPTION_OBJTYPE) + 1
+    old = Metis.options[ix]
+    Metis.options[ix] = Cint(mp.objective == :vol ? lib.METIS_OBJTYPE_VOL : lib.METIS_OBJTYPE_CUT)
+    try
+        return Metis.partition(g, m; alg = alg, kwarg...)
+    finally
+        Metis.options[ix] = old
+    end
 end
 
 function hypergraph_to_metis_format(hg)

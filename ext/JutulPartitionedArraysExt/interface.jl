@@ -157,8 +157,10 @@ function Jutul.partition_distributed(
         comm = MPI.COMM_WORLD,
         nc = maximum(vec(N)),
         np,
-        partitioner = MetisPartitioner(),
+        # Ghost cells are evaluated on every rank, so minimize their number rather than the edge cut.
+        partitioner = MetisPartitioner(objective = :vol),
         groups = [Int[]],
+        group_weight = 10,
         kwarg...
     )
     root = 0
@@ -167,7 +169,7 @@ function Jutul.partition_distributed(
             node_weights = fill(1, nc)
             for group in groups
                 for g in group
-                    node_weights[g] = 10
+                    node_weights[g] = group_weight
                 end
             end
         end

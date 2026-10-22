@@ -31,6 +31,13 @@ import Jutul: process_partition
     p = Jutul.partition(MetisPartitioner(), A_csr, 5)
     test_basic_partition_features(p, 5)
 
+    p = Jutul.partition(MetisPartitioner(objective = :vol), A, 5)
+    test_basic_partition_features(p, 5)
+    @test_throws ArgumentError MetisPartitioner(objective = :foo)
+    # The objective is set for one call only
+    ix = Int(Jutul.Metis.LibMetis.METIS_OPTION_OBJTYPE) + 1
+    @test Jutul.Metis.options[ix] == -1
+
     l = 1:49
     r = 2:50
     N = vcat(l', r')
@@ -113,6 +120,7 @@ import Jutul: process_partition
         @test G.edge_weights[1] == 12
 
         @test length(partition_hypergraph(G, 2, MetisPartitioner())) == 3
+        @test length(partition_hypergraph(G, 2, MetisPartitioner(objective = :vol))) == 3
         @test partition_hypergraph(G, 2, LinearPartitioner()) == [2, 2, 1]
 
         if Sys.islinux()
