@@ -1,4 +1,5 @@
 using Jutul
+include("krylov.jl")
 include("linalg/ilu.jl")
 include("linalg/preconditioners.jl")
 # include("linalg/linear_operators.jl")
