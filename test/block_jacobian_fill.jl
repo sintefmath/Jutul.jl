@@ -17,5 +17,13 @@ using Jutul, Test
         expected = adjoint ? permutedims(derivatives, (2, 1, 3)) : derivatives
         @test jacobian == vec(expected)
         @test residual == [11, 21, 12, 22, 13, 23]
+
+        blocks = zeros(Jutul.SMatrix{3, 3, Float64, 9}, 2)
+        buffer = Jutul.jacobian_fill_buffer(vec(reinterpret(reshape, Float64, blocks)))
+        for cell in 1:2
+            positions = Jutul.jacobian_position_block(cache.jacobian_positions, cell, 3)
+            Jutul.update_jacobian_block!(buffer, positions, Jutul.SMatrix{3, 3}(derivatives[:, :, cell]))
+        end
+        @test collect(buffer) == vec(expected)
     end
 end

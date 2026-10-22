@@ -388,6 +388,7 @@ function update_linearized_system_subset_conservation_fused!(
     global_cell_map = global_map(model.domain)
     timestep = fused.timestep
     positions = fused.jacobian_positions
+    nz = jacobian_fill_buffer(nz)
     state_cell = local_ad(state, 1, T)
     nc, ne, np = ad_dims(acc)
     # Construct specialization arguments before capturing the GPU kernel body.
@@ -443,34 +444,25 @@ function fill_conservation_eq_fused!(
                     acc_r, acc_r[equation] + value(flux_entry), equation
                 )
             end
-            position_block = jacobian_position_block(positions, connection, Np)
-            outer_position = get_jacobian_pos(position_block, 1, 1)
-            is_inner = outer_position > 0
-            if is_inner
-                @simd for partial in 1:Np
-                    @inbounds for equation in 1:Ne
-                        derivative = get_entry_impl(flux[equation], partial)
-                        acc_partials = setindex(
-                            acc_partials,
-                            acc_partials[equation, partial] + derivative,
-                            equation, partial
-                        )
-                        if !(nz isa Missing)
-                            position = get_jacobian_pos(position_block, equation, partial)
-                            update_jacobian_inner!(nz, position, -derivative)
-                        end
-                    end
+            @simd for partial in 1:Np
+                @inbounds for equation in 1:Ne
+                    derivative = get_entry_impl(flux[equation], partial)
+                    acc_partials = setindex(
+                        acc_partials,
+                        acc_partials[equation, partial] + derivative,
+                        equation, partial
+                    )
                 end
-            else
-                @simd for partial in 1:Np
-                    @inbounds for equation in 1:Ne
-                        derivative = get_entry_impl(flux[equation], partial)
-                        acc_partials = setindex(
-                            acc_partials,
-                            acc_partials[equation, partial] + derivative,
-                            equation, partial
-                        )
-                    end
+            end
+            if !(nz isa Missing)
+                position_block = jacobian_position_block(positions, connection, Np)
+                if get_jacobian_pos(position_block, 1, 1) > 0
+                    block = SMatrix{Ne, Np}(ntuple(Val(Ne * Np)) do k
+                        equation = (k - 1) % Ne + 1
+                        partial = (k - 1) ÷ Ne + 1
+                        return -get_entry_impl(@inbounds(flux[equation]), partial)
+                    end)
+                    update_jacobian_block!(nz, position_block, block)
                 end
             end
         end
@@ -480,13 +472,7 @@ function fill_conservation_eq_fused!(
     end
     if !(nz isa Missing)
         position_block = jacobian_position_block(acc.jacobian_positions, cell, Np)
-        @simd for partial in 1:Np
-            for equation in 1:Ne
-                derivative = @inbounds acc_partials[equation, partial]
-                position = get_jacobian_pos(position_block, equation, partial)
-                update_jacobian_inner!(nz, position, derivative)
-            end
-        end
+        update_jacobian_block!(nz, position_block, acc_partials)
     end
     return nothing
 end
