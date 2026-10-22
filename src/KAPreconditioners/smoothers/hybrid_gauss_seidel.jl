@@ -1,0 +1,314 @@
+function hybrid_partition(A, config, partition)
+    n = matrix_nrows(A)
+    if isnothing(partition)
+        np = min(config.npartitions, max(1, n ÷ config.min_partition_size))
+        if np == 1
+            return ones(Int, n)
+        elseif config.partitioner == :contiguous
+            return [1 + (i - 1) * np ÷ n for i in 1:n]
+        else
+            # Partition the symmetrized sparsity graph, independently of signs
+            # and numerical zeros. The schedule is reused after value updates.
+            graph = SparseMatrixCSC(n, n, copy(A.rowptr), copy(A.colval), ones(Int, matrix_nonzeros(A)))
+            return Int.(Jutul.partition(Jutul.MetisPartitioner(), graph, np))
+        end
+    end
+    length(partition) == n || throw(DimensionMismatch("partition must contain one owner per row"))
+    owners = Int.(partition)
+    isempty(owners) && return owners
+    labels = sort!(unique(owners))
+    labels == collect(1:length(labels)) || throw(ArgumentError("partition labels must be consecutive positive integers"))
+    return owners
+end
+
+function hybrid_schedule(A, owners)
+    n = matrix_nrows(A)
+    np = maximum(owners; init = 1)
+    offsets = ones(Int, np + 1)
+    for p in owners
+        offsets[p + 1] += 1
+    end
+    offsets[1] = 1
+    for p in 1:np
+        offsets[p + 1] += offsets[p] - 1
+    end
+    # Keep contiguous ownership as a range: this removes a full-size row map
+    # and its dependent load from the hot path on well-ordered meshes.
+    if issorted(owners)
+        rows = 1:n
+    else
+        next = copy(offsets)
+        rows = Vector{Int}(undef, n)
+        for i in 1:n
+            p = owners[i]
+            rows[next[p]] = i
+            next[p] += 1
+        end
+    end
+    # Interior rows use the original CSR directly. Only interface rows need
+    # split local/remote entry lists; no per-nonzero ownership test in a sweep.
+    boundary_index = zeros(Int, n)
+    diagonal_positions = zeros(eltype(A.rowptr), n)
+    boundary_offsets = Int[1]
+    boundary_rows = Int[]
+    local_offsets, remote_offsets = Int[1], Int[1]
+    local_positions, remote_positions = eltype(A.rowptr)[], eltype(A.rowptr)[]
+    for p in 1:np
+        for t in offsets[p]:(offsets[p + 1] - 1)
+            i = rows[t]
+            entries = A.rowptr[i]:(A.rowptr[i + 1] - 1)
+            boundary = false
+            diagonal = zero(eltype(A.rowptr))
+            diagonal_count = 0
+            for k in entries
+                j = A.colval[k]
+                boundary |= owners[j] != p
+                if j == i
+                    diagonal = k
+                    diagonal_count += 1
+                end
+            end
+            # Zero marks missing/duplicate diagonals, including unsigned CSR.
+            diagonal_positions[i] = diagonal_count == 1 ? diagonal : zero(diagonal)
+            boundary || continue
+            push!(boundary_rows, i)
+            boundary_index[i] = length(boundary_rows)
+            for k in entries
+                push!(owners[A.colval[k]] == p ? local_positions : remote_positions, k)
+            end
+            push!(local_offsets, length(local_positions) + 1)
+            push!(remote_offsets, length(remote_positions) + 1)
+        end
+        push!(boundary_offsets, length(boundary_rows) + 1)
+    end
+    return (;
+        owners, offsets, rows, diagonal_positions, boundary_index, boundary_offsets,
+        boundary_rows, local_offsets, local_positions, remote_offsets, remote_positions,
+    )
+end
+
+function setup_smoother(
+        A::StaticSparsityMatrixCSR, config::HybridGaussSeidel;
+        reuse = nothing, partition = nothing, reallocation_tracker = nothing
+    )
+    require_square_matrix(A, "Hybrid Gauss-Seidel")
+    matrix_backend(A) isa KernelAbstractions.CPU &&
+        A.rowptr isa Vector && A.colval isa Vector && A.nzval isa Vector ||
+        throw(ArgumentError("Hybrid Gauss-Seidel requires CPU Vector CSR storage"))
+    T = eltype(A.nzval)
+    T <: AbstractFloat || throw(ArgumentError("Hybrid Gauss-Seidel requires real floating-point scalar coefficients"))
+    compatible = reuse isa HybridGaussSeidelState && eltype(reuse) === T &&
+        eltype(reuse.rowptr) === eltype(A.rowptr) &&
+        same_smoother_pattern(reuse, A) &&
+        reuse.config.npartitions == config.npartitions &&
+        reuse.config.min_partition_size == config.min_partition_size &&
+        reuse.config.partitioner == config.partitioner &&
+        (isnothing(partition) || reuse.schedule.owners == partition)
+    if compatible
+        reuse.config = config
+        return update_smoother!(reuse, A)
+    end
+    schedule = hybrid_schedule(A, hybrid_partition(A, config, partition))
+    n = matrix_nrows(A)
+    state = HybridGaussSeidelState(
+        A, Vector{T}(undef, n), Vector{T}(undef, n),
+        config, matrix_backend(A), matrix_batch_size(A), n, A.rowptr, A.colval,
+        copy(A.rowptr), copy(A.colval), schedule, Vector{T}(undef, length(schedule.boundary_rows))
+    )
+    return update_smoother!(state, A)
+end
+
+function update_smoother!(
+        state::HybridGaussSeidelState,
+        A::StaticSparsityMatrixCSR{T, I, <:Vector, <:Vector, <:Vector}
+    ) where {T, I}
+    require_same_smoother_pattern(state, A)
+    eltype(state) === T || throw(ArgumentError("Hybrid Gauss-Seidel coefficient type changed"))
+    eltype(state.rowptr) === I || throw(ArgumentError("Hybrid Gauss-Seidel index type changed"))
+    schedule = state.schedule
+    foreach_hybrid_partition(schedule) do p
+        @inbounds for t in schedule.offsets[p]:(schedule.offsets[p + 1] - 1)
+            i = schedule.rows[t]
+            position = schedule.diagonal_positions[i]
+            diagonal = zero(T)
+            if position > 0
+                diagonal = A.nzval[position]
+            else
+                # Preserve duplicate-diagonal and unsorted-CSR semantics.
+                for k in A.rowptr[i]:(A.rowptr[i + 1] - 1)
+                    A.colval[k] == i && (diagonal += A.nzval[k])
+                end
+            end
+            h = schedule.boundary_index[i]
+            remote = zero(T)
+            if state.config.l1 && h > 0
+                @simd for entry in schedule.remote_offsets[h]:(schedule.remote_offsets[h + 1] - 1)
+                    remote += abs(A.nzval[schedule.remote_positions[entry]])
+                end
+            end
+            # Baker et al., scaled ℓ₁ GS (Remark 6.1, LLNL-TR-489114).
+            # Retain the sign for consistently negative matrix rows. Defer
+            # errors until after the batch so no worker throws inside @batch.
+            scale = copysign(abs(diagonal) + remote / 2, diagonal)
+            state.inverse_diagonal[i] = isfinite(scale) && !iszero(diagonal) ? inv(scale) : T(NaN)
+        end
+    end
+    invalid = findfirst(v -> !isfinite(v) || iszero(v), state.inverse_diagonal)
+    isnothing(invalid) || throw(ArgumentError("Hybrid Gauss-Seidel requires a finite nonzero diagonal and scaling in row $invalid"))
+    state.matrix = A
+    state.rowptr, state.colval = A.rowptr, A.colval
+    return state
+end
+
+@inline function foreach_hybrid_partition(f, schedule)
+    np = length(schedule.offsets) - 1
+    if np > 1 && Threads.nthreads() > 1
+        @batch minbatch = 1 for p in 1:np
+            f(p)
+        end
+    else
+        for p in 1:np
+            f(p)
+        end
+    end
+    return nothing
+end
+
+# `forward` and `correction` are compile-time flags. The correction path reads
+# only predecessors in the local triangular solve, so stale scratch and x are
+# never read on the zero-initial path (including a buffer filled with NaNs).
+@inline function hybrid_row_value(
+        x, A, rhs, scratch, schedule, i,
+        ::Val{forward}, ::Val{correction}
+    ) where {forward, correction}
+    h = @inbounds schedule.boundary_index[i]
+    value = @inbounds rhs[i]
+    if h == 0
+        @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i + 1] - 1)
+            j = A.colval[k]
+            if !correction || (forward ? j < i : j > i)
+                value -= A.nzval[k] * x[j]
+            end
+        end
+    else
+        if !correction
+            value -= @inbounds scratch[h]
+        end
+        @inbounds @simd for t in schedule.local_offsets[h]:(schedule.local_offsets[h + 1] - 1)
+            k = schedule.local_positions[t]
+            j = A.colval[k]
+            if !correction || (forward ? j < i : j > i)
+                value -= A.nzval[k] * x[j]
+            end
+        end
+    end
+    return value
+end
+
+function hybrid_sweep!(x, A, b, state, direction::Val{forward}) where {forward}
+    schedule = state.schedule
+    damping = smoother_damping(state)
+    if length(schedule.offsets) == 2
+        # Coarse AMG levels should pay no partition-map or interface overhead.
+        rows = forward ? (1:state.n) : (state.n:-1:1)
+        return gauss_seidel_sweep!(x, A, b, state.inverse_diagonal, damping, rows)
+    end
+    # All reads of cross-partition x finish before any partition writes x.
+    # Store the frozen remote matvec, rather than copying the entire iterate.
+    if !isempty(schedule.boundary_rows)
+        foreach_hybrid_partition(schedule) do p
+            @inbounds for h in schedule.boundary_offsets[p]:(schedule.boundary_offsets[p + 1] - 1)
+                value = zero(eltype(x))
+                @simd for t in schedule.remote_offsets[h]:(schedule.remote_offsets[h + 1] - 1)
+                    k = schedule.remote_positions[t]
+                    value += A.nzval[k] * x[A.colval[k]]
+                end
+                state.halo_rhs[h] = value
+            end
+        end
+    end
+    foreach_hybrid_partition(schedule) do p
+        lo, hi = schedule.offsets[p], schedule.offsets[p + 1] - 1
+        order = forward ? (lo:hi) : (hi:-1:lo)
+        @inbounds for t in order
+            i = schedule.rows[t]
+            value = hybrid_row_value(x, A, b, state.halo_rhs, schedule, i, direction, Val(false))
+            x[i] += damping * state.inverse_diagonal[i] * value
+        end
+    end
+    return x
+end
+
+function hybrid_correction!(
+        x, A, residual, state, direction::Val{forward},
+        ::Val{zero_initial}
+    ) where {forward, zero_initial}
+    schedule, correction = state.schedule, state.correction
+    damping = smoother_damping(state)
+    foreach_hybrid_partition(schedule) do p
+        lo, hi = schedule.offsets[p], schedule.offsets[p + 1] - 1
+        order = forward ? (lo:hi) : (hi:-1:lo)
+        @inbounds for t in order
+            i = schedule.rows[t]
+            value = hybrid_row_value(correction, A, residual, state.halo_rhs, schedule, i, direction, Val(true))
+            delta = damping * state.inverse_diagonal[i] * value
+            correction[i] = delta
+            if zero_initial
+                x[i] = delta
+            else
+                x[i] += delta
+            end
+        end
+    end
+    return x
+end
+
+function hybrid_smooth!(
+        x, A, b, state, steps, direction;
+        residual = nothing, zero_initial::Bool = false
+    )
+    steps > 0 || throw(ArgumentError("smoothing steps must be positive"))
+    check_smoother_dimensions(x, A, b)
+    require_same_smoother_pattern(state, A)
+    isnothing(residual) || length(residual) == state.n || throw(DimensionMismatch("residual length does not match matrix rows"))
+    b = x === b ? copy(b) : b
+    start = 1
+    if zero_initial || !isnothing(residual)
+        hybrid_correction!(x, A, zero_initial ? b : residual, state, direction, Val(zero_initial))
+        start = 2
+    end
+    for _ in start:steps
+        hybrid_sweep!(x, A, b, state, direction)
+    end
+    return x
+end
+
+function smooth!(
+        x::Vector, state::HybridGaussSeidelState,
+        A::StaticSparsityMatrixCSR, b::Vector;
+        steps::Integer = smoother_steps(state.config), zero_initial::Bool = false
+    )
+    return smooth_level!(x, A, b, state, Int(steps); zero_initial)
+end
+
+function smooth_level!(
+        x::Vector, A::StaticSparsityMatrixCSR, b::Vector,
+        state::HybridGaussSeidelState, steps::Int; kwargs...
+    )
+    return hybrid_smooth!(x, A, b, state, steps, Val(true); kwargs...)
+end
+
+function smooth_result!(
+        x::Vector, A::StaticSparsityMatrixCSR, b::Vector,
+        state::HybridGaussSeidelState, steps::Int; kwargs...
+    )
+    return hybrid_smooth!(x, A, b, state, steps, Val(false); kwargs...)
+end
+
+function apply!(x::Vector, state::HybridGaussSeidelState, b::Vector)
+    require_apply_dimensions(x, state, b)
+    b = x === b ? copy(b) : b
+    A, steps = state.matrix, smoother_steps(state.config)
+    smooth_level!(x, A, b, state, steps; zero_initial = true)
+    return smooth_result!(x, A, b, state, steps)
+end
