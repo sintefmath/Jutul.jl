@@ -141,6 +141,34 @@ end
     end
 end
 
+@testset "Hybrid Gauss-Seidel long and unsorted rows" begin
+    for T in (Float32, Float64), I in (Int32, Int64, UInt32), forward in (false, true)
+        n = 24
+        A = sparse(fill(T(-0.01), n, n) + T(2) * LinearAlgebra.I)
+        for matrix in (A, SparseArrays.blockdiag(A, A))
+            n = size(matrix, 1)
+            sorted = csr_matrix(matrix; index_type = I)
+            positions = vcat((reverse(collect(nzrange(sorted, i))) for i in 1:n)...)
+            unsorted = Jutul.StaticSparsityMatrixCSR(
+                n, n, copy(sorted.rowptr), sorted.colval[positions], sorted.nzval[positions]
+            )
+            owners = n == 24 ? [1 + (i % 3) for i in 1:n] : vcat(ones(Int, 24), fill(2, 24))
+            b, initial = T.(1:n), T.((1:n) ./ 10)
+            for csr in (sorted, unsorted)
+                state = setup_smoother(csr, HybridGaussSeidel(1, 0.8); partition = owners)
+                direction! = forward ? KAPreconditioners.smooth_level! : KAPreconditioners.smooth_result!
+                x = copy(initial)
+                expected = reference_hybrid!(copy(initial), matrix, b, owners; forward, damping = 0.8)
+                direction!(x, csr, b, state, 1; residual = b - matrix * initial)
+                @test x ≈ expected
+                fill!(x, T(NaN))
+                direction!(x, csr, b, state, 1; zero_initial = true)
+                @test x ≈ reference_hybrid!(zeros(T, n), matrix, b, owners; forward, damping = 0.8)
+            end
+        end
+    end
+end
+
 @testset "Scaled l1 stabilizes hybrid GS" begin
     # SPD, but point Jacobi (one row per partition) diverges without scaling.
     A = fill(0.8, 8, 8) + 0.2I

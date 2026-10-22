@@ -51,8 +51,10 @@ function hybrid_schedule(A, owners)
     diagonal_positions = zeros(eltype(A.rowptr), n)
     boundary_offsets = Int[1]
     boundary_rows = Int[]
+    local_diagonal_positions = Int[]
     local_offsets, remote_offsets = Int[1], Int[1]
     local_positions, remote_positions = eltype(A.rowptr)[], eltype(A.rowptr)[]
+    sorted_rows = true
     for p in 1:np
         for t in offsets[p]:(offsets[p + 1] - 1)
             i = rows[t]
@@ -62,6 +64,7 @@ function hybrid_schedule(A, owners)
             diagonal_count = 0
             for k in entries
                 j = A.colval[k]
+                sorted_rows &= k == first(entries) || A.colval[k - 1] < j
                 boundary |= owners[j] != p
                 if j == i
                     diagonal = k
@@ -73,9 +76,12 @@ function hybrid_schedule(A, owners)
             boundary || continue
             push!(boundary_rows, i)
             boundary_index[i] = length(boundary_rows)
+            local_diagonal = 0
             for k in entries
                 push!(owners[A.colval[k]] == p ? local_positions : remote_positions, k)
+                A.colval[k] == i && (local_diagonal = length(local_positions))
             end
+            push!(local_diagonal_positions, local_diagonal)
             push!(local_offsets, length(local_positions) + 1)
             push!(remote_offsets, length(remote_positions) + 1)
         end
@@ -84,7 +90,33 @@ function hybrid_schedule(A, owners)
     return (;
         owners, offsets, rows, diagonal_positions, boundary_index, boundary_offsets,
         boundary_rows, local_offsets, local_positions, remote_offsets, remote_positions,
+        local_diagonal_positions,
+        # Short rows favor the existing predicated scan. On longer sorted
+        # rows, cached triangular ranges skip the unused half entirely.
+        triangular_ranges = Val(sorted_rows && matrix_nonzeros(A) >= 12n),
     )
+end
+
+@inline function hybrid_triangular_value(x, A, rhs, schedule, i, ::Val{forward}) where {forward}
+    value = @inbounds rhs[i]
+    h = @inbounds schedule.boundary_index[i]
+    if h == 0
+        diagonal = @inbounds schedule.diagonal_positions[i]
+        lo = forward ? (@inbounds A.rowptr[i]) : (diagonal + 1)
+        hi = forward ? (diagonal - 1) : (@inbounds A.rowptr[i + 1] - 1)
+        @inbounds @simd for k in lo:hi
+            value -= A.nzval[k] * x[A.colval[k]]
+        end
+    else
+        diagonal = @inbounds schedule.local_diagonal_positions[h]
+        lo = forward ? (@inbounds schedule.local_offsets[h]) : (diagonal + 1)
+        hi = forward ? (diagonal - 1) : (@inbounds schedule.local_offsets[h + 1] - 1)
+        @inbounds @simd for t in lo:hi
+            k = schedule.local_positions[t]
+            value -= A.nzval[k] * x[A.colval[k]]
+        end
+    end
+    return value
 end
 
 function setup_smoother(
@@ -181,6 +213,9 @@ end
         x, A, rhs, scratch, schedule, i,
         ::Val{forward}, ::Val{correction}
     ) where {forward, correction}
+    if correction && schedule.triangular_ranges isa Val{true}
+        return hybrid_triangular_value(x, A, rhs, schedule, i, Val(forward))
+    end
     h = @inbounds schedule.boundary_index[i]
     value = @inbounds rhs[i]
     if h == 0
