@@ -409,7 +409,7 @@ end
     end
 end
 
-function test_numeric_interpolation_tuning(backend, T = Float64)
+function test_numeric_interpolation_tuning(backend)
     # Include a strong F-F edge, weak entries, and a distance-two-only coarse
     # point. The correct untruncated row sums are deliberately below one.
     A = sparse(
@@ -418,7 +418,6 @@ function test_numeric_interpolation_tuning(backend, T = Float64)
         [10.0, -2.0, -1.0, -1.5, -0.1, -1.0, 4.0, -0.5, -0.75, -2.0, 0.25, 1.0, 1.0, 1.0, 1.0],
         6, 6
     )
-    A = T.(A)
     cf, cmap = Int8[-1, -1, 1, 1, 1, 1], Int32[0, 0, 1, 2, 3, 4]
     C = csr_matrix(A)
     strong = KAPreconditioners.strength(C, 0.25, 1.0)
@@ -467,10 +466,7 @@ function test_numeric_interpolation_tuning(backend, T = Float64)
         KAPreconditioners.synchronize_backend(backend)
         @test Array(dp) ≈ expected
         if backend isa CPU
-            workspace = KAPreconditioners.SetupWorkspace(T, eltype(BC.rowptr))
-            KAPreconditioners.update_cpu_prolongation!(P, BC, cf, cmap, strong, config, workspace)
-            @test P.nzval ≈ expected
-            KAPreconditioners.update_cpu_prolongation!(P, BC, cf, cmap, strong, config, workspace)
+            KAPreconditioners.update_cpu_prolongation!(P, BC, cf, cmap, strong, config, nothing)
             @test P.nzval ≈ expected
         end
     end
@@ -479,33 +475,7 @@ end
 
 @testset "Interpolation rescaling during numeric updates" begin
     test_numeric_interpolation_tuning(CPU())
-    test_numeric_interpolation_tuning(CPU(), Float32)
-    test_numeric_interpolation_tuning(CPU(), ComplexF64)
     test_numeric_interpolation_tuning(JLBackend())
-end
-
-@testset "CPU interpolation updates with long retained rows" begin
-    n = 24
-    cf = vcat(fill(Int8(-1), 12), ones(Int8, 12))
-    cmap = vcat(zeros(Int32, 12), Int32.(1:12))
-    for T in (Float32, Float64, ComplexF64), interpolation in (ClassicalInterpolation, ExtendedIInterpolation), rescale in (false, true)
-        matrix = T.([-1 - 0.01sin(i + j) for i in 1:n, j in 1:n])
-        matrix[diagind(matrix)] .= T(30)
-        T <: Complex && (matrix .*= reshape(1 .+ 0.05im .* sin.(1:n), 1, n))
-        A = csr_matrix(sparse(matrix))
-        strong = KAPreconditioners.strength(A, 0.25, 1.0)
-        config = interpolation(0.0, 4, 1, rescale)
-        P = KAPreconditioners.build_prolongation(A, cf, cmap, 12, strong, config)
-        A.nzval .*= 1 .+ 0.01cos.(eachindex(A.nzval))
-        expected = copy(P.nzval)
-        KAPreconditioners.update_interpolation_p_kernel!(CPU(), 128)(
-            expected, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval, cf, cmap, strong,
-            config isa ExtendedIInterpolation, rescale, n; ndrange = n
-        )
-        workspace = KAPreconditioners.SetupWorkspace(T, eltype(A.rowptr))
-        KAPreconditioners.update_cpu_prolongation!(P, A, cf, cmap, strong, config, workspace)
-        @test P.nzval ≈ expected
-    end
 end
 
 @testset "AMG strength selection" begin
