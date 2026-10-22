@@ -132,26 +132,10 @@ end
     return reinterpret(T, parent(parent(nz)))
 end
 
-@inline function update_jacobian_block_scalar!(nz, positions, block::StaticMatrix{Ne, Np}) where {Ne, Np}
+@inline function update_jacobian_block!(nz, positions, block::StaticMatrix{Ne, Np}) where {Ne, Np}
     @inbounds for partial in 1:Np, equation in 1:Ne
         position = get_jacobian_pos(positions, equation, partial)
         update_jacobian_inner!(nz, position, block[equation, partial])
-    end
-    return nothing
-end
-
-@inline update_jacobian_block!(nz, positions, block) = update_jacobian_block_scalar!(nz, positions, block)
-
-@inline function update_jacobian_block!(
-        nz::Base.ReinterpretArray{T, 1, B, Vector{B}},
-        positions::BlockJacobianPosition{I, N, adjoint}, block::StaticMatrix{N, N}
-    ) where {T, I, N, adjoint, B <: SMatrix{N, N, T}}
-    index, offset = divrem(Int(positions.first) - 1, N * N)
-    if offset == 0 && positions.first > 0
-        # Write the complete block instead of updating its scalar reinterpretation.
-        @inbounds parent(nz)[index + 1] = adjoint ? transpose(block) : block
-    else
-        update_jacobian_block_scalar!(nz, positions, block)
     end
     return nothing
 end
