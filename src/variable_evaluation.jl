@@ -157,7 +157,11 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
         if scheme == :strided
             # PR #385: spread each worker over up to four batches. Divide first
             # in the threshold check to support minbatch == typemax(Int).
-            N_batches = K ÷ mb < 2 ? 1 : clamp(4K ÷ mb, 1, 4N)
+            if K ÷ mb < 2
+                N_batches = 1
+            else
+                N_batches = clamp(4K ÷ mb, 1, 4N)
+            end
         else
             N_batches = clamp(K ÷ mb, 1, N)
         end

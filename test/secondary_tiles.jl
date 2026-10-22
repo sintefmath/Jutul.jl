@@ -91,8 +91,13 @@ end
             if scheme == :fused
                 expected_calls = cld.([nc, nc, nf, nf], mb)
             else
-                batches = scheme == :flat ? clamp(nc ÷ mb, 1, workers) :
-                    (nc ÷ mb < 2 ? 1 : clamp(4nc ÷ mb, 1, 4workers))
+                if scheme == :flat
+                    batches = clamp(nc ÷ mb, 1, workers)
+                elseif nc ÷ mb < 2
+                    batches = 1
+                else
+                    batches = clamp(4nc ÷ mb, 1, 4workers)
+                end
                 expected_calls = fill(batches, 4)
             end
             @test [c[] for c in actual.calls] == expected_calls
