@@ -67,7 +67,7 @@ function apply!(x, ilu::ILUZeroPreconditioner, y, α = 1.0, β = 0.0)
     end
     ilu_apply!(x, factor, y)
     if has_beta
-        @. x = α*x + β*tmp
+        @. x = α * x + β * tmp
     elseif !isone(α)
         @. x *= α
     end

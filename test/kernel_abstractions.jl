@@ -598,15 +598,15 @@ end
 @testset "KA CPU scaled sparse products" begin
     for T in (Float32, Float64, ComplexF64), block in (false, true)
         if block
-            values = [SMatrix{2,2,T}(1,2,3,4), SMatrix{2,2,T}(2,-1,4,3), SMatrix{2,2,T}(3,1,-2,2)]
-            x = [SVector{2,T}(1,2), SVector{2,T}(3,4), SVector{2,T}(5,6)]
-            expected = [values[1]*x[1]+values[2]*x[3], values[3]*x[2]]
-            A = Jutul.StaticSparsityMatrixCSR(values, [1,3,2], [1,3,4], 2, 3, CPU())
+            values = [SMatrix{2, 2, T}(1, 2, 3, 4), SMatrix{2, 2, T}(2, -1, 4, 3), SMatrix{2, 2, T}(3, 1, -2, 2)]
+            x = [SVector{2, T}(1, 2), SVector{2, T}(3, 4), SVector{2, T}(5, 6)]
+            expected = [values[1] * x[1] + values[2] * x[3], values[3] * x[2]]
+            A = Jutul.StaticSparsityMatrixCSR(values, [1, 3, 2], [1, 3, 4], 2, 3, CPU())
         else
-            host = sparse([1,1,2], [1,3,2], T[2,-1,3], 2,3)
+            host = sparse([1, 1, 2], [1, 3, 2], T[2, -1, 3], 2, 3)
             A = Adapt.adapt(KernelAbstractionsContext(CPU()), Jutul.StaticSparsityMatrixCSR(copy(transpose(host))))
-            x = T[1,2,3]
-            expected = host*x
+            x = T[1, 2, 3]
+            expected = host * x
         end
         y = copy(expected)
         @test mul!(y, A, x, 2, 3) === y

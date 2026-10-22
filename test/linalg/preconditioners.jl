@@ -12,11 +12,11 @@ using Jutul, LinearAlgebra, SparseArrays, Test
             for (alpha, beta) in ((1.0, 0.0), (2.5, 0.0), (-1.0, 0.5), (0.0, -2.0))
                 result = copy(original)
                 @test Jutul.apply!(result, preconditioner, b, alpha, beta) === result
-                @test result ≈ alpha*solution + beta*original
+                @test result ≈ alpha * solution + beta * original
             end
         end
     end
-    
+
     @testset "SPAI0 numeric updates replace normalization" begin
         A = sparse([4.0 -1.0 0.0; -2.0 5.0 -1.0; 0.0 -3.0 6.0])
         expected = diag(A) ./ vec(sum(abs2, A; dims = 2))
@@ -28,7 +28,7 @@ using Jutul, LinearAlgebra, SparseArrays, Test
             end
             nonzeros(matrix) .*= 2
             Jutul.update_preconditioner!(preconditioner, matrix, ones(3), nothing, nothing)
-            @test preconditioner.factor.D ≈ expected/2
+            @test preconditioner.factor.D ≈ expected / 2
         end
     end
 end
