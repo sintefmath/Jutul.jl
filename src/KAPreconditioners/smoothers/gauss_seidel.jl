@@ -50,6 +50,35 @@ function update_smoother!(
     return state
 end
 
+function update_smoother!(
+        state::GaussSeidelState{D},
+        A::StaticSparsityMatrixCSR{Float64, Ti, <:Vector, <:Vector, <:Vector}
+    ) where {D <: Vector{Float64}, Ti}
+    if Threads.nthreads(:default) == 1 || state.n < 16_384
+        return invoke(update_smoother!, Tuple{GaussSeidelState, typeof(A)}, state, A)
+    end
+    require_smoother_size(state, A, "Gauss-Seidel")
+    state.matrix = A
+    diagonal = state.inverse_diagonal
+    foreach_cpu_row(state.n, state.block_size) do i
+        value = 0.0
+        @inbounds for k in A.rowptr[i]:(A.rowptr[i + 1] - 1)
+            A.colval[k] == i && (value += A.nzval[k])
+        end
+        @inbounds diagonal[i] = value
+    end
+    # Validate on the calling task before normalizing independent rows. This
+    # retains the first zero-diagonal error without throwing inside a batch.
+    invalid = findfirst(iszero, diagonal)
+    isnothing(invalid) || throw(ArgumentError(
+        "Gauss-Seidel requires a nonzero diagonal in row $invalid"
+    ))
+    foreach_cpu_row(state.n, state.block_size) do i
+        @inbounds diagonal[i] = inv(abs(diagonal[i]))
+    end
+    return state
+end
+
 function gauss_seidel_sweep!(
         x, A, b, inverse_diagonal, damping,
         rows

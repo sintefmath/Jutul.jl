@@ -1,6 +1,7 @@
 using Jutul
 include("linalg/ilu.jl")
 include("linalg/krylov_history.jl")
+include("linalg/gauss_seidel_update.jl")
 include("linalg/preconditioners.jl")
 include("linalg/smoother_reuse.jl")
 include("linalg/serial_smoother_schedule.jl")
