@@ -233,9 +233,10 @@ end
         )
         state0 = setup_state(model, Dict(:XVar => 0.0))
         cpu_simulator = Simulator(model, state0 = state0)
-        simulator = transfer_to_backend(cpu_simulator, CPU())
+        simulator = transfer_to_backend(cpu_simulator, CPU(); secondary_variable_tile_size = 17)
 
         @test simulator.model.context isa KernelAbstractionsContext
+        @test simulator.model.context.secondary_variable_tile_size == 17
         @test !haskey(simulator.storage, :evaluation_state)
         @test evaluation_state(simulator.storage) === simulator.storage.state
         @test evaluation_state0(simulator.storage) === simulator.storage.state0
@@ -323,9 +324,13 @@ end
     end
     simulator = transfer_to_backend(
         Simulator(model; state0 = state0), CPU();
-        group_execution = group_execution
+        group_execution = group_execution,
+        secondary_variable_tile_size = 17
     )
     @test isnothing(simulator.model.groups)
+    @test simulator.model.context.secondary_variable_tile_size == 17
+    @test simulator.model[:A].context.secondary_variable_tile_size == 17
+    @test simulator.model[:B].context.secondary_variable_tile_size == 17
     @test collect(simulator.model.group_execution) ==
         [SolveFullyOnDevice, AssembleOnDevice]
     @test simulator.model[:A].context.reduce_memory

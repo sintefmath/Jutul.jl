@@ -125,6 +125,8 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 KernelExecution.secondary_variable_loop!(state, model, symbol, ctx)
             end
         end
+    elseif ctx isa KernelAbstractionsContext && ctx.secondary_variable_tile_size > 0
+        update_secondary_variable_tiles!(state, model, NamedTuple(var_pairs))
     elseif length(var_pairs) > 0
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
@@ -156,6 +158,33 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
         end
     end
     return state
+end
+
+function update_secondary_variable_tiles!(state, model, vars::NamedTuple)
+    for entity in unique(map(associated_entity, values(vars)))
+        names = filter(name -> associated_entity(vars[name]) == entity, keys(vars))
+        group = vars[names]
+        count = number_of_entities(model, first(values(group)))
+        update_secondary_variable_tiles!(state, model, group, count)
+    end
+    return nothing
+end
+
+function update_secondary_variable_tiles!(state, model, vars::NamedTuple{names}, count) where names
+    count == 0 && return nothing
+    ctx = model.context
+    tiles = cld(count, ctx.secondary_variable_tile_size)
+    workers = min(tiles, nthreads(ctx), max(1, count ÷ minbatch(ctx)))
+    function update_worker(worker)
+        for tile in load_balanced_interval(worker, tiles, workers)
+            indices = load_balanced_interval(tile, count, tiles)
+            foreach(names, values(vars)) do name, variable
+                update_secondary_variable!(state[name], variable, model, state, indices)
+            end
+        end
+    end
+    threaded_loop(update_worker, workers, thread_type(ctx))
+    return nothing
 end
 
 # Initializers

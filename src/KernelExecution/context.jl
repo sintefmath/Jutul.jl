@@ -5,6 +5,7 @@
                               matrix_layout=EquationMajorLayout(),
                               workgroupsize=256, minbatch=minbatch(nothing),
                               use_kernels_for_secondary=!is_cpu_backend,
+                              secondary_variable_tile_size=0,
                               reduce_memory=true, use_vendor_linalg=true)
 
 Execution context for a [`SimulationModel`](@ref) or [`MultiModel`](@ref) on a
@@ -22,6 +23,14 @@ device backends always launch kernels.
 KernelAbstractions kernels. It defaults to `false` for the CPU backend, where
 the regular host-parallel path is generally preferable, and to `true` for
 accelerator backends, which require kernel evaluation for device arrays.
+
+`secondary_variable_tile_size` enables cache tiling of host secondary-variable
+updates on CPU backends. The default, `0`, disables tiling. A positive size
+evaluates dependent variables on small ranges of the same entity before moving
+to the next range. Variables are grouped by their associated entity.
+This option requires `use_kernels_for_secondary=false`.
+For example, `transfer_to_backend(sim, CPU(); secondary_variable_tile_size=1000)`
+enables tiling through the regular backend-transfer interface.
 
 `float_type` and `index_type` select assembly and state storage. The
 `linear_float_type` and `linear_index_type` keywords select the linearized
@@ -42,6 +51,7 @@ struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
     workgroupsize::Int
     minbatch::Int
     use_kernels_for_secondary::Bool
+    secondary_variable_tile_size::Int
     reduce_memory::Bool
     use_vendor_linalg::Bool
     nthreads::Int
@@ -55,6 +65,7 @@ function KernelAbstractionsContext(
         linear_index_type::Type{LI} = index_type,
         nthreads = Threads.nthreads(),
         use_kernels_for_secondary = missing,
+        secondary_variable_tile_size::Integer = 0,
         matrix_layout = EquationMajorLayout(),
         workgroupsize = 256,
         minbatch = 1000,
@@ -93,9 +104,16 @@ function KernelAbstractionsContext(
             )
         )
     end
+    if secondary_variable_tile_size < 0
+        throw(ArgumentError("secondary_variable_tile_size must be nonnegative"))
+    end
+    if secondary_variable_tile_size > 0 && use_kernels_for_secondary
+        throw(ArgumentError("secondary-variable tiling requires host evaluation on a CPU backend"))
+    end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
-        use_kernels_for_secondary, reduce_memory, use_vendor_linalg, Int(nthreads)
+        use_kernels_for_secondary, Int(secondary_variable_tile_size),
+        reduce_memory, use_vendor_linalg, Int(nthreads)
     )
 end
 
@@ -129,6 +147,7 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
+        secondary_variable_tile_size = ctx.secondary_variable_tile_size,
         reduce_memory = ctx.reduce_memory,
         use_vendor_linalg = ctx.use_vendor_linalg
     )
@@ -147,6 +166,7 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         workgroupsize = ctx.workgroupsize,
         minbatch = minbatch(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
+        secondary_variable_tile_size = ctx.secondary_variable_tile_size,
         reduce_memory = ctx.reduce_memory,
         use_vendor_linalg = ctx.use_vendor_linalg
     )
