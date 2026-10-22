@@ -116,13 +116,14 @@ function align_to_jacobian!(eq_s::ConservationLawFiniteVolumeStorage, eq::Conser
     @assert nu == nf
     left_facepos = face_cache.jacobian_positions
     right_facepos = eq_s.face_flux_extra_alignment
+    alignment_ne, alignment_np = jacobian_alignment_dims(left_facepos, ne, np)
     N = eq_s.neighbors
     for face in 1:nf
         l, r = N[face]
         for fpos in vpos[face]:(vpos[face + 1] - 1)
             cell = vars[fpos]
-            for e in 1:ne
-                for d in 1:np
+            for e in 1:alignment_ne
+                for d in 1:alignment_np
                     pos = find_jac_position(
                         jac,
                         l, cell,

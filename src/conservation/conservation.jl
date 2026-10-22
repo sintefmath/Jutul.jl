@@ -212,6 +212,7 @@ end
 
 function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, context, global_map, target_offset, source_offset, row_offset, column_offset)
     nu, ne, np = dims
+    alignment_ne, alignment_np = jacobian_alignment_dims(face_cache.jacobian_positions, ne, np)
     cd_f = cd[f_ix]
     other = cd_f.other
     cell = full_cell(active_cell_i, global_map)
@@ -219,14 +220,14 @@ function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, c
     other_i = interior_cell(other, global_map)
     return if isnothing(other_i) || isnothing(active_cell_i)
         # Either of the two cells is inactive - we set to zero.
-        for e in 1:ne
-            for d in 1:np
+        for e in 1:alignment_ne
+            for d in 1:alignment_np
                 set_jacobian_pos!(face_cache, f_ix, e, d, 0)
             end
         end
     else
-        for e in 1:ne
-            for d in 1:np
+        for e in 1:alignment_ne
+            for d in 1:alignment_np
                 pos = find_jac_position(
                     jac,
                     other_i, active_cell_i,
@@ -306,6 +307,7 @@ end
 
 function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0, row_offset = 0, column_offset = 0)
     nf, ne, np = ad_dims(face_cache)
+    alignment_ne, alignment_np = jacobian_alignment_dims(face_cache.jacobian_positions, ne, np)
     nhf = size(face_cache.jacobian_positions, 2)
     @assert nhf / 2 == nf
     facepos = flow_disc.conn_pos
@@ -313,8 +315,8 @@ function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc;
     for cell in 1:nc
         for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
             face = flow_disc.conn_data[f_ix].face
-            for e in 1:ne
-                for d in 1:np
+            for e in 1:alignment_ne
+                for d in 1:alignment_np
                     pos = find_jac_position(jac, cell, face, row_offset, column_offset, target_offset, source_offset, e, d, nc, nf, ne, np, context)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end

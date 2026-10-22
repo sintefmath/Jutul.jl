@@ -57,7 +57,7 @@ end
 
 @inline function Base.setindex!(pos::BlockJacobianPositions{I}, value, row::Int, col::Int) where {I}
     @boundscheck checkbounds(pos, row, col)
-    # Alignment may visit the whole block; retain only its first entry.
+    # Only the first entry is stored; the other positions are implicit.
     if row == 1
         @inbounds pos.first_positions[1, col] = value
     end
@@ -94,6 +94,12 @@ end
 
 @inline jacobian_row_ix(eqNo, partial_index, npartials) = (eqNo - 1) * npartials + partial_index
 @inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo - 1) * npartials + partial_index, index)
+
+# Alignment must visit the stored positions, not the logical scalar block.
+# Dispatch on the destination: mixed-layout coupling can require full storage
+# even when the cache itself uses BlockJacobianPositions.
+jacobian_alignment_dims(pos, ne, np) = (ne, np)
+jacobian_alignment_dims(::BlockJacobianPositions, ne, np) = (1, 1)
 
 @inline function ad_dims(cache)
     return (number_of_entities(cache), equations_per_entity(cache), number_of_partials(cache))::NTuple
@@ -186,12 +192,12 @@ function injective_alignment!(
 end
 
 function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, row_offset, column_offset, target_offset, source_offset, context, row_layout, col_layout; number_of_equations_for_entity = ne)
-    block = jpos isa BlockJacobianPositions
+    alignment_ne, alignment_np = jacobian_alignment_dims(jpos, ne, np)
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
-        for e in 1:ifelse(block, 1, ne)
-            for d in 1:ifelse(block, 1, np)
+        for e in 1:alignment_ne
+            for d in 1:alignment_np
                 jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(
                     jac,
                     target, source,

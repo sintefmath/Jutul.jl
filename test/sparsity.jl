@@ -2,6 +2,17 @@ using Jutul, Test
 using SparseArrays, LinearAlgebra
 using StaticArrays
 
+# Count actual sparse searches, including searches whose result is discarded.
+struct CountingAlignmentMatrix{M}
+    matrix::M
+    searches::Base.RefValue{Int}
+end
+
+function Jutul.find_sparse_position(A::CountingAlignmentMatrix, row, col, layout)
+    A.searches[] += 1
+    return Jutul.find_sparse_position(A.matrix, row, col, layout)
+end
+
 @testset "StaticSparsityMatrixCSR storage" begin
     matrix = sparse([1, 1, 2, 3], [1, 3, 2, 1], [2.0, -1.0, 4.0, 3.0], 3, 3)
     csr = Jutul.StaticSparsityMatrixCSR(copy(matrix'))
@@ -11,6 +22,97 @@ using StaticArrays
     rows, columns, values = findnz(csr)
     @test sparse(rows, columns, values, size(csr)...) == matrix
     @test csr * [1.0, 2.0, 3.0] == matrix * [1.0, 2.0, 3.0]
+end
+
+@testset "Block alignment searches only stored positions" begin
+    for adjoint in (false, true), ne in (1, 3), compact in (false, true)
+        np = 3
+        layout = Jutul.BlockMajorLayout(adjoint)
+        context = DefaultContext(matrix_layout = layout)
+        jac = sparse(
+            repeat(1:2, 2), repeat(1:2, inner = 2),
+            fill(zero(SMatrix{3, 3, Float64}), 4), 2, 2
+        )
+        counted = CountingAlignmentMatrix(jac, Ref(0))
+        cache = CompactAutoDiffCache(ne, 2, np; context)
+        positions = compact ? cache.jacobian_positions : zeros(Int, ne * np, 2)
+        expected_searches = compact ? 2 : 2 * ne * np
+
+        Jutul.injective_alignment!(
+            cache, nothing, counted, Cells(), context;
+            pos = positions, target_index = [2, 1], source_index = [1, 2]
+        )
+        @test counted.searches[] == expected_searches
+        for i in 1:2, e in 1:ne, d in 1:np
+            @test positions[(e - 1) * np + d, i] == Jutul.find_jac_position(
+                jac, 3 - i, i, 0, 0, 0, 0, e, d, 2, 2, ne, np, context
+            )
+        end
+
+        # Use a full cache as well as compact storage for the flux paths.
+        flux_context = compact ? context : DefaultContext(matrix_layout = Jutul.EntityMajorLayout(adjoint))
+        flux = CompactAutoDiffCache(ne, 1, np; context = flux_context)
+        counted.searches[] = 0
+        connections = [(self = 1, other = 2, face = 1), (self = 2, other = 1, face = 1)]
+        for i in 1:2
+            # A single cache entry is enough to check each directed connection.
+            Jutul.align_half_face_cells(
+                flux, counted, [connections[i]], 1, i,
+                (2, ne, np), context, Jutul.TrivialGlobalMap(), 0, 0, 0, 0
+            )
+            for e in 1:ne, d in 1:np
+                @test Jutul.get_jacobian_pos(flux, 1, e, d) == Jutul.find_jac_position(
+                    jac, 3 - i, i, 0, 0, 0, 0, e, d, 2, 2, ne, np, context
+                )
+            end
+        end
+        @test counted.searches[] == expected_searches
+
+        inactive = Jutul.FiniteVolumeGlobalMap([1, 2], [1], [false, true])
+        counted.searches[] = 0
+        Jutul.align_half_face_cells(
+            flux, counted, connections, 1, 1,
+            (2, ne, np), context, inactive, 0, 0, 0, 0
+        )
+        @test counted.searches[] == 0
+        @test all(iszero, flux.jacobian_positions)
+
+        # A generic face cache has one entity and two half-face positions.
+        faces = CompactAutoDiffCache(ne, 1, np; context = flux_context, n_entities_pos = 2)
+        disc = (conn_pos = [1, 2, 3], conn_data = connections)
+        counted.searches[] = 0
+        Jutul.half_face_flux_faces_alignment!(faces, counted, context, nothing, disc)
+        @test counted.searches[] == expected_searches
+        for i in 1:2, e in 1:ne, d in 1:np
+            @test Jutul.get_jacobian_pos(faces, i, e, d) == Jutul.find_jac_position(
+                jac, i, 1, 0, 0, 0, 0, e, d, 2, 1, ne, np, context
+            )
+        end
+
+        # General finite-volume assembly aligns both sides of each face.
+        acc = CompactAutoDiffCache(ne, 2, np; context = flux_context)
+        cells = Jutul.GenericAutoDiffCache(
+            eltype(acc.entries), ne, Cells(),
+            [[1, 2]], 1, 2; context = flux_context
+        )
+        storage = Jutul.ConservationLawFiniteVolumeStorage(
+            acc, :mass, cells,
+            similar(cells.jacobian_positions), Int[], [(1, 2)]
+        )
+        domain = DiscretizedDomain(CartesianMesh((2, 1), (2.0, 1.0)))
+        model = (context = context, domain = domain)
+        counted.searches[] = 0
+        law = ConservationLaw(Jutul.PotentialFlow(nothing, nothing, nothing; ad = :fvm), :mass, ne)
+        Jutul.align_to_jacobian!(storage, law, counted, model, Cells())
+        @test counted.searches[] == 3 * expected_searches
+        for (positions, target) in ((cells.jacobian_positions, 1), (storage.face_flux_extra_alignment, 2))
+            for source in 1:2, e in 1:ne, d in 1:np
+                @test positions[(e - 1) * np + d, source] == Jutul.find_jac_position(
+                    jac, target, source, 0, 0, 0, 0, e, d, 2, 2, ne, np, context
+                )
+            end
+        end
+    end
 end
 
 @testset "Parallel ILU CSR storage type" begin
