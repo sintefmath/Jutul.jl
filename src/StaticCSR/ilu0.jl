@@ -108,18 +108,22 @@ end
 @inline process_sorted_partial_row!(nz, pos, cols, A, k, A_ik) =
     process_partial_row!(nz, pos, cols, A, k, A_ik)
 
-@inline function process_sorted_partial_row!(nz, pos, cols, A::StaticSparsityMatrixCSR, k, A_ik)
-    cursor = Int(A.rowptr[k])
-    source_end = Int(A.rowptr[k + 1]) - 1
-    @inbounds for target in pos
-        column = cols[target]
-        while cursor <= source_end && A.colval[cursor] < column
-            cursor += 1
+@inline function process_sorted_partial_row!(target_values, positions, columns, source::StaticSparsityMatrixCSR, row, multiplier)
+    source_row = nzrange(source, row)
+    source_position = first(source_row)
+    source_end = last(source_row)
+    # Merge sorted target columns with the source row, retaining its first duplicate.
+    @inbounds for target in positions
+        column = columns[target]
+        while source_position <= source_end && source.colval[source_position] < column
+            source_position += 1
         end
-        value = cursor <= source_end && A.colval[cursor] == column ?
-            A.nzval[cursor] : zero(eltype(A))
-        # Retain the first duplicate and multiplication by missing-entry zeros.
-        nz[target] -= A_ik * value
+        if source_position > source_end
+            break
+        elseif source.colval[source_position] != column
+            continue
+        end
+        target_values[target] -= multiplier * source.nzval[source_position]
     end
     return nothing
 end
