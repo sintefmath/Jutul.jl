@@ -61,16 +61,15 @@ end
 
 function apply!(x, ilu::ILUZeroPreconditioner, y, α = 1.0, β = 0.0)
     factor = get_factorization(ilu)
-    ilu_apply!(x, factor, y)
-    has_beta = β != 0.0
+    has_beta = !iszero(β)
     if has_beta
         tmp = copy(x)
     end
-    if α != 1.0
-        @. x *= 1.0
-    end
+    ilu_apply!(x, factor, y)
     if has_beta
-        @. x += tmp
+        @. x = α * x + β * tmp
+    elseif !isone(α)
+        @. x *= α
     end
     return x
 end

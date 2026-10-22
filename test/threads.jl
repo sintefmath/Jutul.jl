@@ -1,4 +1,4 @@
-using Jutul, Test
+using Jutul, Test, KernelAbstractions
 
 @testset "Threading with contexts" begin
     ctx_def = DefaultContext()
@@ -26,5 +26,32 @@ using Jutul, Test
 
     for ctx in (ctx_def, ctx_csr, ctx_csr_batch, ctx_csr_serial, ctx_csr_static)
         test_context(ctx)
+    end
+end
+
+@testset "CPU batches and context worker limits" begin
+    available = Threads.nthreads(:default)
+    for workers in unique([1, min(2, available), available])
+        batch_workers = min(workers, Int(Jutul.Polyester.num_cores()))
+        for kind in (:threads, :threads_static, :batch)
+            ctx = ParallelCSRContext(workers; minbatch = 64, thread_type = kind)
+            ids = zeros(Int, 4096)
+            Jutul.threaded_loop_minbatch(i -> (ids[i] = Threads.threadid()), length(ids), ctx)
+            used = length(unique(ids))
+            expected = kind == :batch ? batch_workers : workers
+            @test kind == :threads ? 1 <= used <= workers : used == expected
+            @test all(>(0), ids)
+            @test isnothing(Jutul.threaded_loop_minbatch(identity, 0, ctx))
+        end
+        ctx = KernelAbstractionsContext(CPU(); nthreads = workers, minbatch = 64)
+        ids = zeros(Int, 4096)
+        Jutul.threaded_loop_minbatch(i -> (ids[i] = Threads.threadid()), length(ids), ctx)
+        @test length(unique(ids)) == batch_workers
+        @test Jutul.nthreads(adjoint(ctx)) == workers
+        mixed = KernelAbstractionsContext(CPU(); nthreads = workers, linear_float_type = Float32)
+        @test Jutul.nthreads(Jutul.linear_solver_context(mixed)) == workers
+        small = zeros(Int, 32)
+        Jutul.threaded_loop(i -> (small[i] = Threads.threadid()), length(small), ctx)
+        @test all(==(Threads.threadid()), small)
     end
 end

@@ -279,12 +279,8 @@ const CPU_THREAD_THRESHOLD = 8_192
     )
     number_of_batches = clamp(n ÷ min_batch, 1, Threads.nthreads())
     if number_of_batches > 1
-        Threads.@threads :dynamic for batch in 1:number_of_batches
-            first_row = fld((batch - 1) * n, number_of_batches) + 1
-            last_row = fld(batch * n, number_of_batches)
-            @inbounds for i in first_row:last_row
-                f(i)
-            end
+        @batch minbatch = min_batch for i in 1:n
+            @inbounds f(i)
         end
     else
         @inbounds for i in 1:n

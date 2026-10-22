@@ -295,7 +295,9 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
     end
     return StaticSparsityMatrixCSR(
         nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
-        nthreads = 1, minbatch = execution_size, thread_type = :serial,
+        nthreads = is_cpu_backend(ctx) ? nthreads(ctx) : 1,
+        minbatch = execution_size,
+        thread_type = is_cpu_backend(ctx) ? :batch : :serial,
         use_vendor_linalg = ctx.use_vendor_linalg
     )
 end
@@ -1434,6 +1436,30 @@ function LinearAlgebra.mul!(
     event = kernel!(y, A.nzval, A.colval, A.rowptr, x, alpha, beta; ndrange = size(A, 1))
     if !isnothing(event)
         wait(event)
+    end
+    return y
+end
+
+function LinearAlgebra.mul!(
+        y::AbstractVector,
+        A::StaticSparsityMatrixCSR{Tv, Ti, V, I, R, B},
+        x::AbstractVector, alpha::Number, beta::Number
+    ) where {
+        Tv, Ti <: Integer, V <: Vector, I <: Vector, R <: Vector,
+        B <: KernelAbstractions.CPU,
+    }
+    length(y) == size(A, 1) || throw(DimensionMismatch())
+    length(x) == size(A, 2) || throw(DimensionMismatch())
+    scalar_type = KAPreconditioners.matrix_scalar_type(eltype(y))
+    alpha = convert(scalar_type, alpha)
+    beta = convert(scalar_type, beta)
+    KAPreconditioners.foreach_cpu_row(size(A, 1), A.minbatch) do row
+        value_row = KAPreconditioners.csr_row_product(A, x, row, eltype(y))
+        if iszero(beta)
+            @inbounds y[row] = alpha * value_row
+        else
+            @inbounds y[row] = alpha * value_row + beta * y[row]
+        end
     end
     return y
 end
