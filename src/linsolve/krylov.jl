@@ -156,7 +156,10 @@ function linear_solve!(
     n = length(res) - 1
     solved = stats.solved
     msg = stats.status
-    if n > 1
+    # A successful single iteration also has both history endpoints. Keep the
+    # explicit residual check for initial convergence, failed single steps and
+    # manual minimum-iteration checks.
+    if n > 1 || (n == 1 && solved && !manual_conv)
         initial_res = res[1]
         final_res = res[end]
     else
