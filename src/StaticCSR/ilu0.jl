@@ -105,6 +105,26 @@ end
     end
 end
 
+@inline process_sorted_partial_row!(nz, pos, cols, A, k, A_ik) =
+    process_partial_row!(nz, pos, cols, A, k, A_ik)
+
+@inline function process_sorted_partial_row!(nz, pos, cols, A::StaticSparsityMatrixCSR, k, A_ik)
+    cursor = Int(A.rowptr[k])
+    source_end = Int(A.rowptr[k + 1]) - 1
+    @inbounds for target in pos
+        column = cols[target]
+        while cursor <= source_end && A.colval[cursor] < column
+            cursor += 1
+        end
+        value = cursor <= source_end && A.colval[cursor] == column ?
+            A.nzval[cursor] : zero(eltype(A))
+        # Retain the first matching duplicate and multiplication by missing
+        # entry zeros, including their signed-zero and nonfinite behavior.
+        nz[target] -= A_ik * value
+    end
+    return nothing
+end
+
 function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
     cols_l = colvals(L)
     nz_l = nonzeros(L)
@@ -131,9 +151,11 @@ function ilu0_factor!(L, U, D, A, active = 1:size(A, 1))
                 # This implies that j > k. Accesses to A[k, j] are
                 # then only applied to the upper part of the original
                 # matrix.
-                process_partial_row!(nz_l, rem_l_pos, cols_l, U, k, A_ik)
+                # L/U rows and these target positions are sorted, so each
+                # source row can be scanned once across successive targets.
+                process_sorted_partial_row!(nz_l, rem_l_pos, cols_l, U, k, A_ik)
                 D[i] -= A_ik * U[k, i]
-                process_partial_row!(nz_u, u_pos, cols_u, U, k, A_ik)
+                process_sorted_partial_row!(nz_u, u_pos, cols_u, U, k, A_ik)
             end
             l_start += 1
         end
