@@ -1,5 +1,24 @@
 export sort_secondary_variables!, build_variable_graph
 export @jutul_secondary
+export secondary_scheme
+
+"""
+    secondary_scheme(model)
+    secondary_scheme(context::JutulContext)
+
+Select how secondary variables are evaluated. The model method defaults to its
+context and can be specialized for application models. CPU contexts accept the
+`secondary_scheme` keyword with these values:
+
+- `:flat` (default): one contiguous batch per worker.
+- `:fused`: evaluate all variables of each entity on cache-sized tiles, using
+  `minbatch(context)` entities per tile. Dependencies must be entity-local.
+- `:strided`: spread up to four batches per worker across the entities to
+  balance spatially uneven property costs.
+
+The non-default schemes use host evaluation; device kernels retain `:flat`.
+"""
+secondary_scheme(model) = secondary_scheme(model.context)
 
 """
 Designate the function as updating a secondary variable.
@@ -118,14 +137,16 @@ end
 
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
     ctx = model.context
+    scheme = check_secondary_scheme(secondary_scheme(model))
     var_pairs = pairs(vars)
     if ctx isa KernelAbstractionsContext && ctx.use_kernels_for_secondary
+        scheme == :flat || throw(ArgumentError("secondary_scheme=$scheme requires host evaluation on a CPU backend"))
         for (symbol, var) in var_pairs
             @tic "$symbol" begin
                 KernelExecution.secondary_variable_loop!(state, model, symbol, ctx)
             end
         end
-    elseif ctx isa KernelAbstractionsContext && ctx.secondary_variable_tile_size > 0
+    elseif scheme == :fused
         update_secondary_variable_tiles!(state, model, NamedTuple(var_pairs))
     elseif length(var_pairs) > 0
         # Determine batch size from the first variable only
@@ -133,7 +154,13 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
         K = number_of_entities(model, first_var)
         mb = minbatch(ctx)
         N = nthreads(ctx)
-        N_batches = clamp(K ÷ mb, 1, N)
+        if scheme == :strided
+            # PR #385: spread each worker over up to four batches. Divide first
+            # in the threshold check to support minbatch == typemax(Int).
+            N_batches = K ÷ mb < 2 ? 1 : clamp(4K ÷ mb, 1, 4N)
+        else
+            N_batches = clamp(K ÷ mb, 1, N)
+        end
         tt = thread_type(ctx)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
@@ -154,7 +181,11 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 end
                 return
             end
-            threaded_loop(batch_update, N_batches, tt)
+            if scheme == :strided
+                threaded_loop(t -> foreach(batch_update, t:N:N_batches), min(N, N_batches), tt)
+            else
+                threaded_loop(batch_update, N_batches, tt)
+            end
         end
     end
     return state
@@ -173,7 +204,7 @@ end
 function update_secondary_variable_tiles!(state, model, vars::NamedTuple{names}, count) where names
     count == 0 && return nothing
     ctx = model.context
-    tiles = cld(count, ctx.secondary_variable_tile_size)
+    tiles = cld(count, minbatch(ctx))
     workers = min(tiles, nthreads(ctx), max(1, count ÷ minbatch(ctx)))
     variable_names = map(Val, names)
     function update_worker(worker)
