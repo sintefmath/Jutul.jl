@@ -212,7 +212,6 @@ end
 
 function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, context, global_map, target_offset, source_offset, row_offset, column_offset)
     nu, ne, np = dims
-    alignment_ne, alignment_np = jacobian_alignment_dims(face_cache.jacobian_positions, ne, np)
     cd_f = cd[f_ix]
     other = cd_f.other
     cell = full_cell(active_cell_i, global_map)
@@ -220,14 +219,14 @@ function align_half_face_cells(face_cache, jac, cd, f_ix, active_cell_i, dims, c
     other_i = interior_cell(other, global_map)
     return if isnothing(other_i) || isnothing(active_cell_i)
         # Either of the two cells is inactive - we set to zero.
-        for e in 1:alignment_ne
-            for d in 1:alignment_np
+        for e in 1:ne
+            for d in 1:np
                 set_jacobian_pos!(face_cache, f_ix, e, d, 0)
             end
         end
     else
-        for e in 1:alignment_ne
-            for d in 1:alignment_np
+        for e in 1:ne
+            for d in 1:np
                 pos = find_jac_position(
                     jac,
                     other_i, active_cell_i,
@@ -307,7 +306,6 @@ end
 
 function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc; target_offset = 0, source_offset = 0, row_offset = 0, column_offset = 0)
     nf, ne, np = ad_dims(face_cache)
-    alignment_ne, alignment_np = jacobian_alignment_dims(face_cache.jacobian_positions, ne, np)
     nhf = size(face_cache.jacobian_positions, 2)
     @assert nhf / 2 == nf
     facepos = flow_disc.conn_pos
@@ -315,8 +313,8 @@ function half_face_flux_faces_alignment!(face_cache, jac, context, N, flow_disc;
     for cell in 1:nc
         for f_ix in facepos[cell]:(facepos[cell + 1] - 1)
             face = flow_disc.conn_data[f_ix].face
-            for e in 1:alignment_ne
-                for d in 1:alignment_np
+            for e in 1:ne
+                for d in 1:np
                     pos = find_jac_position(jac, cell, face, row_offset, column_offset, target_offset, source_offset, e, d, nc, nf, ne, np, context)
                     set_jacobian_pos!(face_cache, f_ix, e, d, pos)
                 end
@@ -445,9 +443,8 @@ function fill_conservation_eq_fused!(
                     acc_r, acc_r[equation] + value(flux_entry), equation
                 )
             end
-            outer_position = get_jacobian_pos(
-                Np, connection, 1, 1, positions
-            )
+            position_block = jacobian_position_block(positions, connection, Np)
+            outer_position = get_jacobian_pos(position_block, 1, 1)
             is_inner = outer_position > 0
             if is_inner
                 @simd for partial in 1:Np
@@ -459,9 +456,7 @@ function fill_conservation_eq_fused!(
                             equation, partial
                         )
                         if !(nz isa Missing)
-                            position = get_jacobian_pos(
-                                Np, connection, equation, partial, positions
-                            )
+                            position = get_jacobian_pos(position_block, equation, partial)
                             update_jacobian_inner!(nz, position, -derivative)
                         end
                     end
@@ -484,10 +479,11 @@ function fill_conservation_eq_fused!(
         r[equation, cell] = acc_r[equation]
     end
     if !(nz isa Missing)
+        position_block = jacobian_position_block(acc.jacobian_positions, cell, Np)
         @simd for partial in 1:Np
             for equation in 1:Ne
                 derivative = @inbounds acc_partials[equation, partial]
-                position = get_jacobian_pos(acc, cell, equation, partial)
+                position = get_jacobian_pos(position_block, equation, partial)
                 update_jacobian_inner!(nz, position, derivative)
             end
         end
@@ -530,7 +526,8 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
                 v = acc_r[e] + get_entry_val(cell_flux, i, e)
                 acc_r = setindex(acc_r, v, e)
             end
-            fpos_outer = get_jacobian_pos(cell_flux, i, 1, 1)
+            position_block = jacobian_position_block(cell_flux.jacobian_positions, i, Np)
+            fpos_outer = get_jacobian_pos(position_block, 1, 1)
             is_inner = fpos_outer > 0
             if is_inner
                 @simd for p in 1:Np
@@ -538,7 +535,7 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
                         ∂ = get_entry(cell_flux, i, e, p)
                         f_v = acc_partials[e, p] + ∂
                         acc_partials = setindex(acc_partials, f_v, e, p)
-                        fpos = get_jacobian_pos(cell_flux, i, e, p)
+                        fpos = get_jacobian_pos(position_block, e, p)
                         update_jacobian_inner!(nz, fpos, -∂)
                     end
                 end
@@ -556,10 +553,11 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
     @inbounds for e in 1:Ne
         r[e, cell] = acc_r[e]
     end
+    position_block = jacobian_position_block(acc.jacobian_positions, cell, Np)
     return @simd for p in 1:Np
         for e in 1:Ne
             @inbounds ∂ = acc_partials[e, p]
-            apos = get_jacobian_pos(acc, cell, e, p)
+            apos = get_jacobian_pos(position_block, e, p)
             Jutul.update_jacobian_inner!(nz, apos, ∂)
         end
     end
@@ -577,6 +575,7 @@ function update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fen
     nc = length(conn_pos) - 1
     function F(cell)
         return @inbounds for i in conn_pos[cell]:(conn_pos[cell + 1] - 1)
+            position_block = jacobian_position_block(fp, i, np)
             @inbounds for e in 1:ne
                 c = conn_data[i]
                 face = c.face
@@ -584,7 +583,7 @@ function update_lsys_face_flux_threaded!(Jz, face_flux, conn_pos, conn_data, fen
                 f = sgn * get_entry(face_flux, face, e)
                 @inbounds for d in 1:np
                     df_di = f.partials[d]
-                    fpos = get_jacobian_pos(face_flux, i, e, d, fp)
+                    fpos = get_jacobian_pos(position_block, e, d)
                     @inbounds Jz[fpos] = df_di
                 end
             end

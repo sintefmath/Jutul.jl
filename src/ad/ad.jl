@@ -57,7 +57,7 @@ end
 
 @inline function Base.setindex!(pos::BlockJacobianPositions{I}, value, row::Int, col::Int) where {I}
     @boundscheck checkbounds(pos, row, col)
-    # Only the first entry is stored; the other positions are implicit.
+    # Alignment may visit the whole block; retain only its first entry.
     if row == 1
         @inbounds pos.first_positions[1, col] = value
     end
@@ -91,15 +91,41 @@ end
     return jpos[jacobian_cart_ix(index, eqNo, partial_index, npartials)] = pos
 end
 
+# Prefetch one alignment column before filling its equation/partial block.
+# Compact block storage then needs one backing-array read for the whole block;
+# full scalar storage retains its individual position lookups.
+struct JacobianPositionColumn{P, I, N}
+    positions::P
+    index::I
+    npartials::N
+end
+
+struct BlockJacobianPosition{I, N, adjoint}
+    first::I
+end
+
+@inline jacobian_position_block(pos, index, np) = JacobianPositionColumn(pos, index, np)
+
+@inline function jacobian_position_block(pos::BlockJacobianPositions{I, ne, np, adjoint}, index, _) where {I, ne, np, adjoint}
+    first = @inbounds pos.first_positions[1, index]
+    return BlockJacobianPosition{I, np, adjoint}(first)
+end
+
+@inline function get_jacobian_pos(pos::JacobianPositionColumn, equation, partial)
+    return @inbounds pos.positions[(equation - 1) * pos.npartials + partial, pos.index]
+end
+
+@inline function get_jacobian_pos(pos::BlockJacobianPosition{I, N, adjoint}, equation, partial) where {I, N, adjoint}
+    if iszero(pos.first)
+        return zero(I)
+    end
+    offset = ifelse(adjoint, N * (equation - 1) + partial - 1, N * (partial - 1) + equation - 1)
+    return pos.first + I(offset)
+end
+
 
 @inline jacobian_row_ix(eqNo, partial_index, npartials) = (eqNo - 1) * npartials + partial_index
 @inline jacobian_cart_ix(index, eqNo, partial_index, npartials) = CartesianIndex((eqNo - 1) * npartials + partial_index, index)
-
-# Alignment must visit the stored positions, not the logical scalar block.
-# Dispatch on the destination: mixed-layout coupling can require full storage
-# even when the cache itself uses BlockJacobianPositions.
-jacobian_alignment_dims(pos, ne, np) = (ne, np)
-jacobian_alignment_dims(::BlockJacobianPositions, ne, np) = (1, 1)
 
 @inline function ad_dims(cache)
     return (number_of_entities(cache), equations_per_entity(cache), number_of_partials(cache))::NTuple
@@ -131,16 +157,22 @@ end
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
+    return fill_compact_equation_entries!(nz, r, cache, model.context, nu, Val(ne), Val(np))
+end
+
+function fill_compact_equation_entries!(nz, r, cache, context, nu, ::Val{ne}, ::Val{np}) where {ne, np}
     function F(i)
+        positions = jacobian_position_block(cache.jacobian_positions, i, np)
         return @inbounds for e in 1:ne
             a = get_entry(cache, i, e)
             insert_residual_value(r, i + nu * (e - 1), a.value)
             for d in 1:np
-                update_jacobian_entry!(nz, cache, i, e, d, a.partials[d])
+                position = get_jacobian_pos(positions, e, d)
+                update_jacobian_inner!(nz, position, a.partials[d])
             end
         end
     end
-    threaded_loop(F, nu, model.context)
+    threaded_loop(F, nu, context)
     return nz
 end
 
@@ -192,12 +224,12 @@ function injective_alignment!(
 end
 
 function do_injective_alignment!(jpos, cache, jac, target_index, source_index, nu_t, nu_s, ne, np, row_offset, column_offset, target_offset, source_offset, context, row_layout, col_layout; number_of_equations_for_entity = ne)
-    alignment_ne, alignment_np = jacobian_alignment_dims(jpos, ne, np)
+    block = jpos isa BlockJacobianPositions
     for index in 1:length(source_index)
         target = target_index[index]
         source = source_index[index]
-        for e in 1:alignment_ne
-            for d in 1:alignment_np
+        for e in 1:ifelse(block, 1, ne)
+            for d in 1:ifelse(block, 1, np)
                 jpos[jacobian_cart_ix(index, e, d, np)] = find_jac_position(
                     jac,
                     target, source,
