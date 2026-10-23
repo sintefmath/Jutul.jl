@@ -1,4 +1,5 @@
 using Jutul, Test
+using KernelAbstractions: CPU
 
 @testset "Block Jacobian filling" begin
     derivatives = reshape(collect(1.0:18.0), 3, 3, 2)
@@ -23,7 +24,13 @@ using Jutul, Test
         @test residual == [11, 21, 12, 22, 13, 23]
 
         blocks = zeros(Jutul.SMatrix{3, 3, Float64, 9}, 2)
-        buffer = Jutul.jacobian_fill_buffer(vec(reinterpret(reshape, Float64, blocks)))
+        jac = Jutul.StaticSparsityMatrixCSR(blocks, [1, 2], [1, 2, 3], 2, 2, CPU())
+        r, dx = zeros(6), zeros(6)
+        system = LinearizedSystem(jac, r, dx, vec(reinterpret(reshape, Float64, blocks)), r, dx, matrix_layout(context))
+        ka_context = KernelAbstractionsContext(CPU(); matrix_layout = matrix_layout(context))
+        adapted = Jutul.Adapt.adapt(ka_context, system)
+        buffer = adapted.jac_buffer
+        @test parent(buffer) === Jutul.nonzeros(adapted.jac)
         for cell in 1:2
             positions = Jutul.jacobian_position_block(cache.jacobian_positions, cell, 3)
             Jutul.update_jacobian_block!(buffer, positions, Jutul.SMatrix{3, 3}(derivatives[:, :, cell]))
