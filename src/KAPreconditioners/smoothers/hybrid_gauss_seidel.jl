@@ -17,7 +17,7 @@ function hybrid_partition(A, config, partition)
     owners = Int.(partition)
     isempty(owners) && return owners
     labels = sort!(unique(owners))
-    labels == collect(1:length(labels)) || throw(ArgumentError("partition labels must be consecutive positive integers"))
+    labels == eachindex(labels) || throw(ArgumentError("partition labels must be consecutive positive integers"))
     return owners
 end
 
