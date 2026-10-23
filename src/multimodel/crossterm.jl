@@ -306,15 +306,14 @@ function increment_equation_entries!(nz, r, model, cache, impact_map, sgn)
         return @inbounds for position in start:stop
             ui = impact_map.entries[position]
             for (jno, j) in enumerate(vrange(cache, ui))
+                positions = jacobian_position_block(cache.jacobian_positions, j, np)
                 for equation in 1:ne
                     a = sgn * entries[equation, j]
                     if jno == 1
                         r[equation, entity] += a.value
                     end
                     for derivative in 1:np
-                        ix = get_jacobian_pos(
-                            cache, j, equation, derivative
-                        )
+                        ix = get_jacobian_pos(positions, equation, derivative)
                         nz[ix] += a.partials[derivative]
                     end
                 end
@@ -365,12 +364,11 @@ function fill_crossterm_entries!(
         return @inbounds for impact_position in impact_map.positions[group]:(impact_map.positions[group + 1] - 1)
             ui = impact_map.entries[impact_position]
             for j in vrange(cache, ui)
+                position_block = jacobian_position_block(positions, j, np)
                 for equation in 1:ne
                     a = sgn * entries[equation, j]
                     for derivative in 1:np
-                        position = get_jacobian_pos(
-                            cache, j, equation, derivative, positions
-                        )
+                        position = get_jacobian_pos(position_block, equation, derivative)
                         nz[position] += a.partials[derivative]
                     end
                 end

@@ -229,11 +229,13 @@ function update_linearized_system_equation!(nz, r, model, eq::ConservationLaw, e
         acc = eq_s.accumulation
         nc, ne, np = ad_dims(acc)
         for i in 1:nc
+            positions = jacobian_position_block(acc.jacobian_positions, i, np)
             @inbounds for e in 1:ne
                 a = get_entry(acc, i, e)
                 r[e, i] = a.value
                 for d in 1:np
-                    update_jacobian_entry!(nz, acc, i, e, d, a.partials[d])
+                    position = get_jacobian_pos(positions, e, d)
+                    update_jacobian_inner!(nz, position, a.partials[d])
                 end
             end
         end
@@ -269,16 +271,18 @@ function fvm_face_assembly!(r, nz, vpos, face_cache, left_facepos, right_facepos
             r[e, rc] -= qval
         end
         for fpos in start:stop
+            left_block = jacobian_position_block(left_facepos, fpos, np)
+            right_block = jacobian_position_block(right_facepos, fpos, np)
             for e in 1:ne
                 # Flux (with derivatives with respect to some cell)
                 q = get_entry(face_cache, fpos, e)
                 @inbounds for d in 1:np
                     ∂q = q.partials[d]
                     # Flux for left cell (l -> r)
-                    lc_i = get_jacobian_pos(np, fpos, e, d, left_facepos)
+                    lc_i = get_jacobian_pos(left_block, e, d)
                     nz[lc_i] += ∂q
                     # Flux for right cell (r -> l)
-                    rc_i = get_jacobian_pos(np, fpos, e, d, right_facepos)
+                    rc_i = get_jacobian_pos(right_block, e, d)
                     nz[rc_i] -= ∂q
                 end
             end

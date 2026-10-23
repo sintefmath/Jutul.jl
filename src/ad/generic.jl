@@ -61,13 +61,15 @@ function fill_equation_entries_impl!(nz, r, cache, entries, context, dpos, nu, :
     function F_without_diag(i)
         for (jno, j) in enumerate(vrange(cache, i))
             fill_residual = jno == 1
+            positions = jacobian_position_block(cache.jacobian_positions, j, np)
             for e in 1:ne
                 @inbounds a = entries[e, j]
                 if fill_residual
                     insert_residual_value(r, i, e, a.value)
                 end
                 for d in 1:np
-                    update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
+                    position = get_jacobian_pos(positions, e, d)
+                    update_jacobian_inner!(nz, position, a.partials[d])
                 end
             end
         end
@@ -77,13 +79,15 @@ function fill_equation_entries_impl!(nz, r, cache, entries, context, dpos, nu, :
         @inbounds diag_index = dpos[i]
         for j in vrange(cache, i)
             fill_residual = j == diag_index
+            positions = jacobian_position_block(cache.jacobian_positions, j, np)
             for e in 1:ne
                 @inbounds a = entries[e, j]
                 if fill_residual
                     insert_residual_value(r, i, e, a.value)
                 end
                 for d in 1:np
-                    update_jacobian_entry!(nz, cache, j, e, d, a.partials[d])
+                    position = get_jacobian_pos(positions, e, d)
+                    update_jacobian_inner!(nz, position, a.partials[d])
                 end
             end
         end

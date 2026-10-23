@@ -335,7 +335,9 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, lsys::LinearizedS
             end
         end
         buffer = reinterpret(reshape, buffer_eltype, nz)
-        return reshape(buffer, size(original_buffer))
+        # Keep CPU block storage linear for every assembly path, including
+        # cached fluxes, generic equations and cross terms.
+        return Jutul.jacobian_fill_buffer(reshape(buffer, size(original_buffer)))
     end
     jac_buffer = backend_jacobian_buffer()
     return LinearizedSystem(jac, r, dx, jac_buffer, r_buffer, dx_buffer, lsys.matrix_layout)
@@ -597,7 +599,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
             workgroupsize = ctx.workgroupsize,
             minbatch = minbatch(ctx),
             use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-            secondary_scheme = secondary_scheme(ctx),
+            secondary_scheme = context_secondary_scheme(ctx),
             reduce_memory = reduce_memory,
             use_vendor_linalg = ctx.use_vendor_linalg
         )

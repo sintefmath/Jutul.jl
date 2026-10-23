@@ -1,6 +1,12 @@
-export minbatch
+export minbatch, context_secondary_scheme
 
-secondary_scheme(::JutulContext) = :flat
+"""
+    context_secondary_scheme(context::JutulContext)
+
+Return the context's secondary-variable scheduling scheme. Defaults to `:flat`.
+"""
+context_secondary_scheme(::JutulContext) = :flat
+secondary_scheme(ctx::JutulContext) = context_secondary_scheme(ctx)
 
 function check_secondary_scheme(scheme)
     scheme in (:flat, :fused, :strided) ||
