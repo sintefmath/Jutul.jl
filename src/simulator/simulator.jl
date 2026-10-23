@@ -522,6 +522,10 @@ function perform_step_solve_impl!(report, storage, model, config, dt, iteration,
         report[:update_time] = t_update
     catch e
         if config[:failure_cuts_timestep] && !(e isa InterruptException)
+            if Threads.nthreads() > 1
+                # An exception inside @batch can leave Polyester's workers reserved.
+                Polyester.reset_threads!()
+            end
             if config[:info_level] > 0
                 @warn "Exception occured in solve: $e. Attempting to cut time-step since failure_cuts_timestep = true."
             end

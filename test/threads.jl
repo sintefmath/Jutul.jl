@@ -1,5 +1,45 @@
 using Jutul, Test, KernelAbstractions
 
+struct FailingPolyesterSolve end
+
+function Jutul.solve_and_update!(::Nothing, ::FailingPolyesterSolve, dt; kwarg...)
+    return Jutul.Polyester.@batch per = thread for i in 1:Threads.nthreads()
+        if i == 1
+            error("Batched solve failed")
+        end
+    end
+end
+
+@testset "Polyester recovery after a caught solve exception" begin
+    ids = zeros(Int, 4096)
+    config = Dict{Symbol, Any}(
+        :linear_solver => nothing,
+        :safe_mode => true,
+        :failure_cuts_timestep => true,
+        :info_level => -1,
+    )
+    report = Dict{Symbol, Any}()
+    try
+        Jutul.Polyester.reset_threads!()
+        Jutul.threaded_loop(i -> (ids[i] = Threads.threadid()), length(ids), :batch)
+        workers_before = length(unique(ids))
+
+        Jutul.perform_step_solve_impl!(
+            report, nothing, FailingPolyesterSolve(), config,
+            1.0, 1, nothing, 1.0, Jutul.default_executor()
+        )
+        @test report[:failure_exception] isa Exception
+        @test occursin("Batched solve failed", sprint(showerror, report[:failure_exception]))
+
+        fill!(ids, 0)
+        Jutul.threaded_loop(i -> (ids[i] = Threads.threadid()), length(ids), :batch)
+        @test all(>(0), ids)
+        @test length(unique(ids)) == workers_before
+    finally
+        Jutul.Polyester.reset_threads!()
+    end
+end
+
 @testset "Threading with contexts" begin
     ctx_def = DefaultContext()
     ctx_csr = ParallelCSRContext(thread_type = :threads)
