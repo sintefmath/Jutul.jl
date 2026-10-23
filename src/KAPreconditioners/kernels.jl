@@ -217,6 +217,42 @@ end
     return diagonal, total, selected
 end
 
+@inline function update_interpolation_row!(
+        pv, prp, pcv, arp, acv, av, cf, cmap, strong,
+        extended, rescale, i
+    )
+    firstp, lastp = prp[i], prp[i + 1] - 1
+    if firstp <= lastp
+        if cf[i] == 1
+            @inbounds pv[firstp] = one(eltype(pv))
+        else
+            kept_sum = zero(eltype(pv))
+            original_sum = zero(eltype(pv))
+            @inbounds for pidx in firstp:lastp
+                diagonal, total, selected = interpolation_row_terms(
+                    arp, acv, av, cf, cmap, strong, i, pcv[pidx], extended
+                )
+                scale = if !iszero(diagonal)
+                    -inv(diagonal)
+                else
+                    one(eltype(pv))
+                end
+                weight = scale * selected
+                pv[pidx] = weight
+                kept_sum += weight
+                original_sum = scale * total
+            end
+            if rescale && !iszero(kept_sum)
+                scale = original_sum / kept_sum
+                @inbounds for pidx in firstp:lastp
+                    pv[pidx] *= scale
+                end
+            end
+        end
+    end
+    return nothing
+end
+
 @kernel function update_interpolation_p_kernel!(
         pv, @Const(prp), @Const(pcv),
         @Const(arp), @Const(acv), @Const(av),
@@ -225,32 +261,7 @@ end
     )
     i = @index(Global)
     if i <= n
-        firstp, lastp = prp[i], prp[i + 1] - 1
-        if firstp <= lastp
-            if cf[i] == 1
-                @inbounds pv[firstp] = one(eltype(pv))
-            else
-                kept_sum = zero(eltype(pv))
-                original_sum = zero(eltype(pv))
-                @inbounds for pidx in firstp:lastp
-                    diagonal, total, selected = interpolation_row_terms(
-                        arp, acv, av, cf, cmap, strong, i, pcv[pidx], extended
-                    )
-                    scale = !iszero(diagonal) ?
-                        -inv(diagonal) : one(eltype(pv))
-                    weight = scale * selected
-                    pv[pidx] = weight
-                    kept_sum += weight
-                    original_sum = scale * total
-                end
-                if rescale && !iszero(kept_sum)
-                    scale = original_sum / kept_sum
-                    @inbounds for pidx in firstp:lastp
-                        pv[pidx] *= scale
-                    end
-                end
-            end
-        end
+        update_interpolation_row!(pv, prp, pcv, arp, acv, av, cf, cmap, strong, extended, rescale, i)
     end
 end
 

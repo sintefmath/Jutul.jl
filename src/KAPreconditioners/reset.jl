@@ -40,14 +40,76 @@ function galerkin!(
     return coarse
 end
 
+function update_cpu_prolongation!(
+        P, A::StaticSparsityMatrixCSR{Tv, Ti}, cf, cmap, strong,
+        interpolation, workspace
+    ) where {Tv, Ti}
+    n = matrix_nrows(A)
+    scratch_cols = if isnothing(workspace)
+        [Ti[] for _ in 1:Threads.maxthreadid()]
+    else
+        workspace.interpolation_cols
+    end
+    scratch_vals = if isnothing(workspace)
+        [Tv[] for _ in 1:Threads.maxthreadid()]
+    else
+        workspace.interpolation_vals
+    end
+    foreach_cpu_row(n, 128) do i
+        firstp, lastp = P.rowptr[i], P.rowptr[i + 1] - 1
+        firstp > lastp && return
+        if cf[i] == 1
+            @inbounds P.nzval[firstp] = one(Tv)
+            return
+        end
+        # Short rows and single retained columns need no candidate workspace.
+        if lastp == firstp || A.rowptr[i + 1] - A.rowptr[i] <= 16
+            update_interpolation_row!(
+                P.nzval, P.rowptr, P.colval, A.rowptr, A.colval, A.nzval,
+                cf, cmap, strong, interpolation isa ExtendedIInterpolation,
+                interpolation.rescale, i
+            )
+            return
+        end
+        tid = Threads.threadid()
+        cols, vals = scratch_cols[tid], scratch_vals[tid]
+        # Compute all candidates together, reading only the diagonals they need
+        # instead of scanning the entire matrix before updating interpolation.
+        candidate_weights!(cols, vals, A, i, cf, cmap, strong, A, interpolation)
+        original_sum = sum(vals)
+        kept_sum = zero(Tv)
+        @inbounds for pidx in firstp:lastp
+            q = candidate_index(cols, P.colval[pidx])
+            value = iszero(q) ? zero(Tv) : vals[q]
+            P.nzval[pidx] = value
+            kept_sum += value
+        end
+        if interpolation.rescale && !iszero(kept_sum)
+            scale = original_sum / kept_sum
+            @inbounds for pidx in firstp:lastp
+                P.nzval[pidx] *= scale
+            end
+        end
+    end
+    return P
+end
+
 function update_prolongation!(
         level::AMGLevel,
-        interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation, TwoStageExtendedIInterpolation}
+        interpolation::Union{ExtendedIInterpolation, ClassicalInterpolation, TwoStageExtendedIInterpolation},
+        workspace = nothing
     )
     A, P = level.A, level.P
     isnothing(P) && return level
     if !isnothing(level.aggressive)
         update_aggressive_prolongation!(level, interpolation)
+        return level
+    end
+    if matrix_backend(A) isa KernelAbstractions.CPU &&
+            A.nzval isa Vector && A.rowptr isa Vector && A.colval isa Vector
+        update_cpu_prolongation!(
+            P, A, level.cf, level.coarse_map, level.strength, interpolation, workspace
+        )
         return level
     end
     n = matrix_nrows(A)
@@ -61,7 +123,7 @@ function update_prolongation!(
     return level
 end
 
-update_prolongation!(level::AMGLevel, ::ConstantInterpolation) = level
+update_prolongation!(level::AMGLevel, ::ConstantInterpolation, workspace = nothing) = level
 
 function reset_solve_history!(H::AMGHierarchy)
     H.last_iterations = 0
@@ -84,7 +146,7 @@ function numeric_reset!(
         level = H.levels[l]
         if mode == :sparsity
             update_prolongation!(
-                level, interpolation_for_level(H.options, l)
+                level, interpolation_for_level(H.options, l), H.workspace
             )
         end
         next = H.levels[l + 1]
@@ -181,7 +243,7 @@ function partial_reset!(
         level = H.levels[l]
         update_level_smoother!(level.smoother, level.A, H.options)
         mode == :sparsity && update_prolongation!(
-            level, interpolation_for_level(H.options, l)
+            level, interpolation_for_level(H.options, l), H.workspace
         )
         galerkin!(H.levels[l + 1].A, level.A, level.P, level.galerkin)
     end

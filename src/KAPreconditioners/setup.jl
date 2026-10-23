@@ -794,6 +794,18 @@ function scale_candidate_weights!(
     return nothing
 end
 
+@inline interpolation_diagonal(values, i) = @inbounds values[i]
+
+@inline function interpolation_diagonal(A::StaticSparsityMatrixCSR, i)
+    value = zero(eltype(A.nzval))
+    @inbounds for k in nzrange(A, i)
+        if A.colval[k] == i
+            value += A.nzval[k]
+        end
+    end
+    return value
+end
+
 function candidate_weights!(
         cols::Vector{Ti}, vals::Vector{Tv},
         A::StaticSparsityMatrixCSR{Tv, Ti}, i, cf, cmap, strong,
@@ -835,7 +847,7 @@ function candidate_weights!(
         if direct != 0
             vals[direct] += aij
         elseif strong[k] && cf[j] == -1
-            diag_j = diagonal[j]
+            diag_j = interpolation_diagonal(diagonal, j)
             sign_j = if real(diag_j) < 0
                 -1
             else
@@ -884,7 +896,7 @@ function candidate_weights!(
     ) where {Tv, Ti}
     empty!(cols)
     empty!(vals)
-    effective_diagonal = diagonal[i]
+    effective_diagonal = interpolation_diagonal(diagonal, i)
 
     # Classical interpolation starts from direct strong C-neighbors. Weak
     # connections are lumped into the diagonal.
