@@ -53,9 +53,9 @@ the diagonal magnitude (scaled ℓ₁ GS). This guarantees convergence for SPD
 matrices and changes only interface rows. `l1=false` selects ordinary hybrid
 GS. Contiguous partitions preserve memory locality and avoid graph setup;
 `partitioner=:metis` reduces interfaces on irregular meshes. Small levels use
-fewer partitions so each has at least
-`min_partition_size` rows. An explicit row ownership vector can instead be
-passed as `setup_smoother(A, config; partition=owners)`.
+fewer partitions so each has at least `min_partition_size` rows when possible.
+An explicit row ownership vector can be passed to
+`setup_smoother(A, config; partition=owners)`.
 """
 struct HybridGaussSeidel <: AbstractSmoother
     steps::Int

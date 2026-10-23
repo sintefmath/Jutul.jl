@@ -22,9 +22,7 @@ setup_smoother(
 smoother_steps(config::AbstractSmoother) = config.steps
 
 Base.size(state::SPAI0State) = (length(state.diagonal), length(state.diagonal))
-Base.size(state::GaussSeidelState) = (state.n, state.n)
-Base.size(state::HybridGaussSeidelState) = (state.n, state.n)
-Base.size(state::Union{ILU0State, DILUState, VendorILUState}) = (state.n, state.n)
+Base.size(state::Union{GaussSeidelState, HybridGaussSeidelState, ILU0State, DILUState, VendorILUState}) = (state.n, state.n)
 function Base.size(state::AbstractSmootherState, dimension::Integer)
     return if dimension == 1 || dimension == 2
         state.n
@@ -33,8 +31,7 @@ function Base.size(state::AbstractSmootherState, dimension::Integer)
     end
 end
 Base.eltype(state::SPAI0State) = eltype(state.diagonal)
-Base.eltype(state::GaussSeidelState) = eltype(state.inverse_diagonal)
-Base.eltype(state::HybridGaussSeidelState) = eltype(state.inverse_diagonal)
+Base.eltype(state::Union{GaussSeidelState, HybridGaussSeidelState}) = eltype(state.inverse_diagonal)
 Base.eltype(state::ILU0State) = eltype(state.factors)
 Base.eltype(state::DILUState) = eltype(state.values)
 Base.eltype(::VendorILUState{Tv}) where {Tv} = Tv

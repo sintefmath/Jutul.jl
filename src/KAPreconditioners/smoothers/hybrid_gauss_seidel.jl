@@ -28,7 +28,6 @@ function hybrid_schedule(A, owners)
     for p in owners
         offsets[p + 1] += 1
     end
-    offsets[1] = 1
     for p in 1:np
         offsets[p + 1] += offsets[p] - 1
     end
@@ -37,12 +36,12 @@ function hybrid_schedule(A, owners)
     if issorted(owners)
         rows = 1:n
     else
-        next = copy(offsets)
+        next_row = copy(offsets)
         rows = Vector{Int}(undef, n)
         for i in 1:n
             p = owners[i]
-            rows[next[p]] = i
-            next[p] += 1
+            rows[next_row[p]] = i
+            next_row[p] += 1
         end
     end
     # Interior rows use the original CSR directly. Only interface rows need
@@ -72,14 +71,23 @@ function hybrid_schedule(A, owners)
                 end
             end
             # Zero marks missing/duplicate diagonals, including unsigned CSR.
-            diagonal_positions[i] = diagonal_count == 1 ? diagonal : zero(diagonal)
+            if diagonal_count == 1
+                diagonal_positions[i] = diagonal
+            end
             boundary || continue
             push!(boundary_rows, i)
             boundary_index[i] = length(boundary_rows)
             local_diagonal = 0
             for k in entries
-                push!(owners[A.colval[k]] == p ? local_positions : remote_positions, k)
-                A.colval[k] == i && (local_diagonal = length(local_positions))
+                j = A.colval[k]
+                if owners[j] == p
+                    push!(local_positions, k)
+                    if j == i
+                        local_diagonal = length(local_positions)
+                    end
+                else
+                    push!(remote_positions, k)
+                end
             end
             push!(local_diagonal_positions, local_diagonal)
             push!(local_offsets, length(local_positions) + 1)
@@ -102,15 +110,25 @@ end
     h = @inbounds schedule.boundary_index[i]
     if h == 0
         diagonal = @inbounds schedule.diagonal_positions[i]
-        lo = forward ? (@inbounds A.rowptr[i]) : (diagonal + 1)
-        hi = forward ? (diagonal - 1) : (@inbounds A.rowptr[i + 1] - 1)
+        if forward
+            lo = @inbounds A.rowptr[i]
+            hi = diagonal - 1
+        else
+            lo = diagonal + 1
+            hi = @inbounds A.rowptr[i + 1] - 1
+        end
         @inbounds @simd for k in lo:hi
             value -= A.nzval[k] * x[A.colval[k]]
         end
     else
         diagonal = @inbounds schedule.local_diagonal_positions[h]
-        lo = forward ? (@inbounds schedule.local_offsets[h]) : (diagonal + 1)
-        hi = forward ? (diagonal - 1) : (@inbounds schedule.local_offsets[h + 1] - 1)
+        if forward
+            lo = @inbounds schedule.local_offsets[h]
+            hi = diagonal - 1
+        else
+            lo = diagonal + 1
+            hi = @inbounds schedule.local_offsets[h + 1] - 1
+        end
         @inbounds @simd for t in lo:hi
             k = schedule.local_positions[t]
             value -= A.nzval[k] * x[A.colval[k]]
@@ -124,9 +142,11 @@ function setup_smoother(
         reuse = nothing, partition = nothing, reallocation_tracker = nothing
     )
     require_square_matrix(A, "Hybrid Gauss-Seidel")
-    matrix_backend(A) isa KernelAbstractions.CPU &&
-        A.rowptr isa Vector && A.colval isa Vector && A.nzval isa Vector ||
+    cpu_storage = matrix_backend(A) isa KernelAbstractions.CPU &&
+        A.rowptr isa Vector && A.colval isa Vector && A.nzval isa Vector
+    if !cpu_storage
         throw(ArgumentError("Hybrid Gauss-Seidel requires CPU Vector CSR storage"))
+    end
     T = eltype(A.nzval)
     T <: AbstractFloat || throw(ArgumentError("Hybrid Gauss-Seidel requires real floating-point scalar coefficients"))
     compatible = reuse isa HybridGaussSeidelState && eltype(reuse) === T &&
@@ -168,7 +188,9 @@ function update_smoother!(
             else
                 # Preserve duplicate-diagonal and unsorted-CSR semantics.
                 for k in A.rowptr[i]:(A.rowptr[i + 1] - 1)
-                    A.colval[k] == i && (diagonal += A.nzval[k])
+                    if A.colval[k] == i
+                        diagonal += A.nzval[k]
+                    end
                 end
             end
             h = schedule.boundary_index[i]
@@ -182,7 +204,11 @@ function update_smoother!(
             # Retain the sign for consistently negative matrix rows. Defer
             # errors until after the batch so no worker throws inside @batch.
             scale = copysign(abs(diagonal) + remote / 2, diagonal)
-            state.inverse_diagonal[i] = isfinite(scale) && !iszero(diagonal) ? inv(scale) : T(NaN)
+            if isfinite(scale) && !iszero(diagonal)
+                state.inverse_diagonal[i] = inv(scale)
+            else
+                state.inverse_diagonal[i] = T(NaN)
+            end
         end
     end
     invalid = findfirst(v -> !isfinite(v) || iszero(v), state.inverse_diagonal)
@@ -206,22 +232,22 @@ end
     return nothing
 end
 
-# `forward` and `correction` are compile-time flags. The correction path reads
+# Direction and correction mode are compile-time flags. The correction path reads
 # only predecessors in the local triangular solve, so stale scratch and x are
 # never read on the zero-initial path (including a buffer filled with NaNs).
 @inline function hybrid_row_value(
         x, A, rhs, scratch, schedule, i,
-        ::Val{forward}, ::Val{correction}
-    ) where {forward, correction}
+        direction::Val, ::Val{correction}
+    ) where {correction}
     if correction && schedule.triangular_ranges isa Val{true}
-        return hybrid_triangular_value(x, A, rhs, schedule, i, Val(forward))
+        return hybrid_triangular_value(x, A, rhs, schedule, i, direction)
     end
     h = @inbounds schedule.boundary_index[i]
     value = @inbounds rhs[i]
     if h == 0
         @inbounds @simd for k in A.rowptr[i]:(A.rowptr[i + 1] - 1)
             j = A.colval[k]
-            if !correction || (forward ? j < i : j > i)
+            if !correction || hybrid_predecessor(j, i, direction)
                 value -= A.nzval[k] * x[j]
             end
         end
@@ -232,7 +258,7 @@ end
         @inbounds @simd for t in schedule.local_offsets[h]:(schedule.local_offsets[h + 1] - 1)
             k = schedule.local_positions[t]
             j = A.colval[k]
-            if !correction || (forward ? j < i : j > i)
+            if !correction || hybrid_predecessor(j, i, direction)
                 value -= A.nzval[k] * x[j]
             end
         end
@@ -240,12 +266,23 @@ end
     return value
 end
 
-function hybrid_sweep!(x, A, b, state, direction::Val{forward}) where {forward}
+@inline hybrid_predecessor(j, i, ::Val{true}) = j < i
+@inline hybrid_predecessor(j, i, ::Val{false}) = j > i
+
+@inline function hybrid_sweep_rows(lo, hi, ::Val{forward}) where {forward}
+    if forward
+        return lo:hi
+    else
+        return hi:-1:lo
+    end
+end
+
+function hybrid_sweep!(x, A, b, state, direction::Val)
     schedule = state.schedule
     damping = smoother_damping(state)
     if length(schedule.offsets) == 2
         # Coarse AMG levels should pay no partition-map or interface overhead.
-        rows = forward ? (1:state.n) : (state.n:-1:1)
+        rows = hybrid_sweep_rows(1, state.n, direction)
         return gauss_seidel_sweep!(x, A, b, state.inverse_diagonal, damping, rows)
     end
     # All reads of cross-partition x finish before any partition writes x.
@@ -264,7 +301,7 @@ function hybrid_sweep!(x, A, b, state, direction::Val{forward}) where {forward}
     end
     foreach_hybrid_partition(schedule) do p
         lo, hi = schedule.offsets[p], schedule.offsets[p + 1] - 1
-        order = forward ? (lo:hi) : (hi:-1:lo)
+        order = hybrid_sweep_rows(lo, hi, direction)
         @inbounds for t in order
             i = schedule.rows[t]
             value = hybrid_row_value(x, A, b, state.halo_rhs, schedule, i, direction, Val(false))
@@ -275,14 +312,14 @@ function hybrid_sweep!(x, A, b, state, direction::Val{forward}) where {forward}
 end
 
 function hybrid_correction!(
-        x, A, residual, state, direction::Val{forward},
+        x, A, residual, state, direction::Val,
         ::Val{zero_initial}
-    ) where {forward, zero_initial}
+    ) where {zero_initial}
     schedule, correction = state.schedule, state.correction
     damping = smoother_damping(state)
     foreach_hybrid_partition(schedule) do p
         lo, hi = schedule.offsets[p], schedule.offsets[p + 1] - 1
-        order = forward ? (lo:hi) : (hi:-1:lo)
+        order = hybrid_sweep_rows(lo, hi, direction)
         @inbounds for t in order
             i = schedule.rows[t]
             value = hybrid_row_value(correction, A, residual, state.halo_rhs, schedule, i, direction, Val(true))
@@ -305,14 +342,20 @@ function hybrid_smooth!(
     steps > 0 || throw(ArgumentError("smoothing steps must be positive"))
     check_smoother_dimensions(x, A, b)
     require_same_smoother_pattern(state, A)
-    isnothing(residual) || length(residual) == state.n || throw(DimensionMismatch("residual length does not match matrix rows"))
-    b = x === b ? copy(b) : b
-    start = 1
-    if zero_initial || !isnothing(residual)
-        hybrid_correction!(x, A, zero_initial ? b : residual, state, direction, Val(zero_initial))
-        start = 2
+    if !isnothing(residual) && length(residual) != state.n
+        throw(DimensionMismatch("residual length does not match matrix rows"))
     end
-    for _ in start:steps
+    if x === b
+        b = copy(b)
+    end
+    if zero_initial
+        hybrid_correction!(x, A, b, state, direction, Val(true))
+    elseif !isnothing(residual)
+        hybrid_correction!(x, A, residual, state, direction, Val(false))
+    else
+        hybrid_sweep!(x, A, b, state, direction)
+    end
+    for _ in 2:steps
         hybrid_sweep!(x, A, b, state, direction)
     end
     return x
@@ -342,7 +385,9 @@ end
 
 function apply!(x::Vector, state::HybridGaussSeidelState, b::Vector)
     require_apply_dimensions(x, state, b)
-    b = x === b ? copy(b) : b
+    if x === b
+        b = copy(b)
+    end
     A, steps = state.matrix, smoother_steps(state.config)
     smooth_level!(x, A, b, state, steps; zero_initial = true)
     return smooth_result!(x, A, b, state, steps)
