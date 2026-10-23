@@ -55,11 +55,15 @@ function update_cpu_prolongation!(
         end
         @inbounds diagonal[i] = value
     end
-    scratch_cols, scratch_vals = if isnothing(workspace)
-        nscratch = Threads.maxthreadid()
-        ([Ti[] for _ in 1:nscratch], [Tv[] for _ in 1:nscratch])
+    scratch_cols = if isnothing(workspace)
+        [Ti[] for _ in 1:Threads.maxthreadid()]
     else
-        (workspace.interpolation_cols, workspace.interpolation_vals)
+        workspace.interpolation_cols
+    end
+    scratch_vals = if isnothing(workspace)
+        [Tv[] for _ in 1:Threads.maxthreadid()]
+    else
+        workspace.interpolation_vals
     end
     foreach_cpu_row(n, 128) do i
         firstp, lastp = P.rowptr[i], P.rowptr[i + 1] - 1
