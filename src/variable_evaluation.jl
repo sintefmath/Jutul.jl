@@ -17,8 +17,9 @@ context and can be specialized for application models. CPU contexts accept the
   balance spatially uneven property costs.
 
 The non-default schemes use host evaluation; device kernels retain `:flat`.
+The context's choice is obtained through [`context_secondary_scheme`](@ref).
 """
-secondary_scheme(model) = secondary_scheme(model.context)
+secondary_scheme(model) = context_secondary_scheme(model.context)
 
 """
 Designate the function as updating a secondary variable.

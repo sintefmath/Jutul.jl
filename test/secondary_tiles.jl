@@ -133,7 +133,7 @@ struct TileTestContext <: Jutul.JutulContext end
             ),
         )
         for ctx in contexts
-            @test ctx.secondary_scheme == secondary_scheme(ctx) == scheme
+            @test context_secondary_scheme(ctx) == secondary_scheme(ctx) == scheme
             @test secondary_scheme(adjoint(ctx)) == scheme
             @test minbatch(adjoint(ctx)) == 512
             @test secondary_scheme((; context = ctx)) == scheme

@@ -50,8 +50,6 @@ struct KernelAbstractionsContext{B, F, I, L, LF, LI, S} <: GPUJutulContext
     workgroupsize::Int
     minbatch::Int
     use_kernels_for_secondary::Bool
-    # Scheduling metadata must also be isbits when a model enters a GPU kernel.
-    secondary_scheme::Val{S}
     reduce_memory::Bool
     use_vendor_linalg::Bool
     nthreads::Int
@@ -110,8 +108,7 @@ function KernelAbstractionsContext(
     end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI, secondary_scheme}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
-        use_kernels_for_secondary, Val(secondary_scheme),
-        reduce_memory, use_vendor_linalg, Int(nthreads)
+        use_kernels_for_secondary, reduce_memory, use_vendor_linalg, Int(nthreads)
     )
 end
 
@@ -123,14 +120,7 @@ nzval_index_type(ctx::KernelAbstractionsContext) = index_type(ctx)
 matrix_layout(ctx::KernelAbstractionsContext) = ctx.matrix_layout
 nthreads(ctx::KernelAbstractionsContext) = ctx.nthreads
 minbatch(ctx::KernelAbstractionsContext) = ctx.minbatch
-secondary_scheme(::KernelAbstractionsContext{B, F, I, L, LF, LI, S}) where {B, F, I, L, LF, LI, S} = S
-
-@inline function Base.getproperty(ctx::KernelAbstractionsContext, name::Symbol)
-    if name === :secondary_scheme
-        return secondary_scheme(ctx)
-    end
-    return getfield(ctx, name)
-end
+context_secondary_scheme(::KernelAbstractionsContext{B, F, I, L, LF, LI, S}) where {B, F, I, L, LF, LI, S} = S
 
 function synchronize(ctx::KernelAbstractionsContext)
     if applicable(KernelAbstractions.synchronize, ctx.backend)
@@ -154,7 +144,7 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-        secondary_scheme = secondary_scheme(ctx),
+        secondary_scheme = context_secondary_scheme(ctx),
         reduce_memory = ctx.reduce_memory,
         use_vendor_linalg = ctx.use_vendor_linalg
     )
@@ -174,7 +164,7 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-        secondary_scheme = secondary_scheme(ctx),
+        secondary_scheme = context_secondary_scheme(ctx),
         reduce_memory = ctx.reduce_memory,
         use_vendor_linalg = ctx.use_vendor_linalg
     )

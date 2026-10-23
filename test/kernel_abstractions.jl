@@ -206,6 +206,7 @@ end
         minbatch = 4, workgroupsize = 2
     )
     @test isbitstype(typeof(threshold_context))
+    @test !hasfield(typeof(threshold_context), :secondary_scheme)
     @test threshold_context.reduce_memory
     @test !threshold_context.use_kernels_for_secondary
     @test minbatch(threshold_context) == 4

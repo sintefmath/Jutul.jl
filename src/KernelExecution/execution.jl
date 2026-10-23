@@ -599,7 +599,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
             workgroupsize = ctx.workgroupsize,
             minbatch = minbatch(ctx),
             use_kernels_for_secondary = ctx.use_kernels_for_secondary,
-            secondary_scheme = secondary_scheme(ctx),
+            secondary_scheme = context_secondary_scheme(ctx),
             reduce_memory = reduce_memory,
             use_vendor_linalg = ctx.use_vendor_linalg
         )
