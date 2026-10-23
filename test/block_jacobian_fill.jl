@@ -29,5 +29,20 @@ using Jutul, Test
             Jutul.update_jacobian_block!(buffer, positions, Jutul.SMatrix{3, 3}(derivatives[:, :, cell]))
         end
         @test collect(buffer) == vec(expected)
+
+        flux = CompactAutoDiffCache(3, 3, 3; context)
+        flux.jacobian_positions.first_positions .= [19 0 28]
+        flux.entries .= hcat(-0.5cache.entries[:, 1], 0.25cache.entries[:, 2], -0.5cache.entries[:, 1])
+        jacobian, residual = zeros(36), zeros(3, 2)
+        for cell in 1:2
+            Jutul.fill_conservation_eq!(jacobian, residual, cell, cache, flux, [1, 3, 4], Val(3), Val(3))
+        end
+        d1, d2 = derivatives[:, :, 1], derivatives[:, :, 2]
+        expected = cat(0.5d1 + 0.25d2, d2 - 0.5d1, 0.5d1, 0.5d1; dims = 3)
+        if adjoint
+            expected = permutedims(expected, (2, 1, 3))
+        end
+        @test jacobian == vec(expected)
+        @test residual == [10.75 15.5; 11.5 16.0; 12.25 16.5]
     end
 end

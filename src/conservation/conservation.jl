@@ -411,19 +411,9 @@ function fill_conservation_eq_fused!(
         conn_pos, conn_data, global_cell_map, state, timestep, law, model,
         flow_disc, ::Val{Np}, ::Val{Ne}, scalar_type::Val{T}
     ) where {Np, Ne, T}
-    acc_partials = zeros(SMatrix{Ne, Np})
-    acc_r = zeros(SVector{Ne})
-    for equation in 1:Ne
-        acc_r = setindex(acc_r, get_entry_val(acc, cell, equation), equation)
-    end
-    @simd for partial in 1:Np
-        for equation in 1:Ne
-            derivative = get_entry(acc, cell, equation, partial)
-            acc_partials = setindex(
-                acc_partials, derivative, equation, partial
-            )
-        end
-    end
+    entries = conservation_entries(acc, cell, Val(Ne))
+    acc_r = SVector{Ne, Float64}(map(value, entries))
+    acc_partials = SMatrix{Ne, Np, Float64}(conservation_partials(entries, Val(Np)))
 
     self = full_cell(cell, global_cell_map)
     local_state = new_entity_index(state, self)
@@ -438,33 +428,15 @@ function fill_conservation_eq_fused!(
                 zero(flux_vector_type(law, scalar_type)), self, other, face,
                 face_sign, law, local_state, model, dt, flow_disc
             )
-            for equation in 1:Ne
-                flux_entry = @inbounds flux[equation]
-                acc_r = setindex(
-                    acc_r, acc_r[equation] + value(flux_entry), equation
-                )
-            end
-            @simd for partial in 1:Np
-                @inbounds for equation in 1:Ne
-                    derivative = get_entry_impl(flux[equation], partial)
-                    acc_partials = setindex(
-                        acc_partials,
-                        acc_partials[equation, partial] + derivative,
-                        equation, partial
-                    )
-                end
-            end
+            # Whole-block addition lets the compiler keep the accumulator in
+            # registers instead of repeatedly rebuilding it with setindex.
+            flux_partials = conservation_partials(flux, Val(Np))
+            acc_r = acc_r + map(value, flux)
+            acc_partials = acc_partials + flux_partials
             if !(nz isa Missing)
                 position_block = jacobian_position_block(positions, connection, Np)
                 if get_jacobian_pos(position_block, 1, 1) > 0
-                    block = SMatrix{Ne, Np}(
-                        ntuple(Val(Ne * Np)) do k
-                            equation = (k - 1) % Ne + 1
-                            partial = (k - 1) ÷ Ne + 1
-                            return -get_entry_impl(@inbounds(flux[equation]), partial)
-                        end
-                    )
-                    update_jacobian_block!(nz, position_block, block)
+                    update_jacobian_block!(nz, position_block, -flux_partials)
                 end
             end
         end
@@ -479,6 +451,20 @@ function fill_conservation_eq_fused!(
     return nothing
 end
 
+@inline function conservation_entries(cache, index, ::Val{Ne}) where {Ne}
+    return SVector{Ne}(ntuple(e -> get_entry(cache, index, e), Val(Ne)))
+end
+
+@inline function conservation_partials(entries::StaticVector{Ne}, ::Val{Np}) where {Ne, Np}
+    return SMatrix{Ne, Np}(
+        ntuple(Val(Ne * Np)) do k
+            equation = (k - 1) % Ne + 1
+            partial = (k - 1) ÷ Ne + 1
+            return get_entry_impl(@inbounds(entries[equation]), partial)
+        end
+    )
+end
+
 function update_linearized_system_subset_conservation_accumulation!(nz, r, model, acc::CompactAutoDiffCache, cell_flux::CompactAutoDiffCache, conn_pos, context)
     nc, ne, np = ad_dims(acc)
     return threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, conn_pos, nc, Val(ne), Val(np))
@@ -491,49 +477,23 @@ function threaded_fill_conservation_eq!(nz, r, context, acc, cell_flux, conn_pos
 end
 
 function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np}, ::Val{Ne}) where {Np, Ne}
-    # These should be elided by the compiler
-    acc_partials = zeros(SMatrix{Ne, Np})
-    acc_r = zeros(SVector{Ne})
-    # Accumulation
-    for e in 1:Ne
-        v = get_entry_val(acc, cell, e)
-        acc_r = setindex(acc_r, v, e)
-    end
-    @simd for e in 1:Ne
-        for p in 1:Np
-            dv = get_entry(acc, cell, e, p)
-            acc_partials = setindex(acc_partials, dv, e, p)
-        end
-    end
+    entries = conservation_entries(acc, cell, Val(Ne))
+    # Retain Float64 accumulation, also for single precision equation caches.
+    acc_r = SVector{Ne, Float64}(map(value, entries))
+    acc_partials = SMatrix{Ne, Np, Float64}(conservation_partials(entries, Val(Np)))
     # Fluxes
     start = @inbounds conn_pos[cell]
     stop = @inbounds conn_pos[cell + 1] - 1
     if Np > 0
         for i in start:stop
-            for e in 1:Ne
-                v = acc_r[e] + get_entry_val(cell_flux, i, e)
-                acc_r = setindex(acc_r, v, e)
-            end
-            position_block = jacobian_position_block(cell_flux.jacobian_positions, i, Np)
-            fpos_outer = get_jacobian_pos(position_block, 1, 1)
-            is_inner = fpos_outer > 0
-            if is_inner
-                @simd for p in 1:Np
-                    @inbounds for e in 1:Ne
-                        ∂ = get_entry(cell_flux, i, e, p)
-                        f_v = acc_partials[e, p] + ∂
-                        acc_partials = setindex(acc_partials, f_v, e, p)
-                        fpos = get_jacobian_pos(position_block, e, p)
-                        update_jacobian_inner!(nz, fpos, -∂)
-                    end
-                end
-            else
-                @simd for p in 1:Np
-                    @inbounds for e in 1:Ne
-                        ∂ = get_entry(cell_flux, i, e, p)
-                        f_v = acc_partials[e, p] + ∂
-                        acc_partials = setindex(acc_partials, f_v, e, p)
-                    end
+            flux = conservation_entries(cell_flux, i, Val(Ne))
+            flux_partials = conservation_partials(flux, Val(Np))
+            acc_r = acc_r + map(value, flux)
+            acc_partials = acc_partials + flux_partials
+            if !(nz isa Missing)
+                position_block = jacobian_position_block(cell_flux.jacobian_positions, i, Np)
+                if get_jacobian_pos(position_block, 1, 1) > 0
+                    update_jacobian_block!(nz, position_block, -flux_partials)
                 end
             end
         end
@@ -541,14 +501,11 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
     @inbounds for e in 1:Ne
         r[e, cell] = acc_r[e]
     end
-    position_block = jacobian_position_block(acc.jacobian_positions, cell, Np)
-    return @simd for p in 1:Np
-        for e in 1:Ne
-            @inbounds ∂ = acc_partials[e, p]
-            apos = get_jacobian_pos(position_block, e, p)
-            Jutul.update_jacobian_inner!(nz, apos, ∂)
-        end
+    if !(nz isa Missing)
+        position_block = jacobian_position_block(acc.jacobian_positions, cell, Np)
+        update_jacobian_block!(nz, position_block, acc_partials)
     end
+    return nothing
 end
 
 function update_linearized_system_subset_face_flux!(Jz, model, face_flux, conn_pos, conn_data)
