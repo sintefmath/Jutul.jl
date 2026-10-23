@@ -232,10 +232,10 @@ end
                 diagonal, total, selected = interpolation_row_terms(
                     arp, acv, av, cf, cmap, strong, i, pcv[pidx], extended
                 )
-                scale = if iszero(diagonal)
-                    one(eltype(pv))
-                else
+                scale = if !iszero(diagonal)
                     -inv(diagonal)
+                else
+                    one(eltype(pv))
                 end
                 weight = scale * selected
                 pv[pidx] = weight

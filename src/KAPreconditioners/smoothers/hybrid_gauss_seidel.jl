@@ -204,10 +204,10 @@ function update_smoother!(
             # Retain the sign for consistently negative matrix rows. Defer
             # errors until after the batch so no worker throws inside @batch.
             scale = copysign(abs(diagonal) + remote / 2, diagonal)
-            if isfinite(scale) && !iszero(diagonal)
-                state.inverse_diagonal[i] = inv(scale)
+            state.inverse_diagonal[i] = if isfinite(scale) && !iszero(diagonal)
+                inv(scale)
             else
-                state.inverse_diagonal[i] = T(NaN)
+                T(NaN)
             end
         end
     end
