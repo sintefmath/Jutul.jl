@@ -433,7 +433,7 @@ function fill_conservation_eq_fused!(
             flux_partials = conservation_partials(flux, Val(Np))
             acc_r = acc_r + map(value, flux)
             acc_partials = acc_partials + flux_partials
-            if !(nz isa Missing)
+            if !ismissing(nz)
                 position_block = jacobian_position_block(positions, connection, Np)
                 if get_jacobian_pos(position_block, 1, 1) > 0
                     update_jacobian_block!(nz, position_block, -flux_partials)
@@ -444,7 +444,7 @@ function fill_conservation_eq_fused!(
     @inbounds for equation in 1:Ne
         r[equation, cell] = acc_r[equation]
     end
-    if !(nz isa Missing)
+    if !ismissing(nz)
         position_block = jacobian_position_block(acc.jacobian_positions, cell, Np)
         update_jacobian_block!(nz, position_block, acc_partials)
     end
@@ -490,7 +490,7 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
             flux_partials = conservation_partials(flux, Val(Np))
             acc_r = acc_r + map(value, flux)
             acc_partials = acc_partials + flux_partials
-            if !(nz isa Missing)
+            if !ismissing(nz)
                 position_block = jacobian_position_block(cell_flux.jacobian_positions, i, Np)
                 if get_jacobian_pos(position_block, 1, 1) > 0
                     update_jacobian_block!(nz, position_block, -flux_partials)
@@ -501,7 +501,7 @@ function fill_conservation_eq!(nz, r, cell, acc, cell_flux, conn_pos, ::Val{Np},
     @inbounds for e in 1:Ne
         r[e, cell] = acc_r[e]
     end
-    if !(nz isa Missing)
+    if !ismissing(nz)
         position_block = jacobian_position_block(acc.jacobian_positions, cell, Np)
         update_jacobian_block!(nz, position_block, acc_partials)
     end
