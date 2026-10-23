@@ -45,16 +45,6 @@ function update_cpu_prolongation!(
         interpolation, workspace
     ) where {Tv, Ti}
     n = matrix_nrows(A)
-    diagonal = host_buffer(optional_property(workspace, :values), Tv, n)
-    foreach_cpu_row(n, 128) do i
-        value = zero(Tv)
-        @inbounds for k in nzrange(A, i)
-            if A.colval[k] == i
-                value += A.nzval[k]
-            end
-        end
-        @inbounds diagonal[i] = value
-    end
     scratch_cols = if isnothing(workspace)
         [Ti[] for _ in 1:Threads.maxthreadid()]
     else
@@ -83,9 +73,9 @@ function update_cpu_prolongation!(
         end
         tid = Threads.threadid()
         cols, vals = scratch_cols[tid], scratch_vals[tid]
-        # Compute every candidate together, retaining the existing pattern.
-        # The device kernel instead recomputes the row terms per column.
-        candidate_weights!(cols, vals, A, i, cf, cmap, strong, diagonal, interpolation)
+        # Compute all candidates together, reading only the diagonals they need
+        # instead of scanning the entire matrix before updating interpolation.
+        candidate_weights!(cols, vals, A, i, cf, cmap, strong, A, interpolation)
         original_sum = sum(vals)
         kept_sum = zero(Tv)
         @inbounds for pidx in firstp:lastp
