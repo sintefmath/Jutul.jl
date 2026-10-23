@@ -40,6 +40,48 @@ struct GaussSeidel <: AbstractSmoother
 end
 
 """
+    HybridGaussSeidel(steps=1, damping=1.0; npartitions=Threads.nthreads(),
+        min_partition_size=8192, partitioner=:contiguous, l1=true)
+
+CPU hybrid Gauss-Seidel for real scalar matrices. Each partition sweeps its
+owned rows sequentially, with cross-partition contributions frozen at the
+start of every sweep. Down/up cycles use forward/backward ordering. Standalone
+application uses both directions. No coloring or per-color launches are used.
+
+By default, half the sum of absolute cross-partition coefficients is added to
+the diagonal magnitude (scaled ℓ₁ GS). This guarantees convergence for SPD
+matrices and changes only interface rows. `l1=false` selects ordinary hybrid
+GS. Contiguous partitions preserve memory locality and avoid graph setup;
+`partitioner=:metis` reduces interfaces on irregular meshes. Small levels use
+fewer partitions so each has at least `min_partition_size` rows when possible.
+An explicit row ownership vector can be passed to
+`setup_smoother(A, config; partition=owners)`.
+"""
+struct HybridGaussSeidel <: AbstractSmoother
+    steps::Int
+    damping::Float64
+    npartitions::Int
+    min_partition_size::Int
+    partitioner::Symbol
+    l1::Bool
+    function HybridGaussSeidel(
+            steps::Integer = 1, damping::Real = 1.0;
+            npartitions::Integer = Threads.nthreads(),
+            min_partition_size::Integer = 8192,
+            partitioner::Symbol = :contiguous, l1::Bool = true
+        )
+        validated = GaussSeidel(steps, damping)
+        npartitions > 0 || throw(ArgumentError("npartitions must be positive"))
+        min_partition_size > 0 || throw(ArgumentError("min_partition_size must be positive"))
+        partitioner in (:metis, :contiguous) || throw(ArgumentError("partitioner must be :metis or :contiguous"))
+        return new(
+            validated.steps, validated.damping, Int(npartitions),
+            Int(min_partition_size), partitioner, l1
+        )
+    end
+end
+
+"""
     ILU0(steps=1, damping=1.0)
 
 Level-scheduled incomplete LU factorization with zero fill. The symbolic level
@@ -105,6 +147,22 @@ mutable struct GaussSeidelState{D, C, B} <: AbstractSmootherState
     backend::B
     block_size::Int
     n::Int
+end
+
+mutable struct HybridGaussSeidelState{T, I, S, B} <: AbstractSmootherState
+    matrix::Any
+    inverse_diagonal::Vector{T}
+    correction::Vector{T}
+    config::HybridGaussSeidel
+    backend::B
+    block_size::Int
+    n::Int
+    rowptr::Vector{I}
+    colval::Vector{I}
+    host_rowptr::Vector{I}
+    host_colval::Vector{I}
+    schedule::S
+    halo_rhs::Vector{T}
 end
 
 mutable struct ILU0State{

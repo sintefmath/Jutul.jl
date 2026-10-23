@@ -465,6 +465,10 @@ function test_numeric_interpolation_tuning(backend)
         )
         KAPreconditioners.synchronize_backend(backend)
         @test Array(dp) ≈ expected
+        if backend isa CPU
+            KAPreconditioners.update_cpu_prolongation!(P, BC, cf, cmap, strong, config, nothing)
+            @test P.nzval ≈ expected
+        end
     end
     return
 end
