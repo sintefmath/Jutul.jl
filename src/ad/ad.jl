@@ -119,7 +119,11 @@ end
     if iszero(pos.first)
         return zero(I)
     end
-    offset = ifelse(adjoint, N * (equation - 1) + partial - 1, N * (partial - 1) + equation - 1)
+    offset = if adjoint
+        N * (equation - 1) + partial - 1
+    else
+        N * (partial - 1) + equation - 1
+    end
     return pos.first + I(offset)
 end
 
@@ -174,6 +178,7 @@ end
 
 function fill_equation_entries!(nz, r, model, cache::JutulAutoDiffCache)
     nu, ne, np = ad_dims(cache)
+    # Specialize the filling loop on the small equation/partial dimensions.
     return fill_compact_equation_entries!(nz, r, cache, model.context, nu, Val(ne), Val(np))
 end
 

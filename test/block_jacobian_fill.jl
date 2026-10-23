@@ -14,7 +14,11 @@ using Jutul, Test
 
         jacobian, residual = zeros(18), zeros(6)
         Jutul.fill_equation_entries!(jacobian, residual, (; context), cache)
-        expected = adjoint ? permutedims(derivatives, (2, 1, 3)) : derivatives
+        expected = if adjoint
+            permutedims(derivatives, (2, 1, 3))
+        else
+            derivatives
+        end
         @test jacobian == vec(expected)
         @test residual == [11, 21, 12, 22, 13, 23]
 
