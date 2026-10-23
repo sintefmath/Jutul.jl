@@ -44,13 +44,14 @@ supported sparse matrix-vector products. Vendor descriptors, analysis and
 workspace are retained for repeated products with the same matrix, including
 in-place updates of its values. Set it to `false` to use KA kernels instead.
 """
-struct KernelAbstractionsContext{B, F, I, L, LF, LI} <: GPUJutulContext
+struct KernelAbstractionsContext{B, F, I, L, LF, LI, S} <: GPUJutulContext
     backend::B
     matrix_layout::L
     workgroupsize::Int
     minbatch::Int
     use_kernels_for_secondary::Bool
-    secondary_scheme::Symbol
+    # Scheduling metadata must also be isbits when a model enters a GPU kernel.
+    secondary_scheme::Val{S}
     reduce_memory::Bool
     use_vendor_linalg::Bool
     nthreads::Int
@@ -107,9 +108,9 @@ function KernelAbstractionsContext(
     if secondary_scheme != :flat && use_kernels_for_secondary
         throw(ArgumentError("secondary_scheme=$secondary_scheme requires host evaluation on a CPU backend"))
     end
-    return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI}(
+    return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI, secondary_scheme}(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
-        use_kernels_for_secondary, secondary_scheme,
+        use_kernels_for_secondary, Val(secondary_scheme),
         reduce_memory, use_vendor_linalg, Int(nthreads)
     )
 end
@@ -122,7 +123,14 @@ nzval_index_type(ctx::KernelAbstractionsContext) = index_type(ctx)
 matrix_layout(ctx::KernelAbstractionsContext) = ctx.matrix_layout
 nthreads(ctx::KernelAbstractionsContext) = ctx.nthreads
 minbatch(ctx::KernelAbstractionsContext) = ctx.minbatch
-secondary_scheme(ctx::KernelAbstractionsContext) = ctx.secondary_scheme
+secondary_scheme(::KernelAbstractionsContext{B, F, I, L, LF, LI, S}) where {B, F, I, L, LF, LI, S} = S
+
+@inline function Base.getproperty(ctx::KernelAbstractionsContext, name::Symbol)
+    if name === :secondary_scheme
+        return secondary_scheme(ctx)
+    end
+    return getfield(ctx, name)
+end
 
 function synchronize(ctx::KernelAbstractionsContext)
     if applicable(KernelAbstractions.synchronize, ctx.backend)
