@@ -3,7 +3,7 @@ using Jutul, Test, KernelAbstractions
 struct FailingPolyesterSolve end
 
 function Jutul.solve_and_update!(::Nothing, ::FailingPolyesterSolve, dt; kwarg...)
-    Jutul.Polyester.@batch per = thread for i in 1:Threads.nthreads()
+    return Jutul.Polyester.@batch per = thread for i in 1:Threads.nthreads()
         if i == 1
             error("Batched solve failed")
         end
@@ -26,7 +26,8 @@ end
 
         Jutul.perform_step_solve_impl!(
             report, nothing, FailingPolyesterSolve(), config,
-            1.0, 1, nothing, 1.0, Jutul.default_executor())
+            1.0, 1, nothing, 1.0, Jutul.default_executor()
+        )
         @test report[:failure_exception] isa Exception
         @test occursin("Batched solve failed", sprint(showerror, report[:failure_exception]))
 
