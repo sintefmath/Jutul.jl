@@ -457,12 +457,14 @@ function fill_conservation_eq_fused!(
             if !(nz isa Missing)
                 position_block = jacobian_position_block(positions, connection, Np)
                 if get_jacobian_pos(position_block, 1, 1) > 0
-                    entries = ntuple(Val(Ne * Np)) do k
-                        equation = (k - 1) % Ne + 1
-                        partial = (k - 1) ÷ Ne + 1
-                        return -get_entry_impl(@inbounds(flux[equation]), partial)
-                    end
-                    update_jacobian_block!(nz, position_block, SMatrix{Ne, Np}(entries))
+                    block = SMatrix{Ne, Np}(
+                        ntuple(Val(Ne * Np)) do k
+                            equation = (k - 1) % Ne + 1
+                            partial = (k - 1) ÷ Ne + 1
+                            return -get_entry_impl(@inbounds(flux[equation]), partial)
+                        end
+                    )
+                    update_jacobian_block!(nz, position_block, block)
                 end
             end
         end
