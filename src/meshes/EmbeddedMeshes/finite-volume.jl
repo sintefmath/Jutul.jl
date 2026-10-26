@@ -183,30 +183,37 @@ end
 function compute_intersection_trans_dfm(T_hf, N, intersections)
     # Adjust transmissibilities for intersection faces
     faces, face_pos = get_facepos(N)
-    nf = diff(face_pos)
-    cells = vcat([fill(i, nf[i]) for i in 1:length(nf)]...)
+    # Half-face index of face f for cell c
+    function half_face(c, f)
+        for k in face_pos[c]:(face_pos[c+1]-1)
+            faces[k] == f && return k
+        end
+        error("Face $f is not a face of cell $c")
+    end
 
     Tv = eltype(T_hf)
     T = Tv[]
     intersection_faces = Int[]
+    ix_faces = Int[]
+    counted = Set{Int64}()
     for ix_cells in intersections
-        # Find all faces belonging to this intersection
-        ix_faces = Int[]
-        for (face, n) in enumerate(eachcol(N))
-            if all(c in ix_cells for c in n)
-                push!(ix_faces, face)
+        # Find all faces belonging to this intersection (both neighbors in the
+        # intersection), only visiting the faces of the intersection cells
+        empty!(ix_faces)
+        for c in ix_cells, k in face_pos[c]:(face_pos[c+1]-1)
+            f = faces[k]
+            if N[1, f] in ix_cells && N[2, f] in ix_cells && !(f in ix_faces)
+                push!(ix_faces, f)
             end
         end
+        sort!(ix_faces)
         den = zero(Tv)
         T_ix = zeros(Tv, length(ix_faces))
-        counted = Set{Int64}()
+        empty!(counted)
         for (fno, f) in enumerate(ix_faces)
             ci = N[1, f]
             cj = N[2, f]
-            ii = faces .== f .&& cells .== ci
-            jj = faces .== f .&& cells .== cj
-            @assert sum(ii) == 1 && sum(jj) == 1
-            ii, jj = findfirst(ii), findfirst(jj)
+            ii, jj = half_face(ci, f), half_face(cj, f)
             T_ix[fno] = T_hf[ii] * T_hf[jj]
             if !(ci in counted)
                 den += T_hf[ii]

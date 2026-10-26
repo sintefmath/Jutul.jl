@@ -154,6 +154,34 @@ using Jutul.EmbeddedMeshes
                 @test all(isapprox(abs(dot(cell_normal, face_normal)), 1.0))
             end
         end
+
+        @testset "Intersection transmissibilities" begin
+            N = get_neighborship(embedded_mesh_star)
+            faces, face_pos = Jutul.EmbeddedMeshes.get_facepos(N)
+            T_hf = collect(range(1.0, 2.0, length = length(faces)))
+            ix = embedded_mesh_star.intersection_neighbors
+            T_ix, ix_faces = Jutul.EmbeddedMeshes.compute_intersection_trans_dfm(T_hf, N, ix)
+            # Reference: star-delta transform T_ij = T_i*T_j/sum(T_k), using
+            # the first half-face of each intersection cell in face order
+            half_face(c, f) = findfirst(k -> faces[k] == f, face_pos[c]:(face_pos[c+1]-1)) + face_pos[c] - 1
+            T_ref = Float64[]
+            faces_ref = Int[]
+            for ix_cells in ix
+                ix_f = [f for f in axes(N, 2) if N[1, f] in ix_cells && N[2, f] in ix_cells]
+                T_cell = Dict{Int, Float64}()
+                for f in ix_f, c in N[:, f]
+                    get!(T_cell, c, T_hf[half_face(c, f)])
+                end
+                den = sum(values(T_cell))
+                for f in ix_f
+                    push!(T_ref, T_hf[half_face(N[1, f], f)]*T_hf[half_face(N[2, f], f)]/den)
+                end
+                append!(faces_ref, ix_f)
+            end
+            @test !isempty(ix_faces)
+            @test ix_faces == faces_ref
+            @test T_ix ≈ T_ref
+        end
     end
 
     @testset "Empty Embedded Mesh" begin
