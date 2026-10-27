@@ -163,7 +163,7 @@ using Jutul.EmbeddedMeshes
             T_ix, ix_faces = Jutul.EmbeddedMeshes.compute_intersection_trans_dfm(T_hf, N, ix)
             # Reference: star-delta transform T_ij = T_i*T_j/sum(T_k), using
             # the first half-face of each intersection cell in face order
-            half_face(c, f) = findfirst(k -> faces[k] == f, face_pos[c]:(face_pos[c+1]-1)) + face_pos[c] - 1
+            half_face(c, f) = findfirst(k -> faces[k] == f, face_pos[c]:(face_pos[c + 1] - 1)) + face_pos[c] - 1
             T_ref = Float64[]
             faces_ref = Int[]
             for ix_cells in ix
@@ -174,7 +174,7 @@ using Jutul.EmbeddedMeshes
                 end
                 den = sum(values(T_cell))
                 for f in ix_f
-                    push!(T_ref, T_hf[half_face(N[1, f], f)]*T_hf[half_face(N[2, f], f)]/den)
+                    push!(T_ref, T_hf[half_face(N[1, f], f)] * T_hf[half_face(N[2, f], f)] / den)
                 end
                 append!(faces_ref, ix_f)
             end

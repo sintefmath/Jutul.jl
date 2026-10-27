@@ -185,7 +185,7 @@ function compute_intersection_trans_dfm(T_hf, N, intersections)
     faces, face_pos = get_facepos(N)
     # Half-face index of face f for cell c
     function half_face(c, f)
-        for k in face_pos[c]:(face_pos[c+1]-1)
+        for k in face_pos[c]:(face_pos[c + 1] - 1)
             faces[k] == f && return k
         end
         error("Face $f is not a face of cell $c")
@@ -200,7 +200,7 @@ function compute_intersection_trans_dfm(T_hf, N, intersections)
         # Find all faces belonging to this intersection (both neighbors in the
         # intersection), only visiting the faces of the intersection cells
         empty!(ix_faces)
-        for c in ix_cells, k in face_pos[c]:(face_pos[c+1]-1)
+        for c in ix_cells, k in face_pos[c]:(face_pos[c + 1] - 1)
             f = faces[k]
             if N[1, f] in ix_cells && N[2, f] in ix_cells && !(f in ix_faces)
                 push!(ix_faces, f)
