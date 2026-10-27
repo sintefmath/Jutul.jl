@@ -8,10 +8,11 @@ function Jutul.compute_half_face_trans(mesh::EmbeddedMesh, cell_centroids, face_
     nf = length(face_areas)
     dim = size(cell_centroids, 1)
 
-    T_hf = zeros(eltype(face_areas), length(faces))
+    # Allow permeability and aperture to carry dual numbers for differentiation
+    T_hf = zeros(promote_type(eltype(face_areas), eltype(perm), eltype(aperture)), length(faces))
     Nn_hf = Vector{SVector{dim, Float64}}(undef, length(faces))
     nc = length(facepos) - 1
-    if isa(perm, AbstractFloat)
+    if perm isa Real
         perm = repeat([perm], 1, nc)
     else
         perm::AbstractVecOrMat
@@ -182,29 +183,37 @@ end
 function compute_intersection_trans_dfm(T_hf, N, intersections)
     # Adjust transmissibilities for intersection faces
     faces, face_pos = get_facepos(N)
-    nf = diff(face_pos)
-    cells = vcat([fill(i, nf[i]) for i in 1:length(nf)]...)
+    # Half-face index of face f for cell c
+    function half_face(c, f)
+        for k in face_pos[c]:(face_pos[c + 1] - 1)
+            faces[k] == f && return k
+        end
+        error("Face $f is not a face of cell $c")
+    end
 
-    T = Float64[]
+    Tv = eltype(T_hf)
+    T = Tv[]
     intersection_faces = Int[]
+    ix_faces = Int[]
+    counted = Set{Int64}()
     for ix_cells in intersections
-        # Find all faces belonging to this intersection
-        ix_faces = Int[]
-        for (face, n) in enumerate(eachcol(N))
-            if all(c in ix_cells for c in n)
-                push!(ix_faces, face)
+        # Find all faces belonging to this intersection (both neighbors in the
+        # intersection), only visiting the faces of the intersection cells
+        empty!(ix_faces)
+        for c in ix_cells, k in face_pos[c]:(face_pos[c + 1] - 1)
+            f = faces[k]
+            if N[1, f] in ix_cells && N[2, f] in ix_cells && !(f in ix_faces)
+                push!(ix_faces, f)
             end
         end
-        den = 0.0
-        T_ix = zeros(Float64, length(ix_faces))
-        counted = Set{Int64}()
+        sort!(ix_faces)
+        den = zero(Tv)
+        T_ix = zeros(Tv, length(ix_faces))
+        empty!(counted)
         for (fno, f) in enumerate(ix_faces)
             ci = N[1, f]
             cj = N[2, f]
-            ii = faces .== f .&& cells .== ci
-            jj = faces .== f .&& cells .== cj
-            @assert sum(ii) == 1 && sum(jj) == 1
-            ii, jj = findfirst(ii), findfirst(jj)
+            ii, jj = half_face(ci, f), half_face(cj, f)
             T_ix[fno] = T_hf[ii] * T_hf[jj]
             if !(ci in counted)
                 den += T_hf[ii]
