@@ -10,9 +10,9 @@ function partition(::LinearPartitioner, A, m)
 end
 
 function partition_linear(m, n)
-    partition = zeros(Int64, n);
+    partition = zeros(Int64, n)
     for i in eachindex(partition)
-        partition[i] = ceil(i / (n/m))
+        partition[i] = ceil(i / (n / m))
     end
     return partition
 end
@@ -55,7 +55,7 @@ metis_strength(F) = F
 function metis_strength(F::AbstractMatrix)
     s = zero(eltype(F))
     n, m = size(F)
-    for i = 1:min(n, m)
+    for i in 1:min(n, m)
         s += F[i, i]
     end
     return s
@@ -82,12 +82,15 @@ function metis_integer_weights(x::AbstractVector{<:Integer})
 end
 
 function metis_integer_weights(x::AbstractVector{<:AbstractFloat})
-    mv = mean(x)*0.1;
+    mv = mean(x) * 0.1
     @. x = Int64(ceil(x / mv))
     return x
 end
 
-generate_metis_graph(A::StaticSparsityMatrixCSR) = generate_metis_graph(A.At)
+function generate_metis_graph(A::StaticSparsityMatrixCSR)
+    stored_transpose = SparseMatrixCSC(A.n, A.m, A.rowptr, A.colval, A.nzval)
+    return generate_metis_graph(stored_transpose)
+end
 
 function compress_partition(p::AbstractVector)
     up = sort!(unique(p))
@@ -216,17 +219,17 @@ function cartesian_partition(pts::AbstractMatrix, dim)
         if x0 ≈ x1
             continue
         end
-        dx = (x1 - x0)/n
+        dx = (x1 - x0) / n
         for (i, xi) in enumerate(x)
-            v = ceil((xi - x0)/dx)
+            v = ceil((xi - x0) / dx)
             p_i[i] = clamp(v, 1, n)
         end
     end
     p = zeros(Int, npts)
     for d in 1:ndim
         p_i = view(prow, d, :)
-        offset = prod(dim[1:(d-1)])
-        p += p_i.*offset
+        offset = prod(dim[1:(d - 1)])
+        p += p_i .* offset
     end
     p = compress_partition(p)
     minp, maxp = extrema(p)
@@ -241,7 +244,8 @@ end
 Partition based on neighborship (with optional groups kept contigious after
 partitioning)
 """
-function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2));
+function partition(
+        N::AbstractMatrix, num_coarse, weights = ones(size(N, 2));
         partitioner = MetisPartitioner(),
         groups = nothing,
         n = maximum(N),
@@ -271,7 +275,7 @@ function partition(N::AbstractMatrix, num_coarse, weights = ones(size(N, 2));
         n_inner = n
     end
     if has_groups && group_by_weights
-        maxv = 100*maximum(weights)
+        maxv = 100 * maximum(weights)
         for grp in groups
             for i in axes(N, 2)
                 has_left = N[1, i] in grp
@@ -321,16 +325,29 @@ function load_balanced_endpoint(block_index, nvals, nblocks)
     remainder = mod(nvals, nblocks)
     # Count number of passed blocks that have an extra element
     passed_wide_blocks = min(block_index, remainder)
-    return min(passed_wide_blocks + width*block_index, nvals)
+    return min(passed_wide_blocks + width * block_index, nvals)
 end
 
 """
     load_balanced_interval(b, n, m)
 
-Create UnitRange for block b ∈ [1, m] for interval of total length n
+Create UnitRange for block b ∈ [1, m] for interval of total length n, dividing
+each block into a load balanced interval.
+
+# Example
+We have the interval 1:10 and want to divide it into 3 blocks. The first block
+will have 4 elements, the second will have 3, and the third will have 3.
+
+```julia
+julia> Jutul.load_balanced_interval(1, 10, 3)
+1:4
+julia> Jutul.load_balanced_interval(2, 10, 3)
+5:7
+julia> Jutul.load_balanced_interval(3, 10, 3)
+8:10
 """
 function load_balanced_interval(b, n, m)
-    start = load_balanced_endpoint(b-1, n, m) + 1
+    start = load_balanced_endpoint(b - 1, n, m) + 1
     stop = load_balanced_endpoint(b, n, m)
     return start:stop
 end
@@ -349,7 +366,8 @@ matrix with two rows, with one pair of cells in each column. Optionally node and
 edge weights can be provided. If a list of groups are provided, these nodes will
 be accumulated together in the hypergraph.
 """
-function setup_partitioner_hypergraph(N::Matrix{Int};
+function setup_partitioner_hypergraph(
+        N::Matrix{Int};
         num_nodes::Int = maximum(N),
         num_edges::Int = size(N, 2),
         node_weights::Vector{Int} = ones(Int, num_nodes),
@@ -425,7 +443,7 @@ function setup_partitioner_hypergraph(N::Matrix{Int};
         edge_weights = edge_weights_compressed,
         neighbors = N_new,
         partition = compressed_partition,
-        groups = groups
+        groups = groups,
     )
 end
 
@@ -447,7 +465,7 @@ end
 function partition_hypergraph(N::Matrix{Int}, n::Int, partitioner = MetisPartitioner(); expand = true, output_graph = false, kwarg...)
     g = setup_partitioner_hypergraph(N; kwarg...)
     p = partition_hypergraph(g, n, partitioner, expand = expand)
-    if output_graph
+    return if output_graph
         out = (p, g)
     else
         out = p

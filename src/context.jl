@@ -52,11 +52,11 @@ function transfer(context, t::AbstractDict)
 end
 
 function transfer(context, t::AbstractFloat)
-    convert(float_type(context), t)
+    return convert(float_type(context), t)
 end
 
 function transfer(context, t::Integer)
-    convert(index_type(context), t)
+    return convert(index_type(context), t)
 end
 
 """
@@ -76,6 +76,9 @@ end
 float_type(context) = Float64
 index_type(context) = Int64
 nzval_index_type(context) = index_type(context)
+linear_float_type(context) = float_type(context)
+linear_index_type(context) = index_type(context)
+linear_solver_context(context) = context
 
 function synchronize(::SingleCUDAContext)
 
@@ -90,12 +93,14 @@ function index_type(c::SingleCUDAContext)
     return c.index_t
 end
 
-function select_contexts(ctype = :csc;
-                    main_context = nothing,
-                    context = nothing,
-                    block_backend = true,
-                    nthreads = Threads.nthreads(),
-                    minbatch = 1000)
+function select_contexts(
+        ctype = :csc;
+        main_context = nothing,
+        context = nothing,
+        block_backend = true,
+        nthreads = Threads.nthreads(),
+        minbatch = 1000
+    )
     if block_backend
         matrix_layout = BlockMajorLayout()
     else

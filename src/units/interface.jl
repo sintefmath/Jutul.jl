@@ -3,7 +3,7 @@ function convert_to_si(value, unit_name::String)
     if ssym isa Jutul.CelsiusType || ssym isa Jutul.FahrenheitType
         ret = convert_to_si(value, ssym)
     else
-        ret = value*si_unit(unit_name)
+        ret = value * si_unit(unit_name)
     end
     return ret
 end
@@ -13,11 +13,11 @@ function convert_to_si(value, unit_name::Symbol)
 end
 
 function convert_to_si(val, unit::Val)
-    return val*si_unit(unit)
+    return val * si_unit(unit)
 end
 
 function convert_to_si(val, unit::Real)
-    return val*unit
+    return val * unit
 end
 
 """
@@ -40,11 +40,11 @@ function convert_from_si(value, unit_name::Symbol)
 end
 
 function convert_from_si(val, unit::Val)
-    return val/si_unit(unit)
+    return val / si_unit(unit)
 end
 
 function convert_from_si(val, unit::Real)
-    return val/unit
+    return val / unit
 end
 
 """
@@ -88,7 +88,7 @@ function si_unit(uname::String)
     return unit_convert(uname, to_si = true)
 end
 
-function si_unit(::Val{uname}) where uname
+function si_unit(::Val{uname}) where {uname}
     prefix = get(UNIT_PREFIXES, uname, missing)
     if ismissing(prefix)
         # Could be a prefixed unit, e.g. millimeter
@@ -143,7 +143,7 @@ function unit_convert(ex::Expr; to_si::Bool = true)
             if to_si
                 f = u
             else
-                f = 1.0/u
+                f = 1.0 / u
             end
             ex.args[idx] = f
         elseif val isa Expr

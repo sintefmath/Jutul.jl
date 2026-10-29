@@ -17,13 +17,13 @@ function update_preconditioner!(jac::DiagonalPreconditioner, A, b, context, exec
     end
     D = jac.factor
     jac.minbatch = mb
-    diagonal_precond!(D, A, jac)
+    return diagonal_precond!(D, A, jac)
 end
 
 function diagonal_precond!(Diag, A, jac)
     D = Diag.D
     mb = minbatch(A)
-    @batch minbatch = mb for i in eachindex(D)
+    return @batch minbatch = mb for i in eachindex(D)
         @inbounds D[i] = diagonal_precond(A, i, jac)
     end
 end
@@ -38,7 +38,7 @@ function apply!(x, jac::DiagonalPreconditioner, y, arg...)
     as_svec = (x) -> reinterpret(Vt, x)
 
     # Solve by reinterpreting vectors to block (=SVector) vectors
-    diag_parmul!(as_svec(x), D, as_svec(y), minbatch(jac))
+    return diag_parmul!(as_svec(x), D, as_svec(y), minbatch(jac))
 end
 
 function operator_nrows(jac::DiagonalPreconditioner)
@@ -46,15 +46,15 @@ function operator_nrows(jac::DiagonalPreconditioner)
 end
 
 function diag_parmul!(x, D, y, mb)
-    @batch minbatch = mb for i in eachindex(x, y, D)
-        @inbounds x[i] = D[i]*y[i]
+    return @batch minbatch = mb for i in eachindex(x, y, D)
+        @inbounds x[i] = D[i] * y[i]
     end
 end
 
 function ldiv!(x, Diag::DiagonalPrecondFactorization, y)
     mb = Diag.minbatch
     D = Diag.D
-    @batch minbatch = mb for i in eachindex(x, y, D)
-        @inbounds x[i] = D[i]*y[i]
+    return @batch minbatch = mb for i in eachindex(x, y, D)
+        @inbounds x[i] = D[i] * y[i]
     end
 end

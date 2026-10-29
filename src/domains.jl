@@ -11,7 +11,7 @@ end
 
 function count_entities(D::JutulDomain, ::Cells)
     # The default implementation yields a single cell and nothing else.
-    1
+    return 1
 end
 
 function get_entities(D::Union{DiscretizedDomain, DataDomain})
@@ -25,29 +25,29 @@ function select_variables_domain_helper!(S, domain::DiscretizedDomain, model, f!
             f!(S, d[k], model)
         end
     end
-    f!(S, physical_representation(domain), model)
+    return f!(S, physical_representation(domain), model)
 end
 
 select_primary_variables!(S, something, model) = nothing
 select_secondary_variables!(S, something, model) = nothing
 select_parameters!(S, something, model) = nothing
-select_equations!(S, something, model)  = nothing
+select_equations!(S, something, model) = nothing
 
 # Discretized domain - dispatch further down on all present discretizations
 function select_primary_variables!(S, domain::DiscretizedDomain, model::SimulationModel)
-    select_variables_domain_helper!(S, domain, model, select_primary_variables!)
+    return select_variables_domain_helper!(S, domain, model, select_primary_variables!)
 end
 
 function select_secondary_variables!(S, domain::DiscretizedDomain, model::SimulationModel)
-    select_variables_domain_helper!(S, domain, model, select_secondary_variables!)
+    return select_variables_domain_helper!(S, domain, model, select_secondary_variables!)
 end
 
 function select_parameters!(S, domain::DiscretizedDomain, model::SimulationModel)
-    select_variables_domain_helper!(S, domain, model, select_parameters!)
+    return select_variables_domain_helper!(S, domain, model, select_parameters!)
 end
 
 function select_equations!(S, domain::DiscretizedDomain, model::SimulationModel)
-    select_variables_domain_helper!(S, domain, model, select_equations!)
+    return select_variables_domain_helper!(S, domain, model, select_equations!)
 end
 
 count_entities(D::Union{DataDomain, DiscretizedDomain}, entity::Cells) = D.entities[entity]
@@ -81,12 +81,12 @@ end
 Get the number of half-faces in a `DataDomain` or `DiscretizedDomain`.
 """
 function number_of_half_faces(D::Union{DataDomain, DiscretizedDomain})
-    return 2*number_of_faces(D)
+    return 2 * number_of_faces(D)
 end
 
 function positional_map(domain::JutulDomain, source_entity::JutulEntity, target_entity::JutulEntity)
     g = physical_representation(domain)
-    positional_map(g, source_entity, target_entity)
+    return positional_map(g, source_entity, target_entity)
 end
 
 function positional_map(grid::JutulMesh, source_entity, target_entity)
@@ -103,7 +103,7 @@ function half_face_map(N, nc)
     signs = similar(faces)
     cells = similar(faces)
     for i in 1:nc
-        for j in face_pos[i]:(face_pos[i+1]-1)
+        for j in face_pos[i]:(face_pos[i + 1] - 1)
             f = faces[j]
             l = N[1, f]
             r = N[2, f]
@@ -123,7 +123,7 @@ end
 
 function half_face_map_to_neighbors(fmap)
     (; cells, faces, face_pos, face_sign) = fmap
-    nc = length(face_pos)-1
+    nc = length(face_pos) - 1
     nf = maximum(faces)
     N = zeros(Int, 2, nf)
     for (face, cell, sgn) in zip(faces, cells, face_sign)
@@ -137,7 +137,7 @@ function half_face_map_to_neighbors(fmap)
 end
 
 function local_half_face_map(cd, cell_index)
-    loc = cd.face_pos[cell_index]:(cd.face_pos[cell_index+1]-1)
+    loc = cd.face_pos[cell_index]:(cd.face_pos[cell_index + 1] - 1)
     faces = @views cd.faces[loc]
     signs = @views cd.face_sign[loc]
     cells = @views cd.cells[loc]

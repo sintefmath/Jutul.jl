@@ -18,7 +18,7 @@ struct FaceMap{M, N}
                 @assert c in neigh[face]
             end
         end
-        new{M, N}(c2f, f2n, neigh)
+        return new{M, N}(c2f, f2n, neigh)
     end
 end
 
@@ -37,11 +37,11 @@ struct UnstructuredMesh{D, S, IM, IF, M, F, BM, NM, T} <: FiniteVolumeMesh
     z_is_depth::Bool
 end
 
-function float_type(::UnstructuredMesh{<:Any, <:Any, <:Any, <:Any, <:Any, T, <:Any, <:Any, <:Any}) where T
+function float_type(::UnstructuredMesh{<:Any, <:Any, <:Any, <:Any, <:Any, T, <:Any, <:Any, <:Any}) where {T}
     return T
 end
 
-function convert_coord_points(points::AbstractMatrix{F}) where F
+function convert_coord_points(points::AbstractMatrix{F}) where {F}
     dim, nn = size(points)
     @assert dim <= 3
     T_xyz = SVector{dim, eltype(points)}
@@ -98,8 +98,8 @@ end
 
 # Outer constructor: Take MRST format and turn into separate lists for interior and boundary
 function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespos, node_points, face_neighbors::Matrix{Int}; kwarg...)
-    nc = length(cells_facepos)-1
-    nf = length(faces_nodespos)-1
+    nc = length(cells_facepos) - 1
+    nf = length(faces_nodespos) - 1
     node_points, dim = convert_coord_points(node_points)
     nn = length(node_points)
 
@@ -125,7 +125,7 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
 
     for face in 1:nf
         l, r = face_neighbors[face]
-        npos = faces_nodespos[face]:(faces_nodespos[face+1]-1)
+        npos = faces_nodespos[face]:(faces_nodespos[face + 1] - 1)
         n = length(npos)
         bnd = l == 0 || r == 0
         if bnd
@@ -136,7 +136,7 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
             for i in npos
                 push!(boundary_faces_nodes, faces_nodes[i])
             end
-            
+
             push!(boundary_faces_nodespos, boundary_faces_nodespos[end] + n)
             added_boundary += 1
             # Minus sign means boundary index
@@ -164,7 +164,7 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
     for cell in 1:nc
         bnd_count = 0
         int_count = 0
-        for fp in cells_facepos[cell]:(cells_facepos[cell+1]-1)
+        for fp in cells_facepos[cell]:(cells_facepos[cell + 1] - 1)
             face = cells_faces[fp]
             ix = faceindex[face]
             if ix > 0
@@ -202,7 +202,7 @@ function UnstructuredMesh(cells_faces, cells_facepos, faces_nodes, faces_nodespo
         bnd_cells;
         kwarg...,
         face_map = faceindex
-        )
+    )
 end
 
 # Middle constructor, do some checking and convert to real data structures (SVector, tuple neighbors, indirection maps)
@@ -260,7 +260,7 @@ function UnstructuredMesh(
         node_map::NM = nothing,
         structure::S = nothing,
         z_is_depth = false
-    ) where {T<:IndirectionMap, IM, IF, dim, F<:Real, BM, NM, S}
+    ) where {T <: IndirectionMap, IM, IF, dim, F <: Real, BM, NM, S}
     faces = FaceMap(cells_to_faces, faces_to_nodes, face_neighbors)
     bnd = FaceMap(cells_to_bnd, bnd_to_nodes, boundary_cells)
     @assert length(face_neighbors) == length(faces_to_nodes)
@@ -298,7 +298,7 @@ be 2D and 3D for a 1-to-1 conversion. 1D meshes are implicitly converted to 2D.
 """
 function UnstructuredMesh(g::CartesianMesh; warn_1d = true, kwarg...)
     d = dim(g)
-    if d == 1
+    return if d == 1
         if warn_1d
             @warn "Conversion from CartesianMesh to UnstructuredMesh is only fully supported for 2D/3D grids. Converting 1D grid to 2D."
         end
@@ -332,20 +332,20 @@ function unstructured_from_cart(g, ::Val{2}; kwarg...)
     nc = number_of_cells(g)
     nf = number_of_faces(g)
     nbf = number_of_boundary_faces(g)
-    num_nodes_x = nx+1
-    num_nodes_y = ny+1
-    num_nodes = num_nodes_x*num_nodes_y
+    num_nodes_x = nx + 1
+    num_nodes_y = ny + 1
+    num_nodes = num_nodes_x * num_nodes_y
     nodeix = reshape(1:num_nodes, num_nodes_x, num_nodes_y)
 
     node_points = Vector{SVector{2, Float64}}()
     dx, dy = g.deltas
-    function get_point(D::T, i) where {T<:Real}
-        newpt = (i-1)*D
+    function get_point(D::T, i) where {T <: Real}
+        newpt = (i - 1) * D
         return newpt::T
     end
-    function get_point(D::Union{NTuple{N, T}, Vector{T}}, i) where {T<:Real, N}
+    function get_point(D::Union{NTuple{N, T}, Vector{T}}, i) where {T <: Real, N}
         pt = zero(T)
-        for j in 1:(i-1)
+        for j in 1:(i - 1)
             pt += D[j]
         end
         return pt::T
@@ -377,74 +377,74 @@ function unstructured_from_cart(g, ::Val{2}; kwarg...)
         for node in arg
             push!(nodes, node)
         end
-        push!(pos, pos[end] + length(arg))
+        return push!(pos, pos[end] + length(arg))
     end
     function add_internal_neighbor!(t, D)
         x, y = t
         index = cell_index(g, t)
         l = index
         r = cell_index(g, (x + (D == 1), y + (D == 2)))
-        push!(int_neighbors, (l, r))
+        return push!(int_neighbors, (l, r))
     end
     faces_nodes = Int[]
     faces_nodespos = Int[1]
-    sizehint!(faces_nodes, 4*nf)
-    sizehint!(faces_nodespos, nf+1)
+    sizehint!(faces_nodes, 4 * nf)
+    sizehint!(faces_nodespos, nf + 1)
     # Faces with X-normal > 0
-        for y in 1:ny
-            for x in 2:nx
-                p1 = nodeix[x, y]
-                p2 = nodeix[x, y+1]
-                insert_face!(faces_nodes, faces_nodespos, p1, p2)
-                add_internal_neighbor!((x-1, y), 1)
-            end
+    for y in 1:ny
+        for x in 2:nx
+            p1 = nodeix[x, y]
+            p2 = nodeix[x, y + 1]
+            insert_face!(faces_nodes, faces_nodespos, p1, p2)
+            add_internal_neighbor!((x - 1, y), 1)
         end
+    end
     # Faces with Y-normal > 0
     for y in 2:ny
         for x in 1:nx
             p1 = nodeix[x, y]
-            p2 = nodeix[x+1, y]
+            p2 = nodeix[x + 1, y]
             insert_face!(faces_nodes, faces_nodespos, p2, p1)
-            add_internal_neighbor!((x, y-1), 2)
+            add_internal_neighbor!((x, y - 1), 2)
         end
     end
 
     boundary_faces_nodes = Int[]
     boundary_faces_nodespos = Int[1]
 
-    sizehint!(boundary_faces_nodes, 4*nbf)
-    sizehint!(boundary_faces_nodespos, nbf+1)
+    sizehint!(boundary_faces_nodes, 4 * nbf)
+    sizehint!(boundary_faces_nodespos, nbf + 1)
 
     bnd_cells = Int[]
     sizehint!(bnd_cells, nbf)
     function add_boundary_cell!(t, D)
         index = cell_index(g, t)
-        push!(bnd_cells, index)
+        return push!(bnd_cells, index)
     end
     for y in 1:ny
-        for x in [1, nx+1]
+        for x in [1, nx + 1]
             p1 = nodeix[x, y]
-            p2 = nodeix[x, y+1]
+            p2 = nodeix[x, y + 1]
             if x == 1
                 insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p2, p1)
                 add_boundary_cell!((x, y), 1)
             else
                 insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2)
-                add_boundary_cell!((x-1, y), 1)
+                add_boundary_cell!((x - 1, y), 1)
             end
         end
     end
     # Faces with Y-normal > 0
     for x in 1:nx
-        for y in [1, ny+1]
+        for y in [1, ny + 1]
             p1 = nodeix[x, y]
-            p2 = nodeix[x+1, y]
+            p2 = nodeix[x + 1, y]
             if y == 1
                 insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2)
                 add_boundary_cell!((x, y), 2)
             else
                 insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p2, p1)
-                add_boundary_cell!((x, y-1), 2)
+                add_boundary_cell!((x, y - 1), 2)
             end
         end
     end
@@ -461,7 +461,7 @@ function unstructured_from_cart(g, ::Val{2}; kwarg...)
         for bf in bfaces
             push!(boundary_cells_faces, bf)
         end
-        push!(boundary_cells_facepos, boundary_cells_facepos[end]+n)
+        push!(boundary_cells_facepos, boundary_cells_facepos[end] + n)
     end
 
     return UnstructuredMesh(
@@ -491,17 +491,17 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     nc = number_of_cells(g)
     nf = number_of_faces(g)
     nbf = number_of_boundary_faces(g)
-    num_nodes_x = nx+1
-    num_nodes_y = ny+1
-    num_nodes_z = nz+1
-    num_nodes = num_nodes_x*num_nodes_y*num_nodes_z
+    num_nodes_x = nx + 1
+    num_nodes_y = ny + 1
+    num_nodes_z = nz + 1
+    num_nodes = num_nodes_x * num_nodes_y * num_nodes_z
     nodeix = reshape(1:num_nodes, num_nodes_x, num_nodes_y, num_nodes_z)
 
     dx, dy, dz = g.deltas
     Float_T = promote_type(eltype(dx), eltype(dy), eltype(dz), eltype(X0), eltype(Y0), eltype(Z0))
     node_points = Vector{SVector{3, Float_T}}()
 
-    sizehint!(node_points, num_nodes_x*num_nodes_y*num_nodes_z)
+    sizehint!(node_points, num_nodes_x * num_nodes_y * num_nodes_z)
     xpts = get_cartesian_points(dx, num_nodes_x)
     ypts = get_cartesian_points(dy, num_nodes_y)
     zpts = get_cartesian_points(dz, num_nodes_z)
@@ -535,55 +535,55 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
         for node in arg
             push!(nodes, node)
         end
-        push!(pos, pos[end] + length(arg))
+        return push!(pos, pos[end] + length(arg))
     end
     function add_internal_neighbor!(t, D)
         x, y, z = t
         index = cell_index(g, t)
         l = index
         r = cell_index(g, (x + (D == 1), y + (D == 2), z + (D == 3)))
-        push!(int_neighbors, (l, r))
+        return push!(int_neighbors, (l, r))
     end
     faces_nodes = Int[]
     faces_nodespos = Int[1]
-    sizehint!(faces_nodes, 4*nf)
-    sizehint!(faces_nodespos, nf+1)
+    sizehint!(faces_nodes, 4 * nf)
+    sizehint!(faces_nodespos, nf + 1)
     # Faces with X-normal > 0
-    for z = 1:nz
+    for z in 1:nz
         for y in 1:ny
             for x in 2:nx
                 p1 = nodeix[x, y, z]
-                p2 = nodeix[x, y+1, z]
-                p3 = nodeix[x, y+1, z+1]
-                p4 = nodeix[x, y, z+1]
+                p2 = nodeix[x, y + 1, z]
+                p3 = nodeix[x, y + 1, z + 1]
+                p4 = nodeix[x, y, z + 1]
                 insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
-                add_internal_neighbor!((x-1.0, y, z), 1)
+                add_internal_neighbor!((x - 1.0, y, z), 1)
             end
         end
     end
     # Faces with Y-normal > 0
     for y in 2:ny
-        for z = 1:nz
+        for z in 1:nz
             for x in 1:nx
-                p1 = nodeix[x, y, z+1]
-                p2 = nodeix[x+1, y, z+1]
-                p3 = nodeix[x+1, y, z]
+                p1 = nodeix[x, y, z + 1]
+                p2 = nodeix[x + 1, y, z + 1]
+                p3 = nodeix[x + 1, y, z]
                 p4 = nodeix[x, y, z]
                 insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
-                add_internal_neighbor!((x, y-1.0, z), 2)
+                add_internal_neighbor!((x, y - 1.0, z), 2)
             end
         end
     end
     # Faces with Z-normal > 0
-    for z = 2:nz
+    for z in 2:nz
         for y in 1:ny
             for x in 1:nx
-                p1 = nodeix[x+1, y, z]
-                p2 = nodeix[x+1, y+1, z]
-                p3 = nodeix[x, y+1, z]
+                p1 = nodeix[x + 1, y, z]
+                p2 = nodeix[x + 1, y + 1, z]
+                p3 = nodeix[x, y + 1, z]
                 p4 = nodeix[x, y, z]
                 insert_face!(faces_nodes, faces_nodespos, p1, p2, p3, p4)
-                add_internal_neighbor!((x, y, z-1.0), 3)
+                add_internal_neighbor!((x, y, z - 1.0), 3)
             end
         end
     end
@@ -591,46 +591,46 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     boundary_faces_nodes = Int[]
     boundary_faces_nodespos = Int[1]
 
-    sizehint!(boundary_faces_nodes, 4*nbf)
-    sizehint!(boundary_faces_nodespos, nbf+1)
+    sizehint!(boundary_faces_nodes, 4 * nbf)
+    sizehint!(boundary_faces_nodespos, nbf + 1)
 
     bnd_cells = Int[]
     sizehint!(bnd_cells, nbf)
     function add_boundary_cell!(t, D)
         index = cell_index(g, t)
-        push!(bnd_cells, index)
+        return push!(bnd_cells, index)
     end
     for y in 1:ny
-        for z = 1:nz
-            for x in [1, nx+1]
-                p1 = nodeix[x, y, z+1]
-                p2 = nodeix[x, y+1, z+1]
-                p3 = nodeix[x, y+1, z]
+        for z in 1:nz
+            for x in [1, nx + 1]
+                p1 = nodeix[x, y, z + 1]
+                p2 = nodeix[x, y + 1, z + 1]
+                p3 = nodeix[x, y + 1, z]
                 p4 = nodeix[x, y, z]
                 if x == 1
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2, p3, p4)
                     add_boundary_cell!((x, y, z), 1)
                 else
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
-                    add_boundary_cell!((x-1.0, y, z), 1)
+                    add_boundary_cell!((x - 1.0, y, z), 1)
                 end
             end
         end
     end
     # Faces with Y-normal > 0
     for x in 1:nx
-        for z = 1:nz
-            for y in [1, ny+1]
+        for z in 1:nz
+            for y in [1, ny + 1]
                 p1 = nodeix[x, y, z]
-                p2 = nodeix[x+1, y, z]
-                p3 = nodeix[x+1, y, z+1]
-                p4 = nodeix[x, y, z+1]
+                p2 = nodeix[x + 1, y, z]
+                p3 = nodeix[x + 1, y, z + 1]
+                p4 = nodeix[x, y, z + 1]
                 if y == 1
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2, p3, p4)
                     add_boundary_cell!((x, y, z), 2)
                 else
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
-                    add_boundary_cell!((x, y-1.0, z), 2)
+                    add_boundary_cell!((x, y - 1.0, z), 2)
                 end
             end
         end
@@ -638,17 +638,17 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     # Faces with Z-normal > 0
     for x in 1:nx
         for y in 1:ny
-            for z = [1, nz+1]
+            for z in [1, nz + 1]
                 p1 = nodeix[x, y, z]
-                p2 = nodeix[x, y+1, z]
-                p3 = nodeix[x+1, y+1, z]
-                p4 = nodeix[x+1, y, z]
+                p2 = nodeix[x, y + 1, z]
+                p3 = nodeix[x + 1, y + 1, z]
+                p4 = nodeix[x + 1, y, z]
                 if z == 1
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p1, p2, p3, p4)
                     add_boundary_cell!((x, y, z), 3)
                 else
                     insert_face!(boundary_faces_nodes, boundary_faces_nodespos, p4, p3, p2, p1)
-                    add_boundary_cell!((x, y, z-1.0), 3)
+                    add_boundary_cell!((x, y, z - 1.0), 3)
                 end
             end
         end
@@ -666,7 +666,7 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
         for bf in bfaces
             push!(boundary_cells_faces, bf)
         end
-        push!(boundary_cells_facepos, boundary_cells_facepos[end]+n)
+        push!(boundary_cells_facepos, boundary_cells_facepos[end] + n)
     end
 
     return UnstructuredMesh(
@@ -687,11 +687,11 @@ function unstructured_from_cart(g, ::Val{3}; kwarg...)
     )
 end
 
-function get_cartesian_points(D::T, n) where {T<:Real}
-    return map(i -> (i-1)*D, 1:n)
+function get_cartesian_points(D::T, n) where {T <: Real}
+    return map(i -> (i - 1) * D, 1:n)
 end
 
-function get_cartesian_points(D::Union{NTuple{N, T}, Vector{T}}, n) where {T<:Real, N}
+function get_cartesian_points(D::Union{NTuple{N, T}, Vector{T}}, n) where {T <: Real, N}
     points = Vector{T}(undef, n)
     pt = zero(T)
     for i in 1:n
@@ -723,4 +723,3 @@ function UnstructuredMesh(G_raw::AbstractDict; kwarg...)
     N_raw = Int.(G_raw["faces"]["neighbors"]')
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw; kwarg...)
 end
-

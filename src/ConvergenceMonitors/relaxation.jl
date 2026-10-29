@@ -15,7 +15,7 @@ iplementation of `select_nonlinear_relaxation_model` below for details.
 """
 function ConvergenceMonitorRelaxation(; w_min = 0.1, dw = 0.2, dw_increase = nothing, dw_decrease = nothing, w_max = 1.0)
     if isnothing(dw_increase)
-        dw_increase = dw/2
+        dw_increase = dw / 2
     end
     if isnothing(dw_decrease)
         dw_decrease = dw
@@ -30,18 +30,21 @@ Utility for setting `ConvergenceMonitorRelaxation` to the simulator config. This
 function also sets the a `ConvergenceMonitorCuttingCriterion` to the config --
 see `set_convergence_monitor_cutting_criterion!`.
 """
-function set_convergence_monitor_relaxation!(config; 
-    max_nonlinear_iterations = 50,
-    convergence_monitor_args = NamedTuple(),
-    relaxation_args...
+function set_convergence_monitor_relaxation!(
+        config;
+        max_nonlinear_iterations = 50,
+        convergence_monitor_args = NamedTuple(),
+        relaxation_args...
     )
-    
-    set_convergence_monitor_cutting_criterion!(config; 
-    max_nonlinear_iterations = max_nonlinear_iterations, 
-    convergence_monitor_args...)
+
+    set_convergence_monitor_cutting_criterion!(
+        config;
+        max_nonlinear_iterations = max_nonlinear_iterations,
+        convergence_monitor_args...
+    )
 
     rel = ConvergenceMonitorRelaxation(; relaxation_args...)
-    config[:relaxation] = rel
+    return config[:relaxation] = rel
 
 end
 
@@ -58,8 +61,8 @@ function Jutul.select_nonlinear_relaxation_model(model, rel_type::ConvergenceMon
 
     if length(reports) > 1
         (; dw_decrease, dw_increase, w_max, w_min) = rel_type
-        
-        report = reports[end-1]
+
+        report = reports[end - 1]
         @assert haskey(report, :convergence_monitor)
         status = report[:convergence_monitor][:status]
         oscillating = report[:convergence_monitor][:oscillation]

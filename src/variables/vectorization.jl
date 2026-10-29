@@ -24,7 +24,7 @@ function vectorize_variables(model, state_or_prm, type_or_map = :primary; config
 end
 
 function vectorized_length(model, mapper)
-    sum(x -> x.n_x, values(mapper), init = 0)
+    return sum(x -> x.n_x, values(mapper), init = 0)
 end
 
 function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; config = nothing)
@@ -42,7 +42,8 @@ function vectorize_variables!(V, model, state_or_prm, type_or_map = :primary; co
     return V
 end
 
-function vectorize_variable!(V, state, k, info, F, model, vardef::JutulVariables;
+function vectorize_variable!(
+        V, state, k, info, F, model, vardef::JutulVariables;
         config = nothing,
         offset_x = info.offset_x
     )
@@ -91,7 +92,7 @@ function vectorize_variable_values!(dest, idx, idx_state, dest_offset, n_dest, F
     @assert degrees_of_freedom_per_entity(model, variable_def) == m
     for j in 1:m
         # dest[dest_offset + (idx - 1)*m + j] = F(el[j])
-        dest[dest_offset + (j - 1)*n_dest + idx] = F(el[j])
+        dest[dest_offset + (j - 1) * n_dest + idx] = F(el[j])
     end
     return dest
 end
@@ -122,7 +123,7 @@ function devectorize_variable!(state, model, V, k, info, F_inv; reference = miss
     T_state = eltype(state_val)
     T = eltype(V)
     # old_state_val = state[k]
-    if T_state<:Real
+    if T_state <: Real
         if T_state != T
             state_val = zeros(T, size(state_val))
             state[k] = state_val
@@ -143,7 +144,7 @@ end
 
 function devectorize_variable_inner!(state_val, reference, model::JutulModel, vardef::JutulVariables, V, k, F_inv, lumping, n_full, n_x, offset_full, offset_x)
     m = degrees_of_freedom_per_entity(model, vardef)
-    if isnothing(lumping)
+    return if isnothing(lumping)
         @assert n_full == n_x
         # @assert length(state_val) == n_full "Expected field $k to have length $n_full, was $(length(state_val))"
         if state_val isa AbstractVector
@@ -174,7 +175,7 @@ function devectorize_variable_values!(dest, reference, idx, idx_dest, offset_x, 
     # base_offset = offset_x + (idx - 1)*m
     # x_sub = view(x, (base_offset + 1):(base_offset + m))
     base_offset = offset_x + idx
-    subs = base_offset .+ ndest*(0:(m-1))
+    subs = base_offset .+ ndest * (0:(m - 1))
     # x_sub = x[base_offset .+ ndest*(0:(m-1))]
     x_sub = view(x, subs)
     descalarize_variable!(dest, model, x_sub, variable_def, idx_dest, reference, F = F_inv)
@@ -183,7 +184,7 @@ end
 
 function devectorize_state_and_parameters!(state, parameters, model, V, mapper, config)
     state_and_parameters = merge(state, parameters)
-    devectorize_variables!(state_and_parameters, model, V, mapper; config=config)
+    devectorize_variables!(state_and_parameters, model, V, mapper; config = config)
     for k in keys(mapper)
         if haskey(state, k)
             state[k] = state_and_parameters[k]
@@ -209,7 +210,7 @@ function vectorize_data_domain(d::DataDomain)
     n = 0
     for (k, val_e_pair) in pairs(d.data)
         val, e = val_e_pair
-        if eltype(val)<:AbstractFloat
+        if eltype(val) <: AbstractFloat
             n += length(val)
         end
     end
@@ -221,10 +222,10 @@ function vectorize_data_domain!(x, d::DataDomain)
     offset = 0
     for (k, val_e_pair) in pairs(d.data)
         val, e = val_e_pair
-        if eltype(val)<:AbstractFloat
+        if eltype(val) <: AbstractFloat
             n = length(val)
             for i in 1:n
-                x[offset+i] = val[i]
+                x[offset + i] = val[i]
             end
             offset += n
         end
@@ -239,7 +240,7 @@ function devectorize_data_domain(domain::DataDomain{R, E, D}, x::Vector{T}) wher
     newd = DataDomain{R, E, D}(r, e, d)
     for (k, val_e_pair) in pairs(domain)
         val, e = val_e_pair
-        if eltype(val)<:AbstractFloat
+        if eltype(val) <: AbstractFloat
             sz = size(val)
             newd[k, e] = zeros(T, sz)
         else
@@ -250,18 +251,18 @@ function devectorize_data_domain(domain::DataDomain{R, E, D}, x::Vector{T}) wher
     return devectorize_data_domain!(newd, x)
 end
 
-function devectorize_data_domain!(d::DataDomain, x::Vector{T}) where T
+function devectorize_data_domain!(d::DataDomain, x::Vector{T}) where {T}
     offset = 0
     for (k, val_e_pair) in pairs(d.data)
         val, e = val_e_pair
-        if eltype(val)<:AbstractFloat
+        if eltype(val) <: AbstractFloat
             n = length(val)
             if eltype(val) == T
                 for i in 1:n
-                    val[i] = x[offset+i]
+                    val[i] = x[offset + i]
                 end
             else
-                val = reshape(x[(offset+1):(offset+n)], size(val))
+                val = reshape(x[(offset + 1):(offset + n)], size(val))
                 d[k, e] = val
             end
             offset += n
@@ -278,7 +279,8 @@ Compute the (sparse) Jacobian of parameters with respect to data_domain values
 (i.e. floating point values). Optionally, `config` can be passed to allow
 `vectorize_variables` to only include a subset of the parameters.
 """
-function parameters_jacobian_wrt_data_domain(model;
+function parameters_jacobian_wrt_data_domain(
+        model;
         copy = true,
         config = nothing,
         use_di = true,
@@ -319,7 +321,7 @@ end
 
 function default_di_backend(; sparse = true)
     if sparse
-        sparsity_detector = SCT.TracerLocalSparsityDetector(gradient_pattern_type=Set{Int})
+        sparsity_detector = SCT.TracerLocalSparsityDetector(gradient_pattern_type = Set{Int})
         backend = AutoSparse(
             AutoForwardDiff();
             sparsity_detector = sparsity_detector,
@@ -348,7 +350,7 @@ function data_domain_to_parameters_gradient(model, parameter_gradient; dp_dd = m
     # do_dd = do_dp'*dp_dd
     # if we want to output do_dd' (standard julia vector )we can rewrite
     # do_dd' = (do_dp'*dp_dd)' = dp_dd'*do_dp
-    do_dd = dp_dd'*do_dp
+    do_dd = dp_dd' * do_dp
     data_domain_with_gradients = deepcopy(model.data_domain)
     devectorize_data_domain!(data_domain_with_gradients, do_dd)
     return data_domain_with_gradients

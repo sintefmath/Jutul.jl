@@ -11,4 +11,3 @@ end
 function discretize_domain(d::JutulDomain, system, ::Val{:default}; kwarg...)
     return d
 end
-

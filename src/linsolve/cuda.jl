@@ -32,7 +32,7 @@ end
 function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     F_t = float_type(context)
     I_t = index_type(context)
-    
+
     # I, J, V, n, m = sparse_arg
 
     A = lsys.jac
@@ -50,4 +50,3 @@ function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     dx_buf = dx
     return LinearizedSystem(jac, r, dx, V_buf, r_buf, dx_buf, lsys.matrix_layout)
 end
-

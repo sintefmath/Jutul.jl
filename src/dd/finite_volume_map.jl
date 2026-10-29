@@ -1,4 +1,3 @@
-
 # Specialization for Cells()
 
 function index_map(index, m::FiniteVolumeGlobalMap, from_set::EquationSet, to_set::VariableSet, ce::Cells)
@@ -7,13 +6,13 @@ function index_map(index, m::FiniteVolumeGlobalMap, from_set::EquationSet, to_se
     return m.inner_to_full_cells[index]
 end
 
-Base.@propagate_inbounds function index_map(c, m::FiniteVolumeGlobalMap{R}, from_set::VariableSet, to_set::GlobalSet, ce::Cells) where R
+Base.@propagate_inbounds function index_map(c, m::FiniteVolumeGlobalMap{R}, from_set::VariableSet, to_set::GlobalSet, ce::Cells) where {R}
     # Previously global_cell
     # Base.@propagate_inbounds global_cell(c, m::FiniteVolumeGlobalMap{R}) where R = m.cells[c]::R
     return m.cells[c]::R
 end
 
-function index_map(c_global, m::FiniteVolumeGlobalMap{R}, from_set::GlobalSet, to_set::VariableSet, ce::Cells) where R
+function index_map(c_global, m::FiniteVolumeGlobalMap{R}, from_set::GlobalSet, to_set::VariableSet, ce::Cells) where {R}
     # Previously local_cell
     # local_cell(c_global, m::FiniteVolumeGlobalMap{R}) where R = only(findfirst(isequal(c_global), m.cells))::R
     # TODO: Old sorted version might be faster for some cases but hopefully not used inside simulation loop?
@@ -22,7 +21,7 @@ function index_map(c_global, m::FiniteVolumeGlobalMap{R}, from_set::GlobalSet, t
     return ix
 end
 
-function index_map(c, m::FiniteVolumeGlobalMap{R}, from_set::VariableSet, to_set::EquationSet, ce::Cells) where R
+function index_map(c, m::FiniteVolumeGlobalMap{R}, from_set::VariableSet, to_set::EquationSet, ce::Cells) where {R}
     # Previously interior_cell
     c_i = m.full_to_inner_cells[c]
     return c_i == 0 ? nothing : c_i

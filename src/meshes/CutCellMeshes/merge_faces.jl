@@ -9,9 +9,9 @@ left to right cell (interior) or outward from the cell (boundary).
 Returns a new `UnstructuredMesh`.
 """
 function merge_coplanar_faces(
-    mesh::UnstructuredMesh{3};
-    coplanar_tol::Real = 1e-8
-)
+        mesh::UnstructuredMesh{3};
+        coplanar_tol::Real = 1.0e-8
+    )
     nc = number_of_cells(mesh)
     nf = number_of_faces(mesh)
     nb = number_of_boundary_faces(mesh)
@@ -21,7 +21,7 @@ function merge_coplanar_faces(
     # 1. Merge interior faces
     # ------------------------------------------------------------------
     # Group faces by their (sorted) neighbor pair
-    pair_to_faces = Dict{Tuple{Int,Int}, Vector{Int}}()
+    pair_to_faces = Dict{Tuple{Int, Int}, Vector{Int}}()
     for f in 1:nf
         l, r = mesh.faces.neighbors[f]
         key = l < r ? (l, r) : (r, l)
@@ -29,7 +29,7 @@ function merge_coplanar_faces(
     end
 
     merged_face_nodes = Vector{Int}[]          # nodes per merged face
-    merged_face_neighbors = Tuple{Int,Int}[]   # (left, right) per merged face
+    merged_face_neighbors = Tuple{Int, Int}[]   # (left, right) per merged face
 
     face_done = falses(nf)
     for (pair, fgroup) in pair_to_faces
@@ -75,8 +75,10 @@ function merge_coplanar_faces(
     # ------------------------------------------------------------------
     # 3. Build the new mesh
     # ------------------------------------------------------------------
-    return _rebuild_mesh(mesh, node_points, merged_face_nodes, merged_face_neighbors,
-                         merged_bnd_nodes, merged_bnd_cells)
+    return _rebuild_mesh(
+        mesh, node_points, merged_face_nodes, merged_face_neighbors,
+        merged_bnd_nodes, merged_bnd_cells
+    )
 end
 
 # ==========================================================================
@@ -91,15 +93,15 @@ same cell (boundary), find clusters of coplanar faces that share nodes and
 merge each cluster into a single face.
 """
 function _merge_face_group!(
-    out_nodes::Vector{Vector{Int}},
-    out_meta,
-    fgroup::Vector{Int},
-    done::BitVector,
-    mesh::UnstructuredMesh{3},
-    node_points::Vector{SVector{3, T}},
-    tol::Real,
-    is_boundary::Bool
-) where T
+        out_nodes::Vector{Vector{Int}},
+        out_meta,
+        fgroup::Vector{Int},
+        done::BitVector,
+        mesh::UnstructuredMesh{3},
+        node_points::Vector{SVector{3, T}},
+        tol::Real,
+        is_boundary::Bool
+    ) where {T}
     nf = length(fgroup)
     if nf <= 1
         return  # nothing to merge
@@ -132,13 +134,13 @@ function _merge_face_group!(
     end
     function uf_unite(a, b)
         ra, rb = uf_find(a), uf_find(b)
-        if ra != rb
+        return if ra != rb
             parent[ra] = rb
         end
     end
 
     for i in 1:nf
-        for j in (i+1):nf
+        for j in (i + 1):nf
             shared = length(intersect(face_node_sets[i], face_node_sets[j]))
             if shared >= 2
                 # Check coplanarity: normals must be parallel AND faces
@@ -183,7 +185,7 @@ function _merge_face_group!(
 
         # The boundary of the merged polygon consists of edges that appear
         # exactly once across all faces in the cluster.
-        edge_count = Dict{Tuple{Int,Int}, Int}()
+        edge_count = Dict{Tuple{Int, Int}, Int}()
         for idx in cluster
             fnodes = face_node_lists[idx]
             nn = length(fnodes)
@@ -196,7 +198,7 @@ function _merge_face_group!(
         end
 
         # Boundary edges appear exactly once
-        boundary_edges = Tuple{Int,Int}[]
+        boundary_edges = Tuple{Int, Int}[]
         for (edge, cnt) in edge_count
             if cnt == 1
                 push!(boundary_edges, edge)
@@ -260,6 +262,7 @@ function _merge_face_group!(
             push!(out_meta, c)
         end
     end
+    return
 end
 
 """
@@ -268,7 +271,7 @@ end
 Given a set of directed/undirected edges, chain them into a single polygon
 boundary.  Returns an ordered list of node indices.
 """
-function _chain_boundary_edges(edges::Vector{Tuple{Int,Int}})
+function _chain_boundary_edges(edges::Vector{Tuple{Int, Int}})
     if isempty(edges)
         return Int[]
     end
@@ -312,11 +315,11 @@ Ensure interior face normal (computed from node ordering) points from cell
 `left` toward cell `right`.  If not, reverse the node order.
 """
 function _fix_interior_orientation!(
-    nodes::Vector{Int},
-    node_points::Vector{SVector{3, T}},
-    left::Int, right::Int,
-    mesh::UnstructuredMesh{3}
-) where T
+        nodes::Vector{Int},
+        node_points::Vector{SVector{3, T}},
+        left::Int, right::Int,
+        mesh::UnstructuredMesh{3}
+    ) where {T}
     pts = [node_points[n] for n in nodes]
     face_normal = polygon_normal(pts)
     face_centroid = sum(pts) / length(pts)
@@ -327,7 +330,7 @@ function _fix_interior_orientation!(
 
     # Normal should point from left to right
     dir = right_centroid - left_centroid
-    if dot(face_normal, dir) < 0
+    return if dot(face_normal, dir) < 0
         reverse!(nodes)
     end
 end
@@ -338,11 +341,11 @@ end
 Ensure boundary face normal points outward (away from the cell).
 """
 function _fix_boundary_orientation!(
-    nodes::Vector{Int},
-    node_points::Vector{SVector{3, T}},
-    cell::Int,
-    mesh::UnstructuredMesh{3}
-) where T
+        nodes::Vector{Int},
+        node_points::Vector{SVector{3, T}},
+        cell::Int,
+        mesh::UnstructuredMesh{3}
+    ) where {T}
     pts = [node_points[n] for n in nodes]
     face_normal = polygon_normal(pts)
     face_centroid = sum(pts) / length(pts)
@@ -351,7 +354,7 @@ function _fix_boundary_orientation!(
 
     # Normal should point away from cell (outward)
     dir = face_centroid - cell_centroid
-    if dot(face_normal, dir) < 0
+    return if dot(face_normal, dir) < 0
         reverse!(nodes)
     end
 end
@@ -363,9 +366,9 @@ Compute an approximate cell centroid by averaging the centroids of all
 its faces (interior + boundary).
 """
 function _approx_cell_centroid(
-    mesh::UnstructuredMesh{3},
-    cell::Int
-)
+        mesh::UnstructuredMesh{3},
+        cell::Int
+    )
     T = eltype(eltype(mesh.node_points))
     centroid = zero(SVector{3, T})
     count = 0
@@ -394,13 +397,13 @@ end
 Build a new UnstructuredMesh from merged face data.
 """
 function _rebuild_mesh(
-    mesh::UnstructuredMesh{3},
-    node_points::Vector{SVector{3, T}},
-    face_nodes_list::Vector{Vector{Int}},
-    face_neighbors::Vector{Tuple{Int,Int}},
-    bnd_nodes_list::Vector{Vector{Int}},
-    bnd_cells::Vector{Int}
-) where T
+        mesh::UnstructuredMesh{3},
+        node_points::Vector{SVector{3, T}},
+        face_nodes_list::Vector{Vector{Int}},
+        face_neighbors::Vector{Tuple{Int, Int}},
+        bnd_nodes_list::Vector{Vector{Int}},
+        bnd_cells::Vector{Int}
+    ) where {T}
     nc = number_of_cells(mesh)
     nf_new = length(face_nodes_list)
     nb_new = length(bnd_nodes_list)
@@ -470,10 +473,10 @@ winding direction.  All cross products of consecutive edge pairs must point
 in the same direction as `normal` (or be zero for collinear edges).
 """
 function _is_convex_polygon(
-    pts::Vector{SVector{3, T}},
-    normal::SVector{3, T};
-    tol::Real = 1e-10
-) where T
+        pts::Vector{SVector{3, T}},
+        normal::SVector{3, T};
+        tol::Real = 1.0e-10
+    ) where {T}
     n = length(pts)
     if n <= 3
         return true  # triangles are always convex

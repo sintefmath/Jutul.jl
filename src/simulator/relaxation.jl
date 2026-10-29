@@ -13,9 +13,9 @@ end
 function select_nonlinear_relaxation_model(model, rel_type::SimpleRelaxation, reports, ω)
     if length(reports) > 1
         (; tol, dw_decrease, dw_increase, w_max, w_min) = rel_type
-        e_old = error_sum_scaled(model, reports[end-1][:errors])
+        e_old = error_sum_scaled(model, reports[end - 1][:errors])
         e_new = error_sum_scaled(model, reports[end][:errors])
-        if (e_old - e_new)/max(e_old, 1e-20) < tol
+        if (e_old - e_new) / max(e_old, 1.0e-20) < tol
             ω = ω - dw_decrease
         else
             ω = ω + dw_increase
@@ -33,7 +33,7 @@ function error_sum_scaled(model, rep)
         tol = r.tolerances
         crit = r.criterions
         for (k, v) in tol
-            err_sum += maximum(crit[k].errors)/v
+            err_sum += maximum(crit[k].errors) / v
         end
     end
     return err_sum

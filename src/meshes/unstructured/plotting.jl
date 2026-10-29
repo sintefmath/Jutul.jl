@@ -1,4 +1,4 @@
-function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten = true, flip = true) where D
+function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten = true, flip = true) where {D}
     pts = Vector{SVector{D, Float64}}()
     tri = Vector{SVector{3, Int64}}()
     cell_index = Vector{Int64}()
@@ -9,7 +9,7 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten =
     dest = (cell_index, face_index, pts, tri)
     for d in dest
         # Assume hexahedral, 6 faces per cell, triangulated into 4 parts each
-        sizehint!(d, 24*number_of_cells(m))
+        sizehint!(d, 24 * number_of_cells(m))
     end
     if D == 2
         cell_centroids = SVector{D, Float64}[]
@@ -23,7 +23,8 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten =
         cell_centroids = missing
     end
 
-    add_points!(e, e_def, offset, face_offset) = triangulate_and_add_faces!(dest, m, e, e_def, cell_centroids,
+    add_points!(e, e_def, offset, face_offset) = triangulate_and_add_faces!(
+        dest, m, e, e_def, cell_centroids,
         offset = offset,
         face_offset = face_offset,
         flip = flip
@@ -42,10 +43,10 @@ function Jutul.triangulate_mesh(m::UnstructuredMesh{D}; outer = false, flatten =
     face_buffer = zeros(length(face_index))
 
     mapper = (
-                Cells = (cell_data) -> mesh_data_to_tris!(cell_buffer, cell_data, cell_index)::Vector{Float64},
-                Faces = (face_data) -> mesh_data_to_tris!(face_buffer, face_data, face_index)::Vector{Float64},
-                indices = (Cells = cell_index, Faces = face_index)
-            )
+        Cells = (cell_data) -> mesh_data_to_tris!(cell_buffer, cell_data, cell_index)::Vector{Float64},
+        Faces = (face_data) -> mesh_data_to_tris!(face_buffer, face_data, face_index)::Vector{Float64},
+        indices = (Cells = cell_index, Faces = face_index),
+    )
     return (points = pts, triangulation = tri, mapper = mapper)
 end
 
@@ -84,7 +85,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
             for i in 1:new_vert_count
                 push!(cell_index, cell)
                 push!(face_index, face)
-                push!(pts, svector_local_point(cell_centroids[cell], i-1, nodes, node_pts))
+                push!(pts, svector_local_point(cell_centroids[cell], i - 1, nodes, node_pts))
             end
             for i in 1:n
                 push!(tri, svector_cyclical_tesselation(n, i, offset, flip))
@@ -106,7 +107,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                 push!(face_index, face)
                 push!(pts, node_pts[nodes[i]])
             end
-            next_tri = SVector{3, Int}(offset + 1, offset + 2, offset+3)
+            next_tri = SVector{3, Int}(offset + 1, offset + 2, offset + 3)
             if flip
                 next_tri = reverse(next_tri)
             end
@@ -138,7 +139,7 @@ function triangulate_and_add_faces!(dest, face, neighbors, C, nodes, node_pts::V
                 for i in 1:new_vert_count
                     push!(cell_index, cell)
                     push!(face_index, face)
-                    push!(pts, svector_local_point(C, i-1, nodes, node_pts))
+                    push!(pts, svector_local_point(C, i - 1, nodes, node_pts))
                 end
                 for i in 1:n
                     push!(tri, svector_cyclical_tesselation(n, i, offset, flip))
@@ -171,7 +172,7 @@ function svector_cyclical_tesselation(n::Int, i::Int, offset::Int, flip::Bool = 
     return out
 end
 
-function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts) where N
+function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts) where {N}
     if i == 0
         pt = center
     else
@@ -180,7 +181,7 @@ function svector_local_point(center::SVector{N, Float64}, i, nodes, node_pts) wh
     return pt::SVector{N, Float64}
 end
 
-function plot_flatten_helper(data::Vector{Tv}) where Tv<:SVector
+function plot_flatten_helper(data::Vector{Tv}) where {Tv <: SVector}
     n = length(data)
     m = length(Tv)
     T = eltype(eltype(Tv))
@@ -202,7 +203,7 @@ function plot_flatten_helper(data)
     offset = 0
     for d in data
         n_i = size(d, 1)
-        @. out[(offset+1):(offset+n_i), :] = d
+        @. out[(offset + 1):(offset + n_i), :] = d
         offset += n_i
     end
     return out

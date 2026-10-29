@@ -1,11 +1,11 @@
-
-function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDomainPartition;
+function Jutul.PArraySimulator(
+        case::JutulCase, full_partition::Jutul.AbstractDomainPartition;
         backend = JuliaPArrayBackend(),
         order = :default,
         simulator_constructor = (m; kwarg...) -> Simulator(m; kwarg...),
         primary_buffer = false,
         kwarg...
-        )
+    )
     data = JutulStorage()
     for (k, v) in kwarg
         data[k] = v
@@ -39,7 +39,8 @@ function Jutul.PArraySimulator(case::JutulCase, full_partition::Jutul.AbstractDo
         n_self = counts[i]
         n_owned += n_self
         process_start = min(process_start, process_offset(i, counts))
-        exec = PArrayExecutor(backend, i, remapped_ix[p],
+        exec = PArrayExecutor(
+            backend, i, remapped_ix[p],
             main_label = main_label,
             n_self = n_self,
             number_of_processes = np,
@@ -115,7 +116,7 @@ end
 function Jutul.MPI_PArrayBackend(; comm = MPI.COMM_WORLD)
     # Add a constructor that actually supports MPI.
     MPI.Init()
-    Jutul.MPI_PArrayBackend(comm)
+    return Jutul.MPI_PArrayBackend(comm)
 end
 
 backend_communicator(b::Jutul.MPI_PArrayBackend) = b.comm
@@ -151,7 +152,8 @@ function Jutul.simulate_parray(case::JutulCase, partition, backend::PArrayBacken
     return result
 end
 
-function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
+function Jutul.partition_distributed(
+        N, edge_weights, node_weights = missing;
         comm = MPI.COMM_WORLD,
         nc = maximum(vec(N)),
         np,
@@ -169,7 +171,8 @@ function Jutul.partition_distributed(N, edge_weights, node_weights = missing;
                 end
             end
         end
-        p = Jutul.partition_hypergraph(N, np, partitioner;
+        p = Jutul.partition_hypergraph(
+            N, np, partitioner;
             num_nodes = nc,
             edge_weights = edge_weights,
             node_weights = node_weights,
@@ -199,7 +202,7 @@ function Jutul.parray_synchronize_primary_variables(psim::PArraySimulator; updat
     end
     consistent!(primary_buffer) |> wait
 
-    map(simulators, local_values(primary_buffer)) do sim, pvar_vec
+    return map(simulators, local_values(primary_buffer)) do sim, pvar_vec
         model, s = get_main_model(Jutul.get_simulator_model(sim), l, Jutul.get_simulator_storage(sim))
         Jutul.descalarize_primary_variables!(s.primary_variables, model, pvar_vec)
 
@@ -211,7 +214,7 @@ function Jutul.parray_synchronize_primary_variables(psim::PArraySimulator; updat
             # We own the first n_own values and these need not be updated. The
             # ghost cells are now synchronized for primary and the dependent
             # secondary variables in those cells should also be updated.
-            ghost_ix = (n_own+1):n_total
+            ghost_ix = (n_own + 1):n_total
             for (k, v) in pairs(model.secondary_variables)
                 Jutul.update_secondary_variable!(state[k], v, model, state, ghost_ix)
             end

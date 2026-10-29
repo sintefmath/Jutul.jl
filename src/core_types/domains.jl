@@ -12,6 +12,36 @@ usually some kind of mesh or domain that represents a physical domain.
 """
 physical_representation(x) = x
 
+"Immutable entity-count lookup used by backend-adapted domains."
+struct EntityCounter{E, N}
+    entities::E
+    counts::NTuple{N, Int}
+end
+
+function EntityCounter(d::AbstractDict)
+    entities = Tuple(keys(d))
+    counts = Tuple(values(d))
+    return EntityCounter{typeof(entities), length(counts)}(entities, counts)
+end
+
+function Base.getindex(ec::EntityCounter, entity)
+    i = findfirst(==(entity), ec.entities)
+    isnothing(i) && throw(KeyError(entity))
+    return ec.counts[i]
+end
+Base.haskey(ec::EntityCounter, entity) = !isnothing(findfirst(==(entity), ec.entities))
+Base.keys(ec::EntityCounter) = ec.entities
+Base.values(ec::EntityCounter) = ec.counts
+Base.length(ec::EntityCounter) = length(ec.entities)
+Base.pairs(ec::EntityCounter) = zip(ec.entities, ec.counts)
+function Base.iterate(ec::EntityCounter, state = 1)
+    if state > length(ec)
+        return nothing
+    else
+        return ((ec.entities[state] => ec.counts[state]), state + 1)
+    end
+end
+
 export DiscretizedDomain
 struct DiscretizedDomain{G, D, E, M} <: JutulDomain
     representation::G
@@ -30,7 +60,7 @@ physical_representation(x::DiscretizedDomain) = x.representation
 function Base.show(io::IO, d::DiscretizedDomain)
     disc = d.discretizations
     p = physical_representation(d)
-    if isnothing(disc)
+    return if isnothing(disc)
         print(io, "DiscretizedDomain with $p\n")
     else
         print(io, "DiscretizedDomain with $p and discretizations for $(join(keys(d.discretizations), ", "))\n")
@@ -101,7 +131,7 @@ function Base.show(io::IO, t::MIME"text/plain", d::DataDomain)
     data = d.data
     k = keys(data)
     n = length(k)
-    if n == 0
+    return if n == 0
         print(io, " with no additional data.\n")
     else
         print(io, " with $n data fields added:\n")
@@ -229,6 +259,15 @@ function Base.getindex(domain::DataDomain, key::Symbol, entity = nothing)
         @assert e == entity "Expected property $key to be defined for $entity, but was stored as $e"
     end
     return v
+end
+
+function Base.get(domain::DataDomain, key::Symbol, fallback)
+    if haskey(domain.data, key)
+        ret = domain[key]
+    else
+        ret = fallback
+    end
+    return ret
 end
 
 function Base.keys(domain::DataDomain)

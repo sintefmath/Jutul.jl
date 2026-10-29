@@ -1,4 +1,3 @@
-
 function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info_level = 1, kwarg...)
     cfg = JutulConfig("Simulator config")
     v = sim.storage.verbose
@@ -13,7 +12,8 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
     add_option!(cfg, :delete_on_consolidate, true, "Delete processor states once consolidated.", types = Bool)
     add_option!(cfg, :info_level_parray, main_process_info_level, "Info level for outer printing", types = Int)
 
-    cfg, unused = Jutul.simulator_config!(cfg, sim;
+    cfg, unused = Jutul.simulator_config!(
+        cfg, sim;
         kwarg...,
         info_level = info_level,
         ascii_terminal = is_mpi_win,
@@ -51,7 +51,8 @@ function Jutul.simulator_config(sim::PArraySimulator; extra_timing = false, info
         else
             pth = nothing
         end
-        subconfig = Jutul.simulator_config(sim;
+        subconfig = Jutul.simulator_config(
+            sim;
             info_level = -1,
             extra_timing = extra_timing,
             output_path = pth,
@@ -78,7 +79,7 @@ function Jutul.set_default_tolerances(sim::PArraySimulator; kwarg...)
 end
 
 function Jutul.initialize_before_first_timestep!(psim::PArraySimulator, first_dT; kwarg...)
-    Jutul.@tic "solve" begin
+    return Jutul.@tic "solve" begin
         Jutul.@tic "secondary variables" map(psim.storage[:simulators]) do sim
             s = Jutul.get_simulator_storage(sim)
             m = Jutul.get_simulator_model(sim)
@@ -92,18 +93,18 @@ function Jutul.check_forces(psim::PArraySimulator, forces::AbstractVector, times
     map(psim.storage[:simulators], forces) do sim, f
         Jutul.check_forces(sim, f, timesteps; per_step = per_step)
     end
-    nothing
+    return nothing
 end
 
 function Jutul.reset_state_to_previous_state!(psim::PArraySimulator)
-    map(psim.storage[:simulators]) do sim
+    return map(psim.storage[:simulators]) do sim
         Jutul.reset_state_to_previous_state!(sim)
         nothing
     end
 end
 
 function Jutul.update_before_step!(psim::PArraySimulator, dt, forces; kwarg...)
-    map(psim.storage[:simulators], forces) do sim, f
+    return map(psim.storage[:simulators], forces) do sim, f
         Jutul.update_before_step!(sim, dt, f; kwarg...)
         nothing
     end
@@ -129,7 +130,7 @@ function Jutul.store_output!(states, reports, step, psim::PArraySimulator, confi
     subsims = psim.storage.simulators
     subconfigs = config[:configs]
     # TODO: Deal with substates for PArray.
-    map(subsims, subconfigs) do sim, cfg
+    return map(subsims, subconfigs) do sim, cfg
         Jutul.store_output!(states, reports, step, sim, cfg, report)
     end
 end
@@ -176,7 +177,8 @@ function Jutul.perform_step!(
     end
     out = map(simulators, configs, forces, reports) do sim, config, f, rep
         t_s = get(rep, :secondary_time, 0.0)
-        e, conv, rep = perform_step!(sim, dt, f, config;
+        e, conv, rep = perform_step!(
+            sim, dt, f, config;
             iteration = iteration,
             solve = false,
             report = rep,
@@ -245,14 +247,14 @@ function parray_print_convergence_status(simulator, config, reports, converged, 
         else
             msg = "$nconverged/$np"
         end
-        Jutul.jutul_message("It $(iteration-1)/$maxits", "$msg processes converged.", color = :cyan)
+        Jutul.jutul_message("It $(iteration - 1)/$maxits", "$msg processes converged.", color = :cyan)
     end
-    if info_level > 2
+    return if info_level > 2
         # These get printed on all processes with a barrier. Performance cost to
         # barriers, and potentially a lot of output being printed.
         comm = s[:comm]
         rank_sz = MPI.Comm_size(comm)
-        self_rank = MPI.Comm_rank(comm)+1
+        self_rank = MPI.Comm_rank(comm) + 1
         for rank in 1:rank_sz
             MPI.Barrier(comm)
             sim_ctr = 1
@@ -271,7 +273,7 @@ function Jutul.post_update_linearized_system!(linearized_system, executor::PArra
     lsys = linearized_system[1, 1]
     r = lsys.r
     n_self = executor.data[:n_self]
-    unit_diagonalize!(r, lsys.jac, n_self)
+    return unit_diagonalize!(r, lsys.jac, n_self)
 end
 
 function Jutul.retrieve_output!(sim::PArraySimulator, states, reports, config, n)

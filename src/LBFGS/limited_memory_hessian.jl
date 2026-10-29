@@ -67,7 +67,7 @@ function \(H::LimitedMemoryHessian, v::Vector)
     th = apply_initial(H, 1.0)
     null_space = falses(size(v, 1))
     return subspace_product_inverse(H.S, H.Y, th, null_space, v, true)
-    # below is for reference the standard recursion for L-BFGS, but this is slightly less 
+    # below is for reference the standard recursion for L-BFGS, but this is slightly less
     # stable than the above matrix version for large vectors and large m
     #
     #    nVec = size(H.S, 2)
@@ -124,13 +124,13 @@ Handle multiplication with Hessian:
 
 import Base.*
 function *(H::LimitedMemoryHessian, v::Vector)
-    # apply multiplication with un-reduced Hessian 
+    # apply multiplication with un-reduced Hessian
     if H.it_count == 0
         r = (H.sign * H.init_scale) .* v
         return r
     end
     @assert length(v) == size(H.S, 1) "Dimension mismatch"
-     # use subspace version with empty nullspace
+    # use subspace version with empty nullspace
     th = apply_initial(H, 1.0)
     null_space = falses(size(v, 1))
     return subspace_product(H.S, H.Y, th, null_space, v, true)
@@ -241,13 +241,13 @@ function subspace_product(S, Y, th, null_space, v, is_bool_type)
         # projection onto active subspace (u -> Z*Z'*u)
         proj_sub = get_projection_operator(null_space, is_bool_type)
         r = proj_sub(v)
-        r = proj_sub(r/th - W * (M \ (W' * r)))
+        r = proj_sub(r / th - W * (M \ (W' * r)))
     end
     return r
 end
 
 function null_space_has_full_rank(null_space, is_bool_type)
-if is_bool_type
+    if is_bool_type
         return all(null_space)
     else
         return size(null_space, 1) <= size(null_space, 2)
@@ -266,10 +266,10 @@ function get_projection_operator(null_space, is_bool_type)
 end
 
 function null_space_is_empty(null_space, is_bool_type)
-if is_bool_type
+    if is_bool_type
         return !any(null_space)
     else
-        return isempty(null_space) || size(null_space, 2) == 0 
+        return isempty(null_space) || size(null_space, 2) == 0
     end
 end
 

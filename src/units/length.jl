@@ -5,7 +5,7 @@ end
 
 function si_unit(::Union{Val{:inch}, Val{:in}})
     centi, meter = si_units(:centi, :meter)
-    return 2.54*centi*meter
+    return 2.54 * centi * meter
 end
 
 function si_unit(::Union{Val{:feet}, Val{:ft}})

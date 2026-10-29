@@ -27,15 +27,15 @@ Returns a new `UnstructuredMesh{3}`, or `(UnstructuredMesh{3}, Dict)` when
 `extra_out=true`.
 """
 function embed_mesh(
-    mesh_a::UnstructuredMesh{3},
-    mesh_b::UnstructuredMesh{3};
-    extra_out::Bool = false,
-    min_cut_fraction::Real = 0.01,
-    tol::Real = 1e-6,
-    face_tol::Real = 1e-4,
-    coplanar_tol::Real = 1e-3,
-    merge_faces::Bool = true
-)
+        mesh_a::UnstructuredMesh{3},
+        mesh_b::UnstructuredMesh{3};
+        extra_out::Bool = false,
+        min_cut_fraction::Real = 0.01,
+        tol::Real = 1.0e-6,
+        face_tol::Real = 1.0e-4,
+        coplanar_tol::Real = 1.0e-3,
+        merge_faces::Bool = true
+    )
     T = Float64
 
     # ------------------------------------------------------------------
@@ -79,7 +79,8 @@ function embed_mesh(
         plane = PlaneCut(c, normal)
         bpoly = _expand_polygon(poly)
 
-        current_mesh, step_info = cut_mesh(current_mesh, plane;
+        current_mesh, step_info = cut_mesh(
+            current_mesh, plane;
             extra_out = true,
             min_cut_fraction = min_cut_fraction,
             bounding_polygon = bpoly,
@@ -124,7 +125,8 @@ function embed_mesh(
     # ------------------------------------------------------------------
     # 4. Glue trimmed A with B
     # ------------------------------------------------------------------
-    result, glue_info = glue_mesh(trimmed_a, mesh_b;
+    result, glue_info = glue_mesh(
+        trimmed_a, mesh_b;
         tol = tol,
         face_tol = face_tol,
         coplanar_tol = coplanar_tol,
@@ -176,11 +178,11 @@ polygons.  Uses ray-casting along the +x direction and counts crossings with
 boundary face triangles.
 """
 function _point_inside_mesh(
-    pt::SVector{3, T},
-    polys::Vector{Vector{SVector{3, T}}},
-    normals::Vector{SVector{3, T}},
-    centroids::Vector{SVector{3, T}}
-) where T
+        pt::SVector{3, T},
+        polys::Vector{Vector{SVector{3, T}}},
+        normals::Vector{SVector{3, T}},
+        centroids::Vector{SVector{3, T}}
+    ) where {T}
     crossings = 0
     ray_dir = SVector{3, T}(1, 0, 0)
 
@@ -219,10 +221,10 @@ Test whether a 3D point (assumed to be on the polygon's plane) lies inside
 the polygon.  Projects to the polygon's local 2D frame and uses ray-casting.
 """
 function _point_in_face_polygon(
-    pt::SVector{3, T},
-    poly::Vector{SVector{3, T}},
-    normal::SVector{3, T}
-) where T
+        pt::SVector{3, T},
+        poly::Vector{SVector{3, T}},
+        normal::SVector{3, T}
+    ) where {T}
     # Build local 2D frame
     ref = abs(normal[1]) < 0.9 ? SVector{3, T}(1, 0, 0) : SVector{3, T}(0, 1, 0)
     u = normalize(cross(normal, ref))
@@ -243,9 +245,9 @@ Remove cells from a mesh.  `keep[c]` is `true` for cells to retain.
 Returns the new mesh and a vector mapping new cell indices to old cell indices.
 """
 function _remove_cells(
-    mesh::UnstructuredMesh{3},
-    keep::BitVector
-)
+        mesh::UnstructuredMesh{3},
+        keep::BitVector
+    )
     T = eltype(eltype(mesh.node_points))
     nc_old = number_of_cells(mesh)
     nf_old = number_of_faces(mesh)

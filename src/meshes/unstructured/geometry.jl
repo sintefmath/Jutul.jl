@@ -24,7 +24,7 @@ function face_centroid_and_measure(nodes, pts::Vector{SVector{3, Num}}) where {N
         if i == 1
             l = nodes[end]
         else
-            l = nodes[i-1]
+            l = nodes[i - 1]
         end
         r = nodes[i]
         l_node = pts[l]
@@ -32,18 +32,18 @@ function face_centroid_and_measure(nodes, pts::Vector{SVector{3, Num}}) where {N
         B = l_node - c_node
         A = r_node - c_node
 
-        c = (1/3)*(l_node + r_node + c_node)
-        tri_area = 0.5*norm(cross(A, B), 2)
+        c = (1 / 3) * (l_node + r_node + c_node)
+        tri_area = 0.5 * norm(cross(A, B), 2)
         area += tri_area
-        centroid += c*tri_area
+        centroid += c * tri_area
     end
-    return (centroid./area, area)
+    return (centroid ./ area, area)
 end
 
 function face_centroid_and_measure(nodes, pts::Vector{SVector{2, Num}}) where {Num}
     @assert length(nodes) == 2
     l, r = nodes
-    centroid = (pts[l] + pts[r])/2.0
+    centroid = (pts[l] + pts[r]) / 2.0
     area = norm(pts[l] - pts[r], 2)
     return (centroid, area)
 end
@@ -73,13 +73,24 @@ function compute_centroid_and_measure(G::UnstructuredMesh, ::Cells, i)
 
     centroid, vol = sum_centroid_volumes_helper(pts, c_node, G.faces, centroid, vol, i)
     centroid, vol = sum_centroid_volumes_helper(pts, c_node, G.boundary_faces, centroid, vol, i)
-    return (centroid./vol, vol)
+    # In 3D the tetrahedron volumes are signed (see below): their sum is the
+    # cell volume up to one sign fixed by the node-order convention, and the
+    # centroid is unaffected by it.
+    return (centroid ./ vol, abs(vol))
 end
+
+# Orientation of a face's node order relative to cell i: +1 if the normal
+# given by the node order points out of the cell, -1 otherwise. Interior faces
+# are ordered to point from the first to the second neighbor, boundary faces
+# out of the domain.
+face_orientation_sign(faces::FaceMap{<:Any, Tuple{Int, Int}}, face, i) = faces.neighbors[face][1] == i ? 1 : -1
+face_orientation_sign(faces::FaceMap{<:Any, Int}, face, i) = 1
 
 function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector{N, E}, faces, centroid::SVector{N, E}, vol, i) where {N, E}
     T = SVector{N, E}
     for face in faces.cells_to_faces[i]
         nodes = faces.faces_to_nodes[face]
+        sgn = face_orientation_sign(faces, face, i)
         # Compute center point (not centroid) for face
         c_node_face = zero(T)
         for node in nodes
@@ -92,7 +103,7 @@ function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector
                 if i == 1
                     l = nodes[end]
                 else
-                    l = nodes[i-1]
+                    l = nodes[i - 1]
                 end
                 r = nodes[i]
                 l_node = pts[l]
@@ -104,17 +115,21 @@ function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector
                         l_node[3], r_node[3], c_node[3], c_node_face[3],
                         1.0, 1.0, 1.0, 1.0
                     )
-                    local_volume = (1.0/6.0)*abs(det(M))
-                    local_centroid = (1.0/4.0)*(l_node + r_node + c_node_face + c_node)
+                    # Signed volume, oriented by the face: where the center
+                    # point c_node lies outside a non-convex cell, the
+                    # tetrahedra outside count negatively. Taking abs() here
+                    # would add them instead.
+                    local_volume = (sgn / 6.0) * det(M)
+                    local_centroid = (1.0 / 4.0) * (l_node + r_node + c_node_face + c_node)
                 else
                     A = r_node - c_node
                     B = l_node - c_node
-                    local_volume = abs(cross(A, B)/4)
-                    local_centroid = (l_node + r_node + c_node)/3.0
+                    local_volume = abs(cross(A, B) / 4)
+                    local_centroid = (l_node + r_node + c_node) / 3.0
                     @assert local_volume >= 0
                 end
                 vol += local_volume
-                centroid += local_centroid*local_volume
+                centroid += local_centroid * local_volume
             end
         else
             # 2D is much simpler (area = volume in Jutul)
@@ -124,10 +139,10 @@ function sum_centroid_volumes_helper(pts::Vector{SVector{N, E}}, c_node::SVector
             r_node = pts[r]
             A = l_node - c_node
             B = r_node - c_node
-            local_volume = abs(cross(A, B)/2.0)
-            local_centroid = (l_node + r_node + c_node)/3.0
+            local_volume = abs(cross(A, B) / 2.0)
+            local_centroid = (l_node + r_node + c_node) / 3.0
             vol += local_volume
-            centroid += local_centroid*local_volume
+            centroid += local_centroid * local_volume
         end
     end
     return (centroid, vol)
@@ -148,13 +163,13 @@ function face_normal(G::UnstructuredMesh{3}, f, e = Faces())
         if i == 1
             a = pts[nodes[n]]
         else
-            a = pts[nodes[i-1]]
+            a = pts[nodes[i - 1]]
         end
         b = pts[nodes[i]]
         if i == n
             c = pts[nodes[1]]
         else
-            c = pts[nodes[i+1]]
+            c = pts[nodes[i + 1]]
         end
         normal += cross(c - b, a - b)
     end
@@ -177,6 +192,5 @@ function face_normal(G::UnstructuredMesh{2}, f, e = Faces())
     v = pt_r - pt_l
     normal = T(v[2], -v[1])
 
-    return normal/norm(normal, 2)
+    return normal / norm(normal, 2)
 end
-

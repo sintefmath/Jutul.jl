@@ -57,7 +57,7 @@ struct PArrayExecutor{T} <: Jutul.JutulExecutor
     to_global::Vector{Int}
 end
 
-function PArrayExecutor(mode, rank, to_global;kwarg...)
+function PArrayExecutor(mode, rank, to_global; kwarg...)
     data = Dict{Symbol, Any}()
     for (k, v) in kwarg
         data[k] = v

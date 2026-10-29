@@ -4,12 +4,12 @@
 Define a planar cutting constraint by a point on the plane and a unit normal
 vector. The normal defines the positive half-space.
 """
-struct PlaneCut{T<:Real}
+struct PlaneCut{T <: Real}
     point::SVector{3, T}
     normal::SVector{3, T}
-    function PlaneCut(point::SVector{3, T}, normal::SVector{3, T}) where T<:Real
+    function PlaneCut(point::SVector{3, T}, normal::SVector{3, T}) where {T <: Real}
         n = normalize(normal)
-        new{T}(point, n)
+        return new{T}(point, n)
     end
 end
 
@@ -26,12 +26,12 @@ Define a cutting surface made up of multiple planar polygons. Each polygon is a
 vector of 3D points (SVector{3}). If `normals` is omitted, they are computed
 from the polygon vertices.
 """
-struct PolygonalSurface{T<:Real}
+struct PolygonalSurface{T <: Real}
     polygons::Vector{Vector{SVector{3, T}}}
     normals::Vector{SVector{3, T}}
 end
 
-function PolygonalSurface(polygons::Vector{Vector{SVector{3, T}}}) where T
+function PolygonalSurface(polygons::Vector{Vector{SVector{3, T}}}) where {T}
     normals = SVector{3, T}[]
     for poly in polygons
         n = polygon_normal(poly)
@@ -45,7 +45,7 @@ end
 
 Compute the unit normal of a planar polygon from its vertices using Newell's method.
 """
-function polygon_normal(poly::Vector{SVector{3, T}}) where T
+function polygon_normal(poly::Vector{SVector{3, T}}) where {T}
     n = zero(SVector{3, T})
     np = length(poly)
     for i in 1:np

@@ -1,6 +1,6 @@
 # Time
 function si_unit(::Val{:day})
-    return 60.0*60.0*24.0
+    return 60.0 * 60.0 * 24.0
 end
 
 function si_unit(::Val{:minute})
@@ -8,7 +8,7 @@ function si_unit(::Val{:minute})
 end
 
 function si_unit(::Val{:hour})
-    return 60.0*60.0
+    return 60.0 * 60.0
 end
 
 function si_unit(::Val{:year})
@@ -20,5 +20,5 @@ function si_unit(::Union{Val{:second}, Val{:s}})
 end
 
 function si_unit(::Val{:psi})
-    return si_unit(:lbf)/(si_unit(:inch)^2)
+    return si_unit(:lbf) / (si_unit(:inch)^2)
 end

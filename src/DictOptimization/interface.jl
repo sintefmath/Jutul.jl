@@ -99,13 +99,8 @@ This interface is dependent on the model supporting use of
 `vectorize_variables!` and `devectorize_variables!` for `state0/parameters`,
 which should be the case for most Jutul models.
 """
-function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
-        grad_tol = 1e-6,
-        obj_change_tol = 1e-6,
-        max_it = 25,
-        opt_fun = missing,
-        optimizer = :lbfgs,
-        maximize = false,
+function optimize(
+        dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         backend_arg = missing,
         info_level = 0,
         deps::Symbol = :case,
@@ -115,7 +110,6 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         solution_history = false,
         print_parameters = false,
         allow_errors = false,
-        scale = optimizer != :lbfgsb_qp,
         gradient_scaling = true,
         output_path = nothing,
         randomized_start = false,
@@ -124,7 +118,8 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     if ismissing(setup_fn)
         error("Setup function was not found in DictParameters struct or as last positional argument.")
     end
-    problem = JutulOptimizationProblem(dopt, objective, setup_fn;
+    problem = JutulOptimizationProblem(
+        dopt, objective, setup_fn;
         simulator = simulator,
         config = config,
         info_level = info_level,
@@ -138,13 +133,32 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
         randomized_start = randomized_start,
         output_path = output_path
     )
+    return optimize!(problem; kwarg...)
+end
 
+function optimize!(
+        problem::JutulOptimizationProblem, prm0 = missing;
+        grad_tol = 1.0e-6,
+        obj_change_tol = 1.0e-6,
+        max_it = 25,
+        opt_fun = missing,
+        optimizer = :lbfgs,
+        extra_out = false,
+        maximize = false,
+        scale = optimizer != :lbfgsb_qp,
+        kwarg...
+    )
+    if !ismissing(prm0)
+        x0, = optimization_setup(problem, prm0)
+        @. problem.x0 = x0
+    end
+    dopt = problem.dict_parameters
     if dopt.verbose
         jutul_message("Optimization", "Starting calibration of $(length(problem.x0)) parameters.", color = :green)
     end
-
     t_opt = @elapsed if ismissing(opt_fun)
-        x, solver_history = optimize_implementation(problem, Val(optimizer); 
+        x, solver_history = optimize_implementation(
+            problem, Val(optimizer);
             grad_tol = grad_tol,
             obj_change_tol = obj_change_tol,
             max_it = max_it,
@@ -173,6 +187,7 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
     history[:solver_history] = solver_history
     dopt.history = NamedTuple(history)
 
+    output_path = problem.output_path
     if !isnothing(output_path)
         to_disk = Dict{String, Any}()
         to_disk["parameters"] = prm_out
@@ -185,29 +200,40 @@ function optimize(dopt::DictParameters, objective, setup_fn = dopt.setup_functio
             save(filename, to_disk)
         end
     end
-    return prm_out
+    if extra_out
+        out = (prm_out, problem)
+    else
+        out = prm_out
+    end
+    return out
 end
 
 function optimize_implementation(problem, ::Val{:lbfgs}; scale = true, kwarg...)
     if !scale
         error("Standard lbfgs optimization without scaling is not supported.")
     end
-    v, x, history = Jutul.LBFGS.box_bfgs(problem;
+    verbose = optimizer_verbose(problem)
+    v, x, history = Jutul.LBFGS.box_bfgs(
+        problem;
+        print = Int(verbose),
         kwarg...
     )
     return (x, history)
 end
 
-function optimize_implementation(problem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+function optimize_implementation(problem::JutulOptimizationProblem, ::Val{:lbfgsb_qp}; maximize = false, scale = false, kwarg...)
+    verbose = optimizer_verbose(problem)
     F = Jutul.DictOptimization.setup_optimization_functions(problem, maximize = maximize, scale = scale)
-    _, x, history = Jutul.LBFGS.optimize_bound_constrained(F.x0, F.g_both, F.min, F.max;
+    _, x, history = Jutul.LBFGS.optimize_bound_constrained(
+        F.x0, F.g_both, F.min, F.max;
+        print = Int(verbose),
         kwarg...
     )
     return (F.descale(x), history)
 end
 
-function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where optimizer
-    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb (requires LBFGSB.jl to be imported))")
+function optimize_implementation(problem, ::Val{optimizer}; kwarg...) where {optimizer}
+    error("Unknown optimizer: $optimizer (available: :lbgs, :lbfgsb_qp, :lbfgsb (requires LBFGSB.jl to be imported))")
 end
 
 function setup_optimization_functions(problem::JutulOptimizationProblem; maximize = false, scale = false)
@@ -320,41 +346,50 @@ function setup_optimization_functions(problem::JutulOptimizationProblem; maximiz
         max = ub_scaled,
         x0 = x_to_u(x0),
         scale = x_to_u,
-        descale = u_to_x
+        descale = u_to_x,
     )
 end
 
 """
     parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function)
+    f, dfdx = parameters_gradient(dopt, objective)
 
 Compute the gradient of the objective function with respect to the parameters
 defined in the `DictParameters` object. This function will return the gradient
 as a dictionary with the same structure as the input parameters, where each
 entry is a vector of gradients for each parameter. Only gradients with respect
 to free parameters will be computed.
+
+Setting the `output_cache` argument to `true` will also return a `cache` object
+that can be passed to subsequent calls as `cache` to reuse setup and memory:
+```julia
+f, dfdx, cache = parameters_gradient(dopt, objective)
+# ... Mutate parameters in dopt ...
+f, dfdx = parameters_gradient(dopt, objective, cache = cache)
+```
 """
-function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.setup_function;
+function parameters_gradient(
+        dopt::DictParameters, objective, setup_fn = dopt.setup_function;
         simulator = missing,
         config = missing,
         cache = missing,
         raw_output = false,
         output_cache = false,
         deps = :case,
-        backend_arg = (
-            use_sparsity = true,
-            di_sparse = true,
-            single_step_sparsity = deps != :case,
-            do_prep = true,
-        )
+        backend_arg = missing
     )
     x0, x_setup, = optimization_setup(dopt, include_limits = false)
     if ismissing(cache)
-        cache = setup_optimization_cache(dopt, simulator = simulator, config = config)
+        cache = JutulOptimizationProblem(
+            dopt, objective, setup_fn;
+            simulator = simulator,
+            config = config,
+            backend_arg = backend_arg,
+            deps = deps
+        )
     end
 
-    f, g = solve_and_differentiate_for_optimization(x0, dopt, setup_fn, objective, x_setup, cache;
-        backend_arg = backend_arg
-    )
+    f, g = evaluate(cache, x0)
     if raw_output
         if output_cache
             out = (f, g, cache)
@@ -372,6 +407,40 @@ function parameters_gradient(dopt::DictParameters, objective, setup_fn = dopt.se
 end
 
 """
+    opt = optimization_problem(dopt::DictParameters, objective)
+    opt = optimization_problem(dopt, objective, setup_fn = dopt.setup_function; kwarg...)
+
+Set up a standalone optimization problem from a [`DictParameters`](@ref)
+instance and an objective function that can be used to efficiently evaluate
+objectives and gradients for use in external optimization routines (or
+debugging/testing).
+
+# Keyword arguments
+See [`optimize`] for more details on possible keyword arguments.
+
+Once set up, the optimization problem can be used to evaluate using the following interface:
+```julia
+opt = optimization_problem(dopt, objective)
+# Evaluate objective and gradient at x
+# Note that x can be either a vector of optimization parameters
+# or a parameter Dict. The output will be on the same format
+# (Vector output for Vector input and Dict output for Dict input)
+f, g = opt(x)
+# Evaluate objective only
+f, _ = opt(x; gradient = false)
+f = first(opt(x; gradient = false))
+```
+
+# Notes
+This is structure used internally by the `optimize` function and takes care to
+avoid redundant memory allocations and setup. This is *highly* advantageous for
+multiple evaluations of the objective and gradient.
+"""
+function optimization_problem(dopt::DictParameters, objective, setup_fn = dopt.setup_function; kwarg...)
+    return JutulOptimizationProblem(dopt, objective, setup_fn; kwarg...)
+end
+
+"""
     freeze_optimization_parameter!(dopt, "parameter_name")
     freeze_optimization_parameter!(dopt, ["dict_name", "parameter_name"])
     freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
@@ -384,9 +453,9 @@ removed.
 function freeze_optimization_parameter!(dopt::DictParameters, parameter_name, val = missing)
     parameter_name = convert_key(parameter_name, dopt.parameters)
     if !ismissing(val)
-        set_optimization_parameter!(vc, parameter_name, val)
+        set_optimization_parameter!(dopt, parameter_name, val)
     end
-    delete!(dopt.parameter_targets, parameter_name)
+    return delete!(dopt.parameter_targets, parameter_name)
 end
 
 """
@@ -448,7 +517,8 @@ are set for all parameters.
   should have the same value in the initial parameter, otherwise an error will
   be thrown.
 """
-function free_optimization_parameter!(dopt::DictParameters, parameter_name;
+function free_optimization_parameter!(
+        dopt::DictParameters, parameter_name;
         initial = missing,
         abs_min = -Inf,
         abs_max = Inf,
@@ -539,7 +609,7 @@ Set a specific optimization parameter in the `DictParameters` object. This
 function will update the value of the parameter in the `dopt.parameters` dictionary.
 """
 function set_optimization_parameter!(dopt::DictParameters, parameter_name, value)
-    set_nested_dict_value!(dopt.parameters, parameter_name, value)
+    return set_nested_dict_value!(dopt.parameters, parameter_name, value)
 end
 
 """
@@ -551,7 +621,8 @@ Add an optimization multiplier that acts on one or more targets to the
 optimization process. All parameters with the same multiplier must have the same
 dimensions.
 """
-function add_optimization_multiplier!(dprm::DictParameters, targets...;
+function add_optimization_multiplier!(
+        dprm::DictParameters, targets...;
         initial = missing,
         lumping = missing,
         name = missing,
@@ -562,7 +633,7 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     targets = map(t -> convert_key(t, dprm.parameters), targets)
     if ismissing(name)
         nmult = length(keys(dprm.multipliers))
-        name = "multiplier_$(nmult+1)"
+        name = "multiplier_$(nmult + 1)"
     end
     if haskey(dprm.multipliers, name)
         @warn "Multiplier with name $name already exists, overwriting."
@@ -587,4 +658,14 @@ function add_optimization_multiplier!(dprm::DictParameters, targets...;
     lumping = validate_and_normalize_lumping(lumping, initial, name)
     dprm.multipliers[name] = OptimizationMultiplier(abs_min, abs_max, collect(targets), lumping, initial)
     return dprm
+end
+
+function optimizer_verbose(problem::JutulOptimizationProblem)
+    cfg = get(problem.cache, :config, missing)
+    if ismissing(cfg)
+        v = true
+    else
+        v = get(cfg, :info_level, 0) >= -1
+    end
+    return v
 end

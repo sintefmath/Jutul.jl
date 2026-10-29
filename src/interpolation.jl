@@ -13,17 +13,28 @@ end
     if x <= x0 + dx
         pos = 1
     else
-        m = floor(Int, (x-x0)/dx)+1
-        pos = min(m, n-1)
+        offset = (x - x0) / dx
+        # Bound the positive coordinate before converting it. floor(Int, x)
+        # includes an allocating InexactError path, which becomes a malloc
+        # hostcall in AMDGPU property kernels, even for valid table inputs.
+        if offset >= n - 1
+            pos = n - 1
+        elseif !(offset >= zero(offset))
+            # A NaN input still propagates through the interpolation arithmetic.
+            pos = 1
+        else
+            index = offset isa AbstractFloat ? unsafe_trunc(Int, offset) : floor(Int, offset)
+            pos = index + 1
+        end
     end
     return pos::Int
 end
 
 @inline function interval_weight(t, x, ix)
     @inbounds first = t[ix]
-    @inbounds last = t[ix+1]
+    @inbounds last = t[ix + 1]
     Δx = last - first
-    w = (x - first)/Δx
+    w = (x - first) / Δx
     return w
 end
 
@@ -35,9 +46,9 @@ end
 @inline function linear_interp_internal(F, X, ix, x)
     @inbounds X_0 = X[ix]
     @inbounds F_0 = F[ix]
-    @inbounds ∂F∂X = (F[ix+1] - F_0)/(X[ix+1] - X_0)
+    @inbounds ∂F∂X = (F[ix + 1] - F_0) / (X[ix + 1] - X_0)
     Δx = x - X_0
-    return F_0 + ∂F∂X*Δx
+    return F_0 + ∂F∂X * Δx
 end
 
 """
@@ -53,7 +64,7 @@ function interpolation_constant_lookup(X, constant_dx = missing)
     if ismissing(constant_dx)
         constant_dx = true
         for i in 2:length(X)
-            constant_dx = constant_dx && Δx ≈ X[i] - X[i-1]
+            constant_dx = constant_dx && Δx ≈ X[i] - X[i - 1]
         end
     end
     constant_dx::Bool
@@ -72,7 +83,7 @@ struct LinearInterpolant{V, T, L}
     lookup::L
 end
 
-function LinearInterpolant(X::V, F::T; static = false, constant_dx = missing) where {T<:AbstractVector, V<:AbstractVector}
+function LinearInterpolant(X::V, F::T; static = false, constant_dx = missing) where {T <: AbstractVector, V <: AbstractVector}
     length(X) == length(F) || throw(ArgumentError("X and F values must have equal length."))
     if length(X) == 1
         # Handle single inputs by constant extrapolation
@@ -114,7 +125,8 @@ Get a 1D interpolator `F(x) ≈ y` for a table `xs, ys` that by default does con
 
 Additional keyword arguments are passed onto the interpolator constructor.
 """
-function get_1d_interpolator(xs, ys;
+function get_1d_interpolator(
+        xs, ys;
         method = LinearInterpolant,
         cap_endpoints = true,
         cap_end = cap_endpoints,
@@ -137,7 +149,7 @@ function get_1d_interpolator(xs, ys;
             pushfirst!(ys, ys[1])
         end
         if cap_end
-            ϵ = xs[end] - xs[end-1]
+            ϵ = xs[end] - xs[end - 1]
             push!(xs, xs[end] + ϵ)
             push!(ys, ys[end])
         end
@@ -154,7 +166,8 @@ struct BilinearInterpolant{V, T, LX, LY}
     F::T
     lookup_x::LX
     lookup_y::LY
-    function BilinearInterpolant(xs::T, ys::T, fs::M;
+    function BilinearInterpolant(
+            xs::T, ys::T, fs::M;
             constant_dx = missing,
             constant_dy = missing
         ) where {T, M}
@@ -167,36 +180,41 @@ struct BilinearInterpolant{V, T, LX, LY}
         size(fs) == (nx, ny) || throw(ArgumentError("f(x, y) must match lengths of xs (as rows) and xy (as columns) = ($nx,$ny)"))
         return new{T, M, typeof(lookup_x), typeof(lookup_y)}(xs, ys, fs, lookup_x, lookup_y)
     end
+    function BilinearInterpolant(
+            xs::V, ys::V, fs::T,
+            lookup_x::LX, lookup_y::LY
+        ) where {V, T, LX, LY}
+        return new{V, T, LX, LY}(xs, ys, fs, lookup_x, lookup_y)
+    end
 end
 
 function bilinear_interp(X, Y, F, x, y, lookup_x = missing, lookup_y = missing)
     function interp_local(X_0, F_0, X_1, F_1, X)
-        ∂F∂X = (F_1 - F_0)/(X_1 - X_0)
+        ∂F∂X = (F_1 - F_0) / (X_1 - X_0)
         ΔX = X - X_0
-        return F_0 + ∂F∂X*ΔX
+        return F_0 + ∂F∂X * ΔX
     end
 
     x_pos = first_lower(X, value(x), lookup_x)
     y_pos = first_lower(Y, value(y), lookup_y)
     @inbounds begin
         x_1 = X[x_pos]
-        x_2 = X[x_pos+1]
-        Δx = x_2 - x_1
+        x_2 = X[x_pos + 1]
 
         y_1 = Y[y_pos]
-        y_2 = Y[y_pos+1]
+        y_2 = Y[y_pos + 1]
         Δy = y_2 - y_1
 
         F_11 = F[x_pos, y_pos]
-        F_12 = F[x_pos, y_pos+1]
-        F_21 = F[x_pos+1, y_pos]
-        F_22 = F[x_pos+1, y_pos+1]
+        F_12 = F[x_pos, y_pos + 1]
+        F_21 = F[x_pos + 1, y_pos]
+        F_22 = F[x_pos + 1, y_pos + 1]
     end
     F_upper = interp_local(x_1, F_12, x_2, F_22, x)
     F_lower = interp_local(x_1, F_11, x_2, F_21, x)
-    w_lower = (y_2 - y)/Δy
-    w_upper = (y - y_1)/Δy
-    F = w_lower*F_lower + w_upper*F_upper
+    w_lower = (y_2 - y) / Δy
+    w_upper = (y - y_1) / Δy
+    F = w_lower * F_lower + w_upper * F_upper
     return F
 end
 
@@ -218,7 +236,8 @@ constant extrapolation is used. Fine-grined control over extrapolation can be
 achieved by setting the keywords arguments `cap_x = (cap_low_x, cap_high_x)` and
 analogously for `cap_y`.
 """
-function get_2d_interpolator(xs, ys, fs;
+function get_2d_interpolator(
+        xs, ys, fs;
         method = BilinearInterpolant,
         cap_endpoints = true,
         cap_x = (cap_endpoints, cap_endpoints),
@@ -243,15 +262,15 @@ function get_2d_interpolator(xs, ys, fs;
         fs_new = zeros(F_t, nx + cap_xlo + cap_xhi, ny + cap_ylo + cap_yhi)
         xoffset = cap_xlo
         yoffset = cap_ylo
-        fs_new[(1+xoffset):(nx+xoffset), (1+yoffset):(ny+yoffset)] .= fs
+        fs_new[(1 + xoffset):(nx + xoffset), (1 + yoffset):(ny + yoffset)] .= fs
         if cap_xlo
             fs_new[1, :] .= fs_new[2, :]
             ϵ = xs[2] - xs[1]
             pushfirst!(xs, xs[1] - ϵ)
         end
         if cap_xhi
-            fs_new[end, :] .= fs_new[end-1, :]
-            ϵ = xs[end] - xs[end-1]
+            fs_new[end, :] .= fs_new[end - 1, :]
+            ϵ = xs[end] - xs[end - 1]
             push!(xs, xs[end] + ϵ)
         end
         if cap_ylo
@@ -260,8 +279,8 @@ function get_2d_interpolator(xs, ys, fs;
             pushfirst!(ys, ys[1] - ϵ)
         end
         if cap_yhi
-            fs_new[:, end] .= fs_new[:, end-1]
-            ϵ = ys[end] - ys[end-1]
+            fs_new[:, end] .= fs_new[:, end - 1]
+            ϵ = ys[end] - ys[end - 1]
             push!(ys, ys[end] + ϵ)
         end
         fs = fs_new
@@ -278,7 +297,7 @@ struct UnaryTabulatedVariable <: VectorVariables
     function UnaryTabulatedVariable(x::AbstractVector, F::AbstractMatrix, x_s::Symbol; kwarg...)
         nt, n = size(F)
         @assert nt > 0
-        if eltype(x)<:AbstractVector
+        if eltype(x) <: AbstractVector
             # We got a set of different vectors that correspond to rows of kr
             @assert all(map(length, x) .== n)
             interpolators = map((ix) -> get_1d_interpolator(x[ix], F[ix, :]; kwarg...), 1:nt)
@@ -287,16 +306,16 @@ struct UnaryTabulatedVariable <: VectorVariables
             @assert length(x) == n
             interpolators = map((ix) -> get_1d_interpolator(x, F[ix, :]; kwarg...), 1:nt)
         end
-        new(x, F, interpolators, x_s)
+        return new(x, F, interpolators, x_s)
     end
 end
 
 function get_dependencies(var::UnaryTabulatedVariable, model)
-    return [var.x_symbol]
+    return (var.x_symbol,)
 end
 
 function update_secondary_variable!(V, var::UnaryTabulatedVariable, model, state, ix = entity_eachindex(V))
-    update_unary_tabulated!(V, var, model, state[var.x_symbol], entity_eachindex(V))
+    return update_unary_tabulated!(V, var, model, state[var.x_symbol], entity_eachindex(V))
 end
 
 function update_unary_tabulated!(F_v, tbl::UnaryTabulatedVariable, model, x_v::AbstractVector, ix)
@@ -304,6 +323,7 @@ function update_unary_tabulated!(F_v, tbl::UnaryTabulatedVariable, model, x_v::A
     for i in ix
         F_v[ph, i] = I[k](x_v[i])
     end
+    return
 end
 
 function update_unary_tabulated!(F_v, tbl::UnaryTabulatedVariable, model, x_v::AbstractMatrix, ix)
@@ -311,6 +331,7 @@ function update_unary_tabulated!(F_v, tbl::UnaryTabulatedVariable, model, x_v::A
     for i in ix
         F_v[k, i] = I[k](x_v[k, i])
     end
+    return
 end
 
 struct BlendingVariable{E, S} <: VectorVariables
@@ -326,13 +347,14 @@ struct BlendingVariable{E, S} <: VectorVariables
     a weighted sum of the variables, where the weights are determined by a
     sigmoid function.
     """
-    function BlendingVariable(names, values_per_entity::Int = 1;
+    function BlendingVariable(
+            names, values_per_entity::Int = 1;
             entity = Cells(),
             alpha = 20.0,
             parameter_name = :BlendingParameter
         )
         entity::JutulEntity
-        @assert eltype(names)<:Symbol
+        @assert eltype(names) <: Symbol
         alpha > 0.0 || error("Alpha must be positive")
         if values_per_entity < 1
             error("values_per_entity must be at least 1")
@@ -343,13 +365,13 @@ end
 
 values_per_entity(model, u::BlendingVariable) = u.values_per_entity
 associated_entity(u::BlendingVariable) = u.entity
-get_dependencies(u::BlendingVariable, model) = [u.names..., u.parameter_name]
+get_dependencies(u::BlendingVariable, model) = (u.names..., u.parameter_name)
 
 function update_secondary_variable!(V, var::BlendingVariable, model, state, ix = entity_eachindex(V))
     α = var.alpha
     names = var.names
     n_max = length(names)
-    sigmoid(x, α) = 1.0 / (1.0 + exp(-α*x))
+    sigmoid(x, α) = 1.0 / (1.0 + exp(-α * x))
     function blend_function(x, pos)
         w1 = sigmoid(x - pos - 0.5, α)
         w2 = sigmoid(x - pos + 0.5, α)

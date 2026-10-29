@@ -2,6 +2,24 @@ using Jutul, Test, ForwardDiff
 import Jutul: unit_box_bfgs
 import Jutul.LBFGS: box_bfgs
 
+@testset "LBFGS QP bounds" begin
+    for n in (1, 3)
+        for (lb, ub) in ((0.0, 1.0), ([0.0], [1.0]), (zeros(n), ones(n)))
+            for target in (-0.5, 0.37, 1.5)
+                f = x -> (sum(abs2, x .- target), 2 .* (x .- target))
+                v, x, history = Jutul.LBFGS.optimize_bound_constrained(
+                    fill(0.8, n), f, lb, ub;
+                    grad_tol = 1.0e-8,
+                    obj_rel_tol = -Inf,
+                    print = 0
+                )
+                @test x ≈ fill(clamp(target, 0.0, 1.0), n) atol = 1.0e-8
+                @test v ≈ f(x)[1]
+            end
+        end
+    end
+end
+
 function Rosenbrock(u0, lb, ub, n; scale = true)
     @assert length(u0) == n
     if scale
@@ -11,7 +29,7 @@ function Rosenbrock(u0, lb, ub, n; scale = true)
     g = zeros(n)
     rosenbrock_i(u) = (1.0 - u[1])^2 + 100.0 * (u[2] - u[1]^2)^2
     for i in 1:2:n
-        u_i = u0[i:(i+1)]
+        u_i = u0[i:(i + 1)]
         fval = rosenbrock_i(u_i)
         g1, g2 = ForwardDiff.gradient(rosenbrock_i, u_i)
 
@@ -72,8 +90,10 @@ end
     @test x[1] ≈ sum(x[2:end])
 
     x0 = [3.0, 3.0, 2.0, 1.0]
-    A = [1.0 -1.0 0.0 0.0;
-         0.0 0.0 1.0 -1.0]
+    A = [
+        1.0 -1.0 0.0 0.0;
+        0.0 0.0 1.0 -1.0
+    ]
     lin_eq = (A = A, b = [0.0, 1.0])
     v, x, history = box_bfgs(x0, f!, lb, ub; lin_eq = lin_eq, maximize = false, print = 0)
     @test x[1] ≈ x[2]
@@ -88,11 +108,11 @@ end
     lin_ineq = (A = A, b = [0.0])
     f! = (u) -> Rosenbrock(u, lb, ub, n, scale = false)
     v, x, history = box_bfgs(x0, f!, lb, ub; lin_ineq = lin_ineq, maximize = false, print = 0)
-    @test 0.8 * x[1] - x[2] <= 1e-5
+    @test 0.8 * x[1] - x[2] <= 1.0e-5
 
     x0 = [10.0, 2.0]
     A = [-1.0, 2.0]'
     lin_ineq = (A = A, b = [-5.0])
     v, x, history = box_bfgs(x0, f!, lb, ub; lin_ineq = lin_ineq, maximize = false, print = 0)
-    @test -1.0 * x[1] + 2.0 * x[2] <= lin_ineq.b[1] + 1e-5
+    @test -1.0 * x[1] + 2.0 * x[2] <= lin_ineq.b[1] + 1.0e-5
 end

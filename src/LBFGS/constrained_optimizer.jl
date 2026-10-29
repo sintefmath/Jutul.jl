@@ -220,6 +220,7 @@ function box_bfgs(x0, f, lb, ub; kwarg...)
         for i in 1:n
             g[i] = g[i] * δ[i]
         end
+        return
     end
 
     function x_to_u(x)
@@ -305,7 +306,7 @@ function log_box_bfgs(x0, f, lb, ub; kwargs...)
     end
 
     function dx_to_du!(g, x)
-        g .= g .* x .* δ_log  # Chain rule: df/du = df/dx * dx/du
+        return g .= g .* x .* δ_log  # Chain rule: df/du = df/dx * dx/du
     end
 
     # Wrapped objective function
@@ -802,5 +803,5 @@ function argmax_cubic(p1::NamedTuple, p2::NamedTuple)
 end
 
 function print_msg(msg, color)
-    Jutul.jutul_message("LBFGS", msg, color = color)
+    return Jutul.jutul_message("LBFGS", msg, color = color)
 end

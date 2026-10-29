@@ -12,14 +12,14 @@ function compute_contraction_factor(d, N)
     # Use distance from convergence + 1 to avoid division by small numbers
     r = d .+ 1.0
     # Number of iterates used to estimate contraction factor
-    n = size(r,1)-1
+    n = size(r, 1) - 1
     # Approximate log10 of contraction factor using least squares
-    num = sum(log.(r[2:end]./r[1]).*(1:n))
-    den = sum((1:n).^2)
-    θ = exp(num./den)
+    num = sum(log.(r[2:end] ./ r[1]) .* (1:n))
+    den = sum((1:n) .^ 2)
+    θ = exp(num ./ den)
     # Compute target contraction factor convergence in N iterations
-    θ_target = r[1].^(-1/N)
-    
+    θ_target = r[1] .^ (-1 / N)
+
     return θ, θ_target
 
 end
@@ -39,8 +39,8 @@ function oscillation(contraction_factors, tol = 1.0)
     θ = contraction_factors
     (length(θ) < 3) ? (return false) : nothing
 
-    θ_1 = θ[end-2]
-    θ_2 = θ[end-1]
+    θ_1 = θ[end - 2]
+    θ_2 = θ[end - 1]
     θ_3 = θ[end]
 
     ok_1 = θ_1 .< tol
@@ -56,7 +56,7 @@ function iterations_left(contraction_factor, dist)
     # Compute number of iterations left if we should converge in target_iterations
     # iterations
     θ = contraction_factor
-    N = ceil(-log(dist)/log(θ))
+    N = ceil(-log(dist) / log(θ))
     N = (N > 0) ? Int64(N) : 0
     return N
 

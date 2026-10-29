@@ -1,5 +1,25 @@
 export sort_secondary_variables!, build_variable_graph
 export @jutul_secondary
+export secondary_scheme
+
+"""
+    secondary_scheme(model)
+    secondary_scheme(context::JutulContext)
+
+Select how secondary variables are evaluated. The model method defaults to its
+context and can be specialized for application models. CPU contexts accept the
+`secondary_scheme` keyword with these values:
+
+- `:flat` (default): one contiguous batch per worker.
+- `:fused`: evaluate all variables of each entity on cache-sized tiles, using
+  `minbatch(context)` entities per tile. Dependencies must be entity-local.
+- `:strided`: spread up to four batches per worker across the entities to
+  balance spatially uneven property costs.
+
+The non-default schemes use host evaluation; device kernels retain `:flat`.
+The context's choice is obtained through [`context_secondary_scheme`](@ref).
+"""
+secondary_scheme(model) = context_secondary_scheme(model.context)
 
 """
 Designate the function as updating a secondary variable.
@@ -40,13 +60,13 @@ macro jutul_secondary(ex)
     args = def[:args]
     # Define filters to strip the type spec (if any)
     function myfilter(x::Symbol)
-        x
+        return x
     end
     function myfilter(x::Expr)
-        x.args[1]
+        return x.args[1]
     end
 
-    deps = tuple(map(myfilter, args[4:end-1])...)
+    deps = tuple(map(myfilter, args[4:(end - 1)])...)
     # Pick variable + model
     variable_sym = args[2]
     model_sym = args[3]
@@ -71,32 +91,34 @@ macro jutul_secondary(ex)
     tmp *= String(myfilter(model_sym))
 
     for s in deps
-        tmp *= ", state."*String(s)
+        tmp *= ", state." * String(s)
     end
     tmp *= ", ix)"
     upd_def[:body] = Meta.parse(tmp)
     ex_upd = combinedef(upd_def)
 
-    quote
+    return quote
         $ex
         $ex_dep
         $ex_upd
-    end |> esc 
+    end |> esc
 end
 
 function update_secondary_variables!(storage, model)
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(storage.state, model, vars)
+    return update_secondary_variables_state!(
+        evaluation_state(storage), model, vars
+    )
 end
 
 function update_secondary_variables!(storage, model, is_state0::Bool)
     if is_state0
-        s = storage.state0
+        s = evaluation_state0(storage)
     else
-        s = storage.state
+        s = evaluation_state(storage)
     end
     vars = storage.variable_definitions.secondary_variables
-    update_secondary_variables_state!(s, model, vars)
+    return update_secondary_variables_state!(s, model, vars)
 end
 
 
@@ -116,18 +138,38 @@ end
 
 function update_secondary_variables_state!(state, model, vars = model.secondary_variables)
     ctx = model.context
+    scheme = check_secondary_scheme(secondary_scheme(model))
     var_pairs = pairs(vars)
-    M = length(var_pairs)
-    if M > 0
+    if ctx isa KernelAbstractionsContext && ctx.use_kernels_for_secondary
+        scheme == :flat || throw(ArgumentError("secondary_scheme=$scheme requires host evaluation on a CPU backend"))
+        for (symbol, var) in var_pairs
+            @tic "$symbol" begin
+                KernelExecution.secondary_variable_loop!(state, model, symbol, ctx)
+            end
+        end
+    elseif scheme == :fused
+        update_secondary_variable_tiles!(state, model, NamedTuple(var_pairs))
+    elseif length(var_pairs) > 0
         # Determine batch size from the first variable only
         _, first_var = first(var_pairs)
         K = number_of_entities(model, first_var)
         mb = minbatch(ctx)
         N = nthreads(ctx)
-        N_batches = clamp(K ÷ mb, 1, N)
+        if scheme == :strided
+            # PR #385: spread each worker over up to four batches. Divide first
+            # in the threshold check to support minbatch == typemax(Int).
+            if K ÷ mb < 2
+                N_batches = 1
+            else
+                N_batches = clamp(4K ÷ mb, 1, 4N)
+            end
+        else
+            N_batches = clamp(K ÷ mb, 1, N)
+        end
+        tt = thread_type(ctx)
         # We can either skip threads and use @tic or we can use threads and skip
         # detailed timing.
-        if N_batches == 1
+        if N_batches == 1 || tt == :serial
             for (symbol, var) in var_pairs
                 @tic "$symbol" begin
                     v = state[symbol]
@@ -136,15 +178,56 @@ function update_secondary_variables_state!(state, model, vars = model.secondary_
                 end
             end
         else
-            @batch for i in 1:N_batches
+            function batch_update(i)
                 for (symbol, var) in var_pairs
                     v = state[symbol]
                     ix = entity_eachindex(v, i, N_batches)
                     update_secondary_variable!(v, var, model, state, ix)
                 end
+                return
+            end
+            if scheme == :strided
+                threaded_loop(t -> foreach(batch_update, t:N:N_batches), min(N, N_batches), tt)
+            else
+                threaded_loop(batch_update, N_batches, tt)
             end
         end
     end
+    return state
+end
+
+function update_secondary_variable_tiles!(state, model, vars::NamedTuple)
+    for entity in unique(map(associated_entity, values(vars)))
+        names = filter(name -> associated_entity(vars[name]) == entity, keys(vars))
+        group = vars[names]
+        count = number_of_entities(model, first(values(group)))
+        update_secondary_variable_tiles!(state, model, group, count)
+    end
+    return nothing
+end
+
+function update_secondary_variable_tiles!(state, model, vars::NamedTuple{names}, count) where {names}
+    count == 0 && return nothing
+    ctx = model.context
+    tiles = cld(count, minbatch(ctx))
+    workers = min(tiles, nthreads(ctx), max(1, count ÷ minbatch(ctx)))
+    variable_names = map(Val, names)
+    function update_worker(worker)
+        for tile in load_balanced_interval(worker, tiles, workers)
+            indices = load_balanced_interval(tile, count, tiles)
+            foreach(variable_names) do name
+                update_secondary_variable_tile!(state, model, vars, name, indices)
+            end
+        end
+        return
+    end
+    threaded_loop(update_worker, workers, thread_type(ctx))
+    return nothing
+end
+
+@inline function update_secondary_variable_tile!(state, model, vars, ::Val{name}, indices) where {name}
+    update_secondary_variable!(state[name], vars[name], model, state, indices)
+    return nothing
 end
 
 # Initializers
@@ -152,7 +235,7 @@ function select_secondary_variables!(model)
     svars = model.secondary_variables
     select_secondary_variables!(svars, model.domain, model)
     select_secondary_variables!(svars, model.system, model)
-    select_secondary_variables!(svars, model.formulation, model)
+    return select_secondary_variables!(svars, model.formulation, model)
 end
 
 
@@ -160,21 +243,21 @@ function select_primary_variables!(model::SimulationModel)
     pvars = model.primary_variables
     select_primary_variables!(pvars, model.domain, model)
     select_primary_variables!(pvars, model.system, model)
-    select_primary_variables!(pvars, model.formulation, model)
+    return select_primary_variables!(pvars, model.formulation, model)
 end
 
 function select_parameters!(model::SimulationModel)
     prm = model.parameters
     select_parameters!(prm, model.domain, model)
     select_parameters!(prm, model.system, model)
-    select_parameters!(prm, model.formulation, model)
+    return select_parameters!(prm, model.formulation, model)
 end
 
 function select_equations!(model::SimulationModel)
     eqs = model.equations
     select_equations!(eqs, model.domain, model)
     select_equations!(eqs, model.system, model)
-    select_equations!(eqs, model.formulation, model)
+    return select_equations!(eqs, model.formulation, model)
 end
 
 function select_minimum_output_variables!(model)
@@ -185,7 +268,7 @@ function select_minimum_output_variables!(model)
     end
     select_minimum_output_variables!(outputs, model.domain, model)
     select_minimum_output_variables!(outputs, model.system, model)
-    select_minimum_output_variables!(outputs, model.formulation, model)
+    return select_minimum_output_variables!(outputs, model.formulation, model)
 end
 
 select_minimum_output_variables!(outputs, ::Any, model) = nothing
@@ -215,7 +298,7 @@ end
 Get dependencies of variable when viewed as a secondary variable. Normally autogenerated with @jutul_secondary
 """
 function get_dependencies(svar, model)
-    Symbol[]
+    return tuple()
 end
 
 export update_secondary_variable!
@@ -229,7 +312,7 @@ end
 function map_level(primary_variables, secondary_variables, output_level)
     pkeys = [i for i in keys(primary_variables)]
     skeys = [i for i in keys(secondary_variables)]
-    if output_level == :all
+    return if output_level == :all
         out = vcat(pkeys, skeys)
     elseif output_level == :primary_variables
         out = pkeys
@@ -245,7 +328,7 @@ function select_output_variables!(model, output_level = :primary_variables)
     outputs = model.output_variables
     if !isnothing(output_level)
         if isa(output_level, Symbol)
-            output_level  = [output_level]
+            output_level = [output_level]
         end
         for levels in output_level
             mapped = map_level(model.primary_variables, model.secondary_variables, levels)
@@ -254,7 +337,7 @@ function select_output_variables!(model, output_level = :primary_variables)
             end
         end
     end
-    unique!(outputs)
+    return unique!(outputs)
 end
 
 function sort_secondary_variables!(model::JutulModel)
@@ -272,7 +355,7 @@ function build_variable_graph(model, primary = model.primary_variables, secondar
         push!(nodes, key)
         push!(edges, []) # No dependencies for parameters - they are static.
     end
-    for (key, var) in secondary
+    for (key, var) in pairs(secondary)
         dep = get_dependencies(var, model)
         push!(nodes, key)
         push!(edges, dep)
@@ -298,7 +381,8 @@ function sort_secondary_variables!(model::SimulationModel)
     secondary = model.secondary_variables
     param = model.parameters
 
-    isect = intersect(keys(primary), keys(secondary))
+    skeys = keys(secondary)
+    isect = intersect(keys(primary), skeys)
     if length(isect) > 0
         error("$isect found in both primary and secondary variables.")
     end
@@ -306,7 +390,7 @@ function sort_secondary_variables!(model::SimulationModel)
     if length(isect) > 0
         error("$isect found in both primary variables and parameters.")
     end
-    isect = intersect(keys(param), keys(secondary))
+    isect = intersect(keys(param), skeys)
     if length(isect) > 0
         error("$isect found in both parameters and secondary variables.")
     end
@@ -321,9 +405,16 @@ function sort_secondary_variables!(model::SimulationModel)
     order = order[order .> np]
     # Offset by primary variables
     @. order -= np
-    @. secondary.keys = secondary.keys[order]
-    @. secondary.vals = secondary.vals[order]
-    OrderedCollections.rehash!(secondary)
+    # Remove and re-add in evaluation order
+    skeys = collect(skeys)
+    svar_old = copy(secondary)
+    for k in skeys
+        delete!(secondary, k)
+    end
+    for i in order
+        k = skeys[i]
+        secondary[k] = svar_old[k]
+    end
     return model
 end
 
@@ -346,6 +437,5 @@ function sort_symbols(symbols, deps)
             add_edge!(graph, i, pos[])
         end
     end
-    reverse(topological_sort_by_dfs(graph))
+    return reverse(topological_sort_by_dfs(graph))
 end
-

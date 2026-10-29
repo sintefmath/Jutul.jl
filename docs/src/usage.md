@@ -114,4 +114,6 @@ GroupWisePreconditioner
 ```@docs
 Jutul.DefaultContext
 Jutul.ParallelCSRContext
+Jutul.secondary_scheme
+Jutul.context_secondary_scheme
 ```

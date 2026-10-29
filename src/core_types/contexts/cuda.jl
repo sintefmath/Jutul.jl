@@ -1,4 +1,3 @@
-
 # CUDA context - everything on the single CUDA device attached to machine
 struct SingleCUDAContext <: GPUJutulContext
     float_t::Type

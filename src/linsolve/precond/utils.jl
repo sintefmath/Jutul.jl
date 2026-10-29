@@ -4,11 +4,11 @@ end
 function update_preconditioner!(preconditioner::JutulPreconditioner, lsys::JutulLinearSystem, context, model, storage, recorder, executor)
     J = jacobian(lsys)
     r = residual(lsys)
-    update_preconditioner!(preconditioner, J, r, context, executor)
+    return update_preconditioner!(preconditioner, J, r, context, executor)
 end
 
 function partial_update_preconditioner!(p, A, b, context, executor)
-    update_preconditioner!(p, A, b, context, executor)
+    return update_preconditioner!(p, A, b, context, executor)
 end
 
 function get_factorization(precond)
@@ -24,8 +24,8 @@ end
 
 function linear_operator(precond::JutulPreconditioner, float_t, sys, context, model, storage, recorder)
     n = operator_nrows(precond)
-    function precond_apply!(res, x, α, β::T) where T
-        if β == zero(T)
+    function precond_apply!(res, x, α, β::T) where {T}
+        return if β == zero(T)
             apply!(res, precond, x)
             if α != one(T)
                 lmul!(α, res)
@@ -41,5 +41,5 @@ end
 #nead to be spesilized on type not all JutulPreconditioners has get_factor
 function apply!(x, p::JutulPreconditioner, y)
     factor = get_factorization(p)
-    ldiv!(x, factor, y)
+    return ldiv!(x, factor, y)
 end

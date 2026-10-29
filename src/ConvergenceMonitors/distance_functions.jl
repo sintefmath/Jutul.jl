@@ -5,11 +5,12 @@ Compute distance from convergence using a user-defined distance function, and
 optionally apply a mapping to the distance. The function returns the distance
 and the names of equation residual norms used in the distance computation.
 """
-function compute_distance(report; 
-    distance_function = r -> scaled_residual_norm(r),
-    mapping = v -> maximum(v)
+function compute_distance(
+        report;
+        distance_function = r -> scaled_residual_norm(r),
+        mapping = v -> maximum(v)
     )
-    
+
     # Compute distance using distance function
     distance, names = distance_function(report)
     # Apply transformation

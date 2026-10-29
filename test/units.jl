@@ -55,14 +55,14 @@ using Jutul, Test
         @test_throws "Cannot convert relative temperature" si_unit("Fahrenheit/second")
         @test_throws "Cannot convert relative temperature" si_unit("Celsius/second")
 
-        @test si_unit("rankine/hour") == si_unit(:rankine)/si_unit(:hour)
-        @test si_unit("feet/second") == si_unit(:feet)/si_unit(:second)
+        @test si_unit("rankine/hour") == si_unit(:rankine) / si_unit(:hour)
+        @test si_unit("feet/second") == si_unit(:feet) / si_unit(:second)
 
         teststr = "meter/second^2"
         @test si_unit(teststr) == 1.0
-        @test si_unit("millimeter/second^2") == si_unit(:millimeter)/si_unit(:second)^2
-        @test si_unit("kilometer/hour^2") == si_unit(:kilometer)/si_unit(:hour)^2
-        @test si_unit("kilo*meter*hour^2/meter") == (si_unit(:kilometer)*si_unit(:hour)^2)/si_unit(:meter)
+        @test si_unit("millimeter/second^2") == si_unit(:millimeter) / si_unit(:second)^2
+        @test si_unit("kilometer/hour^2") == si_unit(:kilometer) / si_unit(:hour)^2
+        @test si_unit("kilo*meter*hour^2/meter") == (si_unit(:kilometer) * si_unit(:hour)^2) / si_unit(:meter)
         @test convert_to_si(1.0, "millimeter/second^2") == 0.001
         @test_throws "Cannot convert relative" convert_to_si(1.0, "Celsius/day")
 

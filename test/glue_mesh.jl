@@ -17,7 +17,7 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
         pos_cells = Int[]
         neg_cells = Int[]
         for c in 1:number_of_cells(cut)
-            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            cl = classify_cell(cut, c, plane; tol = 1.0e-6)
             if cl == :positive
                 push!(pos_cells, c)
             else
@@ -28,13 +28,13 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
         mesh_pos = extract_submesh(cut, pos_cells)
         mesh_neg = extract_submesh(cut, neg_cells)
 
-        glued = glue_mesh(mesh_pos, mesh_neg; tol = 1e-6, face_tol = 1.0)
+        glued = glue_mesh(mesh_pos, mesh_neg; tol = 1.0e-6, face_tol = 1.0)
 
         @test number_of_cells(glued) == number_of_cells(mesh_pos) + number_of_cells(mesh_neg)
 
         geo = tpfv_geometry(glued)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-8
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-8
     end
 
     @testset "glue_mesh normal consistency" begin
@@ -47,7 +47,7 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
         pos_cells = Int[]
         neg_cells = Int[]
         for c in 1:number_of_cells(cut)
-            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            cl = classify_cell(cut, c, plane; tol = 1.0e-6)
             if cl == :positive
                 push!(pos_cells, c)
             else
@@ -58,7 +58,7 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
         mesh_pos = extract_submesh(cut, pos_cells)
         mesh_neg = extract_submesh(cut, neg_cells)
 
-        glued = glue_mesh(mesh_pos, mesh_neg; tol = 1e-6, face_tol = 1.0)
+        glued = glue_mesh(mesh_pos, mesh_neg; tol = 1.0e-6, face_tol = 1.0)
         geo = tpfv_geometry(glued)
 
         for f in 1:number_of_faces(glued)
@@ -88,7 +88,7 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
         pos_cells = Int[]
         neg_cells = Int[]
         for c in 1:number_of_cells(cut)
-            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            cl = classify_cell(cut, c, plane; tol = 1.0e-6)
             if cl == :positive
                 push!(pos_cells, c)
             else
@@ -101,8 +101,10 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
         nc_a = number_of_cells(mesh_pos)
         nc_b = number_of_cells(mesh_neg)
 
-        glued, info = glue_mesh(mesh_pos, mesh_neg;
-            tol = 1e-6, face_tol = 1.0, extra_out = true)
+        glued, info = glue_mesh(
+            mesh_pos, mesh_neg;
+            tol = 1.0e-6, face_tol = 1.0, extra_out = true
+        )
 
         nc = number_of_cells(glued)
         nf = number_of_faces(glued)
@@ -117,9 +119,9 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
 
         # Cell mappings: first nc_a map to mesh_a, rest to mesh_b
         @test all(info[:cell_index_a][1:nc_a] .== 1:nc_a)
-        @test all(info[:cell_index_a][nc_a+1:end] .== 0)
+        @test all(info[:cell_index_a][(nc_a + 1):end] .== 0)
         @test all(info[:cell_index_b][1:nc_a] .== 0)
-        @test all(info[:cell_index_b][nc_a+1:end] .== 1:nc_b)
+        @test all(info[:cell_index_b][(nc_a + 1):end] .== 1:nc_b)
 
         # New faces should have zero origin indices
         @test length(info[:new_faces]) >= 9
@@ -131,10 +133,10 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
 
     @testset "glue_mesh different cut planes" begin
         for normal in [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0]
-        ]
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
             g = CartesianMesh((2, 2, 2), (2.0, 2.0, 2.0))
             mesh = UnstructuredMesh(g)
             vol_orig = sum(tpfv_geometry(mesh).volumes)
@@ -145,7 +147,7 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
             pos_cells = Int[]
             neg_cells = Int[]
             for c in 1:number_of_cells(cut)
-                cl = classify_cell(cut, c, plane; tol = 1e-6)
+                cl = classify_cell(cut, c, plane; tol = 1.0e-6)
                 if cl == :positive
                     push!(pos_cells, c)
                 else
@@ -156,10 +158,10 @@ import Jutul.CutCellMeshes: PlaneCut, cut_mesh, glue_mesh, cut_and_displace_mesh
             mesh_pos = extract_submesh(cut, pos_cells)
             mesh_neg = extract_submesh(cut, neg_cells)
 
-            glued = glue_mesh(mesh_pos, mesh_neg; tol = 1e-6, face_tol = 2.5)
+            glued = glue_mesh(mesh_pos, mesh_neg; tol = 1.0e-6, face_tol = 2.5)
             geo = tpfv_geometry(glued)
             @test all(geo.volumes .> 0)
-            @test sum(geo.volumes) ≈ vol_orig rtol = 1e-8
+            @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-8
         end
     end
 end
@@ -171,14 +173,15 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([0.5, 0.5, 0.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.0, side = :positive,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 1.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-8
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-8
     end
 
     @testset "large constant displacement (t1 shift)" begin
@@ -187,9 +190,10 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.5, side = :positive,
-            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         @test number_of_cells(result) > number_of_cells(mesh)
@@ -202,9 +206,10 @@ end
         mesh = UnstructuredMesh(g)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.5, side = :negative,
-            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         @test number_of_cells(result) > number_of_cells(mesh)
@@ -217,9 +222,10 @@ end
         mesh = UnstructuredMesh(g)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             shift_lr = 0.5, side = :positive,
-            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         @test number_of_cells(result) > number_of_cells(mesh)
@@ -233,14 +239,15 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.5, side = :positive,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-6
     end
 
     @testset "shift_lr preserves volume (interface stays in contact)" begin
@@ -249,14 +256,15 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             shift_lr = 0.5, side = :positive,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-6
     end
 
     @testset "angle preserves volume (interface stays in contact)" begin
@@ -266,14 +274,15 @@ end
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
         # Small angle (15 degrees)
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             angle = π / 12, side = :positive,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-6
     end
 
     @testset "angle rotation is in-plane (no normal displacement)" begin
@@ -286,7 +295,7 @@ end
         cut, _ = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
         pos_cells = Int[]
         for c in 1:number_of_cells(cut)
-            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            cl = classify_cell(cut, c, plane; tol = 1.0e-6)
             if cl == :positive
                 push!(pos_cells, c)
             end
@@ -313,7 +322,7 @@ end
             pt_new = plane.point + x1_new * t1 + x2_new * t2 + d_before * n
             d_after = dot(pt_new - plane.point, n)
             # Normal distance must be unchanged
-            @test d_after ≈ d_before atol = 1e-12
+            @test d_after ≈ d_before atol = 1.0e-12
         end
     end
 
@@ -327,7 +336,7 @@ end
         cut, _ = cut_mesh(mesh, plane; min_cut_fraction = 0.01, extra_out = true)
         pos_cells = Int[]
         for c in 1:number_of_cells(cut)
-            cl = classify_cell(cut, c, plane; tol = 1e-6)
+            cl = classify_cell(cut, c, plane; tol = 1.0e-6)
             if cl == :positive
                 push!(pos_cells, c)
             end
@@ -351,7 +360,7 @@ end
             dp = pt - plane.point
             x1 = dot(dp, t1)
             x2 = dot(dp, t2)
-            d  = dot(dp, n)
+            d = dot(dp, n)
             x1_new = x1 * cosθ - x2 * sinθ
             x2_new = x1 * sinθ + x2 * cosθ
             shifted_nodes[i] = plane.point + x1_new * t1 + x2_new * t2 + d * n
@@ -359,7 +368,7 @@ end
         shifted_mesh = _rebuild_mesh_with_nodes(mesh_pos, shifted_nodes)
         vol_after = sum(tpfv_geometry(shifted_mesh).volumes)
 
-        @test vol_after ≈ vol_before rtol = 1e-12
+        @test vol_after ≈ vol_before rtol = 1.0e-12
     end
 
     @testset "combined constant and shift_lr" begin
@@ -368,14 +377,15 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.3, shift_lr = 0.4, side = :positive,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-6
     end
 
     @testset "combined constant, shift_lr and angle" begin
@@ -384,15 +394,16 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.3, shift_lr = 0.2, angle = π / 12,
             side = :positive,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-6
     end
 
     @testset "oblique plane constant displacement preserves volume" begin
@@ -401,9 +412,10 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.4, side = :positive,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 1.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
@@ -419,9 +431,10 @@ end
         nc_orig = number_of_cells(mesh)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.0, side = :positive,
-            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01,
+            tol = 1.0e-6, face_tol = 2.0, min_cut_fraction = 0.01,
             extra_out = true
         )
 
@@ -450,9 +463,10 @@ end
         nc_orig = number_of_cells(mesh)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.5, shift_lr = 0.3, side = :positive,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01,
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01,
             extra_out = true
         )
 
@@ -470,14 +484,15 @@ end
         vol_orig = sum(tpfv_geometry(mesh).volumes)
 
         plane = PlaneCut([1.2, 1.5, 1.5], [1.0, 0.0, 0.0])
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.0, side = :positive,
-            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-8
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-8
     end
 
     @testset "tolerances" begin
@@ -486,11 +501,12 @@ end
 
         plane = PlaneCut([1.0, 1.0, 1.0], [0.0, 0.0, 1.0])
 
-        result = cut_and_displace_mesh(mesh, plane;
+        result = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.0, side = :positive,
-            tol = 1e-8, face_tol = 1.5, coplanar_tol = 1e-4,
+            tol = 1.0e-8, face_tol = 1.5, coplanar_tol = 1.0e-4,
             min_cut_fraction = 0.01,
-            area_tol = 1e-12
+            area_tol = 1.0e-12
         )
 
         geo = tpfv_geometry(result)
@@ -505,11 +521,12 @@ end
         mesh = UnstructuredMesh(g)
 
         plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.3, side = :positive,
             angle = 0.0,
             extra_out = true,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 1.0, min_cut_fraction = 0.01
         )
 
         cut_faces = Int[]
@@ -527,10 +544,11 @@ end
         mesh = UnstructuredMesh(g)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.5, side = :positive,
             extra_out = true,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
 
         cut_faces = Int[]
@@ -548,10 +566,11 @@ end
         mesh = UnstructuredMesh(g)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.0, side = :positive,
             extra_out = true,
-            tol = 1e-6, face_tol = 2.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 2.0, min_cut_fraction = 0.01
         )
 
         cut_faces = Int[]
@@ -569,10 +588,11 @@ end
         mesh = UnstructuredMesh(g)
 
         plane = PlaneCut([1.5, 1.5, 1.5], [0.0, 0.0, 1.0])
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.3, side = :positive,
             extra_out = true,
-            tol = 1e-6, face_tol = 4.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 4.0, min_cut_fraction = 0.01
         )
 
         # new_faces should be a subset of the cross-side faces
@@ -592,15 +612,16 @@ end
 
         plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
         n_hat = normalize(plane.normal)
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = 0.3, side = :positive,
             extra_out = true,
-            tol = 1e-6, face_tol = 1.0, min_cut_fraction = 0.01
+            tol = 1.0e-6, face_tol = 1.0, min_cut_fraction = 0.01
         )
 
         geo = tpfv_geometry(result)
         @test all(geo.volumes .> 0)
-        @test sum(geo.volumes) ≈ vol_orig rtol = 1e-6
+        @test sum(geo.volumes) ≈ vol_orig rtol = 1.0e-6
 
         # All new interface faces must be very close to the cut plane
         for f in info[:new_faces]
@@ -608,7 +629,7 @@ end
             pts = [result.node_points[n] for n in nodes_idx]
             face_center = sum(pts) / length(pts)
             d_plane = dot(face_center - plane.point, n_hat)
-            @test abs(d_plane) < 1e-10
+            @test abs(d_plane) < 1.0e-10
         end
 
         # Normal consistency
@@ -633,11 +654,12 @@ end
         mesh = UnstructuredMesh(g)
 
         plane = PlaneCut([0.5, 0.5, 0.5], [1.0, 0.2, 0.1])
-        result, info = cut_and_displace_mesh(mesh, plane;
+        result, info = cut_and_displace_mesh(
+            mesh, plane;
             constant = cc,
             side = :positive,
             face_tol = 100.0,
-            coplanar_tol = 1e-2,
+            coplanar_tol = 1.0e-2,
             area_tol = 0.0,
             angle = angle,
             extra_out = true,
@@ -671,14 +693,15 @@ end
         n_hat = normalize(plane.normal)
 
         for (angle, cc) in [
-            (0.4339737599553468, 0.12442442442442442),
-            (1.641552918091964,  0.12882882882882882)
-        ]
-            result, info = cut_and_displace_mesh(mesh, plane;
+                (0.4339737599553468, 0.12442442442442442),
+                (1.641552918091964, 0.12882882882882882),
+            ]
+            result, info = cut_and_displace_mesh(
+                mesh, plane;
                 constant = cc,
                 side = :positive,
                 face_tol = 100.0,
-                coplanar_tol = 1e-2,
+                coplanar_tol = 1.0e-2,
                 area_tol = 0.0,
                 angle = angle,
                 extra_out = true,
@@ -686,7 +709,7 @@ end
             )
             geo = tpfv_geometry(result)
             @test all(geo.volumes .> 0)
-            @test sum(geo.volumes) ≈ 1.0 rtol = 1e-6
+            @test sum(geo.volumes) ≈ 1.0 rtol = 1.0e-6
 
             # All new interior faces must lie on the cut plane
             for f in info[:new_faces]
@@ -694,7 +717,7 @@ end
                 pts = [result.node_points[n] for n in nodes_idx]
                 fc = sum(pts) / length(pts)
                 d = abs(dot(fc - plane.point, n_hat))
-                @test d < 1e-10
+                @test d < 1.0e-10
             end
 
             # No boundary face should have near-zero area
@@ -702,7 +725,7 @@ end
                 nodes_idx = collect(result.boundary_faces.faces_to_nodes[f])
                 pts = [result.node_points[n] for n in nodes_idx]
                 area = polygon_area(pts)
-                @test area > 1e-10
+                @test area > 1.0e-10
             end
         end
     end

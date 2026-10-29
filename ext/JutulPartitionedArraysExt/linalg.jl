@@ -8,20 +8,21 @@ function unit_diagonalize!(r, J::SparseMatrixCSC, n_self)
             nzval[k] = zero(T)
         end
     end
-    for i in (n_self+1:length(r))
+    for i in ((n_self + 1):length(r))
         r[i] = zero(eltype(r))
         J[i, i] = -one(T)
     end
+    return
 end
 
 function unit_diagonalize!(r, J::Jutul.StaticSparsityMatrixCSR, n_self)
-    for i in (n_self+1:length(r))
+    for i in ((n_self + 1):length(r))
         r[i] = zero(eltype(r))
     end
     T = eltype(J)
     cols = Jutul.colvals(J)
     nzval = nonzeros(J)
-    for row in (n_self+1:length(r))
+    for row in ((n_self + 1):length(r))
         for k in nzrange(J, row)
             col = cols[k]
             if col == row
@@ -32,6 +33,7 @@ function unit_diagonalize!(r, J::Jutul.StaticSparsityMatrixCSR, n_self)
             nzval[k] = v
         end
     end
+    return
 end
 
 function setup_parray_mul!(simulators, ix = nothing)
@@ -84,7 +86,7 @@ function Jutul.parray_preconditioner_apply!(Y, main_prec, X, preconditioners, si
         apply!(y, prec, x, arg...)
     end
     # @tic "communication" consistent!(Y) |> wait
-    Y
+    return Y
 end
 
 function Jutul.parray_linear_system_operator(simulators, n::Int)
@@ -103,7 +105,7 @@ end
 
 function LinearAlgebra.axpy!(α, x::PVector, y::PVector)
     # y = x*a + y
-    @boundscheck @assert PartitionedArrays.matching_local_indices(axes(x,1),axes(y,1))
+    @boundscheck @assert PartitionedArrays.matching_local_indices(axes(x, 1), axes(y, 1))
     n = length(x)
     # consistent!(x) |> wait
     # consistent!(y) |> wait
@@ -116,12 +118,12 @@ function LinearAlgebra.axpy!(α, x::PVector, y::PVector)
         nothing
     end
     # consistent!(y) |> wait
-    y
+    return y
 end
 
 function LinearAlgebra.axpby!(α, x::PVector, β, y::PVector)
     # y = x*a + y*b
-    @boundscheck @assert PartitionedArrays.matching_local_indices(axes(x,1),axes(y,1))
+    @boundscheck @assert PartitionedArrays.matching_local_indices(axes(x, 1), axes(y, 1))
     n = length(x)
     if n != length(y)
         throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
@@ -130,18 +132,18 @@ function LinearAlgebra.axpby!(α, x::PVector, β, y::PVector)
         LinearAlgebra.axpby!(α, x_i, β, y_i)
         nothing
     end
-    y
+    return y
 end
 
-function Krylov.kaxpy!(n :: Integer, s :: T, x :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dx :: Integer, y :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dy :: Integer) where T<:AbstractFloat
-    map(local_values(x), local_values(y)) do x_i, y_i
+function Krylov.kaxpy!(n::Integer, s::T, x::PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dx::Integer, y::PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dy::Integer) where {T <: AbstractFloat}
+    return map(local_values(x), local_values(y)) do x_i, y_i
         LinearAlgebra.axpy!(s, x_i, y_i)
         nothing
     end
 end
 
-function Krylov.kaxpby!(n :: Integer, s :: T, x :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dx :: Integer, t :: T, y :: PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dy :: Integer) where T<:AbstractFloat
-    map(local_values(x), local_values(y)) do x_i, y_i
+function Krylov.kaxpby!(n::Integer, s::T, x::PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dx::Integer, t::T, y::PVector{Vector{T}, <:Any, <:Any, <:Any, T}, dy::Integer) where {T <: AbstractFloat}
+    return map(local_values(x), local_values(y)) do x_i, y_i
         LinearAlgebra.axpby!(s, x_i, t, y_i)
         nothing
     end

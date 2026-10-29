@@ -41,16 +41,16 @@ Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` when
 `extra_out=true`.
 """
 function glue_mesh(
-    mesh_a::UnstructuredMesh{3},
-    mesh_b::UnstructuredMesh{3};
-    tol::Real = 1e-6,
-    face_tol::Real = 1e-4,
-    coplanar_tol::Real = 1e-3,
-    area_tol::Real = 1e-10,
-    interface_point::Union{Nothing, AbstractVector} = nothing,
-    interface_normal::Union{Nothing, AbstractVector} = nothing,
-    extra_out::Bool = false
-)
+        mesh_a::UnstructuredMesh{3},
+        mesh_b::UnstructuredMesh{3};
+        tol::Real = 1.0e-6,
+        face_tol::Real = 1.0e-4,
+        coplanar_tol::Real = 1.0e-3,
+        area_tol::Real = 1.0e-10,
+        interface_point::Union{Nothing, AbstractVector} = nothing,
+        interface_normal::Union{Nothing, AbstractVector} = nothing,
+        extra_out::Bool = false
+    )
     T = Float64
 
     # Pre-compute interface plane filter if provided
@@ -145,7 +145,7 @@ function glue_mesh(
     # to be close but are on the same side of the domain.
     bnd_normals_a = Vector{SVector{3, T}}(undef, nb_a)
     for bf in 1:nb_a
-        pts = SVector{3,T}[mesh_a.node_points[n] for n in mesh_a.boundary_faces.faces_to_nodes[bf]]
+        pts = SVector{3, T}[mesh_a.node_points[n] for n in mesh_a.boundary_faces.faces_to_nodes[bf]]
         n_raw = _polygon_normal_from_pts(pts)
         # Orient outward: the normal should point away from the cell
         cell = mesh_a.boundary_faces.neighbors[bf]
@@ -158,7 +158,7 @@ function glue_mesh(
     end
     bnd_normals_b = Vector{SVector{3, T}}(undef, nb_b)
     for bf in 1:nb_b
-        pts = SVector{3,T}[mesh_b.node_points[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
+        pts = SVector{3, T}[mesh_b.node_points[n] for n in mesh_b.boundary_faces.faces_to_nodes[bf]]
         n_raw = _polygon_normal_from_pts(pts)
         cell = mesh_b.boundary_faces.neighbors[bf]
         cell_c = _cell_centroid_from_nodes(mesh_b, cell)
@@ -169,7 +169,7 @@ function glue_mesh(
         bnd_normals_b[bf] = n_raw
     end
 
-    candidate_pairs = Tuple{Int,Int}[]
+    candidate_pairs = Tuple{Int, Int}[]
     for bf_a in 1:nb_a
         if degenerate_a[bf_a]
             continue
@@ -218,7 +218,7 @@ function glue_mesh(
     # ----------------------------------------------------------------
     # Result accumulators
     all_face_nodes = Vector{Vector{Int}}()       # interior face node lists
-    all_face_neighbors = Vector{Tuple{Int,Int}}() # interior face neighbors
+    all_face_neighbors = Vector{Tuple{Int, Int}}() # interior face neighbors
     all_bnd_nodes = Vector{Vector{Int}}()          # boundary face node lists
     all_bnd_cells = Vector{Int}()                  # boundary face cells
 
@@ -294,28 +294,28 @@ function glue_mesh(
 
     # For residual computation, track which intersection polygons were carved
     # from each boundary face.
-    carved_from_a = Dict{Int, Vector{Vector{SVector{3,T}}}}()
-    carved_from_b = Dict{Int, Vector{Vector{SVector{3,T}}}}()
+    carved_from_a = Dict{Int, Vector{Vector{SVector{3, T}}}}()
+    carved_from_b = Dict{Int, Vector{Vector{SVector{3, T}}}}()
 
     for (bf_a, bf_b) in candidate_pairs
         cell_a = mesh_a.boundary_faces.neighbors[bf_a]
         cell_b = mesh_b.boundary_faces.neighbors[bf_b]
 
         # Get 3D polygon vertices for both faces
-        pts_a = SVector{3,T}[combined_nodes[n] for n in bnd_a_nodes_combined[bf_a]]
-        pts_b = SVector{3,T}[combined_nodes[n] for n in bnd_b_nodes_combined[bf_b]]
+        pts_a = SVector{3, T}[combined_nodes[n] for n in bnd_a_nodes_combined[bf_a]]
+        pts_b = SVector{3, T}[combined_nodes[n] for n in bnd_b_nodes_combined[bf_b]]
 
         # Compute face normal from mesh_a boundary face for projection
         normal_a = _polygon_normal_from_pts(pts_a)
         face_normal = normal_a
 
         # Build a local 2D coordinate system on the projection plane
-        centroid_ab = (sum(pts_a)/length(pts_a) + sum(pts_b)/length(pts_b)) / 2
+        centroid_ab = (sum(pts_a) / length(pts_a) + sum(pts_b) / length(pts_b)) / 2
         u, v = _build_tangent_basis(face_normal)
 
         # Project both polygons to 2D
-        poly_a_2d = [SVector{2,T}(dot(p - centroid_ab, u), dot(p - centroid_ab, v)) for p in pts_a]
-        poly_b_2d = [SVector{2,T}(dot(p - centroid_ab, u), dot(p - centroid_ab, v)) for p in pts_b]
+        poly_a_2d = [SVector{2, T}(dot(p - centroid_ab, u), dot(p - centroid_ab, v)) for p in pts_a]
+        poly_b_2d = [SVector{2, T}(dot(p - centroid_ab, u), dot(p - centroid_ab, v)) for p in pts_b]
 
         # Compute 2D polygon intersection via Sutherland-Hodgman
         isect_2d = _polygon_intersection_2d(poly_a_2d, poly_b_2d)
@@ -361,11 +361,11 @@ function glue_mesh(
 
         # Track carved polygons for residual computation
         if !haskey(carved_from_a, bf_a)
-            carved_from_a[bf_a] = Vector{SVector{3,T}}[]
+            carved_from_a[bf_a] = Vector{SVector{3, T}}[]
         end
         push!(carved_from_a[bf_a], isect_3d)
         if !haskey(carved_from_b, bf_b)
-            carved_from_b[bf_b] = Vector{SVector{3,T}}[]
+            carved_from_b[bf_b] = Vector{SVector{3, T}}[]
         end
         push!(carved_from_b[bf_b], isect_3d)
     end
@@ -380,14 +380,14 @@ function glue_mesh(
     for bf in 1:nb_a
         if degenerate_a[bf]
             consumed_a[bf] = true
-        elseif original_area_a[bf] > area_tol && consumed_area_a[bf] >= original_area_a[bf] * (1 - 1e-4)
+        elseif original_area_a[bf] > area_tol && consumed_area_a[bf] >= original_area_a[bf] * (1 - 1.0e-4)
             consumed_a[bf] = true
         end
     end
     for bf in 1:nb_b
         if degenerate_b[bf]
             consumed_b[bf] = true
-        elseif original_area_b[bf] > area_tol && consumed_area_b[bf] >= original_area_b[bf] * (1 - 1e-4)
+        elseif original_area_b[bf] > area_tol && consumed_area_b[bf] >= original_area_b[bf] * (1 - 1.0e-4)
             consumed_b[bf] = true
         end
     end
@@ -395,7 +395,7 @@ function glue_mesh(
     # For partially consumed faces, compute residual boundary polygons
     # Use an effective area tolerance that is never smaller than a reasonable
     # minimum to avoid keeping near-zero-area slivers from polygon subtraction.
-    effective_area_tol = max(area_tol, 1e-12)
+    effective_area_tol = max(area_tol, 1.0e-12)
     for bf in 1:nb_a
         if consumed_a[bf]
             continue
@@ -403,7 +403,7 @@ function glue_mesh(
         cell = mesh_a.boundary_faces.neighbors[bf]
         if haskey(carved_from_a, bf)
             residuals = _compute_residual_polygons(
-                SVector{3,T}[combined_nodes[n] for n in bnd_a_nodes_combined[bf]],
+                SVector{3, T}[combined_nodes[n] for n in bnd_a_nodes_combined[bf]],
                 carved_from_a[bf],
                 effective_area_tol
             )
@@ -425,7 +425,7 @@ function glue_mesh(
         cell = mesh_b.boundary_faces.neighbors[bf]
         if haskey(carved_from_b, bf)
             residuals = _compute_residual_polygons(
-                SVector{3,T}[combined_nodes[n] for n in bnd_b_nodes_combined[bf]],
+                SVector{3, T}[combined_nodes[n] for n in bnd_b_nodes_combined[bf]],
                 carved_from_b[bf],
                 effective_area_tol
             )
@@ -521,13 +521,13 @@ function glue_mesh(
         end
 
         info = Dict{Symbol, Any}(
-            :cell_index_a          => cell_index_a,
-            :cell_index_b          => cell_index_b,
-            :face_index_a          => face_index_a,
-            :face_index_b          => face_index_b,
+            :cell_index_a => cell_index_a,
+            :cell_index_b => cell_index_b,
+            :face_index_a => face_index_a,
+            :face_index_b => face_index_b,
             :boundary_face_index_a => bnd_face_index_a,
             :boundary_face_index_b => bnd_face_index_b,
-            :new_faces             => new_faces_list
+            :new_faces => new_faces_list
         )
         return (new_mesh, info)
     end
@@ -539,7 +539,7 @@ end
 
 Compute unit normal of a planar polygon from 3D points using Newell's method.
 """
-function _polygon_normal_from_pts(pts::AbstractVector{SVector{3, T}}) where T
+function _polygon_normal_from_pts(pts::AbstractVector{SVector{3, T}}) where {T}
     n = zero(SVector{3, T})
     np = length(pts)
     for i in 1:np
@@ -560,8 +560,8 @@ end
 
 Build an orthonormal (u, v) basis in the plane perpendicular to `normal`.
 """
-function _build_tangent_basis(normal::SVector{3, T}) where T
-    ref = abs(normal[1]) < T(0.9) ? SVector{3,T}(1, 0, 0) : SVector{3,T}(0, 1, 0)
+function _build_tangent_basis(normal::SVector{3, T}) where {T}
+    ref = abs(normal[1]) < T(0.9) ? SVector{3, T}(1, 0, 0) : SVector{3, T}(0, 1, 0)
     u = normalize(cross(normal, ref))
     v = cross(normal, u)
     return (u, v)
@@ -573,7 +573,7 @@ end
 Ensure a 2D polygon has counter-clockwise winding order.
 Uses the signed area (shoelace formula).
 """
-function _ensure_ccw_2d(poly::Vector{SVector{2, T}}) where T
+function _ensure_ccw_2d(poly::Vector{SVector{2, T}}) where {T}
     n = length(poly)
     if n < 3
         return poly
@@ -598,24 +598,24 @@ Sutherland-Hodgman algorithm. Both polygons are reoriented to
 counter-clockwise winding before clipping. Returns a vector of 2D vertices.
 """
 function _polygon_intersection_2d(
-    subject::Vector{SVector{2, T}},
-    clip::Vector{SVector{2, T}}
-) where T
+        subject::Vector{SVector{2, T}},
+        clip::Vector{SVector{2, T}}
+    ) where {T}
     output = _ensure_ccw_2d(subject)
     clip_ccw = _ensure_ccw_2d(clip)
     nc = length(clip_ccw)
     for i in 1:nc
         if isempty(output)
-            return SVector{2,T}[]
+            return SVector{2, T}[]
         end
         input = output
-        output = SVector{2,T}[]
+        output = SVector{2, T}[]
         edge_start = clip_ccw[i]
         edge_end = clip_ccw[mod1(i + 1, nc)]
         # Edge direction and inward normal
         edge_dir = edge_end - edge_start
         # Inward normal (pointing into the clip polygon)
-        inward = SVector{2,T}(-edge_dir[2], edge_dir[1])
+        inward = SVector{2, T}(-edge_dir[2], edge_dir[1])
 
         n_in = length(input)
         for j in 1:n_in
@@ -648,14 +648,14 @@ the complement of the carved polygon. Returns a list of residual convex polygons
 or empty if the face is fully consumed.
 """
 function _compute_residual_polygons(
-    face_poly::Vector{SVector{3, T}},
-    carved_polys::Vector{Vector{SVector{3, T}}},
-    area_tol::Real
-) where T
+        face_poly::Vector{SVector{3, T}},
+        carved_polys::Vector{Vector{SVector{3, T}}},
+        area_tol::Real
+    ) where {T}
     face_area = polygon_area(face_poly)
     carved_area = sum(polygon_area(cp) for cp in carved_polys)
-    if carved_area >= face_area * (1 - 1e-4)
-        return Vector{SVector{3,T}}[]
+    if carved_area >= face_area * (1 - 1.0e-4)
+        return Vector{SVector{3, T}}[]
     end
 
     # Project everything to 2D for clipping
@@ -663,17 +663,17 @@ function _compute_residual_polygons(
     centroid = sum(face_poly) / length(face_poly)
     u, v = _build_tangent_basis(face_normal)
 
-    face_2d = [SVector{2,T}(dot(p - centroid, u), dot(p - centroid, v)) for p in face_poly]
+    face_2d = [SVector{2, T}(dot(p - centroid, u), dot(p - centroid, v)) for p in face_poly]
     face_2d = _ensure_ccw_2d(face_2d)
 
     # Start with the full face as the set of residual pieces
     pieces = [face_2d]
 
     for carved in carved_polys
-        carved_2d = [SVector{2,T}(dot(p - centroid, u), dot(p - centroid, v)) for p in carved]
+        carved_2d = [SVector{2, T}(dot(p - centroid, u), dot(p - centroid, v)) for p in carved]
         carved_2d = _ensure_ccw_2d(carved_2d)
 
-        new_pieces = Vector{SVector{2,T}}[]
+        new_pieces = Vector{SVector{2, T}}[]
         for piece in pieces
             # Subtract carved_2d from piece by clipping against each edge's exterior
             remaining = _subtract_convex_2d(piece, carved_2d)
@@ -687,11 +687,11 @@ function _compute_residual_polygons(
     end
 
     # Back-project to 3D
-    result = Vector{SVector{3,T}}[]
+    result = Vector{SVector{3, T}}[]
     # Use the average normal-distance of the original face
     d_face = sum(dot(p, face_normal) for p in face_poly) / length(face_poly)
     for piece in pieces
-        poly_3d = SVector{3,T}[]
+        poly_3d = SVector{3, T}[]
         for p2 in piece
             p3 = centroid + p2[1] * u + p2[2] * v
             d_pt = dot(p3, face_normal)
@@ -711,9 +711,9 @@ Returns a list of convex polygon pieces that cover subject \\ clip.
 Uses successive clipping against the complement of each edge of clip.
 """
 function _subtract_convex_2d(
-    subject::Vector{SVector{2, T}},
-    clip::Vector{SVector{2, T}}
-) where T
+        subject::Vector{SVector{2, T}},
+        clip::Vector{SVector{2, T}}
+    ) where {T}
     nc = length(clip)
     # Successively subtract: we clip the subject against the OUTSIDE of each
     # edge of clip.  After subtracting the inside of edge i, any remaining
@@ -725,7 +725,7 @@ function _subtract_convex_2d(
     # After all edges, any remaining "inside all edges" pieces are fully
     # inside clip and are discarded.
     pieces = [subject]
-    result = Vector{SVector{2,T}}[]
+    result = Vector{SVector{2, T}}[]
 
     for i in 1:nc
         j = mod1(i + 1, nc)
@@ -733,9 +733,9 @@ function _subtract_convex_2d(
         edge_end = clip[j]
         edge_dir = edge_end - edge_start
         # Inward normal (pointing into the clip polygon for CCW winding)
-        inward = SVector{2,T}(-edge_dir[2], edge_dir[1])
+        inward = SVector{2, T}(-edge_dir[2], edge_dir[1])
 
-        new_pieces = Vector{SVector{2,T}}[]
+        new_pieces = Vector{SVector{2, T}}[]
         for piece in pieces
             inside, outside = _split_polygon_by_line_2d(piece, edge_start, inward)
             # "outside" pieces are outside this edge → they're outside clip → result
@@ -761,13 +761,13 @@ Returns (inside, outside) where inside is the part on the inward side
 and outside is the part on the outward side.
 """
 function _split_polygon_by_line_2d(
-    poly::Vector{SVector{2, T}},
-    point_on_line::SVector{2, T},
-    inward_normal::SVector{2, T}
-) where T
+        poly::Vector{SVector{2, T}},
+        point_on_line::SVector{2, T},
+        inward_normal::SVector{2, T}
+    ) where {T}
     n = length(poly)
-    inside = SVector{2,T}[]
-    outside = SVector{2,T}[]
+    inside = SVector{2, T}[]
+    outside = SVector{2, T}[]
 
     for i in 1:n
         j = mod1(i + 1, n)
@@ -827,7 +827,7 @@ end
 
 Compute the area of a 2D polygon using the shoelace formula.
 """
-function _polygon_area_2d(poly::Vector{SVector{2, T}}) where T
+function _polygon_area_2d(poly::Vector{SVector{2, T}}) where {T}
     n = length(poly)
     if n < 3
         return zero(T)
@@ -860,8 +860,10 @@ end
 
 Approximate centroid of a cell from mesh_b using combined node coordinates.
 """
-function _cell_centroid_from_nodes_b(mesh_b::UnstructuredMesh{3}, cell_b::Int,
-                                     combined_nodes, node_map_b)
+function _cell_centroid_from_nodes_b(
+        mesh_b::UnstructuredMesh{3}, cell_b::Int,
+        combined_nodes, node_map_b
+    )
     nodes = cell_nodes(mesh_b, cell_b)
     T = eltype(eltype(combined_nodes))
     c = zero(SVector{3, T})
@@ -927,21 +929,22 @@ Returns a new `UnstructuredMesh`, or `(UnstructuredMesh, Dict)` when
 `extra_out=true`.
 """
 function cut_and_displace_mesh(
-    mesh::UnstructuredMesh{3},
-    plane::PlaneCut{Tp};
-    constant::Real = 0.0,
-    shift_lr::Real = 0.0,
-    angle::Real = 0.0,
-    side::Symbol = :positive,
-    tol::Real = 1e-6,
-    face_tol::Real = 1e-4,
-    coplanar_tol::Real = 1e-3,
-    area_tol::Real = 1e-10,
-    min_cut_fraction::Real = 0.05,
-    extra_out::Bool = false
-) where Tp
+        mesh::UnstructuredMesh{3},
+        plane::PlaneCut{Tp};
+        constant::Real = 0.0,
+        shift_lr::Real = 0.0,
+        angle::Real = 0.0,
+        side::Symbol = :positive,
+        tol::Real = 1.0e-6,
+        face_tol::Real = 1.0e-4,
+        coplanar_tol::Real = 1.0e-3,
+        area_tol::Real = 1.0e-10,
+        min_cut_fraction::Real = 0.05,
+        extra_out::Bool = false
+    ) where {Tp}
     # 1. Cut the mesh
-    cut_result = cut_mesh(mesh, plane;
+    cut_result = cut_mesh(
+        mesh, plane;
         min_cut_fraction = min_cut_fraction,
         extra_out = true
     )
@@ -998,7 +1001,7 @@ function cut_and_displace_mesh(
         dp = pt - plane.point
         x1 = dot(dp, t1)  # in-plane coordinate along t1
         x2 = dot(dp, t2)  # in-plane coordinate along t2
-        d  = dot(dp, n)   # out-of-plane (normal) distance
+        d = dot(dp, n)   # out-of-plane (normal) distance
         # Rotate in-plane, then shift
         x1_new = x1 * cosθ - x2 * sinθ + constant
         x2_new = x1 * sinθ + x2 * cosθ + shift_lr
@@ -1013,7 +1016,8 @@ function cut_and_displace_mesh(
     # Pass the cut plane info so glue_mesh only matches faces near the interface
     n_hat = normalize(plane.normal)
     if side == :positive
-        glue_result = glue_mesh(shifted_mesh, mesh_neg;
+        glue_result = glue_mesh(
+            shifted_mesh, mesh_neg;
             tol = tol, face_tol = face_tol, coplanar_tol = coplanar_tol,
             area_tol = area_tol,
             interface_point = plane.point,
@@ -1021,7 +1025,8 @@ function cut_and_displace_mesh(
             extra_out = true
         )
     else
-        glue_result = glue_mesh(mesh_pos, shifted_mesh;
+        glue_result = glue_mesh(
+            mesh_pos, shifted_mesh;
             tol = tol, face_tol = face_tol, coplanar_tol = coplanar_tol,
             area_tol = area_tol,
             interface_point = plane.point,
@@ -1059,13 +1064,13 @@ function cut_and_displace_mesh(
         end
 
         info = Dict{Symbol, Any}(
-            :cell_index            => cell_index,
-            :cell_side             => cell_side,
-            :face_index_a          => glue_info[:face_index_a],
-            :face_index_b          => glue_info[:face_index_b],
+            :cell_index => cell_index,
+            :cell_side => cell_side,
+            :face_index_a => glue_info[:face_index_a],
+            :face_index_b => glue_info[:face_index_b],
             :boundary_face_index_a => glue_info[:boundary_face_index_a],
             :boundary_face_index_b => glue_info[:boundary_face_index_b],
-            :new_faces             => glue_info[:new_faces]
+            :new_faces => glue_info[:new_faces]
         )
         return (glued_mesh, info)
     end
@@ -1079,9 +1084,9 @@ Create a new UnstructuredMesh identical to `mesh` but with `new_nodes` as node
 points.
 """
 function _rebuild_mesh_with_nodes(
-    mesh::UnstructuredMesh{3},
-    new_nodes::Vector{SVector{3, T}}
-) where T
+        mesh::UnstructuredMesh{3},
+        new_nodes::Vector{SVector{3, T}}
+    ) where {T}
     nc = number_of_cells(mesh)
     nf = number_of_faces(mesh)
     nb = number_of_boundary_faces(mesh)

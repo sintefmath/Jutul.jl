@@ -1,8 +1,8 @@
-
 function Jutul.simulate(dps::DictParametersSampler, x::AbstractVector)
     prm = optimizer_devectorize!(dps.parameters, x, dps.setup.x_setup)
     case = dps.setup_function(prm, missing)
-    result = simulate!(dps.simulator, case.dt,
+    result = simulate!(
+        dps.simulator, case.dt,
         config = dps.config,
         state0 = case.state0,
         parameters = case.parameters,

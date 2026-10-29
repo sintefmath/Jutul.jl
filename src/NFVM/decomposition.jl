@@ -4,13 +4,13 @@ function get_half_face_normal(G, cell, face, normals, areas)
     else
         sgn = 1
     end
-    return sgn*normals[face]*areas[face]
+    return sgn * normals[face] * areas[face]
 end
 
-function ntpfa_decompose_half_face(G::UnstructuredMesh{D}, cell, face, K, cell_centroids, face_centroids, normals, areas, bnd_face_centroids, bnd_normals, bnd_areas) where D
+function ntpfa_decompose_half_face(G::UnstructuredMesh{D}, cell, face, K, cell_centroids, face_centroids, normals, areas, bnd_face_centroids, bnd_normals, bnd_areas) where {D}
     # Vector we are going to decompose
     normal = get_half_face_normal(G, cell, face, normals, areas)
-    AKn = K[cell]*normal
+    AKn = K[cell] * normal
     # Get local set of HAPs + weights
     cells = Int[]
     weights = Tuple{Float64, Float64}[]
@@ -28,7 +28,7 @@ function ntpfa_decompose_half_face(G::UnstructuredMesh{D}, cell, face, K, cell_c
             sgn = -1.0
         end
         x_f = face_centroids[f]
-        n_f = sgn*normals[f]
+        n_f = sgn * normals[f]
         K_other = K[other]
         x_other = cell_centroids[other]
         hp, w = find_harmonic_average_point(K_self, x_self, K_other, x_other, x_f, n_f)
@@ -61,7 +61,7 @@ function ntpfa_decompose_half_face(G::UnstructuredMesh{D}, cell, face, K, cell_c
             other_cells = map(x -> cells[x], trip), # Other cell for each HAP
             harmonic_average_points = map(x -> points[x], trip),
             triplet_weights = trip_w,
-            Kn = AKn
+            Kn = AKn,
         )
     end
     return out
@@ -73,7 +73,7 @@ function remainder_trans(decomp, l, r, sgn = 1)
         if c != l && c != r
             tw_i = decomp.triplet_weights[i]
             cw_i = decomp.other_cells_weights[i]
-            w_i = sgn*tw_i*cw_i
+            w_i = sgn * tw_i * cw_i
             push!(out, (c, w_i))
         end
     end
@@ -87,14 +87,14 @@ function two_point_trans(decomp, cell)
     end
     T = 0.0
     if decomp.self == cell
-        T += sum(decomp.self_weights.*decomp.triplet_weights)
+        T += sum(decomp.self_weights .* decomp.triplet_weights)
     end
     for (i, c) in enumerate(decomp.other_cells)
         if c == cell
             tw_i = decomp.triplet_weights[i]
             cw_i = decomp.other_cells_weights[i]
             # @info "Found self in other $cell" c i tw_i cw_i
-            T += tw_i*cw_i
+            T += tw_i * cw_i
         end
     end
     # @info "Final T = $T"
@@ -167,11 +167,12 @@ function Jutul.subdiscretization(d::NFVMLinearDiscretization, subg, mapper::Jutu
     )
 end
 
-function ntpfa_decompose_faces(G::UnstructuredMesh{D}, perm, scheme::Symbol = :avgmpfa;
+function ntpfa_decompose_faces(
+        G::UnstructuredMesh{D}, perm, scheme::Symbol = :avgmpfa;
         faces = 1:number_of_faces(G),
         tpfa_trans = missing,
         extra_out = false
-    ) where D
+    ) where {D}
     geo = tpfv_geometry(G)
     areas = geo.areas
     Vec_t = SVector{D, Float64}
@@ -187,7 +188,7 @@ function ntpfa_decompose_faces(G::UnstructuredMesh{D}, perm, scheme::Symbol = :a
     bnd_face_centroids = reinterpret(Vec_t, geo.boundary_centroids)
 
     if perm isa AbstractMatrix
-        K = SMatrix{D, D, Float64, D*D}[]
+        K = SMatrix{D, D, Float64, D * D}[]
         for i in axes(perm, 2)
             push!(K, Jutul.expand_perm(perm[:, i], Val(D)))
         end
