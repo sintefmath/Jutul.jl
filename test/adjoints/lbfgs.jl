@@ -235,3 +235,21 @@ end
     d, = Jutul.LBFGS.get_search_direction([0.5, 0.5], [1.0, 1.0], Hi, deepcopy(Hi), c)
     @test isempty(d)
 end
+
+@testset "LBFGS old line search success with negative objective" begin
+    # Flat objective with misleading gradient: line search can never improve,
+    # so the optimizer should stop due to line search failure before max_it
+    for v0 in (5.0, -5.0)
+        f = x -> (v0, ones(length(x)))
+        max_it = 5
+        v, x, info = Jutul.LBFGS.optimize_bound_constrained(
+            [0.5, 0.5], f, 0.0, 1.0;
+            use_new_line_search = false,
+            obj_rel_tol = -Inf,
+            obj_change_tol_rel = -Inf,
+            max_it = max_it,
+            print = 0
+        )
+        @test length(info) < max_it + 1
+    end
+end

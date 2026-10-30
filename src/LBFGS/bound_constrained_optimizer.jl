@@ -213,7 +213,7 @@ function optimize_bound_constrained(
                     line_searchmax_it = ls_max_it,
                     maxStep = ls_max_step
                 )
-                ls_success = v < v0 * (1 - 100 * eps()) # somewhat ad-hoc
+                ls_success = v < v0 - 100 * eps() * abs(v0) # somewhat ad-hoc
             else
                 # Perform line-search (from inexact_line_search.jl)
                 ls_success, u, v, g, lsinfo = inexact_line_search(
