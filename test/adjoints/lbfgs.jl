@@ -227,3 +227,11 @@ end
         @test v == v0
     end
 end
+
+@testset "LBFGS legacy search direction without descent" begin
+    # Negative initial scaling yields an ascent direction for every Hessian trial
+    c = Jutul.LBFGS.get_constraints(zeros(2))
+    Hi = Jutul.LBFGS.LimitedMemoryHessianLegacy(init_scale = -1.0)
+    d, = Jutul.LBFGS.get_search_direction([0.5, 0.5], [1.0, 1.0], Hi, deepcopy(Hi), c)
+    @test isempty(d)
+end
