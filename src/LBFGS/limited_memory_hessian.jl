@@ -175,8 +175,9 @@ function -(H::LimitedMemoryHessian)
 end
 
 function apply_initial(H::LimitedMemoryHessian, v)
+    # Applies the initial *inverse* Hessian approximation
     if H.init_strategy == :static
-        r = H.sign * H.init_scale * v
+        r = (H.sign / H.init_scale) * v
     elseif H.init_strategy == :dynamic
         s = H.S[:, end]
         y = H.Y[:, end]

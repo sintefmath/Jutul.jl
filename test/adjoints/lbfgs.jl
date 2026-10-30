@@ -162,3 +162,14 @@ end
         @test q(d_lbfgs) <= q(d_dense) + 1.0e-8
     end
 end
+
+@testset "LBFGS static initial scaling" begin
+    # Update pairs consistent with B = c*I should leave B = c*I unchanged
+    n = 4
+    c = 3.0
+    for strategy in (:static, :dynamic)
+        H = lbfgs_test_hessian(c * I(n), m = 4, init_scale = c, init_strategy = strategy, nupdates = 2)
+        @test Jutul.LBFGS.full_matrix(H) ≈ c * I(n)
+        @test Jutul.LBFGS.full_inverse_matrix(H) ≈ I(n) / c
+    end
+end
