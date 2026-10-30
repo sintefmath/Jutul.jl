@@ -70,10 +70,10 @@ JutulPartitionedArraysExt = ["PartitionedArrays", "MPI"]
 JutulWriteVTKExt = "WriteVTK"
 
 [compat]
-AMDGPU = "1, 2"
+AMDGPU = "2.10"
 AMGCLWrap = "=0.3.2"
 Adapt = "4"
-CUDA = "6"
+CUDA = "6.5"
 CUDSS = "0.8"
 Crayons = "4.1.1"
 DataStructures = "0.18.13"
@@ -85,7 +85,7 @@ HYPRE = "1.8"
 ILUZero = "0.2.0"
 JLD2 = "0.4, 0.5, 0.6"
 KaHyPar = "0.3.0"
-KernelAbstractions = "0.9"
+KernelAbstractions = "0.10.4"
 Krylov = "0.10"
 LBFGSB = "0.4.1"
 LinearOperators = "2.3.2"
@@ -114,7 +114,6 @@ CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 Gmsh = "705231aa-382f-11e9-3f0c-b7cb4346fdeb"
 HYPRE = "b5ffcf37-a2bd-41ab-a3da-4bd9bc8ad771"
-JLArrays = "27aeb0d3-9eb9-45fb-866b-73c2ecf80fcb"
 KaHyPar = "2a6221f6-aa48-11e9-3542-2d9e0ef01880"
 LBFGSB = "5be7bae1-8223-5378-bac3-9e7378a2f6e6"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
@@ -122,4 +121,4 @@ Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 PartitionedArrays = "5a9dfac6-5c52-46f7-8278-5e2210713be9"
 
 [targets]
-test = ["KaHyPar", "HYPRE", "JLArrays", "LBFGSB", "CUDA"]
+test = ["KaHyPar", "HYPRE", "LBFGSB", "CUDA"]

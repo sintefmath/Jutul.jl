@@ -1,4 +1,4 @@
-const RF = isdefined(CUDA, :cuSOLVER) ? CUDA.cuSOLVER : CUDA.CUSOLVER
+const RF = isdefined(CUDA, :cuSOLVER) ? CUDA.cuSOLVER : CUDA.cuSOLVER
 
 mutable struct CUDARFFactor{V, I, H, R, C}
     handle::H

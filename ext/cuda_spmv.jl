@@ -15,19 +15,19 @@ end
 
 function cuda_spmv_setup(A::StaticSparsityMatrixCSR{T}, x, y) where {T <: Number}
     matrix = cusparse_wrapper(A)
-    descriptor = CUDA.CUSPARSE.CuSparseMatrixDescriptor(matrix, 'O')
-    x_descriptor = CUDA.CUSPARSE.CuDenseVectorDescriptor(x)
-    y_descriptor = CUDA.CUSPARSE.CuDenseVectorDescriptor(y)
-    algorithm = CUDA.CUSPARSE.CUSPARSE_SPMV_CSR_ALG1
+    descriptor = CUDA.cuSPARSE.CuSparseMatrixDescriptor(matrix, 'O')
+    x_descriptor = CUDA.cuSPARSE.CuDenseVectorDescriptor(x)
+    y_descriptor = CUDA.cuSPARSE.CuDenseVectorDescriptor(y)
+    algorithm = CUDA.cuSPARSE.CUSPARSE_SPMV_CSR_ALG1
     buffer_size = Ref{Csize_t}(0)
-    CUDA.CUSPARSE.cusparseSpMV_bufferSize(
-        CUDA.CUSPARSE.handle(), 'N', Ref{T}(one(T)), descriptor,
+    CUDA.cuSPARSE.cusparseSpMV_bufferSize(
+        CUDA.cuSPARSE.handle(), 'N', Ref{T}(one(T)), descriptor,
         x_descriptor, Ref{T}(zero(T)), y_descriptor, T, algorithm, buffer_size
     )
     workspace = CuVector{UInt8}(undef, Int(buffer_size[]))
-    if CUDA.CUSPARSE.version() >= v"12.4"
-        CUDA.CUSPARSE.cusparseSpMV_preprocess(
-            CUDA.CUSPARSE.handle(), 'N', Ref{T}(one(T)), descriptor,
+    if CUDA.cuSPARSE.version() >= v"12.4"
+        CUDA.cuSPARSE.cusparseSpMV_preprocess(
+            CUDA.cuSPARSE.handle(), 'N', Ref{T}(one(T)), descriptor,
             x_descriptor, Ref{T}(zero(T)), y_descriptor, T, algorithm, workspace
         )
     end
@@ -46,7 +46,7 @@ function cuda_spmv_setup(A::StaticSparsityMatrixCSR{T}, x, y) where {T <: Static
         (block_size * size(A, 1), block_size * size(A, 2)),
         block_size, 'C', length(A.nzval)
     )
-    descriptor = CUDA.CUSPARSE.CuMatrixDescriptor('G', 'L', 'N', 'O')
+    descriptor = CUDA.cuSPARSE.CuMatrixDescriptor('G', 'L', 'N', 'O')
     return CUDABlockSpMV(matrix, descriptor)
 end
 
@@ -54,12 +54,12 @@ function cuda_spmv!(plan::CUDASpMV, y, x, alpha, beta)
     T = eltype(plan.matrix)
     GC.@preserve plan x y begin
         # Krylov methods alternate vectors/views while reusing the matrix.
-        CUDA.CUSPARSE.cusparseDnVecSetValues(plan.x_descriptor, x)
-        CUDA.CUSPARSE.cusparseDnVecSetValues(plan.y_descriptor, y)
-        CUDA.CUSPARSE.cusparseSpMV(
-            CUDA.CUSPARSE.handle(), 'N', Ref{T}(alpha), plan.descriptor,
+        CUDA.cuSPARSE.cusparseDnVecSetValues(plan.x_descriptor, x)
+        CUDA.cuSPARSE.cusparseDnVecSetValues(plan.y_descriptor, y)
+        CUDA.cuSPARSE.cusparseSpMV(
+            CUDA.cuSPARSE.handle(), 'N', Ref{T}(alpha), plan.descriptor,
             plan.x_descriptor, Ref{T}(beta), plan.y_descriptor, T,
-            CUDA.CUSPARSE.CUSPARSE_SPMV_CSR_ALG1, plan.workspace
+            CUDA.cuSPARSE.CUSPARSE_SPMV_CSR_ALG1, plan.workspace
         )
     end
     return nothing
@@ -70,10 +70,10 @@ function cuda_spmv!(plan::CUDABlockSpMV, y, x, alpha, beta)
     T = eltype(matrix)
     prefix = T === Float32 ? "S" : T === Float64 ? "D" :
         T === ComplexF32 ? "C" : "Z"
-    multiply = getproperty(CUDA.CUSPARSE, Symbol("cusparse", prefix, "bsrmv"))
+    multiply = getproperty(CUDA.cuSPARSE, Symbol("cusparse", prefix, "bsrmv"))
     GC.@preserve plan x y begin
         multiply(
-            CUDA.CUSPARSE.handle(), matrix.dir, 'N',
+            CUDA.cuSPARSE.handle(), matrix.dir, 'N',
             div(size(matrix, 1), matrix.blockDim), div(size(matrix, 2), matrix.blockDim),
             matrix.nnzb, Ref{T}(alpha), plan.descriptor, matrix.nzVal,
             matrix.rowPtr, matrix.colVal, matrix.blockDim, x, Ref{T}(beta), y

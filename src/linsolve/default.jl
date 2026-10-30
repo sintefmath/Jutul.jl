@@ -1,6 +1,6 @@
 export LinearizedSystem, MultiLinearizedSystem, linear_solve!, transfer, LUSolver
 
-# using CUDA, CUDA.CUSPARSE
+# using CUDA, CUDA.cuSPARSE
 
 mutable struct FactorStore
     factor

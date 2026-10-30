@@ -1,6 +1,5 @@
 using Jutul
 using Jutul.KAPreconditioners
-using JLArrays
 using KernelAbstractions
 import Jutul.Krylov: gmres
 using LinearAlgebra
@@ -9,7 +8,8 @@ using Jutul.StaticArrays: SMatrix, SVector
 using Test
 
 @testset "Vendor ILU vectors from reusable buffers" begin
-    for backend in (CPU(), JLBackend()), T in (Float64, SVector{3, Float64})
+    for T in (Float64, SVector{3, Float64})
+        backend = CPU()
         unit = T <: Number ? one(T) : T(1, 1, 1)
         allocation = KAPreconditioners.backend_copy(backend, fill(unit, 8))
         prefix = KAPreconditioners.BackendBufferPrefix(view(allocation, 1:3), allocation)
@@ -74,12 +74,10 @@ end
 @testset "SparseLU setup and same-pattern resetup" begin
     A = poisson_2d(4)
     b = collect(1.0:size(A, 1))
-    for backend in (KernelAbstractions.CPU(), JLBackend())
+    let backend = CPU()
         matrix = csr_matrix(A; backend)
-        rhs = backend isa KernelAbstractions.CPU ? b : JLArray(b)
-        F = backend isa KernelAbstractions.CPU ?
-            KAPreconditioners.setup_sparse_lu(matrix) :
-            Jutul.KernelExecution.factorize_linear_system(lu, matrix)
+        rhs = b
+        F = KAPreconditioners.setup_sparse_lu(matrix)
         @test F isa SparseLU
         x = similar(rhs)
         ldiv!(x, F, rhs)
@@ -112,11 +110,11 @@ end
     B = sparse(rows, cols, [5.0, 2.0, 3.0, 4.0], 2, 2)
     C = sparse([1, 2, 2], [2, 1, 2], [2.0, 3.0, 4.0], 2, 2)
     b = [1.0, 2.0]
-    for backend in (KernelAbstractions.CPU(), JLBackend())
+    let backend = CPU()
         matrix = csr_matrix(A; backend)
         F = KAPreconditioners.setup_sparse_lu(matrix)
         @test F.factorization.pivoting
-        rhs = backend isa KernelAbstractions.CPU ? b : JLArray(b)
+        rhs = b
         x = similar(rhs)
         ldiv!(x, F, rhs)
         @test Array(x) ≈ A \ b
@@ -142,18 +140,14 @@ end
         ExtendedIInterpolation(0.25, 4, 2, true)
     ) == 2
 
-    for backend in (KernelAbstractions.CPU(), JLBackend())
+    let backend = CPU()
         C = csr_matrix(A; backend = backend)
         @test eltype(C.nzval) === Float32
         strong = KAPreconditioners.strength(C, 0.25, 0.9)
         @test eltype(strong) === Bool
 
         rhs = ones(Float32, size(A, 1))
-        if backend isa KernelAbstractions.CPU
-            b = rhs
-        else
-            b = JLArray(rhs)
-        end
+        b = rhs
         for config in (SPAI0(1, 0.7), ILU0(1, 0.7), DILU(1, 0.7))
             state = setup_smoother(C, config)
             @test eltype(state) === Float32
@@ -309,28 +303,25 @@ end
 end
 
 @testset "KernelAbstractions CPU backend compatibility" begin
-    # CPU(static=true) controls kernel scheduling, but it uses the same Array
-    # storage as the default CPU(static=false) backend inferred from `zeros`.
-    # Smoother and AMG reuse must therefore accept matrices and vectors from
-    # either CPU variant.
+    # Explicit and inferred CPU backends use the same Array storage.
     A = poisson_2d(4)
     ordinary = csr_matrix(A)
-    static_backend = KernelAbstractions.CPU(; static = true)
-    static_matrix = csr_matrix(
+    explicit_backend = KernelAbstractions.CPU()
+    explicit_matrix = csr_matrix(
         copy(ordinary.rowptr), copy(ordinary.colval), copy(ordinary.nzval),
-        size(ordinary, 1), size(ordinary, 2); backend = static_backend
+        size(ordinary, 1), size(ordinary, 2); backend = explicit_backend
     )
     b = ones(size(A, 1))
 
     for config in (SPAI0(), GaussSeidel(), ILU0(), DILU())
-        smoother = setup_smoother(static_matrix, config)
+        smoother = setup_smoother(explicit_matrix, config)
         @test update_smoother!(smoother, ordinary) === smoother
         x = zeros(size(A, 1))
         KAPreconditioners.apply!(x, smoother, b)
         @test all(isfinite, x)
     end
 
-    hierarchy = setup_amg(static_matrix, AMGOptions(coarse_size = 4))
+    hierarchy = setup_amg(explicit_matrix, AMGOptions(coarse_size = 4))
     @test resetup_amg!(hierarchy, ordinary) === hierarchy
     x = zeros(size(A, 1))
     KAPreconditioners.apply!(x, hierarchy, b)
@@ -475,13 +466,13 @@ end
 
 @testset "Interpolation rescaling during numeric updates" begin
     test_numeric_interpolation_tuning(CPU())
-    test_numeric_interpolation_tuning(JLBackend())
 end
 
 @testset "AMG strength selection" begin
     A = sparse([1, 1, 1, 2, 2, 3], [1, 2, 3, 2, 3, 3], [5.0, -1.0, 2.0, 3.0, 1.0, 1.0], 3, 3)
     C = csr_matrix(A)
-    for backend in (CPU(), JLBackend()), mode in (:signed_fallback, :signed, :absolute)
+    for mode in (:signed_fallback, :signed, :absolute)
+        backend = CPU()
         D = csr_matrix(A; backend = backend)
         strong = Array(KAPreconditioners.strength(D, 0.25, 1.0; strength_type = mode))
         expected = KAPreconditioners.strength(C, 0.25, 1.0; strength_type = mode)
@@ -632,7 +623,7 @@ end
     )
     @test wrapper.options.aggressive_num_paths == 2
     @test wrapper.options.aggressive_interpolation === aggressive_interp
-    for backend in (CPU(), JLBackend())
+    let backend = CPU()
         D = csr_matrix(A; backend = backend)
         H = setup_amg(D, options)
         P = H.levels[1].P
@@ -736,7 +727,7 @@ end
         poisson_2d(3),
         AMGOptions(interpolation = TwoStageExtendedIInterpolation())
     )
-    for backend in (CPU(), JLBackend())
+    let backend = CPU()
         test_two_stage_interpolation(backend)
     end
 end
@@ -796,11 +787,11 @@ end
     @test aggressive.levels[1].P.ncol < regular.levels[1].P.ncol
 
     device = setup_amg(
-        csr_matrix(A; backend = JLBackend()), aggressive_options
+        csr_matrix(A; backend = KernelAbstractions.CPU()), aggressive_options
     )
     @test device.levels[1].P.ncol == aggressive.levels[1].P.ncol
-    device_x = JLArray(zeros(size(A, 1)))
-    device_b = JLArray(b)
+    device_x = zeros(size(A, 1))
+    device_b = copy(b)
     for _ in 1:4
         cycle!(device_x, device, device_b)
     end
@@ -949,8 +940,9 @@ end
 end
 
 @testset "backend buffer capacity reuse" begin
-    backend = JLBackend()
-    allocation = JLArray(collect(Int32, 1:12))
+    backend = KernelAbstractions.CPU()
+    # Non-resizable storage exercises capacity reuse instead of Vector resizing.
+    allocation = reinterpret(Int32, zeros(UInt8, 12 * sizeof(Int32)))
     shortened = KAPreconditioners.copy_reusing(
         allocation, collect(Int32, 1:7), backend
     )
@@ -988,7 +980,7 @@ end
 
     tracker[] = 0
     zero_buffer = KAPreconditioners.zeros_reusing(
-        JLArray(zeros(Float64, 4)), backend, Float64, 7;
+        reinterpret(Float64, zeros(UInt8, 4 * sizeof(Float64))), backend, Float64, 7;
         reallocation_tracker = tracker
     )
     zero_allocation = KAPreconditioners.reusable_buffer(zero_buffer)
@@ -1109,21 +1101,20 @@ end
     @test P.rowptr[3] - P.rowptr[2] == 1
 end
 
-@testset "KernelAbstractions device hierarchy" begin
+@testset "KernelAbstractions CPU hierarchy" begin
     A = poisson_2d(10)
     C = csr_matrix(A)
-    backend = JLBackend()
+    backend = KernelAbstractions.CPU()
     D = csr_matrix(A; backend = backend)
-    @test D.rowptr isa JLArray
+    @test D.rowptr isa Array
     @test Matrix(KAPreconditioners.sparse_matrix(D)) ≈ Matrix(A)
     H = setup_amg(D, AMGOptions(coarse_size = 10))
-    @test H.levels[1].A.nzval isa JLArray
-    @test all(level -> level.A.nzval isa JLArray, H.levels)
+    @test H.levels[1].A.nzval isa Array
+    @test all(level -> level.A.nzval isa Array, H.levels)
     coarse_solver = H.levels[end].coarse_solver
-    @test coarse_solver isa SparseLU
-    @test coarse_solver.factorization isa KAPreconditioners.KASparseLUFactor
-    b = JLArray(ones(size(A, 1)))
-    x = JLArray(zeros(size(A, 1)))
+    @test coarse_solver isa KAPreconditioners.CoarseLUState
+    b = ones(size(A, 1))
+    x = zeros(size(A, 1))
     for _ in 1:4
         cycle!(x, H, b)
     end
@@ -1140,7 +1131,7 @@ end
 
     DB = csr_matrix(
         copy(D.rowptr), copy(D.colval),
-        D.nzval .* JLArray(
+        D.nzval .* Array(
             [
                 if isodd(i)
                     0.8
@@ -1157,7 +1148,7 @@ end
     )
     resetup_amg!(H, DB, :memory)
     test_galerkin(H)
-    @test H.levels[end].coarse_solver isa SparseLU
+    @test H.levels[end].coarse_solver isa KAPreconditioners.CoarseLUState
     @test level1_ids == (
         objectid(H.levels[1].A.rowptr), objectid(H.levels[1].A.colval),
         objectid(H.levels[1].A.nzval),
@@ -1172,12 +1163,12 @@ end
     resetup_amg!(H, D, :partial_operators; n_levels_partial_keep = 2)
     test_galerkin(H)
 
-    # Exercise every method-specific interpolation reset on device arrays.
+    # Exercise every method-specific interpolation reset on backend arrays.
     for coarsening in (RugeStuben(), Aggregation())
         method_options = AMGOptions(coarsening = coarsening, coarse_size = 10)
         method_hierarchy = setup_amg(D, method_options)
         resetup_amg!(method_hierarchy, D2, :sparsity)
-        method_x = JLArray(zeros(size(A, 1)))
+        method_x = zeros(size(A, 1))
         cycle!(method_x, method_hierarchy, b)
         @test all(isfinite, Array(method_x))
         test_galerkin(method_hierarchy)
@@ -1244,14 +1235,14 @@ end
 
 @testset "ILU smoothers on KernelAbstractions arrays" begin
     A = poisson_2d(5)
-    backend = JLBackend()
+    backend = KernelAbstractions.CPU()
     C = csr_matrix(A; backend = backend)
-    b = JLArray(ones(size(A, 1)))
+    b = ones(size(A, 1))
 
     for config in (ILU0(), DILU())
         state = setup_smoother(C, config)
         @test Any ∉ fieldtypes(typeof(state))
-        x = JLArray(zeros(size(A, 1)))
+        x = zeros(size(A, 1))
         KAPreconditioners.apply!(x, state, b)
         @test norm(ones(size(A, 1)) - A * Array(x)) < norm(ones(size(A, 1)))
 
@@ -1272,20 +1263,12 @@ end
     A = poisson_2d(5)
     initial = fill(0.25, size(A, 1))
     rhs = ones(size(A, 1))
-    for backend in (KernelAbstractions.CPU(), JLBackend())
+    let backend = CPU()
         C = csr_matrix(A; backend = backend)
-        if backend isa KernelAbstractions.CPU
-            b = rhs
-        else
-            b = JLArray(rhs)
-        end
+        b = rhs
         for config in (ILU0(2), DILU(2))
             state = setup_smoother(C, config)
-            if backend isa KernelAbstractions.CPU
-                reference = copy(initial)
-            else
-                reference = JLArray(initial)
-            end
+            reference = copy(initial)
             fused = copy(reference)
             smooth!(reference, state, C, b; steps = 2)
             KAPreconditioners.smooth_result!(fused, C, b, state, 2)
@@ -1310,10 +1293,10 @@ end
     z1 = y1 - d1 * A[1, 2] * z2
     expected = [z1, z2, z3]
 
-    for backend in (KernelAbstractions.CPU(), JLBackend())
+    let backend = CPU()
         C = csr_matrix(A; backend = backend)
         state = setup_smoother(C, DILU())
-        backend_rhs = backend isa KernelAbstractions.CPU ? rhs : JLArray(rhs)
+        backend_rhs = rhs
         result = similar(backend_rhs)
         KAPreconditioners.apply!(result, state, backend_rhs)
         @test Array(state.inverse_diagonal) ≈ expected_diagonal
@@ -1358,12 +1341,12 @@ end
         @test norm(b - A * x) < initial_residual
     end
 
-    backend = JLBackend()
+    backend = KernelAbstractions.CPU()
     D = csr_matrix(A; backend = backend)
-    device_b = JLArray(b)
+    device_b = copy(b)
     for config in (ILU0(), DILU())
         state = setup_smoother(D, config)
-        x = JLArray(fill(zero(BlockVector), n))
+        x = fill(zero(BlockVector), n)
         KAPreconditioners.apply!(x, state, device_b)
         @test norm(b - A * Array(x)) < norm(b)
 
@@ -1419,13 +1402,13 @@ end
         rtol = 1.0e-12, atol = 1.0e-12
     )
 
-    device_matrix = csr_matrix(block_matrix; backend = JLBackend())
-    device_rhs = JLArray(flat_rhs)
+    device_matrix = csr_matrix(block_matrix; backend = KernelAbstractions.CPU())
+    device_rhs = copy(flat_rhs)
     device_result = similar(device_rhs)
     device_smoother = KASmootherPreconditioner(:ilu0)
     Jutul.update_preconditioner!(
         device_smoother, device_matrix,
-        device_rhs, KernelAbstractionsContext(JLBackend()), nothing
+        device_rhs, KernelAbstractionsContext(KernelAbstractions.CPU()), nothing
     )
     Jutul.apply!(device_result, device_smoother, device_rhs)
     @test isapprox(
