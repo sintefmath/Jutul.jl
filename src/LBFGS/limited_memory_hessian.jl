@@ -259,7 +259,7 @@ function get_projection_operator(null_space, is_bool_type)
         return identity
     end
     if is_bool_type
-        return (u) -> (u[null_space, :] .= 0.0; return u)
+        return (u) -> (w = copy(u); w[null_space, :] .= 0.0; return w)
     else
         return (u) -> u - null_space * (null_space' * u)
     end

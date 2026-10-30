@@ -1,4 +1,4 @@
-using Jutul, Test, ForwardDiff
+using Jutul, Test, ForwardDiff, LinearAlgebra
 import Jutul: unit_box_bfgs
 import Jutul.LBFGS: box_bfgs
 
@@ -115,4 +115,50 @@ end
     lin_ineq = (A = A, b = [-5.0])
     v, x, history = box_bfgs(x0, f!, lb, ub; lin_ineq = lin_ineq, maximize = false, print = 0)
     @test -1.0 * x[1] + 2.0 * x[2] <= lin_ineq.b[1] + 1.0e-5
+end
+
+function lbfgs_test_hessian(A; m = 5, init_scale = 1.0, init_strategy = :dynamic, nupdates = m)
+    n = size(A, 1)
+    H = Jutul.LBFGS.LimitedMemoryHessian(init_scale = init_scale, m = m, init_strategy = init_strategy)
+    for _ in 1:nupdates
+        s = randn(n)
+        Jutul.LBFGS.update!(H, s, A * s)
+    end
+    return H
+end
+
+@testset "LBFGS reduced Hessian products do not mutate input" begin
+    n = 6
+    A = randn(n, n)
+    A = A' * A + n * I
+    H = lbfgs_test_hessian(A)
+    active = falses(n)
+    active[2] = true
+    g = collect(1.0:n)
+    g_ref = copy(g)
+    Jutul.LBFGS.apply_reduced_hessian_inverse(H, g, active)
+    @test g == g_ref
+    Jutul.LBFGS.apply_reduced_hessian(H, g, active)
+    @test g == g_ref
+end
+
+@testset "LBFGS active-set QP releases bounds correctly" begin
+    # Compare QP solution using the L-BFGS operator against the same solver
+    # using the dense matrix representation of the same Hessian
+    for _ in 1:50
+        n = 5
+        A = randn(n, n)
+        A = A' * A + 0.1 * I
+        H = lbfgs_test_hessian(A)
+        Hf = Jutul.LBFGS.full_matrix(H)
+        lb, ub = zeros(n), ones(n)
+        u0 = rand(n)
+        u0[1:2] .= 0.0
+        g0 = randn(n)
+        g0[1:2] .= abs.(g0[1:2])
+        d_lbfgs, = Jutul.LBFGS.solve_active_set_qp(u0, g0, H, lb, ub, 100, 0.0)
+        d_dense, = Jutul.LBFGS.solve_active_set_qp(u0, g0, Hf, lb, ub, 100, 0.0)
+        q = d -> g0' * d + 0.5 * d' * Hf * d
+        @test q(d_lbfgs) <= q(d_dense) + 1.0e-8
+    end
 end
