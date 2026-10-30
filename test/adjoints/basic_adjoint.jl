@@ -336,6 +336,55 @@ end
     test_for_split_timesteps([0.25, 1.0], max_timestep = 0.25, deps = :parameters)
 end
 
+function setup_poisson_test_case_dense(x::Vector, step_info = missing; dim = (4, 4), dt = [1.0, 2.0])
+    # Every entry of x affects the permeability in every cell. This gives a
+    # Jacobian with one color per entry, so ForwardDiff must use several chunks
+    # when length(x) is large.
+    g = CartesianMesh(dim, (1.0, 1.0))
+    c = tpfv_geometry(g).cell_centroids
+    k_val = map(axes(c, 2)) do i
+        s = zero(eltype(x))
+        for j in eachindex(x)
+            s += x[j] * 0.3 * cos(j * c[1, i]) * sin((j + 1) * c[2, i])
+        end
+        exp(s)
+    end
+    return setup_poisson_test_case(1.0, 1.0, 1.0, k_val, 1.0, dim = dim, dt = dt)
+end
+
+@testset "AdjointDI.solve_adjoint_generic cached helper parameters" begin
+    G(model, state, dt, step_info, forces) = sum(abs2, state[:U])
+    F = setup_poisson_test_case_dense
+    function solve_forward(x)
+        case = F(x)
+        states, reports = simulate(case, info_level = -1, output_substates = true)
+        return (case, states, reports)
+    end
+    # More parameters than the default ForwardDiff chunk size
+    x1 = collect(range(-0.2, 0.3, length = 16))
+    x2 = reverse(x1) .+ 0.1
+    case1, states1, reports1 = solve_forward(x1)
+    case2, states2, reports2 = solve_forward(x2)
+    @testset "multiple chunks" begin
+        dG_case = solve_adjoint_generic(x1, F, states1, reports1, G, state0 = case1.state0, deps = :case)
+        dG_prm = solve_adjoint_generic(x1, F, states1, reports1, G, state0 = case1.state0, deps = :parameters)
+        dG_num = num_grad_generic_central(F, G, x1)
+        @test dG_case ≈ dG_prm rtol = 1.0e-8
+        @test dG_case ≈ dG_num rtol = 1.0e-5
+    end
+    @testset "storage reused with new parameters" begin
+        packed = Jutul.AdjointPackedResult(states1, reports1, case1.forces)
+        storage = Jutul.AdjointsDI.setup_adjoint_storage_generic(x1, F, packed, G, state0 = case1.state0, deps = :case)
+        dG_reused = zeros(length(x1))
+        Jutul.AdjointsDI.solve_adjoint_generic!(dG_reused, x1, F, storage, states1, reports1, G, state0 = case1.state0)
+        Jutul.AdjointsDI.solve_adjoint_generic!(dG_reused, x2, F, storage, states2, reports2, G, state0 = case2.state0)
+        dG_fresh = solve_adjoint_generic(x2, F, states2, reports2, G, state0 = case2.state0, deps = :case)
+        dG_prm = solve_adjoint_generic(x2, F, states2, reports2, G, state0 = case2.state0, deps = :parameters)
+        @test dG_reused ≈ dG_fresh rtol = 1.0e-8
+        @test dG_reused ≈ dG_prm rtol = 1.0e-8
+    end
+end
+
 import Jutul.DictOptimization as DictOptimization
 @testset "DictOptimization" begin
     testdata = Dict(
