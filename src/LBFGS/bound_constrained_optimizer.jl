@@ -199,6 +199,8 @@ function optimize_bound_constrained(
             grad_tol, max_it_qp, active_chunk_tol
         )
 
+        # No step is taken if the QP solve did not produce a search direction
+        ls_success = false
         if ls_max_step > 0.0
             if !use_new_line_search
                 # Perform line-search (from constrained_optimizer.jl)

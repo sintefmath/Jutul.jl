@@ -192,3 +192,12 @@ end
     @test x ≈ [12.5, 20.0] atol = 1.0e-6
     @test v ≈ f(x)[1]
 end
+
+@testset "LBFGS bound constrained with all bounds active" begin
+    # Initial point is optimal: all bounds are active and no step is taken
+    f = x -> (sum(x) + 1.0, ones(length(x)))
+    x0 = [0.0, 0.0]
+    v, x, = Jutul.LBFGS.optimize_bound_constrained(x0, f, 0.0, 1.0; print = 0)
+    @test x == x0
+    @test v ≈ 1.0
+end
