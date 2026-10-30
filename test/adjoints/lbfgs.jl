@@ -216,3 +216,14 @@ end
     @test v ≈ f(x)[1]
     @test v ≈ info[end].obj_info.v
 end
+
+@testset "LBFGS inexact line search with negative objective" begin
+    # Flat objective: no improvement can be found
+    for v0 in (5.0, -5.0)
+        f = u -> (v0, [1.0])
+        found, u, v, = Jutul.LBFGS.inexact_line_search([0.0], v0, [1.0], [-1.0e-12], f; verbosity = 0)
+        @test !found
+        @test u == [0.0]
+        @test v == v0
+    end
+end
