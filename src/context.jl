@@ -33,7 +33,7 @@ end
 # end
 
 # function transfer(context::SingleCUDAContext, v::SparseMatrixCSC)
-#     return CUDA.CUSPARSE.CuSparseMatrixCSC(v)
+#     return CUDA.cuSPARSE.CuSparseMatrixCSC(v)
 # end
 
 function transfer(context, t::NamedTuple)
