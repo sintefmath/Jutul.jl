@@ -173,3 +173,22 @@ end
         @test Jutul.LBFGS.full_inverse_matrix(H) ≈ I(n) / c
     end
 end
+
+@testset "LBFGS bound constrained with scaling" begin
+    lb, ub = [10.0, 10.0], [20.0, 20.0]
+    target = [12.5, 30.0]
+    evaluated = Vector{Vector{Float64}}()
+    f = x -> (push!(evaluated, copy(x)); (sum(abs2, x .- target), 2 .* (x .- target)))
+    x0 = [18.0, 11.0]
+    v, x, = Jutul.LBFGS.optimize_bound_constrained(
+        x0, f, lb, ub;
+        scale = true,
+        grad_tol = 1.0e-8,
+        obj_rel_tol = -Inf,
+        print = 0
+    )
+    @test first(evaluated) ≈ x0
+    @test all(u -> all(lb .<= u .<= ub), evaluated)
+    @test x ≈ [12.5, 20.0] atol = 1.0e-6
+    @test v ≈ f(x)[1]
+end

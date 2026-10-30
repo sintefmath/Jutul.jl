@@ -115,10 +115,12 @@ function optimize_bound_constrained(
     # handle bounds
     lb, ub = handle_bounds!(lb, ub, length(u0))
     # Potential scaling
+    # Keep original bounds in separate variables since lb/ub are rebound below
+    lb_orig, ub_orig = lb, ub
     if scale
         f_old! = f!
-        f! = (u) -> f_scale(u, f_old!, lb, ub)
-        u0 = (u0 .- lb) ./ (ub .- lb)
+        f! = (u) -> f_scale(u, f_old!, lb_orig, ub_orig)
+        u0 = (u0 .- lb_orig) ./ (ub_orig .- lb_orig)
         lb, ub = zeros(length(u0)), ones(length(u0))
     end
     # Initialize variables
@@ -293,7 +295,7 @@ function optimize_bound_constrained(
     end
 
     if scale
-        u = u .* (ub .- lb) .+ lb
+        u = u .* (ub_orig .- lb_orig) .+ lb_orig
     end
     if print > 0
         print_end_message(stop_flags, stop_tols, info)
