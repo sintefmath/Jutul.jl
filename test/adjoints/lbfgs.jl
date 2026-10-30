@@ -201,3 +201,18 @@ end
     @test x == x0
     @test v ≈ 1.0
 end
+
+@testset "LBFGS bound constrained maximize" begin
+    target = [0.3, 0.6]
+    f = x -> (5.0 - sum(abs2, x .- target), -2 .* (x .- target))
+    v, x, info = Jutul.LBFGS.optimize_bound_constrained(
+        [0.9, 0.9], f, 0.0, 1.0;
+        maximize = true,
+        grad_tol = 1.0e-8,
+        obj_rel_tol = -Inf,
+        print = 0
+    )
+    @test x ≈ target atol = 1.0e-6
+    @test v ≈ f(x)[1]
+    @test v ≈ info[end].obj_info.v
+end

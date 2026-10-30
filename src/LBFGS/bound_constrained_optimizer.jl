@@ -302,7 +302,7 @@ function optimize_bound_constrained(
     if print > 0
         print_end_message(stop_flags, stop_tols, info)
     end
-    return (v, u, info)
+    return (obj_sign * v, u, info)
 end
 
 function optimize_bound_constrained(problem; kwarg...)
