@@ -175,8 +175,9 @@ function -(H::LimitedMemoryHessian)
 end
 
 function apply_initial(H::LimitedMemoryHessian, v)
+    # Applies the initial *inverse* Hessian approximation
     if H.init_strategy == :static
-        r = H.sign * H.init_scale * v
+        r = (H.sign / H.init_scale) * v
     elseif H.init_strategy == :dynamic
         s = H.S[:, end]
         y = H.Y[:, end]
@@ -259,7 +260,7 @@ function get_projection_operator(null_space, is_bool_type)
         return identity
     end
     if is_bool_type
-        return (u) -> (u[null_space, :] .= 0.0; return u)
+        return (u) -> (w = copy(u); w[null_space, :] .= 0.0; return w)
     else
         return (u) -> u - null_space * (null_space' * u)
     end

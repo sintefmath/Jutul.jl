@@ -1,4 +1,4 @@
-using Jutul, Test, ForwardDiff
+using Jutul, Test, ForwardDiff, LinearAlgebra
 import Jutul: unit_box_bfgs
 import Jutul.LBFGS: box_bfgs
 
@@ -115,4 +115,141 @@ end
     lin_ineq = (A = A, b = [-5.0])
     v, x, history = box_bfgs(x0, f!, lb, ub; lin_ineq = lin_ineq, maximize = false, print = 0)
     @test -1.0 * x[1] + 2.0 * x[2] <= lin_ineq.b[1] + 1.0e-5
+end
+
+function lbfgs_test_hessian(A; m = 5, init_scale = 1.0, init_strategy = :dynamic, nupdates = m)
+    n = size(A, 1)
+    H = Jutul.LBFGS.LimitedMemoryHessian(init_scale = init_scale, m = m, init_strategy = init_strategy)
+    for _ in 1:nupdates
+        s = randn(n)
+        Jutul.LBFGS.update!(H, s, A * s)
+    end
+    return H
+end
+
+@testset "LBFGS reduced Hessian products do not mutate input" begin
+    n = 6
+    A = randn(n, n)
+    A = A' * A + n * I
+    H = lbfgs_test_hessian(A)
+    active = falses(n)
+    active[2] = true
+    g = collect(1.0:n)
+    g_ref = copy(g)
+    Jutul.LBFGS.apply_reduced_hessian_inverse(H, g, active)
+    @test g == g_ref
+    Jutul.LBFGS.apply_reduced_hessian(H, g, active)
+    @test g == g_ref
+end
+
+@testset "LBFGS active-set QP releases bounds correctly" begin
+    # Compare QP solution using the L-BFGS operator against the same solver
+    # using the dense matrix representation of the same Hessian
+    for _ in 1:50
+        n = 5
+        A = randn(n, n)
+        A = A' * A + 0.1 * I
+        H = lbfgs_test_hessian(A)
+        Hf = Jutul.LBFGS.full_matrix(H)
+        lb, ub = zeros(n), ones(n)
+        u0 = rand(n)
+        u0[1:2] .= 0.0
+        g0 = randn(n)
+        g0[1:2] .= abs.(g0[1:2])
+        d_lbfgs, = Jutul.LBFGS.solve_active_set_qp(u0, g0, H, lb, ub, 100, 0.0)
+        d_dense, = Jutul.LBFGS.solve_active_set_qp(u0, g0, Hf, lb, ub, 100, 0.0)
+        q = d -> g0' * d + 0.5 * d' * Hf * d
+        @test q(d_lbfgs) <= q(d_dense) + 1.0e-8
+    end
+end
+
+@testset "LBFGS static initial scaling" begin
+    # Update pairs consistent with B = c*I should leave B = c*I unchanged
+    n = 4
+    c = 3.0
+    for strategy in (:static, :dynamic)
+        H = lbfgs_test_hessian(c * I(n), m = 4, init_scale = c, init_strategy = strategy, nupdates = 2)
+        @test Jutul.LBFGS.full_matrix(H) ≈ c * I(n)
+        @test Jutul.LBFGS.full_inverse_matrix(H) ≈ I(n) / c
+    end
+end
+
+@testset "LBFGS bound constrained with scaling" begin
+    lb, ub = [10.0, 10.0], [20.0, 20.0]
+    target = [12.5, 30.0]
+    evaluated = Vector{Vector{Float64}}()
+    f = x -> (push!(evaluated, copy(x)); (sum(abs2, x .- target), 2 .* (x .- target)))
+    x0 = [18.0, 11.0]
+    v, x, = Jutul.LBFGS.optimize_bound_constrained(
+        x0, f, lb, ub;
+        scale = true,
+        grad_tol = 1.0e-8,
+        obj_rel_tol = -Inf,
+        print = 0
+    )
+    @test first(evaluated) ≈ x0
+    @test all(u -> all(lb .<= u .<= ub), evaluated)
+    @test x ≈ [12.5, 20.0] atol = 1.0e-6
+    @test v ≈ f(x)[1]
+end
+
+@testset "LBFGS bound constrained with all bounds active" begin
+    # Initial point is optimal: all bounds are active and no step is taken
+    f = x -> (sum(x) + 1.0, ones(length(x)))
+    x0 = [0.0, 0.0]
+    v, x, = Jutul.LBFGS.optimize_bound_constrained(x0, f, 0.0, 1.0; print = 0)
+    @test x == x0
+    @test v ≈ 1.0
+end
+
+@testset "LBFGS bound constrained maximize" begin
+    target = [0.3, 0.6]
+    f = x -> (5.0 - sum(abs2, x .- target), -2 .* (x .- target))
+    v, x, info = Jutul.LBFGS.optimize_bound_constrained(
+        [0.9, 0.9], f, 0.0, 1.0;
+        maximize = true,
+        grad_tol = 1.0e-8,
+        obj_rel_tol = -Inf,
+        print = 0
+    )
+    @test x ≈ target atol = 1.0e-6
+    @test v ≈ f(x)[1]
+    @test v ≈ info[end].obj_info.v
+end
+
+@testset "LBFGS inexact line search with negative objective" begin
+    # Flat objective: no improvement can be found
+    for v0 in (5.0, -5.0)
+        f = u -> (v0, [1.0])
+        found, u, v, = Jutul.LBFGS.inexact_line_search([0.0], v0, [1.0], [-1.0e-12], f; verbosity = 0)
+        @test !found
+        @test u == [0.0]
+        @test v == v0
+    end
+end
+
+@testset "LBFGS legacy search direction without descent" begin
+    # Negative initial scaling yields an ascent direction for every Hessian trial
+    c = Jutul.LBFGS.get_constraints(zeros(2))
+    Hi = Jutul.LBFGS.LimitedMemoryHessianLegacy(init_scale = -1.0)
+    d, = Jutul.LBFGS.get_search_direction([0.5, 0.5], [1.0, 1.0], Hi, deepcopy(Hi), c)
+    @test isempty(d)
+end
+
+@testset "LBFGS old line search success with negative objective" begin
+    # Flat objective with misleading gradient: line search can never improve,
+    # so the optimizer should stop due to line search failure before max_it
+    for v0 in (5.0, -5.0)
+        f = x -> (v0, ones(length(x)))
+        max_it = 5
+        v, x, info = Jutul.LBFGS.optimize_bound_constrained(
+            [0.5, 0.5], f, 0.0, 1.0;
+            use_new_line_search = false,
+            obj_rel_tol = -Inf,
+            obj_change_tol_rel = -Inf,
+            max_it = max_it,
+            print = 0
+        )
+        @test length(info) < max_it + 1
+    end
 end
