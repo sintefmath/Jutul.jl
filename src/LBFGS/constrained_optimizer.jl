@@ -445,6 +445,7 @@ function get_search_direction(u0, g0, Hi, HiPrev, c)
             end
         end
     end
+    return
 end
 
 function project_Q(v, Q, H = nothing)
