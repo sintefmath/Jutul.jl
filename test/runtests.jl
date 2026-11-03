@@ -1,6 +1,7 @@
 using Jutul
 include("krylov.jl")
 include("linalg/ilu.jl")
+include("linalg/lu_solver.jl")
 include("linalg/preconditioners.jl")
 # include("linalg/linear_operators.jl")
 include("linalg/ilu_sorted_traversal.jl")
