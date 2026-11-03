@@ -6,7 +6,6 @@ using MappedArrays
 using StaticArrays
 import Adapt
 # Data structures
-import DataStructures: OrderedDict
 using OrderedCollections
 # Various bits and bobs from Base
 using Statistics
