@@ -82,6 +82,17 @@ end
             @test kind == :threads ? 1 <= used <= workers : used == expected
             @test all(>(0), ids)
             @test isnothing(Jutul.threaded_loop_minbatch(identity, 0, ctx))
+            # threaded_loop with a context follows the same batching: large loops
+            # use the workers, loops below minbatch stay on the calling thread
+            fill!(ids, 0)
+            Jutul.threaded_loop(i -> (ids[i] = Threads.threadid()), length(ids), ctx)
+            used = length(unique(ids))
+            @test kind == :threads ? 1 <= used <= workers : used == expected
+            @test all(>(0), ids)
+            small = zeros(Int, 32)
+            Jutul.threaded_loop(i -> (small[i] = Threads.threadid()), length(small), ctx)
+            @test all(==(Threads.threadid()), small)
+            @test isnothing(Jutul.threaded_loop(identity, 0, ctx))
         end
         ctx = KernelAbstractionsContext(CPU(); nthreads = workers, minbatch = 64)
         ids = zeros(Int, 4096)
