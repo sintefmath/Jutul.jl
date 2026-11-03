@@ -211,7 +211,7 @@ function update_level_smoother!(
         state::MulticolorILUState,
         A::StaticSparsityMatrixCSR, options::AMGOptions
     )
-    state.config = options.smoother
+    state.config = resolve_ilu_ordering(options.smoother, state.backend)
     state.inner.config = typeof(state.config)(state.config.steps, state.config.damping)
     return update_smoother!(state, A)
 end

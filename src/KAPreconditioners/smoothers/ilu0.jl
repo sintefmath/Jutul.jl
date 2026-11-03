@@ -468,11 +468,23 @@ function reuse_ilu_smoother!(reuse, A, config, ::Type{S}) where {S}
     return update_smoother!(reuse, A)
 end
 
+default_ilu_ordering(backend) = :natural
+resolve_ilu_ordering(config, backend) = config
+
+function resolve_ilu_ordering(config::Union{ILU0, DILU}, backend)
+    if config.ordering == :auto
+        return typeof(config)(config.steps, config.damping;
+            ordering = default_ilu_ordering(backend))
+    end
+    return config
+end
+
 function setup_smoother(
         A::StaticSparsityMatrixCSR, config::ILU0;
         reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "ILU0")
+    config = resolve_ilu_ordering(config, matrix_backend(A))
     if config.ordering != :natural
         return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
     end
@@ -514,6 +526,7 @@ function setup_smoother(
         reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "DILU")
+    config = resolve_ilu_ordering(config, matrix_backend(A))
     if config.ordering != :natural
         return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
     end

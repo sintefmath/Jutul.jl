@@ -15,6 +15,8 @@ import KernelAbstractions as KA
 
 include("cuda_sparse_lu.jl")
 
+KAPreconditioners.default_ilu_ordering(::CUDA.CUDABackend) = :level
+
 function KAPreconditioners.update_permuted_ilu!(state, ::CUDA.CUDABackend)
     if KAPreconditioners.ilu_permutation_kind(state.config) != :level || iszero(state.n)
         return KAPreconditioners.update_smoother!(state.inner, state.matrix)

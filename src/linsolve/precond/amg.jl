@@ -192,6 +192,9 @@ end
 Wrap a backend-portable smoother in Jutul's preconditioner lifecycle. A symbol
 (`:spai0`, `:gauss_seidel`, `:hybrid_gauss_seidel`, `:ilu0`, `:dilu`, or `:vendor_ilu`) can be supplied
 instead of a smoother config.
+Symbol-based ILU0 and DILU default to `ordering=:auto`: CUDA uses cached
+dependency-level storage and other backends retain natural storage. Pass an
+explicit `ordering` to override this choice.
 """
 mutable struct KASmootherPreconditioner{C} <: JutulPreconditioner
     config::C
@@ -202,7 +205,10 @@ end
 KASmootherPreconditioner(config = KAPreconditioners.SPAI0()) =
     KASmootherPreconditioner(config, nothing, nothing)
 
-function KASmootherPreconditioner(method::Symbol; steps = 1, damping = 1.0, ordering = :natural)
+function KASmootherPreconditioner(method::Symbol; steps = 1, damping = 1.0, ordering = :auto)
+    if ordering == :auto && !(method in (:ilu0, :dilu))
+        ordering = :natural
+    end
     config = ka_smoother(method; steps, damping, ordering)
     return KASmootherPreconditioner(config)
 end
@@ -251,6 +257,9 @@ function ka_smoother_vectors(smoother, x, y)
             )
         )
         scalar_type = eltype(factor_type)
+        eltype(x) === scalar_type && eltype(y) === scalar_type || throw(
+            ArgumentError("flat vectors for a block smoother must have element type $scalar_type")
+        )
         vector_type = SVector{block_size, scalar_type}
         x = unsafe_reinterpret(vector_type, x, length(x) ÷ block_size)
         y = unsafe_reinterpret(vector_type, y, length(y) ÷ block_size)

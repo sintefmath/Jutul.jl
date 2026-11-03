@@ -120,3 +120,4 @@ end
 end
 
 include("ka_ilu_graph_replay.jl")
+include("ka_ilu_auto_ordering.jl")
