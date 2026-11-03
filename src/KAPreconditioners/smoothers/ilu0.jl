@@ -473,8 +473,10 @@ resolve_ilu_ordering(config, backend) = config
 
 function resolve_ilu_ordering(config::Union{ILU0, DILU}, backend)
     if config.ordering == :auto
-        return typeof(config)(config.steps, config.damping;
-            ordering = default_ilu_ordering(backend))
+        return typeof(config)(
+            config.steps, config.damping;
+            ordering = default_ilu_ordering(backend)
+        )
     end
     return config
 end
