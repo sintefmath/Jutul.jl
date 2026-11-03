@@ -475,6 +475,9 @@ function setup_smoother(
         reuse = nothing, reallocation_tracker = nothing
     )
     require_square_matrix(A, "ILU0")
+    if config.ordering == :multicolor
+        return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
+    end
     reused = reuse_ilu_smoother!(reuse, A, config, ILU0State)
     isnothing(reused) || return reused
     mark_backend_reallocation!(
@@ -513,6 +516,9 @@ function setup_smoother(
         reuse = nothing, reallocation_tracker = nothing
     )
     require_square_matrix(A, "DILU")
+    if config.ordering == :multicolor
+        return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
+    end
     reused = reuse_ilu_smoother!(reuse, A, config, DILUState)
     isnothing(reused) || return reused
     mark_backend_reallocation!(
@@ -595,10 +601,28 @@ function launch_factor_levels!(state::DILUState, kernel)
     return state
 end
 
+function cpu_ilu_schedule(state)
+    if Threads.nthreads() == 1
+        # A single worker can follow natural row order directly. Visiting
+        # sparse dependency wavefronts needlessly destroys CSR locality.
+        offsets = (1, state.n + 1)
+        return offsets, Base.OneTo(state.n), offsets, state.n:-1:1
+    else
+        return state.factor_offsets, state.factor_rows,
+            state.upper_offsets, state.upper_rows
+    end
+end
+
 function update_smoother!(
         state::ILU0State{<:Vector, <:Vector, <:Vector, <:Vector},
         A::StaticSparsityMatrixCSR{Tv, Ti, <:Vector, <:Vector, <:Vector}
     ) where {Tv, Ti}
+    return update_ilu_cpu!(state, A, cpu_ilu_schedule(state))
+end
+
+# Pass the schedule through a function barrier: one-worker ranges and parallel
+# level vectors must both remain concretely typed inside the batch loops.
+function update_ilu_cpu!(state::ILU0State, A::StaticSparsityMatrixCSR{Tv, Ti}, schedule) where {Tv, Ti}
     require_same_smoother_pattern(state, A)
     copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
     factors = state.factors
@@ -606,8 +630,7 @@ function update_smoother!(
     rowptr = state.rowptr
     colval = state.colval
     diagonal = state.diagonal_positions
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -640,6 +663,10 @@ function update_smoother!(
         state::DILUState{<:Vector, <:Vector, <:Vector, <:Vector},
         A::StaticSparsityMatrixCSR{Tv, Ti, <:Vector, <:Vector, <:Vector}
     ) where {Tv, Ti}
+    return update_ilu_cpu!(state, A, cpu_ilu_schedule(state))
+end
+
+function update_ilu_cpu!(state::DILUState, A::StaticSparsityMatrixCSR{Tv, Ti}, schedule) where {Tv, Ti}
     require_same_smoother_pattern(state, A)
     copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
     dilu_values = state.values
@@ -648,8 +675,7 @@ function update_smoother!(
     colval = state.colval
     diagonal_index = state.diagonal_positions
     transpose_index = state.transpose_positions
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -744,12 +770,15 @@ function ilu_solve!(
 end
 
 function ilu_solve_cpu!(x, state::ILU0State, b, work)
+    return ilu_solve_cpu!(x, state, b, work, cpu_ilu_schedule(state))
+end
+
+function ilu_solve_cpu!(x, state::ILU0State, b, work, schedule)
     factors = state.factors
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -764,8 +793,7 @@ function ilu_solve_cpu!(x, state::ILU0State, b, work)
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -792,12 +820,15 @@ function ilu_solve!(
 end
 
 function ilu_solve_cpu!(x, state::DILUState, b, work)
+    return ilu_solve_cpu!(x, state, b, work, cpu_ilu_schedule(state))
+end
+
+function ilu_solve_cpu!(x, state::DILUState, b, work, schedule)
     dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -812,8 +843,7 @@ function ilu_solve_cpu!(x, state::DILUState, b, work)
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -914,12 +944,15 @@ function ilu_smooth_result!(
 end
 
 function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
+    return ilu_smooth_result_cpu!(x, A, b, state, work, correction, cpu_ilu_schedule(state))
+end
+
+function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction, schedule)
     factors = state.factors
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -935,8 +968,7 @@ function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -967,12 +999,15 @@ function ilu_smooth_result!(
 end
 
 function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
+    return ilu_smooth_result_cpu!(x, A, b, state, work, correction, cpu_ilu_schedule(state))
+end
+
+function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction, schedule)
     dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -988,8 +1023,7 @@ function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start

@@ -56,7 +56,10 @@ function amg_coarsening(method::Symbol, theta; second_pass::Bool = true)
     end
 end
 
-function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
+function ka_smoother(method::Symbol; steps = 1, damping = 1.0, ordering = :natural)
+    if ordering != :natural && !(method in (:ilu0, :dilu))
+        throw(ArgumentError("ordering is only supported for ILU0 and DILU"))
+    end
     if method == :default || method == :spai0
         return KAPreconditioners.SPAI0(steps, damping)
     elseif method == :gauss_seidel
@@ -64,9 +67,9 @@ function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
     elseif method == :hybrid_gauss_seidel
         return KAPreconditioners.HybridGaussSeidel(steps, damping)
     elseif method == :ilu0
-        return KAPreconditioners.ILU0(steps, damping)
+        return KAPreconditioners.ILU0(steps, damping; ordering)
     elseif method == :dilu
-        return KAPreconditioners.DILU(steps, damping)
+        return KAPreconditioners.DILU(steps, damping; ordering)
     elseif method == :vendor_ilu
         return KAPreconditioners.VendorILU(steps, damping)
     else
@@ -199,8 +202,8 @@ end
 KASmootherPreconditioner(config = KAPreconditioners.SPAI0()) =
     KASmootherPreconditioner(config, nothing, nothing)
 
-function KASmootherPreconditioner(method::Symbol; steps = 1, damping = 1.0)
-    config = ka_smoother(method; steps = steps, damping = damping)
+function KASmootherPreconditioner(method::Symbol; steps = 1, damping = 1.0, ordering = :natural)
+    config = ka_smoother(method; steps, damping, ordering)
     return KASmootherPreconditioner(config)
 end
 

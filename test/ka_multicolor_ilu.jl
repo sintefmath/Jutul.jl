@@ -1,0 +1,71 @@
+using Jutul, Jutul.KAPreconditioners, KernelAbstractions, StaticArrays
+using SparseArrays, LinearAlgebra, Test, CUDA
+const KP = Jutul.KAPreconditioners
+BLAS.set_num_threads(1)
+
+@testset "multicolor ILU independent permutation reference" begin
+    backends = CUDA.functional() ? (CPU(), CUDABackend()) : (CPU(),)
+    for backend in backends, block in (false, true), factory in (ILU0, DILU)
+        A = spdiagm(-1 => fill(-0.7, 30), 0 => fill(4.0, 31), 1 => fill(-1.1, 30))
+        A[2, 15] = -0.2 # one-sided edge: graph must be symmetrized
+        if block
+            A = SparseMatrixCSC(size(A)..., copy(A.colptr), copy(A.rowval),
+                [SMatrix{2,2}(v, 0.1v, -0.07v, 1.3v) for v in nonzeros(A)])
+        end
+        T = block ? SVector{2, Float64} : Float64
+        b = block ? [T(sin(i), cos(i)) for i in 1:31] : sin.(1:31)
+        C = csr_matrix(A; backend)
+        config = factory(; ordering=:multicolor)
+        state = setup_smoother(C, config)
+        p = Int.(Array(state.permutation))
+        ref = setup_smoother(csr_matrix(A[p,p]), factory())
+        expected = similar(b)
+        expected[p] = ref \ b[p]
+        rhs = KP.backend_copy(backend, b)
+        x = similar(rhs)
+        KP.apply!(x, state, rhs)
+        @test Array(x) ≈ expected
+        # The two colors must separate every directed edge.
+        inner = state.inner
+        @test length(inner.factor_offsets) <= length(KP.ilu_symbolic(csr_matrix(A)).factor_offsets)
+        # Application must support aliased input/output.
+        copyto!(x, rhs)
+        KP.apply!(x, state, x)
+        @test Array(x) ≈ expected
+        # Updates retain symbolic data and buffers, including equivalent new CSR storage.
+        old_positions = state.value_positions
+        D = csr_matrix(1.1A; backend)
+        @test setup_smoother(D, config; reuse=state) === state
+        @test state.value_positions === old_positions
+        KP.apply!(x, state, rhs)
+        @test Array(x) ≈ expected/1.1
+        # General smoothing and the AMG cycle hooks use residual correction.
+        copyto!(x, rhs)
+        expected_smooth = b + (ref \ (b[p] - (1.1A*b)[p]))[invperm(p)]/1.1
+        smooth!(x, state, D, rhs; steps=1)
+        @test Array(x) ≈ expected_smooth
+        @test_throws ArgumentError update_smoother!(state, csr_matrix(A +
+            sparse([1], [31], [one(eltype(A))], 31, 31); backend))
+    end
+end
+
+@testset "multicolor AMG and wrapper" begin
+    A = spdiagm(-1=>fill(-1.0, 63), 0=>fill(3.0,64), 1=>fill(-1.0,63))
+    for factory in (ILU0, DILU)
+        config = factory(; ordering=:multicolor)
+        H = setup_amg(A, AMGOptions(; smoother=config, coarse_size=8))
+        b = sin.(1:64)
+        x = zeros(64)
+        KP.apply!(x, H, b)
+        @test norm(b-A*x) < norm(b)
+        resetup_amg!(H, 1.1A, :operators)
+        KP.apply!(x, H, b)
+        @test norm(b-1.1A*x) < norm(b)
+        precond = Jutul.KASmootherPreconditioner(config)
+        Jutul.update_preconditioner!(precond, csr_matrix(A), b, nothing, nothing)
+        Jutul.apply!(x, precond, b)
+        @test x ≈ precond.factor \ b
+    end
+    @test_throws ArgumentError ILU0(; ordering=:invalid)
+    @test_throws ArgumentError DILU(; ordering=:invalid)
+end
