@@ -112,6 +112,17 @@ function ilu_scatter!(destination::AbstractVector, source::Vector, positions::Ve
     return destination
 end
 
+function setup_permuted_ilu_factor(matrix, config::Union{ILU0, DILU})
+    # This matrix is private to the preconditioner. Gather new coefficients
+    # directly into its factor storage on every update. Residuals continue to
+    # use the caller's original matrix, which is never overwritten.
+    natural = typeof(config)(config.steps, config.damping)
+    return setup_smoother(matrix, natural; _in_place = true)
+end
+
+setup_permuted_ilu_factor(matrix, config) =
+    setup_smoother(matrix, typeof(config)(config.steps, config.damping))
+
 function setup_multicolor_ilu(A, config; reuse = nothing, reallocation_tracker = nothing)
     if reuse isa MulticolorILUState && typeof(config) === typeof(reuse.config) &&
             same_backend(reuse.backend, matrix_backend(A)) && same_smoother_pattern(reuse, A)
@@ -131,7 +142,7 @@ function setup_multicolor_ilu(A, config; reuse = nothing, reallocation_tracker =
     ilu_gather!(values, A.nzval, device_positions, backend, block_size)
     matrix = csr_matrix(backend_copy(backend, rp), backend_copy(backend, cv), values,
         n, n; backend, block_size)
-    inner = setup_smoother(matrix, typeof(config)(config.steps, config.damping))
+    inner = setup_permuted_ilu_factor(matrix, config)
     work, residual = allocate_ilu_work(A)
     return MulticolorILUState(inner, matrix,
         backend_copy(backend, eltype(rowptr).(permutation)), device_positions,
@@ -198,7 +209,10 @@ function replaced_ilu_storage_bytes(state::MulticolorILUState)
     for buffer in (state.matrix.rowptr, state.matrix.colval, state.matrix.nzval,
             state.permutation, state.value_positions, state.work, state.residual,
             state.permuted_rhs, state.permuted_x)
-        bytes += backend_buffer_bytes(buffer)
+        # The private matrix shares coefficient storage with KA ILU factors.
+        shares_values = (state.inner isa ILU0State && buffer === state.inner.factors) ||
+            (state.inner isa DILUState && buffer === state.inner.values)
+        shares_values || (bytes += backend_buffer_bytes(buffer))
     end
     return bytes
 end

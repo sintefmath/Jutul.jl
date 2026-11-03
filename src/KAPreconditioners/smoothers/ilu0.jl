@@ -313,8 +313,12 @@ end
     end
 end
 
-function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}) where {Tv}
-    factors = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nonzeros(A))
+function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}; in_place::Bool = false) where {Tv}
+    factors = if in_place
+        A.nzval
+    else
+        KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nonzeros(A))
+    end
     inverse_diagonal = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nrows(A))
     return factors, inverse_diagonal
 end
@@ -472,7 +476,7 @@ end
 
 function setup_smoother(
         A::StaticSparsityMatrixCSR, config::ILU0;
-        reuse = nothing, reallocation_tracker = nothing
+        reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "ILU0")
     if config.ordering == :multicolor
@@ -485,7 +489,7 @@ function setup_smoother(
     )
     symbolic = ilu_symbolic(A)
     backend = matrix_backend(A)
-    factors, inverse_diagonal = allocate_factor_storage(A)
+    factors, inverse_diagonal = allocate_factor_storage(A; in_place = _in_place)
     work, residual = allocate_ilu_work(A)
     diagonal_positions = backend_copy(backend, symbolic.diagonal)
     factor_rows = backend_copy(backend, symbolic.factor_rows)
@@ -513,7 +517,7 @@ end
 
 function setup_smoother(
         A::StaticSparsityMatrixCSR, config::DILU;
-        reuse = nothing, reallocation_tracker = nothing
+        reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "DILU")
     if config.ordering == :multicolor
@@ -528,7 +532,7 @@ function setup_smoother(
     backend = matrix_backend(A)
     # The dependency levels expose parallelism without changing the natural
     # ordering used by the DILU recurrence and triangular solves.
-    values, inverse_diagonal = allocate_factor_storage(A)
+    values, inverse_diagonal = allocate_factor_storage(A; in_place = _in_place)
     work, residual = allocate_ilu_work(A)
     diagonal_positions = backend_copy(backend, symbolic.diagonal)
     transpose_positions = backend_copy(backend, symbolic.transpose)
@@ -557,7 +561,7 @@ end
 
 function update_smoother!(state::ILU0State, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
-    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.factors, A)
     kernel = state.factor_kernel
     launch_factor_levels!(state, kernel)
     return state
@@ -580,7 +584,7 @@ end
 
 function update_smoother!(state::DILUState, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
-    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.values, A)
     kernel = state.factor_kernel
     launch_factor_levels!(state, kernel)
     return state
@@ -613,6 +617,13 @@ function cpu_ilu_schedule(state)
     end
 end
 
+function copy_ilu_values!(values, A)
+    if values !== A.nzval
+        copyto!(values, 1, A.nzval, 1, matrix_nonzeros(A))
+    end
+    return values
+end
+
 function update_smoother!(
         state::ILU0State{<:Vector, <:Vector, <:Vector, <:Vector},
         A::StaticSparsityMatrixCSR{Tv, Ti, <:Vector, <:Vector, <:Vector}
@@ -624,7 +635,7 @@ end
 # level vectors must both remain concretely typed inside the batch loops.
 function update_ilu_cpu!(state::ILU0State, A::StaticSparsityMatrixCSR{Tv, Ti}, schedule) where {Tv, Ti}
     require_same_smoother_pattern(state, A)
-    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.factors, A)
     factors = state.factors
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
@@ -668,7 +679,7 @@ end
 
 function update_ilu_cpu!(state::DILUState, A::StaticSparsityMatrixCSR{Tv, Ti}, schedule) where {Tv, Ti}
     require_same_smoother_pattern(state, A)
-    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.values, A)
     dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr

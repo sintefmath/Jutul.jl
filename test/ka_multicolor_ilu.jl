@@ -15,6 +15,7 @@ BLAS.set_num_threads(1)
         T = block ? SVector{2, Float64} : Float64
         b = block ? [T(sin(i), cos(i)) for i in 1:31] : sin.(1:31)
         C = csr_matrix(A; backend)
+        source_values = Array(C.nzval)
         config = factory(; ordering=:multicolor)
         state = setup_smoother(C, config)
         p = Int.(Array(state.permutation))
@@ -27,6 +28,8 @@ BLAS.set_num_threads(1)
         @test Array(x) ≈ expected
         # The two colors must separate every directed edge.
         inner = state.inner
+        @test state.matrix.nzval === (inner isa KP.ILU0State ? inner.factors : inner.values)
+        @test Array(C.nzval) == source_values
         @test length(inner.factor_offsets) <= length(KP.ilu_symbolic(csr_matrix(A)).factor_offsets)
         # Application must support aliased input/output.
         copyto!(x, rhs)
