@@ -22,11 +22,15 @@ mutable struct MulticolorILUState{S, M, P, V, RP, CV, H, W, C, B} <: AbstractSmo
 end
 
 # Initialize the backend-specific launch cache lazily.
-MulticolorILUState(inner, matrix, permutation, value_positions, rowptr, colval,
+MulticolorILUState(
+    inner, matrix, permutation, value_positions, rowptr, colval,
     host_rowptr, host_colval, work, residual, permuted_rhs, permuted_x, config,
-    backend, block_size, n) = MulticolorILUState(inner, matrix, permutation,
-        value_positions, rowptr, colval, host_rowptr, host_colval, work, residual,
-        permuted_rhs, permuted_x, config, backend, block_size, n, nothing, nothing)
+    backend, block_size, n
+) = MulticolorILUState(
+    inner, matrix, permutation,
+    value_positions, rowptr, colval, host_rowptr, host_colval, work, residual,
+    permuted_rhs, permuted_x, config, backend, block_size, n, nothing, nothing
+)
 
 Base.size(state::MulticolorILUState) = (state.n, state.n)
 Base.eltype(state::MulticolorILUState) = eltype(state.inner)
@@ -109,27 +113,35 @@ end
 end
 
 function ilu_gather!(destination, source, positions, backend, block_size)
-    ilu_gather_kernel!(backend, block_size)(destination, source, positions,
-        length(destination); ndrange = length(destination))
+    ilu_gather_kernel!(backend, block_size)(
+        destination, source, positions,
+        length(destination); ndrange = length(destination)
+    )
     return destination
 end
 
 function ilu_scatter!(destination, source, positions, backend, block_size)
-    ilu_scatter_kernel!(backend, block_size)(destination, source, positions,
-        length(source); ndrange = length(source))
+    ilu_scatter_kernel!(backend, block_size)(
+        destination, source, positions,
+        length(source); ndrange = length(source)
+    )
     return destination
 end
 
-function ilu_gather!(destination::Vector, source::AbstractVector, positions::Vector,
-        ::KernelAbstractions.CPU, block_size)
+function ilu_gather!(
+        destination::Vector, source::AbstractVector, positions::Vector,
+        ::KernelAbstractions.CPU, block_size
+    )
     @batch for i in eachindex(destination)
         @inbounds destination[i] = source[positions[i]]
     end
     return destination
 end
 
-function ilu_scatter!(destination::AbstractVector, source::Vector, positions::Vector,
-        ::KernelAbstractions.CPU, block_size)
+function ilu_scatter!(
+        destination::AbstractVector, source::Vector, positions::Vector,
+        ::KernelAbstractions.CPU, block_size
+    )
     @batch for i in eachindex(source)
         @inbounds destination[positions[i]] = source[i]
     end
@@ -169,28 +181,36 @@ function setup_multicolor_ilu(A, config; reuse = nothing, reallocation_tracker =
     device_positions = backend_copy(backend, positions)
     values = similar(A.nzval, matrix_nonzeros(A))
     ilu_gather!(values, A.nzval, device_positions, backend, block_size)
-    matrix = csr_matrix(backend_copy(backend, rp), backend_copy(backend, cv), values,
-        n, n; backend, block_size)
+    matrix = csr_matrix(
+        backend_copy(backend, rp), backend_copy(backend, cv), values,
+        n, n; backend, block_size
+    )
     inner = setup_permuted_ilu_factor(matrix, config)
     work, residual = allocate_ilu_work(A)
-    return MulticolorILUState(inner, matrix,
+    return MulticolorILUState(
+        inner, matrix,
         backend_copy(backend, eltype(rowptr).(permutation)), device_positions,
         A.rowptr, A.colval, rowptr, colval, work, residual,
-        similar(work), similar(work), config, backend, block_size, n)
+        similar(work), similar(work), config, backend, block_size, n
+    )
 end
 
 function update_smoother!(state::MulticolorILUState, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
-    ilu_gather!(state.matrix.nzval, A.nzval, state.value_positions,
-        state.backend, state.block_size)
+    ilu_gather!(
+        state.matrix.nzval, A.nzval, state.value_positions,
+        state.backend, state.block_size
+    )
     update_permuted_ilu!(state, state.backend)
     return state
 end
 
 update_permuted_ilu!(state, backend) = update_smoother!(state.inner, state.matrix)
 
-function update_level_smoother!(state::MulticolorILUState,
-        A::StaticSparsityMatrixCSR, options::AMGOptions)
+function update_level_smoother!(
+        state::MulticolorILUState,
+        A::StaticSparsityMatrixCSR, options::AMGOptions
+    )
     state.config = options.smoother
     state.inner.config = typeof(state.config)(state.config.steps, state.config.damping)
     return update_smoother!(state, A)
@@ -215,8 +235,10 @@ function apply_correction!(x, state::MulticolorILUState, residual)
     return x
 end
 
-function smooth_level!(x, A::StaticSparsityMatrixCSR, b, state::MulticolorILUState,
-        steps::Int; residual = nothing, zero_initial::Bool = false)
+function smooth_level!(
+        x, A::StaticSparsityMatrixCSR, b, state::MulticolorILUState,
+        steps::Int; residual = nothing, zero_initial::Bool = false
+    )
     steps > 0 || throw(ArgumentError("smoothing steps must be positive"))
     start = 1
     if !isnothing(residual)
@@ -235,14 +257,18 @@ function smooth_level!(x, A::StaticSparsityMatrixCSR, b, state::MulticolorILUSta
     return x
 end
 
-smooth_result!(x, A::StaticSparsityMatrixCSR, b, state::MulticolorILUState,
-    steps::Int; kwargs...) = smooth_level!(x, A, b, state, steps; kwargs...)
+smooth_result!(
+    x, A::StaticSparsityMatrixCSR, b, state::MulticolorILUState,
+    steps::Int; kwargs...
+) = smooth_level!(x, A, b, state, steps; kwargs...)
 
 function replaced_ilu_storage_bytes(state::MulticolorILUState)
     bytes = replaced_ilu_storage_bytes(state.inner)
-    for buffer in (state.matrix.rowptr, state.matrix.colval, state.matrix.nzval,
+    for buffer in (
+            state.matrix.rowptr, state.matrix.colval, state.matrix.nzval,
             state.permutation, state.value_positions, state.work, state.residual,
-            state.permuted_rhs, state.permuted_x)
+            state.permuted_rhs, state.permuted_x,
+        )
         # The private matrix shares coefficient storage with KA ILU factors.
         shares_values = (state.inner isa ILU0State && buffer === state.inner.factors) ||
             (state.inner isa DILUState && buffer === state.inner.values)
