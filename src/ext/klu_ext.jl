@@ -1,3 +1,22 @@
+export KLUSolver
+
+"""
+    KLUSolver(; reuse_memory = true, check = true, max_size = 50000)
+
+Direct solver using KLU for a `SparseMatrixCSC` Jacobian. Suitable for small
+systems with a low fill ratio `nnz(L + U) / nnz(J)`. Requires `using KLU`.
+"""
+mutable struct KLUSolver
+    F
+    reuse_memory::Bool
+    check::Bool
+    max_size
+    function KLUSolver(; reuse_memory = true, check = true, max_size = 50000)
+        check_klu_availability()
+        return new(nothing, reuse_memory, check, max_size)
+    end
+end
+
 """
     check_klu_availability(; throw = true)
 
@@ -11,7 +30,7 @@ function check_klu_availability(; throw = true)
     catch e
         if throw
             if e isa MethodError
-                error("KLU is not available. To fix: using Pkg; Pkg.add(\"KLU\") and then call using KLU to enable the KLU backend of LUSolver.")
+                error("KLU is not available. To fix: using Pkg; Pkg.add(\"KLU\") and then call using KLU to enable KLUSolver.")
             else
                 rethrow(e)
             end
@@ -23,20 +42,5 @@ function check_klu_availability(; throw = true)
 end
 
 function check_klu_availability_impl
-
-end
-
-function factorize_jacobian(::Val{:klu}, J)
-    check_klu_availability()
-    error("The KLU backend requires a SparseMatrixCSC Jacobian, got $(typeof(J)).")
-end
-
-"""
-    lu_fill_ratio(F, J)
-
-Number of nonzeros in the factors of `F` relative to the number of nonzeros in
-the factorized matrix `J`. Defined by the KLU extension.
-"""
-function lu_fill_ratio
 
 end

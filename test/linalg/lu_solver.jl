@@ -8,17 +8,18 @@ function lu_solver_test_matrix(n)
     return A
 end
 
-@testset "LUSolver backends" begin
+@testset "Sparse direct solvers" begin
     n = 12
     A = lu_solver_test_matrix(n)
     rhs = collect(1.0:n)
     tol = 1.0e-12 * norm(rhs)
-    for backend in (:umfpack, :klu, :auto)
-        @testset "$backend" begin
-            solver = LUSolver(backend = backend)
+    for (solver_type, factorization_type) in ((LUSolver, SparseArrays.UMFPACK.UmfpackLU), (KLUSolver, KLU.KLUFactorization))
+        @testset "$solver_type" begin
+            solver = solver_type()
             system = Jutul.LinearizedSystem(A, copy(rhs))
             result = Jutul.linear_solve!(system, solver)
             @test result.ok
+            @test solver.F isa factorization_type
             @test norm(A * system.dx + rhs) <= tol
             # New values on the same pattern refactorize the stored object in place
             F = solver.F
@@ -27,47 +28,55 @@ end
             Jutul.linear_solve!(system2, solver)
             @test solver.F === F
             @test norm(A2 * system2.dx + rhs) <= tol
+
+            @testset "No factorization reuse" begin
+                solver = solver_type(reuse_memory = false)
+                for matrix in (A, A2)
+                    system = Jutul.LinearizedSystem(matrix, copy(rhs))
+                    result = Jutul.linear_solve!(system, solver)
+                    @test result.ok
+                    @test solver.F === nothing
+                    @test norm(matrix * system.dx + rhs) <= tol
+                end
+            end
         end
     end
-    @testset "Backend selection" begin
-        @test LUSolver().backend == :umfpack
-
-        solver = LUSolver(backend = :auto, klu_max_size = n - 1)
-        Jutul.linear_solve!(Jutul.LinearizedSystem(A, copy(rhs)), solver)
-        @test solver.backend == :umfpack
-        @test solver.F isa SparseArrays.UMFPACK.UmfpackLU
-
-        solver = LUSolver(backend = :auto, klu_max_size = n)
-        Jutul.linear_solve!(Jutul.LinearizedSystem(A, copy(rhs)), solver)
-        @test solver.backend == :klu
-        @test solver.F isa KLU.KLUFactorization
-
-        # A fill limit below the actual fill makes :auto fall back to UMFPACK
-        solver = LUSolver(backend = :auto, klu_max_fill = 0.0)
-        Jutul.linear_solve!(Jutul.LinearizedSystem(A, copy(rhs)), solver)
-        @test solver.backend == :umfpack
-        @test solver.F isa SparseArrays.UMFPACK.UmfpackLU
-
-        # Changing the backend of a solver with a stored factorization refactorizes
-        solver.backend = :klu
+    @testset "KLU explicit buffers" begin
+        system = Jutul.LinearizedSystem(A, zeros(n))
+        fill!(system.dx, NaN)
+        dx = similar(rhs)
+        r = copy(rhs)
+        result = Jutul.linear_solve!(system, KLUSolver(max_size = n); dx = dx, r = r)
+        @test result.ok
+        @test norm(A * dx + rhs) <= tol
+        @test r == rhs
+        @test all(isnan, system.dx)
+        @test all(iszero, system.r)
+    end
+    @testset "KLU safeguards" begin
         system = Jutul.LinearizedSystem(A, copy(rhs))
-        Jutul.linear_solve!(system, solver)
-        @test solver.F isa KLU.KLUFactorization
-        @test norm(A * system.dx + rhs) <= tol
+        @test_throws ErrorException Jutul.linear_solve!(system, KLUSolver(max_size = n - 1))
+        dense_system = (jac = Matrix(A), dx = zeros(n), r = copy(rhs))
+        @test_throws ArgumentError Jutul.linear_solve!(dense_system, KLUSolver())
 
-        @test_throws ArgumentError LUSolver(backend = :cholesky)
+        nonfinite_rhs = copy(rhs)
+        nonfinite_rhs[1] = NaN
+        system = Jutul.LinearizedSystem(A, nonfinite_rhs)
+        @test_throws ErrorException Jutul.linear_solve!(system, KLUSolver())
+        result = Jutul.linear_solve!(system, KLUSolver(check = false))
+        @test result.ok
+        @test !all(isfinite, system.dx)
     end
     @testset "Simulation with KLU" begin
         g = CartesianMesh((4, 4), (1.0, 1.0))
         model = SimulationModel(DiscretizedDomain(g), SimpleHeatSystem())
         nc = number_of_cells(g)
         T0 = [1.0 + sin(0.3 * i) for i in 1:nc]
-        states = Dict{Symbol, Any}()
-        for backend in (:umfpack, :klu)
+        lu_states, klu_states = map((LUSolver, KLUSolver)) do solver_type
             sim = Simulator(model, state0 = setup_state(model, Dict(:T => T0)))
-            result, = simulate(sim, [1.0]; info_level = -1, linear_solver = LUSolver(backend = backend))
-            states[backend] = result[end][:T]
+            result, = simulate(sim, [1.0]; info_level = -1, linear_solver = solver_type())
+            return result[end][:T]
         end
-        @test isapprox(states[:klu], states[:umfpack], rtol = 1.0e-10)
+        @test isapprox(klu_states, lu_states, rtol = 1.0e-10, atol = 1.0e-12)
     end
 end
