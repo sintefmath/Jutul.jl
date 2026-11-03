@@ -49,6 +49,16 @@ BLAS.set_num_threads(1)
         @test Array(x) ≈ expected_smooth
         @test_throws ArgumentError update_smoother!(state, csr_matrix(A +
             sparse([1], [31], [one(eltype(A))], 31, 31); backend))
+        # Exercise the native fused sweep kernels, including empty lower/upper
+        # ranges in the first/last row, on both host and accelerator storage.
+        natural = setup_smoother(C, factory())
+        fused = copy(rhs)
+        KP.ilu_smooth_result!(fused, C, rhs, natural)
+        host_matrix = csr_matrix(A)
+        host_state = setup_smoother(host_matrix, factory())
+        host_fused = copy(b)
+        KP.ilu_smooth_result!(host_fused, host_matrix, b, host_state)
+        @test Array(fused) ≈ host_fused
     end
 end
 
