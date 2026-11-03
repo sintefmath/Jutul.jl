@@ -4,7 +4,7 @@ using Jutul
 using Jutul.KAPreconditioners
 using Jutul: StaticSparsityMatrixCSR
 using CUDA
-using CUDA.CUSPARSE: CuSparseMatrixBSR, CuSparseMatrixCSR
+using CUDA.cuSPARSE: CuSparseMatrixBSR, CuSparseMatrixCSR
 using KernelAbstractions
 using LinearAlgebra
 using SparseArrays
@@ -144,20 +144,20 @@ end
 const CUSPARSEValue = Union{Float32, Float64, ComplexF32, ComplexF64}
 
 mutable struct CUDABSRSolveInfo
-    info::CUDA.CUSPARSE.bsrsv2Info_t
+    info::CUDA.cuSPARSE.bsrsv2Info_t
     function CUDABSRSolveInfo()
-        info = Ref{CUDA.CUSPARSE.bsrsv2Info_t}()
-        CUDA.CUSPARSE.cusparseCreateBsrsv2Info(info)
+        info = Ref{CUDA.cuSPARSE.bsrsv2Info_t}()
+        CUDA.cuSPARSE.cusparseCreateBsrsv2Info(info)
         object = new(info[])
         finalizer(object) do current
-            CUDA.CUSPARSE.cusparseDestroyBsrsv2Info(current.info)
+            CUDA.cuSPARSE.cusparseDestroyBsrsv2Info(current.info)
         end
         return object
     end
 end
 
 Base.unsafe_convert(
-    ::Type{CUDA.CUSPARSE.bsrsv2Info_t}, info::CUDABSRSolveInfo
+    ::Type{CUDA.cuSPARSE.bsrsv2Info_t}, info::CUDABSRSolveInfo
 ) = info.info
 
 struct CUDACSRVendorILUFactor{M, FI, FD, MD, DD, SI, W}
@@ -193,73 +193,73 @@ const CUDAVendorILUFactor = Union{
 }
 
 cuda_csr_ilu_functions(::Type{Float32}) = (
-    CUDA.CUSPARSE.cusparseScsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseScsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseScsrilu02,
+    CUDA.cuSPARSE.cusparseScsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseScsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseScsrilu02,
 )
 cuda_csr_ilu_functions(::Type{Float64}) = (
-    CUDA.CUSPARSE.cusparseDcsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseDcsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseDcsrilu02,
+    CUDA.cuSPARSE.cusparseDcsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseDcsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseDcsrilu02,
 )
 cuda_csr_ilu_functions(::Type{ComplexF32}) = (
-    CUDA.CUSPARSE.cusparseCcsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseCcsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseCcsrilu02,
+    CUDA.cuSPARSE.cusparseCcsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseCcsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseCcsrilu02,
 )
 cuda_csr_ilu_functions(::Type{ComplexF64}) = (
-    CUDA.CUSPARSE.cusparseZcsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseZcsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseZcsrilu02,
+    CUDA.cuSPARSE.cusparseZcsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseZcsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseZcsrilu02,
 )
 
 cuda_bsr_ilu_functions(::Type{Float32}) = (
-    CUDA.CUSPARSE.cusparseSbsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseSbsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseSbsrilu02,
+    CUDA.cuSPARSE.cusparseSbsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseSbsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseSbsrilu02,
 )
 cuda_bsr_ilu_functions(::Type{Float64}) = (
-    CUDA.CUSPARSE.cusparseDbsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseDbsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseDbsrilu02,
+    CUDA.cuSPARSE.cusparseDbsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseDbsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseDbsrilu02,
 )
 cuda_bsr_ilu_functions(::Type{ComplexF32}) = (
-    CUDA.CUSPARSE.cusparseCbsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseCbsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseCbsrilu02,
+    CUDA.cuSPARSE.cusparseCbsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseCbsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseCbsrilu02,
 )
 cuda_bsr_ilu_functions(::Type{ComplexF64}) = (
-    CUDA.CUSPARSE.cusparseZbsrilu02_bufferSize,
-    CUDA.CUSPARSE.cusparseZbsrilu02_analysis,
-    CUDA.CUSPARSE.cusparseZbsrilu02,
+    CUDA.cuSPARSE.cusparseZbsrilu02_bufferSize,
+    CUDA.cuSPARSE.cusparseZbsrilu02_analysis,
+    CUDA.cuSPARSE.cusparseZbsrilu02,
 )
 
 cuda_bsr_solve_functions(::Type{Float32}) = (
-    CUDA.CUSPARSE.cusparseSbsrsv2_bufferSize,
-    CUDA.CUSPARSE.cusparseSbsrsv2_analysis,
-    CUDA.CUSPARSE.cusparseSbsrsv2_solve,
+    CUDA.cuSPARSE.cusparseSbsrsv2_bufferSize,
+    CUDA.cuSPARSE.cusparseSbsrsv2_analysis,
+    CUDA.cuSPARSE.cusparseSbsrsv2_solve,
 )
 cuda_bsr_solve_functions(::Type{Float64}) = (
-    CUDA.CUSPARSE.cusparseDbsrsv2_bufferSize,
-    CUDA.CUSPARSE.cusparseDbsrsv2_analysis,
-    CUDA.CUSPARSE.cusparseDbsrsv2_solve,
+    CUDA.cuSPARSE.cusparseDbsrsv2_bufferSize,
+    CUDA.cuSPARSE.cusparseDbsrsv2_analysis,
+    CUDA.cuSPARSE.cusparseDbsrsv2_solve,
 )
 cuda_bsr_solve_functions(::Type{ComplexF32}) = (
-    CUDA.CUSPARSE.cusparseCbsrsv2_bufferSize,
-    CUDA.CUSPARSE.cusparseCbsrsv2_analysis,
-    CUDA.CUSPARSE.cusparseCbsrsv2_solve,
+    CUDA.cuSPARSE.cusparseCbsrsv2_bufferSize,
+    CUDA.cuSPARSE.cusparseCbsrsv2_analysis,
+    CUDA.cuSPARSE.cusparseCbsrsv2_solve,
 )
 cuda_bsr_solve_functions(::Type{ComplexF64}) = (
-    CUDA.CUSPARSE.cusparseZbsrsv2_bufferSize,
-    CUDA.CUSPARSE.cusparseZbsrsv2_analysis,
-    CUDA.CUSPARSE.cusparseZbsrsv2_solve,
+    CUDA.cuSPARSE.cusparseZbsrsv2_bufferSize,
+    CUDA.cuSPARSE.cusparseZbsrsv2_analysis,
+    CUDA.cuSPARSE.cusparseZbsrsv2_solve,
 )
 
 function cuda_csr_ilu_buffer_size(matrix, info, descriptor)
     buffer_size, _, _ = cuda_csr_ilu_functions(eltype(matrix.nzVal))
     output = Ref{Cint}()
     buffer_size(
-        CUDA.CUSPARSE.handle(), size(matrix, 1), length(matrix.nzVal),
+        CUDA.cuSPARSE.handle(), size(matrix, 1), length(matrix.nzVal),
         descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal, info, output
     )
     return Int(output[])
@@ -270,7 +270,7 @@ function cuda_bsr_ilu_buffer_size(matrix, info, descriptor)
     output = Ref{Cint}()
     block_rows = div(size(matrix, 1), matrix.blockDim)
     buffer_size(
-        CUDA.CUSPARSE.handle(), matrix.dir, block_rows, matrix.nnzb,
+        CUDA.cuSPARSE.handle(), matrix.dir, block_rows, matrix.nnzb,
         descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal,
         matrix.blockDim, info, output
     )
@@ -282,7 +282,7 @@ function cuda_bsr_solve_buffer_size(matrix, info, descriptor)
     output = Ref{Cint}()
     block_rows = div(size(matrix, 1), matrix.blockDim)
     buffer_size(
-        CUDA.CUSPARSE.handle(), matrix.dir, 'N', block_rows, matrix.nnzb,
+        CUDA.cuSPARSE.handle(), matrix.dir, 'N', block_rows, matrix.nnzb,
         descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal,
         matrix.blockDim, info, output
     )
@@ -290,12 +290,12 @@ function cuda_bsr_solve_buffer_size(matrix, info, descriptor)
 end
 
 function cuda_set_triangular_attributes!(descriptor, uplo::Char, diag::Char)
-    fill_mode = Ref{CUDA.CUSPARSE.cusparseFillMode_t}(uplo)
-    diagonal_type = Ref{CUDA.CUSPARSE.cusparseDiagType_t}(diag)
-    CUDA.CUSPARSE.cusparseSpMatSetAttribute(
+    fill_mode = Ref{CUDA.cuSPARSE.cusparseFillMode_t}(uplo)
+    diagonal_type = Ref{CUDA.cuSPARSE.cusparseDiagType_t}(diag)
+    CUDA.cuSPARSE.cusparseSpMatSetAttribute(
         descriptor, 'F', fill_mode, Csize_t(sizeof(fill_mode))
     )
-    CUDA.CUSPARSE.cusparseSpMatSetAttribute(
+    CUDA.cuSPARSE.cusparseSpMatSetAttribute(
         descriptor, 'D', diagonal_type, Csize_t(sizeof(diagonal_type))
     )
     return descriptor
@@ -306,10 +306,10 @@ function cuda_csr_solve_buffer_size(
         ::Type{T}
     ) where {T}
     output = Ref{Csize_t}()
-    CUDA.CUSPARSE.cusparseSpSV_bufferSize(
-        CUDA.CUSPARSE.handle(), 'N', Ref{T}(one(T)), matrix_descriptor,
+    CUDA.cuSPARSE.cusparseSpSV_bufferSize(
+        CUDA.cuSPARSE.handle(), 'N', Ref{T}(one(T)), matrix_descriptor,
         input_descriptor, output_descriptor, T,
-        CUDA.CUSPARSE.CUSPARSE_SPSV_ALG_DEFAULT, solve_info, output
+        CUDA.cuSPARSE.CUSPARSE_SPSV_ALG_DEFAULT, solve_info, output
     )
     return Int(output[])
 end
@@ -317,12 +317,12 @@ end
 function cuda_check_ilu_pivot(info, block::Bool)
     position = Ref{Cint}(1)
     if block
-        CUDA.CUSPARSE.cusparseXbsrilu02_zeroPivot(
-            CUDA.CUSPARSE.handle(), info, position
+        CUDA.cuSPARSE.cusparseXbsrilu02_zeroPivot(
+            CUDA.cuSPARSE.handle(), info, position
         )
     else
-        CUDA.CUSPARSE.cusparseXcsrilu02_zeroPivot(
-            CUDA.CUSPARSE.handle(), info, position
+        CUDA.cuSPARSE.cusparseXcsrilu02_zeroPivot(
+            CUDA.cuSPARSE.handle(), info, position
         )
     end
     position[] < 0 || error(
@@ -333,8 +333,8 @@ end
 
 function cuda_check_bsr_solve_pivot(info)
     position = Ref{Cint}(1)
-    CUDA.CUSPARSE.cusparseXbsrsv2_zeroPivot(
-        CUDA.CUSPARSE.handle(), info, position
+    CUDA.cuSPARSE.cusparseXbsrsv2_zeroPivot(
+        CUDA.cuSPARSE.handle(), info, position
     )
     position[] < 0 || error(
         "Structural/numerical zero in vendor triangular solve at row " *
@@ -345,18 +345,18 @@ end
 
 function cuda_analyze_vendor_ilu(matrix::CuSparseMatrixCSR, solve_values)
     T = eltype(matrix.nzVal)
-    factor_info = CUDA.CUSPARSE.ILU0Info()
-    factor_descriptor = CUDA.CUSPARSE.CuMatrixDescriptor('G', 'L', 'N', 'O')
+    factor_info = CUDA.cuSPARSE.ILU0Info()
+    factor_descriptor = CUDA.cuSPARSE.CuMatrixDescriptor('G', 'L', 'N', 'O')
     lower_matrix_descriptor = cuda_set_triangular_attributes!(
-        CUDA.CUSPARSE.CuSparseMatrixDescriptor(matrix, 'O'), 'L', 'U'
+        CUDA.cuSPARSE.CuSparseMatrixDescriptor(matrix, 'O'), 'L', 'U'
     )
     upper_matrix_descriptor = cuda_set_triangular_attributes!(
-        CUDA.CUSPARSE.CuSparseMatrixDescriptor(matrix, 'O'), 'U', 'N'
+        CUDA.cuSPARSE.CuSparseMatrixDescriptor(matrix, 'O'), 'U', 'N'
     )
-    input_descriptor = CUDA.CUSPARSE.CuDenseVectorDescriptor(solve_values)
-    output_descriptor = CUDA.CUSPARSE.CuDenseVectorDescriptor(solve_values)
-    lower_solve_info = CUDA.CUSPARSE.CuSparseSpSVDescriptor()
-    upper_solve_info = CUDA.CUSPARSE.CuSparseSpSVDescriptor()
+    input_descriptor = CUDA.cuSPARSE.CuDenseVectorDescriptor(solve_values)
+    output_descriptor = CUDA.cuSPARSE.CuDenseVectorDescriptor(solve_values)
+    lower_solve_info = CUDA.cuSPARSE.CuSparseSpSVDescriptor()
+    upper_solve_info = CUDA.cuSPARSE.CuSparseSpSVDescriptor()
     factor_size = cuda_csr_ilu_buffer_size(
         matrix, factor_info, factor_descriptor
     )
@@ -381,9 +381,9 @@ function cuda_analyze_vendor_ilu(matrix::CuSparseMatrixCSR, solve_values)
 
     _, analyze, _ = cuda_csr_ilu_functions(T)
     analyze(
-        CUDA.CUSPARSE.handle(), size(matrix, 1), length(matrix.nzVal),
+        CUDA.cuSPARSE.handle(), size(matrix, 1), length(matrix.nzVal),
         factor_descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal,
-        factor_info, CUDA.CUSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+        factor_info, CUDA.cuSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
         factor_workspace
     )
     cuda_check_ilu_pivot(factor_info, false)
@@ -392,10 +392,10 @@ function cuda_analyze_vendor_ilu(matrix::CuSparseMatrixCSR, solve_values)
             (lower_matrix_descriptor, lower_solve_info, lower_workspace),
             (upper_matrix_descriptor, upper_solve_info, upper_workspace),
         )
-        CUDA.CUSPARSE.cusparseSpSV_analysis(
-            CUDA.CUSPARSE.handle(), 'N', Ref{T}(one(T)), matrix_descriptor,
+        CUDA.cuSPARSE.cusparseSpSV_analysis(
+            CUDA.cuSPARSE.handle(), 'N', Ref{T}(one(T)), matrix_descriptor,
             input_descriptor, output_descriptor, T,
-            CUDA.CUSPARSE.CUSPARSE_SPSV_ALG_DEFAULT, solve_info,
+            CUDA.cuSPARSE.CUSPARSE_SPSV_ALG_DEFAULT, solve_info,
             solve_workspace
         )
     end
@@ -405,14 +405,14 @@ end
 
 function cuda_analyze_vendor_ilu(matrix::CuSparseMatrixBSR, solve_values)
     T = eltype(matrix.nzVal)
-    factor_info = CUDA.CUSPARSE.ILU0InfoBSR()
-    factor_descriptor = CUDA.CUSPARSE.CuMatrixDescriptor('G', 'U', 'N', 'O')
+    factor_info = CUDA.cuSPARSE.ILU0InfoBSR()
+    factor_descriptor = CUDA.cuSPARSE.CuMatrixDescriptor('G', 'U', 'N', 'O')
     lower_solve_info = CUDABSRSolveInfo()
-    lower_solve_descriptor = CUDA.CUSPARSE.CuMatrixDescriptor(
+    lower_solve_descriptor = CUDA.cuSPARSE.CuMatrixDescriptor(
         'G', 'L', 'U', 'O'
     )
     upper_solve_info = CUDABSRSolveInfo()
-    upper_solve_descriptor = CUDA.CUSPARSE.CuMatrixDescriptor(
+    upper_solve_descriptor = CUDA.cuSPARSE.CuMatrixDescriptor(
         'G', 'U', 'N', 'O'
     )
     factor_size = cuda_bsr_ilu_buffer_size(
@@ -437,10 +437,10 @@ function cuda_analyze_vendor_ilu(matrix::CuSparseMatrixBSR, solve_values)
     _, analyze_factor, _ = cuda_bsr_ilu_functions(T)
     block_rows = div(size(matrix, 1), matrix.blockDim)
     analyze_factor(
-        CUDA.CUSPARSE.handle(), matrix.dir, block_rows, matrix.nnzb,
+        CUDA.cuSPARSE.handle(), matrix.dir, block_rows, matrix.nnzb,
         factor_descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal,
         matrix.blockDim, factor_info,
-        CUDA.CUSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL, factor_workspace
+        CUDA.cuSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL, factor_workspace
     )
     cuda_check_ilu_pivot(factor_info, true)
     KAPreconditioners.refactor_vendor_ilu!(factor)
@@ -451,10 +451,10 @@ function cuda_analyze_vendor_ilu(matrix::CuSparseMatrixBSR, solve_values)
             (upper_solve_descriptor, upper_solve_info, upper_workspace),
         )
         analyze_solve(
-            CUDA.CUSPARSE.handle(), matrix.dir, 'N', block_rows, matrix.nnzb,
+            CUDA.cuSPARSE.handle(), matrix.dir, 'N', block_rows, matrix.nnzb,
             descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal,
             matrix.blockDim, info,
-            CUDA.CUSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL, solve_workspace
+            CUDA.cuSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL, solve_workspace
         )
         cuda_check_bsr_solve_pivot(info)
     end
@@ -520,15 +520,15 @@ function KAPreconditioners.refactor_vendor_ilu!(
     matrix = factor.matrix
     _, _, refactor = cuda_csr_ilu_functions(eltype(matrix.nzVal))
     refactor(
-        CUDA.CUSPARSE.handle(), size(matrix, 1), length(matrix.nzVal),
+        CUDA.cuSPARSE.handle(), size(matrix, 1), length(matrix.nzVal),
         factor.factor_descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal,
-        factor.factor_info, CUDA.CUSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+        factor.factor_info, CUDA.cuSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
         factor.factor_workspace
     )
     for solve_info in (factor.lower_solve_info, factor.upper_solve_info)
-        CUDA.CUSPARSE.cusparseSpSV_updateMatrix(
-            CUDA.CUSPARSE.handle(), solve_info, matrix.nzVal,
-            CUDA.CUSPARSE.CUSPARSE_SPSV_UPDATE_GENERAL
+        CUDA.cuSPARSE.cusparseSpSV_updateMatrix(
+            CUDA.cuSPARSE.handle(), solve_info, matrix.nzVal,
+            CUDA.cuSPARSE.CUSPARSE_SPSV_UPDATE_GENERAL
         )
     end
     return factor
@@ -541,10 +541,10 @@ function KAPreconditioners.refactor_vendor_ilu!(
     _, _, refactor = cuda_bsr_ilu_functions(eltype(matrix.nzVal))
     block_rows = div(size(matrix, 1), matrix.blockDim)
     refactor(
-        CUDA.CUSPARSE.handle(), matrix.dir, block_rows, matrix.nnzb,
+        CUDA.cuSPARSE.handle(), matrix.dir, block_rows, matrix.nnzb,
         factor.factor_descriptor, matrix.nzVal, matrix.rowPtr, matrix.colVal,
         matrix.blockDim, factor.factor_info,
-        CUDA.CUSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+        CUDA.cuSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
         factor.factor_workspace
     )
     return factor
@@ -570,16 +570,16 @@ function KAPreconditioners.solve_vendor_ilu_factor!(
         values, factor::CUDACSRVendorILUFactor
     )
     T = eltype(values)
-    CUDA.CUSPARSE.cusparseDnVecSetValues(factor.input_descriptor, values)
-    CUDA.CUSPARSE.cusparseDnVecSetValues(factor.output_descriptor, values)
+    CUDA.cuSPARSE.cusparseDnVecSetValues(factor.input_descriptor, values)
+    CUDA.cuSPARSE.cusparseDnVecSetValues(factor.output_descriptor, values)
     for (matrix_descriptor, solve_info) in (
             (factor.lower_matrix_descriptor, factor.lower_solve_info),
             (factor.upper_matrix_descriptor, factor.upper_solve_info),
         )
-        CUDA.CUSPARSE.cusparseSpSV_solve(
-            CUDA.CUSPARSE.handle(), 'N', Ref{T}(one(T)), matrix_descriptor,
+        CUDA.cuSPARSE.cusparseSpSV_solve(
+            CUDA.cuSPARSE.handle(), 'N', Ref{T}(one(T)), matrix_descriptor,
             factor.input_descriptor, factor.output_descriptor, T,
-            CUDA.CUSPARSE.CUSPARSE_SPSV_ALG_DEFAULT, solve_info
+            CUDA.cuSPARSE.CUSPARSE_SPSV_ALG_DEFAULT, solve_info
         )
     end
     return values
@@ -603,10 +603,10 @@ function KAPreconditioners.solve_vendor_ilu_factor!(
             ),
         )
         solve(
-            CUDA.CUSPARSE.handle(), matrix.dir, 'N', block_rows, matrix.nnzb,
+            CUDA.cuSPARSE.handle(), matrix.dir, 'N', block_rows, matrix.nnzb,
             Ref{T}(one(T)), descriptor, matrix.nzVal,
             matrix.rowPtr, matrix.colVal, matrix.blockDim, info,
-            values, values, CUDA.CUSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+            values, values, CUDA.cuSPARSE.CUSPARSE_SOLVE_POLICY_USE_LEVEL,
             solve_workspace
         )
     end

@@ -87,7 +87,7 @@ function inexact_line_search(
     best_eval = (u = u0, v = v0, g = g0, a = 0.0)
     ls_done, wolfe_ok, at_max_step = false, false, false
     # tolerance for considering function values equal
-    equal_value_tol = v0 * value_diff_tol
+    equal_value_tol = abs(v0) * value_diff_tol
     it, msg, values = 0, "", []
 
     while !ls_done && it < max_it

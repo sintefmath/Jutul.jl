@@ -32,6 +32,14 @@ function HelperSimulator(
         @assert haskey(storage, :r) "Expected storage to have :r key"
         @assert length(storage[:r]) == n "Expected storage to have length $n"
         @assert eltype(storage[:r]) == T "Expected cached storage to have eltype $T"
+        # The cached storage holds the parameters from when it was created.
+        # Overwrite them so that both values and partials match this call.
+        parameters = get(kwarg, :parameters, missing)
+        if !ismissing(parameters)
+            for k in (:state, :state0, :parameters)
+                Jutul.reset_variables!(storage, model, parameters, type = k)
+            end
+        end
     else
         storage = JutulStorage()
         Jutul.setup_storage!(
