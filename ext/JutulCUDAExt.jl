@@ -15,6 +15,25 @@ import KernelAbstractions as KA
 
 include("cuda_sparse_lu.jl")
 
+function KAPreconditioners.update_permuted_ilu!(state, ::CUDA.CUDABackend)
+    if KAPreconditioners.ilu_permutation_kind(state.config) != :level || iszero(state.n)
+        return KAPreconditioners.update_smoother!(state.inner, state.matrix)
+    end
+    cached = state.factor_cache
+    if isnothing(cached)
+        KAPreconditioners.update_smoother!(state.inner, state.matrix)
+        graph = CUDA.capture() do
+            KAPreconditioners.update_smoother!(state.inner, state.matrix)
+        end
+        state.factor_cache = CUDA.instantiate(graph)
+        # Factorization overwrites the coefficients in place. The warm call
+        # already produced the result; replay only after the next gather.
+    else
+        cached()
+    end
+    return state.inner
+end
+
 function KAPreconditioners.apply_permuted_ilu!(state, ::CUDA.CUDABackend)
     if KAPreconditioners.ilu_permutation_kind(state.config) != :level || iszero(state.n)
         return KAPreconditioners.apply!(state.permuted_x, state.inner, state.permuted_rhs)

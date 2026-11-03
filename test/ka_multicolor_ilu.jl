@@ -51,6 +51,10 @@ BLAS.set_num_threads(1)
         D = csr_matrix(1.1A; backend)
         @test setup_smoother(D, config; reuse=state) === state
         @test state.value_positions === old_positions
+        original_factor_cache = state.factor_cache
+        if ordering == :level && backend isa CUDABackend
+            @test !isnothing(original_factor_cache)
+        end
         KP.apply!(x, state, rhs)
         @test Array(x) ≈ expected/1.1
         @test state.apply_cache === original_cache
@@ -74,6 +78,7 @@ BLAS.set_num_threads(1)
         if ordering == :level
             damped = factory(1, 0.7; ordering)
             @test setup_smoother(D, damped; reuse=state) === state
+            @test state.factor_cache === original_factor_cache
             damped_ref = setup_smoother(csr_matrix(1.1A[p,p]), factory(1, 0.7))
             expected[p] = damped_ref \ b[p]
             KP.apply!(x, state, rhs)
@@ -107,3 +112,5 @@ end
     @test_throws ArgumentError ILU0(; ordering=:invalid)
     @test_throws ArgumentError DILU(; ordering=:invalid)
 end
+
+include("ka_ilu_graph_replay.jl")

@@ -18,6 +18,7 @@ mutable struct MulticolorILUState{S, M, P, V, RP, CV, H, W, C, B} <: AbstractSmo
     block_size::Int
     n::Int
     apply_cache::Any
+    factor_cache::Any
 end
 
 # Initialize the backend-specific launch cache lazily.
@@ -25,7 +26,7 @@ MulticolorILUState(inner, matrix, permutation, value_positions, rowptr, colval,
     host_rowptr, host_colval, work, residual, permuted_rhs, permuted_x, config,
     backend, block_size, n) = MulticolorILUState(inner, matrix, permutation,
         value_positions, rowptr, colval, host_rowptr, host_colval, work, residual,
-        permuted_rhs, permuted_x, config, backend, block_size, n, nothing)
+        permuted_rhs, permuted_x, config, backend, block_size, n, nothing, nothing)
 
 Base.size(state::MulticolorILUState) = (state.n, state.n)
 Base.eltype(state::MulticolorILUState) = eltype(state.inner)
@@ -182,9 +183,11 @@ function update_smoother!(state::MulticolorILUState, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
     ilu_gather!(state.matrix.nzval, A.nzval, state.value_positions,
         state.backend, state.block_size)
-    update_smoother!(state.inner, state.matrix)
+    update_permuted_ilu!(state, state.backend)
     return state
 end
+
+update_permuted_ilu!(state, backend) = update_smoother!(state.inner, state.matrix)
 
 function update_level_smoother!(state::MulticolorILUState,
         A::StaticSparsityMatrixCSR, options::AMGOptions)
