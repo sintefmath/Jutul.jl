@@ -473,7 +473,7 @@ function setup_smoother(
         reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "ILU0")
-    if config.ordering == :multicolor
+    if config.ordering != :natural
         return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
     end
     reused = reuse_ilu_smoother!(reuse, A, config, ILU0State)
@@ -514,7 +514,7 @@ function setup_smoother(
         reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "DILU")
-    if config.ordering == :multicolor
+    if config.ordering != :natural
         return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
     end
     reused = reuse_ilu_smoother!(reuse, A, config, DILUState)

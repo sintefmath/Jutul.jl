@@ -86,6 +86,9 @@ end
 
 Level-scheduled incomplete LU factorization with zero fill. The symbolic level
 schedules are retained and reused when matrix coefficients are updated.
+`ordering=:level` groups storage by dependency level while preserving the
+direction of every original matrix edge, retaining the natural-order
+factorization up to roundoff. CUDA caches a graph of its triangular sweeps.
 `ordering=:multicolor` symmetrically permutes the matrix by a greedy coloring
 of its undirected sparsity graph. This reduces sequential stages but changes
 the preconditioner and can increase Krylov iterations.
@@ -95,7 +98,7 @@ struct ILU0 <: AbstractSmoother
     damping::Float64
     ordering::Symbol
     function ILU0(steps::Integer = 1, damping::Real = 1.0; ordering::Symbol = :natural)
-        ordering in (:natural, :multicolor) || throw(ArgumentError("unsupported ILU ordering: $ordering"))
+        ordering in (:natural, :level, :multicolor) || throw(ArgumentError("unsupported ILU ordering: $ordering"))
         return new(positive_smoother_parameters("ILU0", steps, damping)..., ordering)
     end
 end
@@ -106,6 +109,8 @@ end
 Diagonal ILU(0), implemented with level-scheduled factorization and triangular
 sweeps following Andersen et al. The level schedule preserves the natural row
 ordering, so host and accelerator backends construct the same preconditioner.
+`ordering=:level` groups storage by dependency level as for `ILU0`, retaining
+the natural-order preconditioner. CUDA caches a graph of its triangular sweeps.
 `ordering=:multicolor` uses the same optional coloring as `ILU0`, changing the
 factorization ordering on both backends.
 """
@@ -114,7 +119,7 @@ struct DILU <: AbstractSmoother
     damping::Float64
     ordering::Symbol
     function DILU(steps::Integer = 1, damping::Real = 1.0; ordering::Symbol = :natural)
-        ordering in (:natural, :multicolor) || throw(ArgumentError("unsupported ILU ordering: $ordering"))
+        ordering in (:natural, :level, :multicolor) || throw(ArgumentError("unsupported ILU ordering: $ordering"))
         return new(positive_smoother_parameters("DILU", steps, damping)..., ordering)
     end
 end

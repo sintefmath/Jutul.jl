@@ -3,9 +3,9 @@ using SparseArrays, LinearAlgebra, Test, CUDA
 const KP = Jutul.KAPreconditioners
 BLAS.set_num_threads(1)
 
-@testset "multicolor ILU independent permutation reference" begin
+@testset "permuted ILU independent permutation reference" begin
     backends = CUDA.functional() ? (CPU(), CUDABackend()) : (CPU(),)
-    for backend in backends, block in (false, true), factory in (ILU0, DILU)
+    for backend in backends, block in (false, true), factory in (ILU0, DILU), ordering in (:multicolor, :level)
         A = spdiagm(-1 => fill(-0.7, 30), 0 => fill(4.0, 31), 1 => fill(-1.1, 30))
         A[2, 15] = -0.2 # one-sided edge: graph must be symmetrized
         if block
@@ -16,7 +16,7 @@ BLAS.set_num_threads(1)
         b = block ? [T(sin(i), cos(i)) for i in 1:31] : sin.(1:31)
         C = csr_matrix(A; backend)
         source_values = Array(C.nzval)
-        config = factory(; ordering=:multicolor)
+        config = factory(; ordering)
         state = setup_smoother(C, config)
         p = Int.(Array(state.permutation))
         ref = setup_smoother(csr_matrix(A[p,p]), factory())
@@ -26,6 +26,17 @@ BLAS.set_num_threads(1)
         x = similar(rhs)
         KP.apply!(x, state, rhs)
         @test Array(x) ≈ expected
+        original_cache = state.apply_cache
+        if ordering == :level
+            natural_ref = setup_smoother(csr_matrix(A), factory())
+            @test Array(x) ≈ natural_ref \ b
+            inverse = invperm(p)
+            ii, jj, _ = findnz(A)
+            @test all((i < j) == (inverse[i] < inverse[j]) for (i,j) in zip(ii,jj))
+            if backend isa CUDABackend
+                @test !isnothing(original_cache)
+            end
+        end
         # The two colors must separate every directed edge.
         inner = state.inner
         @test state.matrix.nzval === (inner isa KP.ILU0State ? inner.factors : inner.values)
@@ -42,6 +53,7 @@ BLAS.set_num_threads(1)
         @test state.value_positions === old_positions
         KP.apply!(x, state, rhs)
         @test Array(x) ≈ expected/1.1
+        @test state.apply_cache === original_cache
         # General smoothing and the AMG cycle hooks use residual correction.
         copyto!(x, rhs)
         expected_smooth = b + (ref \ (b[p] - (1.1A*b)[p]))[invperm(p)]/1.1
@@ -59,13 +71,26 @@ BLAS.set_num_threads(1)
         host_fused = copy(b)
         KP.ilu_smooth_result!(host_fused, host_matrix, b, host_state)
         @test Array(fused) ≈ host_fused
+        if ordering == :level
+            damped = factory(1, 0.7; ordering)
+            @test setup_smoother(D, damped; reuse=state) === state
+            damped_ref = setup_smoother(csr_matrix(1.1A[p,p]), factory(1, 0.7))
+            expected[p] = damped_ref \ b[p]
+            KP.apply!(x, state, rhs)
+            @test Array(x) ≈ expected
+            if backend isa CUDABackend
+                @test state.apply_cache !== original_cache
+            end
+            # A different permutation strategy must rebuild its symbolic data.
+            @test setup_smoother(D, factory(;ordering=:multicolor); reuse=state) !== state
+        end
     end
 end
 
-@testset "multicolor AMG and wrapper" begin
+@testset "permuted AMG and wrapper" begin
     A = spdiagm(-1=>fill(-1.0, 63), 0=>fill(3.0,64), 1=>fill(-1.0,63))
-    for factory in (ILU0, DILU)
-        config = factory(; ordering=:multicolor)
+    for factory in (ILU0, DILU), ordering in (:multicolor, :level)
+        config = factory(; ordering)
         H = setup_amg(A, AMGOptions(; smoother=config, coarse_size=8))
         b = sin.(1:64)
         x = zeros(64)

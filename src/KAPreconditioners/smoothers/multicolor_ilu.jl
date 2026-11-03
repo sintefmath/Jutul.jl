@@ -17,17 +17,29 @@ mutable struct MulticolorILUState{S, M, P, V, RP, CV, H, W, C, B} <: AbstractSmo
     backend::B
     block_size::Int
     n::Int
+    apply_cache::Any
 end
+
+# Initialize the backend-specific launch cache lazily.
+MulticolorILUState(inner, matrix, permutation, value_positions, rowptr, colval,
+    host_rowptr, host_colval, work, residual, permuted_rhs, permuted_x, config,
+    backend, block_size, n) = MulticolorILUState(inner, matrix, permutation,
+        value_positions, rowptr, colval, host_rowptr, host_colval, work, residual,
+        permuted_rhs, permuted_x, config, backend, block_size, n, nothing)
 
 Base.size(state::MulticolorILUState) = (state.n, state.n)
 Base.eltype(state::MulticolorILUState) = eltype(state.inner)
 smoother_damping(state::MulticolorILUState) = smoother_damping(state.inner)
 
-function multicolor_ilu_permutation(rowptr, colval, n)
+function ilu_undirected_graph(rowptr, colval, n)
     # CSR viewed as CSC is the transposed graph. Include both directions:
     # a one-sided edge must also prevent simultaneous dependent row updates.
     graph = SparseMatrixCSC(n, n, Int.(rowptr), Int.(colval), ones(Int8, length(colval)))
-    graph = graph + transpose(graph)
+    return graph + transpose(graph)
+end
+
+function multicolor_ilu_permutation(rowptr, colval, n)
+    graph = ilu_undirected_graph(rowptr, colval, n)
     colors = zeros(Int, n)
     used = zeros(Int, n + 1)
     @inbounds for i in 1:n
@@ -43,6 +55,17 @@ function multicolor_ilu_permutation(rowptr, colval, n)
     end
     return sortperm(colors)
 end
+
+function level_ilu_permutation(rowptr, colval, n)
+    graph = ilu_undirected_graph(rowptr, colval, n)
+    # Symmetrization also constrains one-sided upper edges. Sorting the
+    # resulting DAG levels preserves the direction of every original edge.
+    _, rows = level_schedule(graph.colptr, graph.rowval, n)
+    return rows
+end
+
+ilu_permutation_kind(config::Union{ILU0, DILU}) = config.ordering
+ilu_permutation_kind(config) = :multicolor
 
 function multicolor_ilu_pattern(rowptr::Vector{Ti}, colval, permutation) where {Ti}
     n = length(permutation)
@@ -125,6 +148,7 @@ setup_permuted_ilu_factor(matrix, config) =
 
 function setup_multicolor_ilu(A, config; reuse = nothing, reallocation_tracker = nothing)
     if reuse isa MulticolorILUState && typeof(config) === typeof(reuse.config) &&
+            ilu_permutation_kind(config) == ilu_permutation_kind(reuse.config) &&
             same_backend(reuse.backend, matrix_backend(A)) && same_smoother_pattern(reuse, A)
         reuse.config = config
         reuse.inner.config = typeof(config)(config.steps, config.damping)
@@ -134,7 +158,11 @@ function setup_multicolor_ilu(A, config; reuse = nothing, reallocation_tracker =
     n = matrix_nrows(A)
     rowptr = host_prefix(A.rowptr, n + 1)
     colval = host_prefix(A.colval, matrix_nonzeros(A))
-    permutation = multicolor_ilu_permutation(rowptr, colval, n)
+    permutation = if ilu_permutation_kind(config) == :level
+        level_ilu_permutation(rowptr, colval, n)
+    else
+        multicolor_ilu_permutation(rowptr, colval, n)
+    end
     rp, cv, positions = multicolor_ilu_pattern(rowptr, colval, permutation)
     backend, block_size = matrix_backend(A), matrix_batch_size(A)
     device_positions = backend_copy(backend, positions)
@@ -170,10 +198,13 @@ function apply!(x::AbstractVector, state::MulticolorILUState, b::AbstractVector)
     same_backend(KernelAbstractions.get_backend(x), state.backend) ||
         throw(ArgumentError("output and smoother must use the same backend"))
     ilu_gather!(state.permuted_rhs, b, state.permutation, state.backend, state.block_size)
-    apply!(state.permuted_x, state.inner, state.permuted_rhs)
+    apply_permuted_ilu!(state, state.backend)
     ilu_scatter!(x, state.permuted_x, state.permutation, state.backend, state.block_size)
     return x
 end
+
+apply_permuted_ilu!(state, backend) =
+    apply!(state.permuted_x, state.inner, state.permuted_rhs)
 
 function apply_correction!(x, state::MulticolorILUState, residual)
     apply!(state.work, state, residual)

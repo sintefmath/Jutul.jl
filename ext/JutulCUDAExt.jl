@@ -15,6 +15,26 @@ import KernelAbstractions as KA
 
 include("cuda_sparse_lu.jl")
 
+function KAPreconditioners.apply_permuted_ilu!(state, ::CUDA.CUDABackend)
+    if KAPreconditioners.ilu_permutation_kind(state.config) != :level || iszero(state.n)
+        return KAPreconditioners.apply!(state.permuted_x, state.inner, state.permuted_rhs)
+    end
+    damping = KAPreconditioners.smoother_damping(state.inner)
+    cached = state.apply_cache
+    if isnothing(cached) || cached.damping != damping
+        # Permutation work buffers, factor storage and schedules remain fixed
+        # across coefficient updates. Warm all per-level calls before capture.
+        KAPreconditioners.apply!(state.permuted_x, state.inner, state.permuted_rhs)
+        graph = CUDA.capture() do
+            KAPreconditioners.apply!(state.permuted_x, state.inner, state.permuted_rhs)
+        end
+        cached = (graph = CUDA.instantiate(graph), damping = damping)
+        state.apply_cache = cached
+    end
+    cached.graph()
+    return state.permuted_x
+end
+
 struct CUDASmootherKernel{K, C, KC}
     kernel::K
     compiled::C
