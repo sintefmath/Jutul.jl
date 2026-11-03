@@ -34,9 +34,17 @@ function thread_type(context::JutulContext)
     return :batch
 end
 
+"""
+    threaded_loop(F, N, context)
+
+Evaluate `F(i)` for `i in 1:N` using the threading of `context`. Loops with
+fewer than two chunks of `minbatch(context)` entities run serially on the
+calling thread, since launching tasks or Polyester workers costs more than the
+loop itself for small entity counts (e.g. the cells of a small 1D model). Pass a
+thread type `Symbol` instead of the context to loop over worker batches.
+"""
 function threaded_loop(F, N, context::JutulContext; do_wait = true)
-    threads = thread_type(context)
-    return threaded_loop(F, N, threads; do_wait = do_wait)
+    return threaded_loop_minbatch(F, N, context; do_wait = do_wait)
 end
 
 function threaded_loop(F, N, threads::Symbol; do_wait = true)
@@ -64,7 +72,7 @@ function threaded_loop(F, N, threads::Symbol; do_wait = true)
     end
 end
 
-function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Int = minbatch(context); do_wait = true)
+function threaded_loop_minbatch(F, N, context::JutulContext, minbatch::Integer = minbatch(context); do_wait = true)
     N_threads = nthreads(context)
     N_batches = clamp(N ÷ minbatch, 1, N_threads)
     threads = thread_type(context)
