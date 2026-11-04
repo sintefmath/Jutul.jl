@@ -193,7 +193,7 @@ function update_level_smoother!(
         },
         A::StaticSparsityMatrixCSR, options::AMGOptions
     )
-    state.config = options.smoother
+    state.config = resolve_ilu_ordering(options.smoother, state.backend)
     return update_smoother!(state, A)
 end
 

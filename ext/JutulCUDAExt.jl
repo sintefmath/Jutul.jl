@@ -15,6 +15,47 @@ import KernelAbstractions as KA
 
 include("cuda_sparse_lu.jl")
 
+KAPreconditioners.default_ilu_ordering(::CUDA.CUDABackend) = :level
+
+function KAPreconditioners.update_permuted_ilu!(state, ::CUDA.CUDABackend)
+    if KAPreconditioners.ilu_permutation_kind(state.config) != :level || iszero(state.n)
+        return KAPreconditioners.update_smoother!(state.inner, state.matrix)
+    end
+    cached = state.factor_cache
+    if isnothing(cached)
+        KAPreconditioners.update_smoother!(state.inner, state.matrix)
+        graph = CUDA.capture() do
+            KAPreconditioners.update_smoother!(state.inner, state.matrix)
+        end
+        state.factor_cache = CUDA.instantiate(graph)
+        # Factorization overwrites the coefficients in place. The warm call
+        # already produced the result; replay only after the next gather.
+    else
+        cached()
+    end
+    return state.inner
+end
+
+function KAPreconditioners.apply_permuted_ilu!(state, ::CUDA.CUDABackend)
+    if KAPreconditioners.ilu_permutation_kind(state.config) != :level || iszero(state.n)
+        return KAPreconditioners.apply!(state.permuted_x, state.inner, state.permuted_rhs)
+    end
+    damping = KAPreconditioners.smoother_damping(state.inner)
+    cached = state.apply_cache
+    if isnothing(cached) || cached.damping != damping
+        # Permutation work buffers, factor storage and schedules remain fixed
+        # across coefficient updates. Warm all per-level calls before capture.
+        KAPreconditioners.apply!(state.permuted_x, state.inner, state.permuted_rhs)
+        graph = CUDA.capture() do
+            KAPreconditioners.apply!(state.permuted_x, state.inner, state.permuted_rhs)
+        end
+        cached = (graph = CUDA.instantiate(graph), damping = damping)
+        state.apply_cache = cached
+    end
+    cached.graph()
+    return state.permuted_x
+end
+
 struct CUDASmootherKernel{K, C, KC}
     kernel::K
     compiled::C

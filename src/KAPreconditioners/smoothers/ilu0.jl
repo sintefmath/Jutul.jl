@@ -111,20 +111,15 @@ end
     q = @index(Global)
     if q <= count
         i = rows[first + q - 1]
-        row_end = rowptr[i + 1] - one(eltype(rowptr))
-        @inbounds for k in rowptr[i]:row_end
+        @inbounds for k in rowptr[i]:(diagonal_positions[i] - one(eltype(rowptr)))
             j = colval[k]
-            if j < i
-                multiplier = factors[k] * inverse_diagonal[j]
-                factors[k] = multiplier
-                for p in rowptr[j]:(rowptr[j + 1] - one(eltype(rowptr)))
-                    column = colval[p]
-                    if column > j
-                        target = device_find_column(rowptr, colval, i, column)
-                        if !iszero(target)
-                            factors[target] -= multiplier * factors[p]
-                        end
-                    end
+            multiplier = factors[k] * inverse_diagonal[j]
+            factors[k] = multiplier
+            for p in (diagonal_positions[j] + one(eltype(rowptr))):(rowptr[j + 1] - one(eltype(rowptr)))
+                column = colval[p]
+                target = device_find_column(rowptr, colval, i, column)
+                if !iszero(target)
+                    factors[target] -= multiplier * factors[p]
                 end
             end
         end
@@ -146,10 +141,10 @@ end
         # D_i = A_ii - sum_{j < i} A_ij inv(D_j) A_ji. The comparison is
         # deliberately against the natural row index: the OPM row reordering
         # is a storage optimization and does not change the DILU ordering.
-        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+        @inbounds for k in rowptr[i]:(diagonal_positions[i] - one(eltype(rowptr)))
             j = colval[k]
             opposite = transpose_positions[k]
-            if j < i && !iszero(opposite)
+            if !iszero(opposite)
                 diagonal -= values[k] * inverse_diagonal[j] * values[opposite]
             end
         end
@@ -159,16 +154,16 @@ end
 
 @kernel function ilu0_lower_level_kernel!(
         work, @Const(rhs), @Const(factors),
-        @Const(rowptr), @Const(colval),
+        @Const(rowptr), @Const(colval), @Const(diagonal_positions),
         @Const(rows), first, count
     )
     q = @index(Global)
     if q <= count
         i = rows[first + q - 1]
         value = rhs[i]
-        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+        @inbounds for k in rowptr[i]:(diagonal_positions[i] - one(eltype(rowptr)))
             j = colval[k]
-            j < i && (value -= factors[k] * work[j])
+            value -= factors[k] * work[j]
         end
         @inbounds work[i] = value
     end
@@ -177,16 +172,16 @@ end
 @kernel function ilu0_upper_level_kernel!(
         x, @Const(work), @Const(factors),
         @Const(inverse_diagonal),
-        @Const(rowptr), @Const(colval),
+        @Const(rowptr), @Const(colval), @Const(diagonal_positions),
         damping, @Const(rows), first, count
     )
     q = @index(Global)
     if q <= count
         i = rows[first + q - 1]
         value = work[i]
-        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+        @inbounds for k in (diagonal_positions[i] + one(eltype(rowptr))):(rowptr[i + 1] - one(eltype(rowptr)))
             j = colval[k]
-            j > i && (value -= factors[k] * x[j])
+            value -= factors[k] * x[j]
         end
         @inbounds x[i] = damping * (inverse_diagonal[i] * value)
     end
@@ -195,16 +190,16 @@ end
 @kernel function dilu_lower_level_kernel!(
         work, @Const(rhs), @Const(values),
         @Const(inverse_diagonal),
-        @Const(rowptr), @Const(colval),
+        @Const(rowptr), @Const(colval), @Const(diagonal_positions),
         @Const(rows), first, count
     )
     q = @index(Global)
     if q <= count
         i = rows[first + q - 1]
         value = rhs[i]
-        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+        @inbounds for k in rowptr[i]:(diagonal_positions[i] - one(eltype(rowptr)))
             j = colval[k]
-            j < i && (value -= values[k] * work[j])
+            value -= values[k] * work[j]
         end
         @inbounds work[i] = inverse_diagonal[i] * value
     end
@@ -213,7 +208,7 @@ end
 @kernel function dilu_upper_level_kernel!(
         x, @Const(work), @Const(values),
         @Const(inverse_diagonal),
-        @Const(rowptr), @Const(colval),
+        @Const(rowptr), @Const(colval), @Const(diagonal_positions),
         damping,
         @Const(rows), first, count
     )
@@ -222,9 +217,9 @@ end
         i = rows[first + q - 1]
         correction = zero(eltype(x))
         diagonal_inverse = inverse_diagonal[i]
-        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+        @inbounds for k in (diagonal_positions[i] + one(eltype(rowptr))):(rowptr[i + 1] - one(eltype(rowptr)))
             j = colval[k]
-            j > i && (correction += values[k] * x[j])
+            correction += values[k] * x[j]
         end
         @inbounds x[i] = damping * (work[i] - diagonal_inverse * correction)
     end
@@ -251,15 +246,15 @@ end
 @kernel function ilu0_smooth_upper_level_kernel!(
         x, correction, @Const(work),
         @Const(factors), @Const(inverse_diagonal), @Const(rowptr),
-        @Const(colval), damping, @Const(rows), first, count
+        @Const(colval), @Const(diagonal_positions), damping, @Const(rows), first, count
     )
     q = @index(Global)
     if q <= count
         i = rows[first + q - 1]
         value = work[i]
-        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+        @inbounds for k in (diagonal_positions[i] + one(eltype(rowptr))):(rowptr[i + 1] - one(eltype(rowptr)))
             j = colval[k]
-            j > i && (value -= factors[k] * correction[j])
+            value -= factors[k] * correction[j]
         end
         delta = damping * (inverse_diagonal[i] * value)
         @inbounds begin
@@ -292,7 +287,7 @@ end
 @kernel function dilu_smooth_upper_level_kernel!(
         x, correction, @Const(work),
         @Const(values), @Const(inverse_diagonal), @Const(rowptr),
-        @Const(colval), damping,
+        @Const(colval), @Const(diagonal_positions), damping,
         @Const(rows), first, count
     )
     q = @index(Global)
@@ -300,10 +295,9 @@ end
         i = rows[first + q - 1]
         value = work[i]
         diagonal_inverse = inverse_diagonal[i]
-        @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(eltype(rowptr)))
+        @inbounds for k in (diagonal_positions[i] + one(eltype(rowptr))):(rowptr[i + 1] - one(eltype(rowptr)))
             j = colval[k]
-            j > i &&
-                (value -= diagonal_inverse * values[k] * correction[j])
+            value -= diagonal_inverse * values[k] * correction[j]
         end
         delta = damping * value
         @inbounds begin
@@ -313,8 +307,12 @@ end
     end
 end
 
-function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}) where {Tv}
-    factors = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nonzeros(A))
+function allocate_factor_storage(A::StaticSparsityMatrixCSR{Tv}; in_place::Bool = false) where {Tv}
+    factors = if in_place
+        A.nzval
+    else
+        KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nonzeros(A))
+    end
     inverse_diagonal = KernelAbstractions.allocate(matrix_backend(A), Tv, matrix_nrows(A))
     return factors, inverse_diagonal
 end
@@ -356,14 +354,14 @@ function setup_ilu0_kernels(
     )
     lower = setup_smoother_kernel(
         ilu0_lower_level_kernel!, backend, block_size,
-        work, work, factors, A.rowptr, A.colval,
+        work, work, factors, A.rowptr, A.colval, diagonal_positions,
         factor_rows, lower_first, lower_count;
         ndrange = lower_count,
         number_of_launches = length(factor_offsets) - 1
     )
     upper = setup_smoother_kernel(
         ilu0_upper_level_kernel!, backend, block_size,
-        residual, work, factors, inverse_diagonal, A.rowptr, A.colval,
+        residual, work, factors, inverse_diagonal, A.rowptr, A.colval, diagonal_positions,
         damping,
         upper_rows, upper_first, upper_count;
         ndrange = upper_count,
@@ -379,7 +377,7 @@ function setup_ilu0_kernels(
     smooth_upper = setup_smoother_kernel(
         ilu0_smooth_upper_level_kernel!, backend, block_size,
         residual, residual, work, factors, inverse_diagonal,
-        A.rowptr, A.colval, damping,
+        A.rowptr, A.colval, diagonal_positions, damping,
         upper_rows, upper_first, upper_count;
         ndrange = upper_count,
         number_of_launches = length(upper_offsets) - 1
@@ -411,14 +409,14 @@ function setup_dilu_kernels(
     )
     lower = setup_smoother_kernel(
         dilu_lower_level_kernel!, backend, block_size,
-        work, work, values, inverse_diagonal, A.rowptr, A.colval,
+        work, work, values, inverse_diagonal, A.rowptr, A.colval, diagonal_positions,
         factor_rows, lower_first, lower_count;
         ndrange = lower_count,
         number_of_launches = length(factor_offsets) - 1
     )
     upper = setup_smoother_kernel(
         dilu_upper_level_kernel!, backend, block_size,
-        residual, work, values, inverse_diagonal, A.rowptr, A.colval,
+        residual, work, values, inverse_diagonal, A.rowptr, A.colval, diagonal_positions,
         damping,
         upper_rows, upper_first, upper_count;
         ndrange = upper_count,
@@ -434,7 +432,7 @@ function setup_dilu_kernels(
     smooth_upper = setup_smoother_kernel(
         dilu_smooth_upper_level_kernel!, backend, block_size,
         residual, residual, work, values, inverse_diagonal,
-        A.rowptr, A.colval, damping,
+        A.rowptr, A.colval, diagonal_positions, damping,
         upper_rows, upper_first, upper_count;
         ndrange = upper_count,
         number_of_launches = length(upper_offsets) - 1
@@ -470,11 +468,28 @@ function reuse_ilu_smoother!(reuse, A, config, ::Type{S}) where {S}
     return update_smoother!(reuse, A)
 end
 
+default_ilu_ordering(backend) = :natural
+resolve_ilu_ordering(config, backend) = config
+
+function resolve_ilu_ordering(config::Union{ILU0, DILU}, backend)
+    if config.ordering == :auto
+        return typeof(config)(
+            config.steps, config.damping;
+            ordering = default_ilu_ordering(backend)
+        )
+    end
+    return config
+end
+
 function setup_smoother(
         A::StaticSparsityMatrixCSR, config::ILU0;
-        reuse = nothing, reallocation_tracker = nothing
+        reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "ILU0")
+    config = resolve_ilu_ordering(config, matrix_backend(A))
+    if config.ordering != :natural
+        return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
+    end
     reused = reuse_ilu_smoother!(reuse, A, config, ILU0State)
     isnothing(reused) || return reused
     mark_backend_reallocation!(
@@ -482,7 +497,7 @@ function setup_smoother(
     )
     symbolic = ilu_symbolic(A)
     backend = matrix_backend(A)
-    factors, inverse_diagonal = allocate_factor_storage(A)
+    factors, inverse_diagonal = allocate_factor_storage(A; in_place = _in_place)
     work, residual = allocate_ilu_work(A)
     diagonal_positions = backend_copy(backend, symbolic.diagonal)
     factor_rows = backend_copy(backend, symbolic.factor_rows)
@@ -510,9 +525,13 @@ end
 
 function setup_smoother(
         A::StaticSparsityMatrixCSR, config::DILU;
-        reuse = nothing, reallocation_tracker = nothing
+        reuse = nothing, reallocation_tracker = nothing, _in_place::Bool = false
     )
     require_square_matrix(A, "DILU")
+    config = resolve_ilu_ordering(config, matrix_backend(A))
+    if config.ordering != :natural
+        return setup_multicolor_ilu(A, config; reuse, reallocation_tracker)
+    end
     reused = reuse_ilu_smoother!(reuse, A, config, DILUState)
     isnothing(reused) || return reused
     mark_backend_reallocation!(
@@ -522,7 +541,7 @@ function setup_smoother(
     backend = matrix_backend(A)
     # The dependency levels expose parallelism without changing the natural
     # ordering used by the DILU recurrence and triangular solves.
-    values, inverse_diagonal = allocate_factor_storage(A)
+    values, inverse_diagonal = allocate_factor_storage(A; in_place = _in_place)
     work, residual = allocate_ilu_work(A)
     diagonal_positions = backend_copy(backend, symbolic.diagonal)
     transpose_positions = backend_copy(backend, symbolic.transpose)
@@ -551,7 +570,7 @@ end
 
 function update_smoother!(state::ILU0State, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
-    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.factors, A)
     kernel = state.factor_kernel
     launch_factor_levels!(state, kernel)
     return state
@@ -574,7 +593,7 @@ end
 
 function update_smoother!(state::DILUState, A::StaticSparsityMatrixCSR)
     require_same_smoother_pattern(state, A)
-    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.values, A)
     kernel = state.factor_kernel
     launch_factor_levels!(state, kernel)
     return state
@@ -595,39 +614,57 @@ function launch_factor_levels!(state::DILUState, kernel)
     return state
 end
 
+function cpu_ilu_schedule(state)
+    if Threads.nthreads() == 1
+        # A single worker can follow natural row order directly. Visiting
+        # sparse dependency wavefronts needlessly destroys CSR locality.
+        offsets = (1, state.n + 1)
+        return offsets, Base.OneTo(state.n), offsets, state.n:-1:1
+    else
+        return state.factor_offsets, state.factor_rows,
+            state.upper_offsets, state.upper_rows
+    end
+end
+
+function copy_ilu_values!(values, A)
+    if values !== A.nzval
+        copyto!(values, 1, A.nzval, 1, matrix_nonzeros(A))
+    end
+    return values
+end
+
 function update_smoother!(
         state::ILU0State{<:Vector, <:Vector, <:Vector, <:Vector},
         A::StaticSparsityMatrixCSR{Tv, Ti, <:Vector, <:Vector, <:Vector}
     ) where {Tv, Ti}
+    return update_ilu_cpu!(state, A, cpu_ilu_schedule(state))
+end
+
+# Pass the schedule through a function barrier: one-worker ranges and parallel
+# level vectors must both remain concretely typed inside the batch loops.
+function update_ilu_cpu!(state::ILU0State, A::StaticSparsityMatrixCSR{Tv, Ti}, schedule) where {Tv, Ti}
     require_same_smoother_pattern(state, A)
-    copyto!(state.factors, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.factors, A)
     factors = state.factors
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
     diagonal = state.diagonal_positions
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
             i = rows[level_start + q - 1]
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
+            @inbounds for k in rowptr[i]:(diagonal[i] - one(Ti))
                 j = colval[k]
-                if j < i
-                    multiplier = factors[k] * inverse_diagonal[j]
-                    factors[k] = multiplier
-                    for p in rowptr[j]:(rowptr[j + 1] - one(Ti))
-                        column = colval[p]
-                        if column > j
-                            target = device_find_column(
-                                rowptr, colval, i, column
-                            )
-                            !iszero(target) &&
-                                (factors[target] -= multiplier * factors[p])
-                        end
-                    end
+                multiplier = factors[k] * inverse_diagonal[j]
+                factors[k] = multiplier
+                for p in (diagonal[j] + one(Ti)):(rowptr[j + 1] - one(Ti))
+                    column = colval[p]
+                    target = device_find_column(rowptr, colval, i, column)
+                    !iszero(target) &&
+                        (factors[target] -= multiplier * factors[p])
                 end
             end
             inverse_diagonal[i] = inv(factors[diagonal[i]])
@@ -640,26 +677,29 @@ function update_smoother!(
         state::DILUState{<:Vector, <:Vector, <:Vector, <:Vector},
         A::StaticSparsityMatrixCSR{Tv, Ti, <:Vector, <:Vector, <:Vector}
     ) where {Tv, Ti}
+    return update_ilu_cpu!(state, A, cpu_ilu_schedule(state))
+end
+
+function update_ilu_cpu!(state::DILUState, A::StaticSparsityMatrixCSR{Tv, Ti}, schedule) where {Tv, Ti}
     require_same_smoother_pattern(state, A)
-    copyto!(state.values, 1, A.nzval, 1, matrix_nonzeros(A))
+    copy_ilu_values!(state.values, A)
     dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
     diagonal_index = state.diagonal_positions
     transpose_index = state.transpose_positions
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
             i = rows[level_start + q - 1]
             diagonal = dilu_values[diagonal_index[i]]
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - one(Ti))
+            @inbounds for k in rowptr[i]:(diagonal_index[i] - one(Ti))
                 j = colval[k]
                 opposite = transpose_index[k]
-                if j < i && !iszero(opposite)
+                if !iszero(opposite)
                     diagonal -= dilu_values[k] * inverse_diagonal[j] * dilu_values[opposite]
                 end
             end
@@ -683,6 +723,7 @@ function ilu_solve_levels!(x, state::ILU0State, b, work, kernels)
         launch_smoother_kernel(
             lower,
             work, b, state.factors, state.rowptr, state.colval,
+            state.diagonal_positions,
             state.factor_rows, first, count;
             ndrange = count, launch_index = level
         )
@@ -693,7 +734,7 @@ function ilu_solve_levels!(x, state::ILU0State, b, work, kernels)
         launch_smoother_kernel(
             upper,
             x, work, state.factors, state.inverse_diagonal,
-            state.rowptr, state.colval, smoother_damping(state),
+            state.rowptr, state.colval, state.diagonal_positions, smoother_damping(state),
             state.upper_rows, first, count;
             ndrange = count, launch_index = level
         )
@@ -715,7 +756,7 @@ function ilu_solve_levels!(x, state::DILUState, b, work, kernels)
         launch_smoother_kernel(
             lower,
             work, b, state.values, state.inverse_diagonal,
-            state.rowptr, state.colval,
+            state.rowptr, state.colval, state.diagonal_positions,
             state.factor_rows, first, count;
             ndrange = count, launch_index = level
         )
@@ -726,7 +767,7 @@ function ilu_solve_levels!(x, state::DILUState, b, work, kernels)
         launch_smoother_kernel(
             upper,
             x, work, state.values, state.inverse_diagonal,
-            state.rowptr, state.colval, smoother_damping(state),
+            state.rowptr, state.colval, state.diagonal_positions, smoother_damping(state),
             state.upper_rows, first, count;
             ndrange = count, launch_index = level
         )
@@ -744,37 +785,40 @@ function ilu_solve!(
 end
 
 function ilu_solve_cpu!(x, state::ILU0State, b, work)
+    return ilu_solve_cpu!(x, state, b, work, cpu_ilu_schedule(state))
+end
+
+function ilu_solve_cpu!(x, state::ILU0State, b, work, schedule)
     factors = state.factors
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    diagonal = state.diagonal_positions
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
             i = rows[level_start + q - 1]
             value = b[i]
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            @inbounds for k in rowptr[i]:(diagonal[i] - 1)
                 j = colval[k]
-                j < i && (value -= factors[k] * work[j])
+                value -= factors[k] * work[j]
             end
             @inbounds work[i] = value
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
             i = rows[level_start + q - 1]
             value = work[i]
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            @inbounds for k in (diagonal[i] + 1):(rowptr[i + 1] - 1)
                 j = colval[k]
-                j > i && (value -= factors[k] * x[j])
+                value -= factors[k] * x[j]
             end
             @inbounds x[i] = damping * (inverse_diagonal[i] * value)
         end
@@ -792,37 +836,40 @@ function ilu_solve!(
 end
 
 function ilu_solve_cpu!(x, state::DILUState, b, work)
+    return ilu_solve_cpu!(x, state, b, work, cpu_ilu_schedule(state))
+end
+
+function ilu_solve_cpu!(x, state::DILUState, b, work, schedule)
     dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    diagonal = state.diagonal_positions
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
             i = rows[level_start + q - 1]
             value = b[i]
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            @inbounds for k in rowptr[i]:(diagonal[i] - 1)
                 j = colval[k]
-                j < i && (value -= dilu_values[k] * work[j])
+                value -= dilu_values[k] * work[j]
             end
             @inbounds work[i] = inverse_diagonal[i] * value
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
             i = rows[level_start + q - 1]
             correction = zero(eltype(x))
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            @inbounds for k in (diagonal[i] + 1):(rowptr[i + 1] - 1)
                 j = colval[k]
-                j > i && (correction += dilu_values[k] * x[j])
+                correction += dilu_values[k] * x[j]
             end
             @inbounds x[i] = damping * (
                 work[i] - inverse_diagonal[i] * correction
@@ -860,7 +907,7 @@ function ilu_smooth_levels!(x, A, b, state::ILU0State, work, correction, kernels
             upper,
             x, correction, work,
             state.factors, state.inverse_diagonal,
-            state.rowptr, state.colval, smoother_damping(state),
+            state.rowptr, state.colval, state.diagonal_positions, smoother_damping(state),
             state.upper_rows, first, count;
             ndrange = count, launch_index = level
         )
@@ -896,7 +943,7 @@ function ilu_smooth_levels!(x, A, b, state::DILUState, work, correction, kernels
             upper,
             x, correction, work,
             state.values, state.inverse_diagonal,
-            state.rowptr, state.colval, smoother_damping(state),
+            state.rowptr, state.colval, state.diagonal_positions, smoother_damping(state),
             state.upper_rows, first, count;
             ndrange = count, launch_index = level
         )
@@ -914,12 +961,16 @@ function ilu_smooth_result!(
 end
 
 function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
+    return ilu_smooth_result_cpu!(x, A, b, state, work, correction, cpu_ilu_schedule(state))
+end
+
+function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction, schedule)
     factors = state.factors
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    diagonal = state.diagonal_positions
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -935,17 +986,16 @@ function ilu_smooth_result_cpu!(x, A, b, state::ILU0State, work, correction)
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
         @batch for q in 1:count
             i = rows[level_start + q - 1]
             value = work[i]
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            @inbounds for k in (diagonal[i] + 1):(rowptr[i + 1] - 1)
                 j = colval[k]
-                j > i && (value -= factors[k] * correction[j])
+                value -= factors[k] * correction[j]
             end
             delta = damping * (inverse_diagonal[i] * value)
             @inbounds begin
@@ -967,12 +1017,16 @@ function ilu_smooth_result!(
 end
 
 function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
+    return ilu_smooth_result_cpu!(x, A, b, state, work, correction, cpu_ilu_schedule(state))
+end
+
+function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction, schedule)
     dilu_values = state.values
     inverse_diagonal = state.inverse_diagonal
     rowptr = state.rowptr
     colval = state.colval
-    rows = state.factor_rows
-    offsets = state.factor_offsets
+    diagonal = state.diagonal_positions
+    offsets, rows = schedule[1], schedule[2]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -988,8 +1042,7 @@ function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
         end
     end
     damping = smoother_damping(state)
-    rows = state.upper_rows
-    offsets = state.upper_offsets
+    offsets, rows = schedule[3], schedule[4]
     for level in 1:(length(offsets) - 1)
         level_start = offsets[level]
         count = offsets[level + 1] - level_start
@@ -997,11 +1050,9 @@ function ilu_smooth_result_cpu!(x, A, b, state::DILUState, work, correction)
             i = rows[level_start + q - 1]
             value = work[i]
             diagonal_inverse = inverse_diagonal[i]
-            @inbounds for k in rowptr[i]:(rowptr[i + 1] - 1)
+            @inbounds for k in (diagonal[i] + 1):(rowptr[i + 1] - 1)
                 j = colval[k]
-                j > i && (
-                    value -= diagonal_inverse * dilu_values[k] * correction[j]
-                )
+                value -= diagonal_inverse * dilu_values[k] * correction[j]
             end
             delta = damping * value
             @inbounds begin
