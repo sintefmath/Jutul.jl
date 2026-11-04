@@ -82,31 +82,49 @@ struct HybridGaussSeidel <: AbstractSmoother
 end
 
 """
-    ILU0(steps=1, damping=1.0)
+    ILU0(steps=1, damping=1.0; ordering=:natural)
 
 Level-scheduled incomplete LU factorization with zero fill. The symbolic level
 schedules are retained and reused when matrix coefficients are updated.
+`ordering=:level` groups storage by dependency level while preserving the
+direction of every original matrix edge, retaining the natural-order
+factorization up to roundoff. CUDA caches graphs of its factorization and
+triangular sweeps.
+`ordering=:auto` selects level storage on CUDA and natural storage otherwise.
+`ordering=:multicolor` symmetrically permutes the matrix by a greedy coloring
+of its undirected sparsity graph. This reduces sequential stages but changes
+the preconditioner and can increase Krylov iterations.
 """
 struct ILU0 <: AbstractSmoother
     steps::Int
     damping::Float64
-    function ILU0(steps::Integer = 1, damping::Real = 1.0)
-        return new(positive_smoother_parameters("ILU0", steps, damping)...)
+    ordering::Symbol
+    function ILU0(steps::Integer = 1, damping::Real = 1.0; ordering::Symbol = :natural)
+        ordering in (:auto, :natural, :level, :multicolor) || throw(ArgumentError("unsupported ILU ordering: $ordering"))
+        return new(positive_smoother_parameters("ILU0", steps, damping)..., ordering)
     end
 end
 
 """
-    DILU(steps=1, damping=1.0)
+    DILU(steps=1, damping=1.0; ordering=:natural)
 
 Diagonal ILU(0), implemented with level-scheduled factorization and triangular
 sweeps following Andersen et al. The level schedule preserves the natural row
 ordering, so host and accelerator backends construct the same preconditioner.
+`ordering=:level` groups storage by dependency level as for `ILU0`, retaining
+the natural-order preconditioner. CUDA caches graphs of its factorization and
+triangular sweeps.
+`ordering=:multicolor` uses the same optional coloring as `ILU0`, changing the
+factorization ordering on both backends.
+`ordering=:auto` selects level storage on CUDA and natural storage otherwise.
 """
 struct DILU <: AbstractSmoother
     steps::Int
     damping::Float64
-    function DILU(steps::Integer = 1, damping::Real = 1.0)
-        return new(positive_smoother_parameters("DILU", steps, damping)...)
+    ordering::Symbol
+    function DILU(steps::Integer = 1, damping::Real = 1.0; ordering::Symbol = :natural)
+        ordering in (:auto, :natural, :level, :multicolor) || throw(ArgumentError("unsupported ILU ordering: $ordering"))
+        return new(positive_smoother_parameters("DILU", steps, damping)..., ordering)
     end
 end
 
