@@ -168,7 +168,8 @@ end
             # Implicit Euler for dA/dt = B - A with B = P = 2 and two steps of 0.5
             @test isapprox(result.states[end][:A], fill(10 / 9, n), rtol = 1.0e-10)
             @test isapprox(result.states[end][:B], fill(2.0, n), rtol = 1.0e-10)
-            # update_before_step! calls the parameter hook once per ministep
+            # update_before_step! reaches the parameter hook through the domain, system
+            # and formulation fallbacks, i.e. three times per ministep
             @test calls.parameter_hook == 3 * ministeps
             # Equations are updated in model order and prepared once per entity
             @test result.equation_order == repeat([:eq_a, :eq_b], linearizations)
