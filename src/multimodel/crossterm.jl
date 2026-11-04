@@ -186,7 +186,7 @@ function update_main_linearized_system_subgroup!(storage, model, model_keys, off
         m = model.models[key]
         s = storage[key]
         eqs_s = s.equations
-        eqs = m.equations
+        eqs = s.equation_definitions
         eqs_views = s.views.equations
         update_linearized_system!(
             lsys, eqs, eqs_s, eqs_views, m;
@@ -226,11 +226,12 @@ function source_impact_for_pair(ctp, ct_s, label)
 end
 
 function update_linearized_system_cross_terms!(
-        lsys, eq_views, crossterms, crossterm_storage, model, label;
+        lsys, eq_views, crossterms, crossterm_storage, @nospecialize(model), label;
         equation_offset = 0,
         r = lsys.r_buffer,
         nzval = lsys.jac_buffer
     )
+    # The model is only passed on through dynamic calls: unspecialized, it is not copied
     for (ctp, ct_s) in zip(crossterms, crossterm_storage)
         ct = ctp.cross_term
         eq_label, impact_map, _, caches, _, sgn =
@@ -243,7 +244,8 @@ function update_linearized_system_cross_terms!(
     return
 end
 
-function update_offdiagonal_linearized_system_cross_term!(nz, model, ctp, ct_s, label)
+function update_offdiagonal_linearized_system_cross_term!(nz, @nospecialize(model), ctp, ct_s, label)
+    # The model is only passed on through dynamic calls: unspecialized, it is not copied
     _, impact_map, caches, _, pos, sgn =
         source_impact_for_pair(ctp, ct_s, label)
     @assert !isnothing(pos)
@@ -340,7 +342,9 @@ function update_offdiagonal_blocks!(
     end
 end
 
-function update_offdiagonal_block_pair!(linearized_system, ctp, ct_s, storage, model, models, targets, sources)
+function update_offdiagonal_block_pair!(linearized_system, ctp, @nospecialize(ct_s), storage, model, models, targets, sources)
+    # The cross-term storage is not specialized. Without specialization on it, the call from
+    # the loop over cross terms is static and does not box the other arguments.
     ct = ctp.cross_term
     t = ctp.target
     s = ctp.source

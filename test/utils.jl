@@ -551,3 +551,48 @@ end
     B = complex.(A, 1)
     @test Jutul.matrix_row_view(B', 1) == conj.(B[:, 1])
 end
+
+function sum_definitions!(totals, definitions)
+    Jutul.foreach_definition(definitions, totals) do key, definition, total
+        total[] += definition
+    end
+    return totals
+end
+
+@testset "foreach_definition" begin
+    definitions = (a = 1, b = 2.0, c = :c)
+    entries = (c = "C", b = "B", a = "A", unused = "U")
+    for defs in (definitions, Jutul.OrderedDict(pairs(definitions)))
+        visited = []
+        Jutul.foreach_definition(defs, entries) do key, definition, entry
+            push!(visited, (key, definition, entry))
+        end
+        @test visited == [(:a, 1, "A"), (:b, 2.0, "B"), (:c, :c, "C")]
+    end
+    # Above the unrolling limit the traversal is a loop with the same result
+    long = NamedTuple(Symbol("x$i") => i for i in 1:(Jutul.MAX_UNROLLED_DEFINITIONS + 1))
+    keys_seen = Symbol[]
+    Jutul.foreach_definition((key, definition) -> push!(keys_seen, key), long)
+    @test keys_seen == collect(keys(long))
+    # Short named tuples are unrolled: entries of more types than union splitting
+    # handles are visited without boxing
+    definitions = (a = Int8(1), b = Int16(2), c = Int32(3), d = Int64(4), e = 5.0f0, f = 6.0)
+    totals = map(x -> Ref(zero(x)), definitions)
+    sum_definitions!(totals, definitions)
+    @test map(getindex, totals) == definitions
+    @test @allocated(sum_definitions!(totals, definitions)) == 0
+end
+
+struct RowsTestEquation <: Jutul.JutulEquation
+    rows::Int
+end
+Jutul.number_of_equations_per_entity(model, eq::RowsTestEquation) = eq.rows
+
+@testset "Default convergence criterion" begin
+    for n in (1, 3, 40)
+        r = [(-1)^j * i * j for i in 1:n, j in 1:4]
+        crit = Jutul.convergence_criterion(nothing, nothing, RowsTestEquation(n), nothing, r).AbsMax
+        @test crit.errors == [4 * i for i in 1:n]
+        @test crit.names == (n == 1 ? "R" : ["R_$i" for i in 1:n])
+    end
+end
