@@ -19,7 +19,6 @@ function linear_solve!(sys, solver::LUSolver, arg...; dx = sys.dx, r = sys.r, kw
         error("System too big for LU solver. You can increase max_size at your own peril.")
     end
     J = sys.jac
-    #r = sys.r
     if !solver.reuse_memory
         F = lu(J)
     else
