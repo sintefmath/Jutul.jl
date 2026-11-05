@@ -982,20 +982,27 @@ function increment_norm(dX, state, model, X, pvar)
 end
 
 """
+    update_before_step!(storage, model, dt, forces; time = NaN, recorder, update_explicit = true)
 
+Prepare the storage for a step: call `update_parameter_before_step!` once for every
+parameter, then the domain, system and formulation hooks
+`update_before_step!(storage, model.domain, model, dt, forces; kwarg...)` etc. (no-ops by
+default).
 """
 function update_before_step!(storage, model, dt, forces; kwarg...)
+    update_parameters_before_step!(storage.state, storage.variable_definitions.parameters, storage, model, dt, forces)
     update_before_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_before_step!(storage, model.system, model, dt, forces; kwarg...)
     return update_before_step!(storage, model.formulation, model, dt, forces; kwarg...)
 end
 
-function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
-    state = storage.state
-    for (k, prm) in pairs(storage.variable_definitions.parameters)
-        update_parameter_before_step!(state[k], prm, storage, model, dt, forces)
+update_before_step!(storage, ::Any, model, dt, forces; kwarg...) = nothing
+
+function update_parameters_before_step!(state, parameters, storage, model, dt, forces)
+    foreach_definition(parameters, state) do key, prm, value
+        update_parameter_before_step!(value, prm, storage, model, dt, forces)
     end
-    return
+    return nothing
 end
 
 function update_after_step!(storage, model, dt, forces; kwarg...)
