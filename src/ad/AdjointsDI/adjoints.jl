@@ -195,9 +195,11 @@ function setup_adjoint_storage_generic(
     prep_static = nothing
     adj_kwarg = (
         use_sparsity = use_sparsity,
-        linear_solver = coalesce(linear_solver, Jutul.select_linear_solver(
-            execution_model, mode = :adjoint, rtol = 1.0e-6
-        )),
+        linear_solver = coalesce(
+            linear_solver, Jutul.select_linear_solver(
+                execution_model, mode = :adjoint, rtol = 1.0e-6
+            )
+        ),
         n_objective = nothing,
         info_level = info_level,
         execution_model = execution_model,
