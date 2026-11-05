@@ -32,7 +32,7 @@ function error_sum_scaled(model, rep)
     for r in rep
         tol = r.tolerances
         crit = r.criterions
-        for (k, v) in tol
+        for (k, v) in pairs(tol)
             err_sum += maximum(crit[k].errors) / v
         end
     end
