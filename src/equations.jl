@@ -552,8 +552,13 @@ end
 Update equation based on currently stored properties
 """
 function update_equation!(eq_s, eq::JutulEquation, storage, model, dt)
-    state = evaluation_state(storage)
-    state0 = evaluation_state0(storage)
+    # Function barrier: the states of an unspecialized storage are not inferable, and
+    # the preparation loop and the cache updates below should not dispatch dynamically
+    update_equation_from_states!(eq_s, eq, evaluation_state(storage), evaluation_state0(storage), model, dt)
+    return nothing
+end
+
+function update_equation_from_states!(eq_s, eq, state, state0, model, dt)
     prepare(i) = prepare_equation_in_entity!(i, eq, eq_s, state, state0, model, dt)
     threaded_loop(prepare, number_of_entities(model, eq), model.context)
     if eq_s isa AbstractArray
@@ -637,12 +642,18 @@ function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 
     @tic "default" e = map(i -> maximum(absolute_value, view(r, i, :)), 1:n)
     if n == 1
         names = "R"
+    elseif n <= length(DEFAULT_RESIDUAL_NAMES)
+        names = DEFAULT_RESIDUAL_NAMES[n]
     else
         names = map(i -> "R_$i", 1:n)
     end
     R = (AbsMax = (errors = e, names = names),)
     return R
 end
+
+# Names of the default criterion for equations with several rows, built once instead of in
+# every convergence check. Shared between calls: do not modify.
+const DEFAULT_RESIDUAL_NAMES = [["R_$i" for i in 1:n] for n in 1:32]
 
 @inline function get_diagonal_entries(eq::JutulEquation, eq_s::CompactAutoDiffCache)
     return get_entries(eq_s)

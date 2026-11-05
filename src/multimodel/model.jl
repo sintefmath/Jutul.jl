@@ -942,8 +942,10 @@ end
 
 function update_cross_term!(
         ct_s, ct::CrossTerm, eq, storage_t, storage_s,
-        model_t, model_s, dt
+        @nospecialize(model_t), @nospecialize(model_s), dt
     )
+    # The models are only passed on through the dynamic call below. Without specialization
+    # they stay boxed, whereas a specialized method copies each model to pass it on.
     state_t = evaluation_state(storage_t)
     state0_t = evaluation_state0(storage_t)
 
@@ -961,7 +963,8 @@ function update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s_targ
     prepare(i) = prepare_cross_term_in_entity!(
         i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt
     )
-    threaded_loop(prepare, ct_s.N, model_t.context)
+    # The cross-term storage is not specialized: assert the count so that the loop is a static call
+    threaded_loop(prepare, ct_s.N::Int, model_t.context)
     state_s_v = as_value(state_s)
     state0_s_v = as_value(state0_s)
     for cache in values(ct_s_target)
@@ -980,7 +983,8 @@ function update_cross_term_helper_impl!(state_t, state0_t, state_s, state0_s, ct
     prepare(i) = prepare_cross_term_in_entity!(
         i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt
     )
-    threaded_loop(prepare, ct_s.N, model_t.context)
+    # The cross-term storage is not specialized: assert the count so that the loop is a static call
+    threaded_loop(prepare, ct_s.N::Int, model_t.context)
     # Target and source are aliased. We just update one of them.
     @assert ct_s_target === ct_s_source
     update_cross_term_for_entity!(ct_s_source, ct, eq, state_t, state0_t, state_s, state0_s, model_t, model_s, dt)
@@ -1261,7 +1265,7 @@ function check_convergence(
             inc = update_report[key]
         end
         s, m = submodel_evaluation_pair(storage, model, key)
-        eqs = m.equations
+        eqs = s.equation_definitions
         eqs_s = s.equations
         eqs_view = s.views.equations
         conv, e, errors[key], = check_convergence(
