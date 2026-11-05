@@ -96,6 +96,7 @@ config = simulator_config(sim)
 ```@docs
 GenericKrylov
 LUSolver
+KLUSolver
 ```
 
 ### Preconditioners
