@@ -640,20 +640,17 @@ function convergence_criterion(model, storage, eq::JutulEquation, eq_s, r; dt = 
     # this only transfers the final scalars and does not allocate a temporary
     # backend array during every convergence check.
     @tic "default" e = map(i -> maximum(absolute_value, view(r, i, :)), 1:n)
-    if n == 1
-        names = "R"
-    elseif n <= length(DEFAULT_RESIDUAL_NAMES)
-        names = DEFAULT_RESIDUAL_NAMES[n]
-    else
-        names = map(i -> "R_$i", 1:n)
-    end
+    names = static_residual_names(Val(n))
     R = (AbsMax = (errors = e, names = names),)
     return R
 end
 
-# Names of the default criterion for equations with several rows, built once instead of in
-# every convergence check. Shared between calls: do not modify.
-const DEFAULT_RESIDUAL_NAMES = [["R_$i" for i in 1:n] for n in 1:32]
+@generated function static_residual_names(::Val{N}) where {N}
+    residual_label(i) = "R_$i"
+    N == 1 && return QuoteNode("R")
+    labels = SVector{N,String}(ntuple(residual_label, N))
+    return QuoteNode(labels)
+end
 
 @inline function get_diagonal_entries(eq::JutulEquation, eq_s::CompactAutoDiffCache)
     return get_entries(eq_s)
