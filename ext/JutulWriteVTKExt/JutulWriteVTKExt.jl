@@ -31,6 +31,9 @@ The `cell_data` argument can be:
   in which case a `.pvd` collection is written with one `.vtu` file per
   timestep.
 
+String vectors with one entry per cell are exported as string cell fields,
+for example `cell_data = (component_name = ["Electrolyte", "Separator"],)`.
+
 Matrix fields (e.g. `Saturations` with shape `nphases × ncells`) are
 automatically split into one scalar field per row, named `Saturations_1`,
 `Saturations_2`, etc.
@@ -101,9 +104,11 @@ function _add_cell_field!(vtk, name, values, nc)
         end
     elseif values isa AbstractVector && eltype(values) <: Number && length(values) == nc
         vtk[name, WriteVTK.VTKCellData()] = Float64.(values)
+    elseif values isa AbstractVector && eltype(values) <: AbstractString && length(values) == nc
+        vtk[name, WriteVTK.VTKCellData()] = String.(values)
     end
-    # Skip fields whose element type is not a Number (e.g. BlackOilX) or whose
-    # size doesn't match the cell count (e.g. face arrays, scalars).
+    # Skip unsupported element types (e.g. BlackOilX) or fields whose size
+    # doesn't match the cell count (e.g. face arrays, scalars).
 end
 
 function _points_matrix(mesh, flip_z = false)
