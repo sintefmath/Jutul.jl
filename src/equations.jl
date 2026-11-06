@@ -648,7 +648,7 @@ end
 @generated function static_residual_names(::Val{N}) where {N}
     residual_label(i) = "R_$i"
     N == 1 && return QuoteNode("R")
-    labels = SVector{N,String}(ntuple(residual_label, N))
+    labels = SVector{N, String}(ntuple(residual_label, N))
     return QuoteNode(labels)
 end
 
