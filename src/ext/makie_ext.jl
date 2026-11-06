@@ -41,6 +41,14 @@ argument), dynamic data (via the `dynamic` argument), and sensitivity data (via
 the `sens` argument, plotted using a special colormap). The optional keyword
 `step_labels` gives the step number displayed for each entry in `dynamic` (e.g.
 report step numbers when only some steps are stored).
+
+Additional submodels (e.g. fractures) can be shown together with the main mesh
+using the `submodels` keyword. Each entry is a `NamedTuple` with fields `name`
+and `mesh` (a `JutulMesh` or `DataDomain`), and optionally `static` (`Dict` of
+cell data), `dynamic` (`Vector` of `Dict`s, one per entry in `dynamic`) and
+`enabled` (initial state of the toggle). Each submodel gets a toggle and is
+colored by the selected property where it is defined. Properties found in
+several submodels share the same color range.
 """
 function plot_explorer(arg...; kwarg...)
     check_plotting_availability(interactive = true)

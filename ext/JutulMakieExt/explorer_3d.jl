@@ -21,26 +21,31 @@ function Jutul.plot_explorer_impl(
         kwarg...
     )
     if ismissing(static)
-        if m isa DataDomain
-            static = convert_dict(m.data, number_of_cells(m))
-            if haskey(m, :cell_centroids)
-                cc = m[:cell_centroids]
-                d = size(cc, 1)
-                static["X"] = view(cc, 1, :)
-                static["Y"] = view(cc, 2, :)
-                if d > 2
-                    static["Z"] = view(cc, 3, :)
-                end
-                if haskey(m, :volumes)
-                    static["Volumes"] = m[:volumes]
-                end
-            end
-        else
-            static = OrderedDict{String, Vector}()
-            static["Cell index"] = collect(1:number_of_cells(m))
-        end
+        static = explorer_static_data(m)
     end
     return Jutul.plot_explorer_impl(m, static, dynamic; kwarg...)
+end
+
+function explorer_static_data(m)
+    if m isa DataDomain
+        static = convert_dict(m.data, number_of_cells(m))
+        if haskey(m, :cell_centroids)
+            cc = m[:cell_centroids]
+            d = size(cc, 1)
+            static["X"] = view(cc, 1, :)
+            static["Y"] = view(cc, 2, :)
+            if d > 2
+                static["Z"] = view(cc, 3, :)
+            end
+            if haskey(m, :volumes)
+                static["Volumes"] = m[:volumes]
+            end
+        end
+    else
+        static = OrderedDict{String, Vector}()
+        static["Cell index"] = collect(1:number_of_cells(m))
+    end
+    return static
 end
 
 function Jutul.plot_explorer_impl(
@@ -159,6 +164,7 @@ function Jutul.plot_explorer_impl(
         sens_enabled = false,
         mesh_enabled = true,
         sens_kwarg = NamedTuple(),
+        submodels = missing,
         kwarg...
     )
     default_colors = preset_colors(preset)
@@ -196,30 +202,7 @@ function Jutul.plot_explorer_impl(
     plot_data = convert_dict(static, nc)
     plot_keys = collect(keys(plot_data))
     if extra_static || length(plot_keys) == 0
-        if !haskey(plot_data, "X")
-            geo = missing
-            try
-                geo = tpfv_geometry(m)
-            catch
-
-            end
-            if !ismissing(geo)
-                cc = geo.cell_centroids
-                plot_data["X"] = view(cc, 1, :)
-                plot_data["Y"] = view(cc, 2, :)
-                if size(cc, 1) > 2
-                    plot_data["Z"] = view(cc, 3, :)
-                end
-                plot_data["Volumes"] = geo.volumes
-            end
-        end
-        plot_data["Cell ID"] = 1:number_of_cells(m)
-        if (m isa Jutul.UnstructuredMesh || m isa Jutul.CartesianMesh) && Jutul.grid_dims_ijk(m) != (nc, 1, 1)
-            ijk = map(i -> Jutul.cell_ijk(m, i), 1:nc)
-            plot_data["I"] = map(x -> x[1], ijk)
-            plot_data["J"] = map(x -> x[2], ijk)
-            plot_data["K"] = map(x -> x[3], ijk)
-        end
+        add_extra_static!(plot_data, m)
     end
     if HAS_DYNAMIC_DATA
         dynamic_data = [convert_dict(d, nc) for d in dynamic_data]
@@ -236,6 +219,7 @@ function Jutul.plot_explorer_impl(
     if !ismissing(step_labels) && HAS_DYNAMIC_DATA
         length(step_labels) == Nstep || throw(ArgumentError("step_labels must have one entry per dynamic data step ($Nstep), was $(length(step_labels))."))
     end
+    explorer_submodels = setup_explorer_submodels(submodels, HAS_DYNAMIC_DATA ? Nstep : missing, extra_static)
 
     function match_key(key; soft = false)
         if soft
@@ -282,6 +266,11 @@ function Jutul.plot_explorer_impl(
         scene_arg = (clear = true, backgroundcolor = backgroundcolor)
     end
     static_lims, dynamic_lims = setup_limits(plot_data, dynamic_data)
+    for sm in explorer_submodels
+        # Shared color range: Properties found in several submodels use the
+        # combined range.
+        merge_limits!(static_lims, dynamic_lims, setup_limits(sm.static, sm.dynamic)...)
+    end
     menu_alpha = 0.1
     main_color = textcolor
     # Tri_T = eltype(ttri)
@@ -503,6 +492,8 @@ function Jutul.plot_explorer_impl(
     toggle_edge = add_toggle!("Mesh lines", edges)
     # Toggle mesh itself
     toggle_mesh = add_toggle!("Mesh cells", mesh_enabled)
+    # Toggle for each additional submodel
+    submodel_toggles = map(sm -> add_toggle!(sm.name, sm.enabled), explorer_submodels)
 
     # Toggle mesh itself
     # transparency_toggle = add_toggle!("Transparency", false)
@@ -627,6 +618,21 @@ function Jutul.plot_explorer_impl(
         kwarg...
     )
     plot_mesh_edges!(lscene, m, visible = toggle_edge.checked, color = main_color)
+    for (sm, sm_toggle) in zip(explorer_submodels, submodel_toggles)
+        _ = @lift update_submodel_values!(sm, static_lims, dynamic_lims, $sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_independent, $is_global_limit, $use_symlog, use_highclip, verbose)
+        mesh!(
+            lscene, sm.points, sm.triangles;
+            colormap = cmap,
+            color = sm.vertex_buffer,
+            visible = sm_toggle.checked,
+            colorrange = lims,
+            backlight = 1,
+            mesh_arg...,
+            kwarg...
+        )
+        sm_edges_visible = @lift $(toggle_edge.checked) && $(sm_toggle.checked)
+        plot_mesh_edges!(lscene, sm.mesh, visible = sm_edges_visible, color = main_color)
+    end
     # plot_faults!(lscene, m, colormap = cmap)
 
 
@@ -923,6 +929,35 @@ function Jutul.plot_explorer_impl(
     return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!, color_information)
 end
 
+function add_extra_static!(plot_data, m)
+    nc = number_of_cells(m)
+    if !haskey(plot_data, "X")
+        geo = missing
+        try
+            geo = tpfv_geometry(m)
+        catch
+
+        end
+        if !ismissing(geo)
+            cc = geo.cell_centroids
+            plot_data["X"] = view(cc, 1, :)
+            plot_data["Y"] = view(cc, 2, :)
+            if size(cc, 1) > 2
+                plot_data["Z"] = view(cc, 3, :)
+            end
+            plot_data["Volumes"] = geo.volumes
+        end
+    end
+    plot_data["Cell ID"] = 1:number_of_cells(m)
+    if (m isa Jutul.UnstructuredMesh || m isa Jutul.CartesianMesh) && Jutul.grid_dims_ijk(m) != (nc, 1, 1)
+        ijk = map(i -> Jutul.cell_ijk(m, i), 1:nc)
+        plot_data["I"] = map(x -> x[1], ijk)
+        plot_data["J"] = map(x -> x[2], ijk)
+        plot_data["K"] = map(x -> x[3], ijk)
+    end
+    return plot_data
+end
+
 function mesh_as_static(m; kwarg...)
     tri = Jutul.triangulate_mesh(m; outer = false, kwarg...)
     return mesh_as_static(m, tri)
@@ -980,6 +1015,112 @@ function mesh_as_static(m, tri, Dval::Val{D}, Tval::Val{T}) where {D, T}
         push!(ttri, nexttri)
     end
     return (points, ttri, indices)
+end
+
+"""
+Set up the additional submodels (e.g. fractures) shown together with the main
+mesh. Each entry of `submodels` is a `NamedTuple` with fields `name` and `mesh`
+(a `JutulMesh` or `DataDomain`) and optional fields `static` (`Dict` of cell
+data), `dynamic` (`Vector` of `Dict`s with one entry per dynamic data step of
+the main mesh) and `enabled` (initial state of the toggle).
+"""
+function setup_explorer_submodels(submodels, nstep, extra_static)
+    out = []
+    if ismissing(submodels)
+        return out
+    end
+    for spec in submodels
+        push!(out, setup_explorer_submodel(spec, nstep, extra_static))
+    end
+    return out
+end
+
+function setup_explorer_submodel(spec, nstep, extra_static)
+    name = string(spec.name)
+    static = get(spec, :static, missing)
+    dynamic = get(spec, :dynamic, missing)
+    if ismissing(static)
+        static = explorer_static_data(spec.mesh)
+    end
+    points, triangles, indices = mesh_as_static(spec.mesh)
+    m = physical_representation(spec.mesh)
+    nc = number_of_cells(m)
+    static = convert_dict(static, nc)
+    if extra_static
+        add_extra_static!(static, m)
+    end
+    if !ismissing(dynamic)
+        if ismissing(nstep)
+            dynamic = missing
+        else
+            length(dynamic) == nstep || throw(ArgumentError("Dynamic data for submodel $name must have one entry per dynamic data step ($nstep), was $(length(dynamic))."))
+            dynamic = [convert_dict(d, nc) for d in dynamic]
+        end
+    end
+    cell_to_vertex = indices.Cells
+    nv = length(cell_to_vertex)
+    return (
+        name = name,
+        mesh = m,
+        points = points,
+        triangles = triangles,
+        cell_to_vertex = cell_to_vertex,
+        static = static,
+        dynamic = dynamic,
+        enabled = get(spec, :enabled, true),
+        cell_values = zeros(nc),
+        vertex_values = zeros(Float32, nv),
+        vertex_buffer = Jutul.allocate_plot_buffer(zeros(Float32, nv))
+    )
+end
+
+function update_submodel_values!(sm, static_lims, dynamic_lims, static_key, dyn_key, step_idx, bounds_static, bounds_dynamic, is_dyn, is_indep, is_glob, to_symlog, use_highclip, verbose)
+    static_values = get(sm.static, static_key, missing)
+    if ismissing(sm.dynamic)
+        dyn_values = missing
+    else
+        dyn_values = get(sm.dynamic[step_idx], dyn_key, missing)
+    end
+    if is_dyn
+        v = dyn_values
+    else
+        v = static_values
+    end
+    if ismissing(v)
+        # Property is not defined for this submodel
+        fill!(sm.vertex_values, NaN)
+        Jutul.update_plot_buffer!(sm.vertex_buffer, sm.vertex_values)
+    else
+        if to_symlog
+            F = symlog10
+        else
+            F = x -> x
+        end
+        @. sm.cell_values = F(v)
+        bnd_static = get_limits(static_lims, dynamic_lims, static_key, dyn_key, false, step_idx, is_glob, to_symlog)
+        bnd_dyn = get_limits(static_lims, dynamic_lims, static_key, dyn_key, true, step_idx, is_glob, to_symlog)
+        map_to_face_buffer_with_truncation!(sm.vertex_buffer, sm.vertex_values, sm.cell_values, sm.cell_to_vertex, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, is_indep, use_highclip, F, verbose)
+    end
+    return sm.vertex_buffer
+end
+
+function merge_limits!(static_lims, dynamic_lims, sm_static_lims, sm_dynamic_lims)
+    merge_lims(a, b) = (min(a[1], b[1]), max(a[2], b[2]))
+    for (k, v) in sm_static_lims
+        if haskey(static_lims, k)
+            static_lims[k] = merge_lims(static_lims[k], v)
+        else
+            static_lims[k] = v
+        end
+    end
+    if !ismissing(dynamic_lims) && !ismissing(sm_dynamic_lims)
+        for (k, v) in sm_dynamic_lims
+            if haskey(dynamic_lims, k)
+                dynamic_lims[k] = map(merge_lims, dynamic_lims[k], v)
+            end
+        end
+    end
+    return (static_lims, dynamic_lims)
 end
 
 function setup_limits(static, dynamic)
@@ -1099,6 +1240,7 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
     # val_buffer, bnd_dyn, bnd_static, dyn_values, static_values, bounds_dynamic, bounds_static, is_dyn, use_highclip
     ϵ = 1.0e-6
     has_dynamic = !ismissing(dyn_values)
+    has_static = !ismissing(static_values)
     if ismissing(bnd_dyn)
         @assert !has_dynamic
         bnd_dyn = (0.0, 1.0)
@@ -1114,7 +1256,11 @@ function map_to_face_buffer_with_truncation!(vertex_val_buffer, vertex_vals, cel
         else
             dyn_norm = 0.5
         end
-        static_norm = to_inner(static_values[cell_no], bnd_static)
+        if has_static
+            static_norm = to_inner(static_values[cell_no], bnd_static)
+        else
+            static_norm = 0.5
+        end
         outside_dyn = is_outside(dyn_norm, limiter_dynamic)
         outside_static = is_outside(static_norm, limiter_static)
         if is_indep
