@@ -944,8 +944,8 @@ function update_cross_term!(
         ct_s, ct::CrossTerm, eq, storage_t, storage_s,
         @nospecialize(model_t), @nospecialize(model_s), dt
     )
-    # The models are only passed on through the dynamic call below. Without specialization
-    # they stay boxed, whereas a specialized method copies each model to pass it on.
+    # The models are only passed on through the dynamic call below. Without
+    # specialization they stay boxed.
     state_t = evaluation_state(storage_t)
     state0_t = evaluation_state0(storage_t)
 
@@ -963,7 +963,8 @@ function update_cross_term_impl!(state_t, state0_t, state_s, state0_s, ct_s_targ
     prepare(i) = prepare_cross_term_in_entity!(
         i, state_t, state0_t, state_s, state0_s, model_t, model_s, ct, eq, dt
     )
-    # The cross-term storage is not specialized: assert the count so that the loop is a static call
+    # The cross-term storage is not specialized: assert the count so that the
+    # loop is a static call
     threaded_loop(prepare, ct_s.N::Int, model_t.context)
     state_s_v = as_value(state_s)
     state0_s_v = as_value(state0_s)

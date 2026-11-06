@@ -984,10 +984,8 @@ end
 """
     update_before_step!(storage, model, dt, forces; time = NaN, recorder, update_explicit = true)
 
-Prepare the storage for a step: call `update_parameter_before_step!` once for every
-parameter, then the domain, system and formulation hooks
-`update_before_step!(storage, model.domain, model, dt, forces; kwarg...)` etc. (no-ops by
-default).
+Prepare the storage for a step: Call `update_parameter_before_step!` once with
+potential dispatches for parameteres, domain, system and formulation.
 """
 function update_before_step!(storage, model, dt, forces; kwarg...)
     update_parameters_before_step!(storage.state, storage.variable_definitions.parameters, storage, model, dt, forces)
