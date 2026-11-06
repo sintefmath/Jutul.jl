@@ -46,9 +46,11 @@ Additional submodels (e.g. fractures) can be shown together with the main mesh
 using the `submodels` keyword. Each entry is a `NamedTuple` with fields `name`
 and `mesh` (a `JutulMesh` or `DataDomain`), and optionally `static` (`Dict` of
 cell data), `dynamic` (`Vector` of `Dict`s, one per entry in `dynamic`) and
-`enabled` (initial state of the toggle). Each submodel gets a toggle and is
-colored by the selected property where it is defined. Properties found in
-several submodels share the same color range.
+`enabled` (initially selected). The models to display are then selected in the
+GUI, where the main mesh is named by the `mesh_name` keyword. The property menus
+list the properties of all models, and each model is colored by the selected
+property where it is defined (and hidden otherwise). The color range is shared
+by the selected models.
 """
 function plot_explorer(arg...; kwarg...)
     check_plotting_availability(interactive = true)
