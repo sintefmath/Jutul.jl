@@ -105,7 +105,7 @@ if CUDA.functional()
             b = CuArray(Float32[1, 2])
             x = similar(b)
             ldiv!(x, F, b)
-            @test Array(x) ≈ A \ Array(b)
+            @test Array(x) ≈ Matrix(A) \ Array(b)
         end
     else
         @testset "CUDA CUDSS sparse LU takes precedence" begin

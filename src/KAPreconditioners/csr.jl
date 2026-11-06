@@ -21,8 +21,7 @@ function matrix_backend(A::StaticSparsityMatrixCSR)
 end
 
 # KernelAbstractions backends describe where an array can be used. Backend
-# options may still differ within the same backend type: notably, `CPU` carries
-# a `static` scheduling flag while both variants operate on ordinary `Array`s.
+# options may still differ within the same backend type.
 # Compare backend types when checking storage compatibility instead of backend
 # object identity.
 @inline same_backend(first, second) = typeof(first) === typeof(second)

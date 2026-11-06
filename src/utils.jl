@@ -60,6 +60,47 @@ function convert_to_immutable_storage(v::Any)
     return v
 end
 
+"""
+Largest named tuple of definitions that `foreach_definition` unrolls.
+"""
+const MAX_UNROLLED_DEFINITIONS = 16
+
+"""
+    foreach_definition(f, definitions, collections...)
+
+Call `f(key, definition, (collection[key] for collection in collections)...)` for every
+`key => definition` in `definitions`, in order. A named tuple with at most
+`MAX_UNROLLED_DEFINITIONS` entries is traversed with unrolled calls, so that `f` and the
+lookups in `collections` are compiled for the concrete type of every entry. Dictionaries and
+longer named tuples are traversed with a loop that dispatches at run time.
+"""
+function foreach_definition(f::F, definitions::NamedTuple{names}, collections::Vararg{Any, N}) where {F, names, N}
+    if length(names) <= MAX_UNROLLED_DEFINITIONS
+        # ntuple with a Val length unrolls, and the inlined body sees a constant key
+        ntuple(Val(length(names))) do i
+            @inline
+            key = names[i]
+            f(key, definitions[i], map(collection -> collection[key], collections)...)
+            return nothing
+        end
+    else
+        dynamic_foreach_definition(f, definitions, collections...)
+    end
+    return nothing
+end
+
+function foreach_definition(f::F, definitions, collections::Vararg{Any, N}) where {F, N}
+    dynamic_foreach_definition(f, definitions, collections...)
+    return nothing
+end
+
+function dynamic_foreach_definition(f::F, definitions, collections::Vararg{Any, N}) where {F, N}
+    for (key, definition) in pairs(definitions)
+        f(key, definition, map(collection -> collection[key], collections)...)
+    end
+    return nothing
+end
+
 function convert_to_mutable_storage(v::NamedTuple)
     D = Dict{Symbol, Any}()
     for k in keys(v)

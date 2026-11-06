@@ -29,7 +29,7 @@ function KAPreconditioners.setup_preferred_sparse_lu(
     }
     n = size(A, 1)
     size(A, 2) == n || throw(DimensionMismatch("sparse LU requires a square matrix"))
-    matrix = CUDA.CUSPARSE.CuSparseMatrixCSR{Tv, Ti}(
+    matrix = CUDA.cuSPARSE.CuSparseMatrixCSR{Tv, Ti}(
         A.rowptr, A.colval, A.nzval, size(A)
     )
     solver = lu(matrix)

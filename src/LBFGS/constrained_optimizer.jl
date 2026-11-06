@@ -339,7 +339,6 @@ end
 function get_search_direction(u0, g0, Hi, HiPrev, c)
     # Find search-direction which is (sum of) the projection(s) of Hi*g0
     # restricted to directions with non-active constraints.
-    cnt = 1
     for k in 1:3
         if k == 2
             Hi = deepcopy(HiPrev)
@@ -430,24 +429,23 @@ function get_search_direction(u0, g0, Hi, HiPrev, c)
             return (d, Hi, pg, maxStep)
         else
             # retry with other Hessian approx
-            if !isZero
+            if isZero
                 str = "Small norm of search direction"
             else
-                str = "Non-inceasing search direction"
+                str = "Non-decreasing search direction"
             end
-            if cnt == 1
+            if k == 1
                 print_msg("$str trying previous Hessian approximation.", :yellow)
-            end
-            if cnt == 2
+            elseif k == 2
                 print_msg("$str trying to reset Hessian to identity.", :yellow)
-            end
-            if cnt == 3
+            else
                 print_msg("Exiting: $str", :yellow)
                 d, maxStep = [], []
+                return (d, Hi, pg, maxStep)
             end
         end
     end
-    return (d, Hi, pg, maxStep)
+    return
 end
 
 function project_Q(v, Q, H = nothing)

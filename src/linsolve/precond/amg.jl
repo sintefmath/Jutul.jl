@@ -56,7 +56,10 @@ function amg_coarsening(method::Symbol, theta; second_pass::Bool = true)
     end
 end
 
-function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
+function ka_smoother(method::Symbol; steps = 1, damping = 1.0, ordering = :natural)
+    if ordering != :natural && !(method in (:ilu0, :dilu))
+        throw(ArgumentError("ordering is only supported for ILU0 and DILU"))
+    end
     if method == :default || method == :spai0
         return KAPreconditioners.SPAI0(steps, damping)
     elseif method == :gauss_seidel
@@ -64,9 +67,9 @@ function ka_smoother(method::Symbol; steps = 1, damping = 1.0)
     elseif method == :hybrid_gauss_seidel
         return KAPreconditioners.HybridGaussSeidel(steps, damping)
     elseif method == :ilu0
-        return KAPreconditioners.ILU0(steps, damping)
+        return KAPreconditioners.ILU0(steps, damping; ordering)
     elseif method == :dilu
-        return KAPreconditioners.DILU(steps, damping)
+        return KAPreconditioners.DILU(steps, damping; ordering)
     elseif method == :vendor_ilu
         return KAPreconditioners.VendorILU(steps, damping)
     else
@@ -189,6 +192,9 @@ end
 Wrap a backend-portable smoother in Jutul's preconditioner lifecycle. A symbol
 (`:spai0`, `:gauss_seidel`, `:hybrid_gauss_seidel`, `:ilu0`, `:dilu`, or `:vendor_ilu`) can be supplied
 instead of a smoother config.
+Symbol-based ILU0 and DILU default to `ordering=:auto`: CUDA uses cached
+dependency-level storage and other backends retain natural storage. Pass an
+explicit `ordering` to override this choice.
 """
 mutable struct KASmootherPreconditioner{C} <: JutulPreconditioner
     config::C
@@ -199,8 +205,11 @@ end
 KASmootherPreconditioner(config = KAPreconditioners.SPAI0()) =
     KASmootherPreconditioner(config, nothing, nothing)
 
-function KASmootherPreconditioner(method::Symbol; steps = 1, damping = 1.0)
-    config = ka_smoother(method; steps = steps, damping = damping)
+function KASmootherPreconditioner(method::Symbol; steps = 1, damping = 1.0, ordering = :auto)
+    if ordering == :auto && !(method in (:ilu0, :dilu))
+        ordering = :natural
+    end
+    config = ka_smoother(method; steps, damping, ordering)
     return KASmootherPreconditioner(config)
 end
 
@@ -248,6 +257,9 @@ function ka_smoother_vectors(smoother, x, y)
             )
         )
         scalar_type = eltype(factor_type)
+        eltype(x) === scalar_type && eltype(y) === scalar_type || throw(
+            ArgumentError("flat vectors for a block smoother must have element type $scalar_type")
+        )
         vector_type = SVector{block_size, scalar_type}
         x = unsafe_reinterpret(vector_type, x, length(x) ÷ block_size)
         y = unsafe_reinterpret(vector_type, y, length(y) ÷ block_size)

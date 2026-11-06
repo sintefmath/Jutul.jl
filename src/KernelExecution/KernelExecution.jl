@@ -6,7 +6,7 @@ import Adapt
 import ForwardDiff
 import StaticArrays
 import StaticArrays: StaticArray
-import DataStructures: OrderedDict
+import OrderedCollections: OrderedDict
 
 using ..Jutul
 import ..Jutul: AssembleOnDevice, BilinearInterpolant,

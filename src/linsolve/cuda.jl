@@ -8,8 +8,8 @@ function build_jacobian(sparse_arg, context::SingleCUDAContext, layout)
 
     V = zeros(Jt, length(I))
     jac_cpu = sparse(It.(I), It.(J), V, n, m)
-    jac = CUDA.CUSPARSE.CuSparseMatrixCSC{Ft}(jac_cpu)
-    # A = CUDA.CUSPARSE.CuSparseMatrixBSR{Float64}(sparse(rand(6, 6)), 2)
+    jac = CUDA.cuSPARSE.CuSparseMatrixCSC{Ft}(jac_cpu)
+    # A = CUDA.cuSPARSE.CuSparseMatrixBSR{Float64}(sparse(rand(6, 6)), 2)
     nzval = nonzeros(jac)
     if Ft == Jt
         V_buf = nzval
@@ -39,7 +39,7 @@ function transfer(context::SingleCUDAContext, lsys::LinearizedSystem)
     n = size(A, 1)
 
     # A = sparse(I_t.(I), I_t.(J), F_t.(V), I_t(n), I_t(m))
-    jac = CUDA.CUSPARSE.CuSparseMatrixCSC{F_t}(A)
+    jac = CUDA.cuSPARSE.CuSparseMatrixCSC{F_t}(A)
 
     V_buf = nonzeros(jac)
 

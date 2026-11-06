@@ -505,6 +505,9 @@ function setup_storage_model(storage, model)
     vars[:parameters] = parameters
     vars[:extra_variable_fields] = extra_keys
     storage[:variable_definitions] = vars
+    # Typed equations for the per-iteration loops. Unlike the variables, equations cannot be
+    # replaced after setup since their caches are set up here.
+    storage[:equation_definitions] = NamedTuple(pairs(model.equations))
     # Allow for dispatch specific to model's constitutive parts.
     setup_storage_domain!(storage, model, model.domain)
     setup_storage_system!(storage, model, model.system)
@@ -753,13 +756,13 @@ apply_boundary_conditions!(storage, parameters, model) = nothing
 Update the governing equations using the current set of primary variables, parameters and secondary variables. Does not fill linearized system.
 """
 function update_equations!(storage, model, dt = nothing)
-    update_equations!(storage, storage.equations, model.equations, model, dt)
+    update_equations!(storage, storage.equations, storage.equation_definitions, model, dt)
     return nothing
 end
 
 function update_equations!(storage, equations_storage, equations, model, dt)
-    for (key, eq) in pairs(equations)
-        @tic "$key" update_equation!(equations_storage[key], eq, storage, model, dt)
+    foreach_definition(equations, equations_storage) do key, eq, eq_s
+        @tic "$key" update_equation!(eq_s, eq, storage, model, dt)
     end
     return nothing
 end
@@ -770,7 +773,7 @@ end
 Update the linearized system with the current set of equations.
 """
 function update_linearized_system!(storage, model::JutulModel, executor = default_executor(); lsys = storage.LinearizedSystem, kwarg...)
-    eqs = model.equations
+    eqs = storage.equation_definitions
     eqs_storage = storage.equations
     eqs_views = storage.views.equations
     update_linearized_system!(
@@ -789,15 +792,8 @@ function update_linearized_system!(
         model::JutulModel; equation_offset = 0, r = lsys.r_buffer,
         nzval = lsys.jac_buffer, storage = missing
     )
-    for key in keys(equations)
-        @tic "$key" begin
-            eq = equations[key]
-            eqs_s = eqs_storage[key]
-            r_view = eqs_views[key]
-            update_linearized_system_equation!(
-                nzval, r_view, model, eq, eqs_s, storage
-            )
-        end
+    foreach_definition(equations, eqs_storage, eqs_views) do key, eq, eqs_s, r_view
+        @tic "$key" update_linearized_system_equation!(nzval, r_view, model, eq, eqs_s, storage)
     end
     return nothing
 end
@@ -837,7 +833,7 @@ end
 
 function check_convergence(storage, model, config; kwarg...)
     eqs_views = storage.views.equations
-    eqs = model.equations
+    eqs = storage.equation_definitions
     eqs_s = storage.equations
     if config isa JutulConfig
         cfg_tol = config[:tolerances]
@@ -855,59 +851,63 @@ function check_convergence(
         tol_factor = 1.0,
         kwarg...
     )
-    converged = true
-    e = 0
-    if isnothing(tol)
-        tol = tol_cfg[:default]
-    end
+    # Accumulated over all criteria of all equations: every criterion is evaluated
+    converged = Ref(true)
+    e = Ref(0.0)
     output = []
-
-    for key in keys(eqs)
-        eq = eqs[key]
-        eq_s = eqs_s[key]
-        r_v = eqs_views[key]
+    foreach_definition(eqs, eqs_s, eqs_views) do key, eq, eq_s, r_v
         @tic "$key" all_crits = convergence_criterion(model, storage, eq, eq_s, r_v; kwarg...)
-        e_keys = keys(all_crits)
-        tols = Dict()
-        for e_k in e_keys
-            if haskey(tol_cfg, key)
-                v = tol_cfg[key]
-                if isa(v, AbstractFloat)
-                    t_e = v
-                elseif haskey(v, e_k)
-                    t_e = v[e_k]
-                else
-                    t_e = tol
-                end
-            else
-                t_e = tol
-            end
-            errors = all_crits[e_k].errors
+        tols = map_criteria(e_k -> convergence_tolerance(tol_cfg, key, e_k, tol) * tol_factor, all_crits)
+        foreach_definition(all_crits) do e_k, crit
+            errors = crit.errors
             if minimum(errors) < -10 * eps(Float64)
                 @warn "Negative residuals detected for $key: $e_k. Programming error?" errors
             end
             max_error = maximum(errors)
-            e = max(e, max_error / t_e)
-            t_actual = t_e * tol_factor
-            converged = converged && max_error < t_actual
-            tols[e_k] = t_actual
+            e[] = max(e[], max_error / convergence_tolerance(tol_cfg, key, e_k, tol))
+            converged[] = converged[] && max_error < tols[e_k]
         end
         if extra_out
             push!(output, (name = key, criterions = all_crits, tolerances = tols))
         end
     end
     if extra_out
-        return (converged, e, output)
+        return (converged[], e[], output)
     else
-        return converged
+        return converged[]
     end
 end
+
+"""
+    convergence_tolerance(tol_cfg, equation, criterion, tol)
+
+Tolerance for a convergence criterion of an equation: the number given for the equation in
+`tol_cfg`, else the value given there for the criterion, else `tol`, or `tol_cfg[:default]`
+if `tol` is `nothing`.
+"""
+function convergence_tolerance(tol_cfg, equation, criterion, tol)
+    if haskey(tol_cfg, equation)
+        v = tol_cfg[equation]
+        if isa(v, AbstractFloat)
+            return v
+        elseif haskey(v, criterion)
+            return v[criterion]
+        end
+    end
+    # Resolved here rather than once per call: the closures in check_convergence then
+    # capture `tol` with a type known at compile time
+    return isnothing(tol) ? tol_cfg[:default] : tol
+end
+
+map_criteria(f, criteria::NamedTuple{names}) where {names} = NamedTuple{names}(map(f, names))
+map_criteria(f, criteria) = Dict(k => f(k) for k in keys(criteria))
 
 """
 Apply a set of forces to all equations. Equations that don't support a given force
 will just ignore them, thanks to the power of multiple dispatch.
 """
 function apply_forces!(storage, model, dt, forces; time = NaN)
+    isempty(forces) && return
     equations = model.equations
     equations_storage = storage.equations
     for key in keys(equations)
@@ -960,15 +960,14 @@ end
 
 function update_primary_variables!(primary_storage, dx, model::JutulModel, primary = get_primary_variables(model); relaxation = 1.0, check = false, state = missing)
     report = Dict{Symbol, Any}()
-    for (pkey, p) in pairs(primary)
-        dxi = dx[pkey]
+    foreach_definition(primary, dx, primary_storage) do pkey, p, dxi, x
         if check
             ok = check_increment(dxi, p, pkey)
             if !ok
                 error("Primary variables recieved invalid updates.")
             end
         end
-        report[pkey] = increment_norm(dxi, state, model, primary_storage[pkey], p)
+        report[pkey] = increment_norm(dxi, state, model, x, p)
         @tic "$pkey" update_primary_variable!(primary_storage, p, pkey, model, dxi, relaxation)
     end
     return report
@@ -983,20 +982,27 @@ function increment_norm(dX, state, model, X, pvar)
 end
 
 """
+    update_before_step!(storage, model, dt, forces; time = NaN, recorder, update_explicit = true)
 
+Prepare the storage for a step: call `update_parameter_before_step!` once for every
+parameter, then the domain, system and formulation hooks
+`update_before_step!(storage, model.domain, model, dt, forces; kwarg...)` etc. (no-ops by
+default).
 """
 function update_before_step!(storage, model, dt, forces; kwarg...)
+    update_parameters_before_step!(storage.state, storage.variable_definitions.parameters, storage, model, dt, forces)
     update_before_step!(storage, model.domain, model, dt, forces; kwarg...)
     update_before_step!(storage, model.system, model, dt, forces; kwarg...)
     return update_before_step!(storage, model.formulation, model, dt, forces; kwarg...)
 end
 
-function update_before_step!(storage, ::Any, model, dt, forces; time = NaN, recorder = ProgressRecorder(), update_explicit = true)
-    state = storage.state
-    for (k, prm) in pairs(storage.variable_definitions.parameters)
-        update_parameter_before_step!(state[k], prm, storage, model, dt, forces)
+update_before_step!(storage, ::Any, model, dt, forces; kwarg...) = nothing
+
+function update_parameters_before_step!(state, parameters, storage, model, dt, forces)
+    foreach_definition(parameters, state) do key, prm, value
+        update_parameter_before_step!(value, prm, storage, model, dt, forces)
     end
-    return
+    return nothing
 end
 
 function update_after_step!(storage, model, dt, forces; kwarg...)
