@@ -50,7 +50,8 @@ cell data), `dynamic` (`Vector` of `Dict`s, one per entry in `dynamic`) and
 GUI, where the main mesh is named by the `mesh_name` keyword. The property menus
 list the properties of all models, and each model is colored by the selected
 property where it is defined (and hidden otherwise). The color range is shared
-by the selected models.
+by the selected models. The filter sliders can be set for all models or for one
+model at a time.
 """
 function plot_explorer(arg...; kwarg...)
     check_plotting_availability(interactive = true)

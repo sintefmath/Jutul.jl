@@ -399,6 +399,13 @@ function Jutul.plot_explorer_impl(
         is_global_limit = Observable(false)
         is_independent = Observable(false)
     end
+    if HAS_SUBMODELS
+        # Filters can be set for all models or for one model at a time
+        menu_filter = add_menu!(["All models"; map(x -> x.name, explorer_models)], "Filter")
+        filter_target = menu_filter.selection
+    else
+        filter_target = Observable("All models")
+    end
 
     # Label(right_grid_layout[idx_right_gl, 4:5], "static", justification = :right, color = main_color)
     menu_cell = add_menu!(plot_keys, "Static", pos_static)
@@ -495,6 +502,48 @@ function Jutul.plot_explorer_impl(
         sel_dyn = Observable("No dynamic data")
         value_dynamic = Observable((0.0, 1.0))
     end
+    # Filter intervals for each model. The sliders edit the intervals of the
+    # model selected in the filter menu (or all models).
+    model_names = map(x -> x.name, explorer_models)
+    static_bounds = Observable(fill(value_static[], length(explorer_models)))
+    dynamic_bounds = Observable(fill(value_dynamic[], length(explorer_models)))
+    updating_sliders = Ref(false)
+    function set_filter_bounds!(bounds, interval)
+        if !updating_sliders[]
+            target = filter_target[]
+            if target == "All models"
+                fill!(bounds[], interval)
+            else
+                bounds[][findfirst(isequal(target), model_names)] = interval
+            end
+            notify(bounds)
+        end
+    end
+    on(interval -> set_filter_bounds!(static_bounds, interval), value_static)
+    on(interval -> set_filter_bounds!(dynamic_bounds, interval), value_dynamic)
+    function target_bounds(bounds, target)
+        if target == "All models"
+            if all(isequal(first(bounds)), bounds)
+                return first(bounds)
+            else
+                return (0.0, 1.0)
+            end
+        else
+            return bounds[findfirst(isequal(target), model_names)]
+        end
+    end
+    on(filter_target) do target
+        # Show the intervals of the selected model on the sliders
+        updating_sliders[] = true
+        try
+            set_close_to!(slider_static, target_bounds(static_bounds[], target)...)
+            if HAS_DYNAMIC_DATA
+                set_close_to!(slider_dynamic, target_bounds(dynamic_bounds[], target)...)
+            end
+        finally
+            updating_sliders[] = false
+        end
+    end
     if HAS_SENS
         menu_sens = add_menu!(keys(sens), "Sensitivities")
         sel_sens = menu_sens.selection
@@ -531,9 +580,9 @@ function Jutul.plot_explorer_impl(
         # - Return the values of the selected models for histogram
         # - Update the vertex buffers for the mesh plotting
         static_lims, dynamic_lims = lims_active
-        for (x, is_active) in zip(explorer_models, active)
-            if is_active
-                update_model_values!(x, static_lims, dynamic_lims, static_key, dyn_key, step_idx, bounds_static, bounds_dynamic, is_dyn, is_indep, is_glob, to_symlog, use_highclip, verbose)
+        for (i, x) in enumerate(explorer_models)
+            if active[i]
+                update_model_values!(x, static_lims, dynamic_lims, static_key, dyn_key, step_idx, bounds_static[i], bounds_dynamic[i], is_dyn, is_indep, is_glob, to_symlog, use_highclip, verbose)
             end
         end
         if HAS_SENS
@@ -604,7 +653,7 @@ function Jutul.plot_explorer_impl(
 
     use_symlog = symlog_toggle.checked
     # cdata_face = @lift get_mesh_plot($sel, $sel_dyn, $step_idx, $value_static, $value_dynamic, $is_dynamic, $is_global_limit, $use_symlog, do_map = true)
-    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $sel_sens, $step_idx, $value_static, $value_dynamic, $value_sens, $is_dynamic, $is_independent, $is_global_limit, $use_symlog, $active_models, $active_limits)
+    cdata_cells = @lift update_cell_values($sel, $sel_dyn, $sel_sens, $step_idx, $static_bounds, $dynamic_bounds, $value_sens, $is_dynamic, $is_independent, $is_global_limit, $use_symlog, $active_models, $active_limits)
     lims = @lift coalesce(get_limits($active_limits..., $sel, $sel_dyn, $is_dynamic, $step_idx, $is_global_limit, $use_symlog), (0.0, 1.0))
     if use_highclip
         mesh_arg = (highclip = :transparent,)
