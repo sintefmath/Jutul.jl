@@ -180,6 +180,43 @@ function sparse_prolongation(P)
     return sparse(rows, Array(P.colval)[1:nnz], Array(P.nzval)[1:nnz], P.nrow, P.ncol)
 end
 
+@testset "SPAI0 row norms at extreme real scales" begin
+    base = sparse([4.0 -1 0 0; -2 5 -1 0; 0 -1 3 0; 0 0 0 0])
+    for (T, small, large) in ((Float32, 1.0f-25, 1.0f25), (Float64, 1.0e-200, 1.0e200))
+        A = SparseMatrixCSC{T, Int}(base)
+        config = SPAI0(1, 0.7)
+        expected = T(0.7) .* T[4/17, 5/30, 3/10, 0]
+        state = setup_smoother(csr_matrix(A), config)
+        for scale in (small, -small, large, -large)
+            C = csr_matrix(scale * A)
+            update_smoother!(state, C)
+            @test all(isfinite, state.diagonal)
+            @test scale .* state.diagonal ≈ expected
+            @test state * (scale .* ones(T, 4)) ≈ expected
+
+            # Exercise the shared setup kernel as well as the CPU row loop.
+            d = fill(T(NaN), 4)
+            KAPreconditioners.spai0_setup_kernel!(CPU(), 128)(
+                d, C.rowptr, C.colval, C.nzval, T(0.7), 4; ndrange = 4
+            )
+            KernelAbstractions.synchronize(CPU())
+            @test scale .* d ≈ expected
+        end
+
+        A = SparseMatrixCSC{T, Int}(poisson_2d(4))
+        options = AMGOptions(coarse_size = 3)
+        H = setup_amg(A, options)
+        rhs = ones(T, size(A, 1))
+        expected_solution = H * rhs
+        for scale in (small, large)
+            fresh = setup_amg(scale * A, options)
+            @test fresh * (scale .* rhs) ≈ expected_solution
+            resetup_amg!(H, scale * A, :sparsity)
+            @test H * (scale .* rhs) ≈ expected_solution
+        end
+    end
+end
+
 function test_galerkin(H)
     for l in 1:(length(H.levels) - 1)
         fine = KAPreconditioners.sparse_matrix(H.levels[l].A)
