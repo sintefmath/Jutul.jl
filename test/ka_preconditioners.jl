@@ -437,6 +437,28 @@ end
     end
 end
 
+@testset "Interpolation truncation across weight scales" begin
+    cf, cmap = Int8[-1, 1, 1], Int32[0, 1, 2]
+    for (T, small) in ((Float32, 1.0f-25), (Float64, 1.0e-200))
+        for diagonal in (small, inv(small))
+            A = sparse(T[diagonal -0.4 -1; 0 1 0; 0 0 1])
+            C = csr_matrix(A)
+            strong = KAPreconditioners.strength(C, 0.25, 1.0; strength_type = :signed)
+            for interpolation in (ClassicalInterpolation, ExtendedIInterpolation),
+                    rescale in (false, true), (truncation, maximum) in ((0.3, 0), (0.0, 1))
+                config = interpolation(truncation, maximum, 2, rescale)
+                P = KAPreconditioners.build_prolongation(C, cf, cmap, 2, strong, config)
+                row = P.rowptr[1]:(P.rowptr[2] - 1)
+                @test P.colval[row] == Int32[2]
+                @test diagonal * only(P.nzval[row]) ≈ (rescale ? T(1.4) : one(T))
+            end
+        end
+        @test KAPreconditioners.candidate_count(
+            zeros(T, 3), ExtendedIInterpolation(0.3, 0, 2)
+        ) == 3
+    end
+end
+
 function test_numeric_interpolation_tuning(backend)
     # Include a strong F-F edge, weak entries, and a distance-two-only coarse
     # point. The correct untruncated row sums are deliberately below one.

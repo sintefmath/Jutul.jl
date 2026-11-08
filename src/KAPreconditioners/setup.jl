@@ -971,15 +971,16 @@ end
     end
 end
 
-function sort_candidates!(cols, vals, p::Int)
+function sort_candidates!(cols, vals, ::Int)
     # Distance-two candidate sets are small; insertion sort avoids allocating a
     # Pair vector and its sorting workspace for every fine row.
     @inbounds for q in 2:length(cols)
         col, value = cols[q], vals[q]
-        score = candidate_score(value, p)
+        # Positive powers preserve ordering, but can overflow or underflow.
+        score = abs(value)
         pos = q
         while pos > 1
-            previous = candidate_score(vals[pos - 1], p)
+            previous = abs(vals[pos - 1])
             (score > previous || (score == previous && col < cols[pos - 1])) || break
             cols[pos], vals[pos] = cols[pos - 1], vals[pos - 1]
             pos -= 1
@@ -1010,11 +1011,13 @@ end
         min(length(vals), interpolation.max_elements)
     end
     if interpolation.truncation > 0
-        leading_score = candidate_score(vals[1], interpolation.norm_p)
-        truncation = convert(typeof(leading_score), interpolation.truncation)
-        cutoff = truncation * leading_score
+        leading = abs(vals[1])
+        iszero(leading) && return count
+        truncation = convert(typeof(leading), interpolation.truncation)
         @inbounds for q in 1:count
-            if candidate_score(vals[q], interpolation.norm_p) < cutoff
+            # Normalize before taking powers so representable interpolation
+            # weights remain comparable at very small or large magnitudes.
+            if candidate_score(vals[q] / leading, interpolation.norm_p) < truncation
                 return q - 1
             end
         end
