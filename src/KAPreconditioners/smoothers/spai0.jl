@@ -11,7 +11,7 @@ end
 
 @inline spai0_inverse(diagonal, scale, damping) = damping * inv(diagonal)
 
-@inline function spai0_row_inverse(diagonal::Number, scale, damping, rp, values, row)
+@inline function spai0_row_inverse(diagonal::Number, scale::AbstractFloat, damping, rp, values, row)
     if isfinite(scale) && scale >= floatmin(typeof(scale))
         return spai0_inverse(diagonal, scale, damping)
     end

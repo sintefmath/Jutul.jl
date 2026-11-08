@@ -185,7 +185,7 @@ end
     for (T, small, large) in ((Float32, 1.0f-25, 1.0f25), (Float64, 1.0e-200, 1.0e200))
         A = SparseMatrixCSC{T, Int}(base)
         config = SPAI0(1, 0.7)
-        expected = T(0.7) .* T[4/17, 5/30, 3/10, 0]
+        expected = T(0.7) .* T[4 / 17, 5 / 30, 3 / 10, 0]
         state = setup_smoother(csr_matrix(A), config)
         for scale in (small, -small, large, -large)
             C = csr_matrix(scale * A)
@@ -214,6 +214,25 @@ end
             resetup_amg!(H, scale * A, :sparsity)
             @test H * (scale .* rhs) ≈ expected_solution
         end
+    end
+end
+
+@testset "SPAI0 exact scalar types" begin
+    for (diagonal, expected) in (
+            (ones(Int, 2), ones(Int, 2)),
+            (Rational{Int}[2 // 1, 3 // 1], Rational{Int}[1 // 2, 1 // 3]),
+        )
+        T = eltype(diagonal)
+        C = csr_matrix(spdiagm(0 => diagonal))
+        state = setup_smoother(C, SPAI0())
+        @test state.diagonal == expected
+        @test state * ones(T, 2) == expected
+        coefficients = zeros(T, 2)
+        KAPreconditioners.spai0_setup_kernel!(CPU(), 128)(
+            coefficients, C.rowptr, C.colval, C.nzval, one(T), 2; ndrange = 2
+        )
+        KernelAbstractions.synchronize(CPU())
+        @test coefficients == expected
     end
 end
 
@@ -833,9 +852,9 @@ end
             level = H.levels[1]
             stage_cf = aggressive_levels == 1 ? Int8[-1, -1, 1, -1] : expected_cf
             @test level.cf == stage_cf
-            @test vec(Matrix(sparse_prolongation(level.P))) ≈ [0, 1/3, 1, 1/3]
+            @test vec(Matrix(sparse_prolongation(level.P))) ≈ [0, 1 / 3, 1, 1 / 3]
             resetup_amg!(H, 2A, :sparsity)
-            @test vec(Matrix(sparse_prolongation(level.P))) ≈ [0, 1/3, 1, 1/3]
+            @test vec(Matrix(sparse_prolongation(level.P))) ≈ [0, 1 / 3, 1, 1 / 3]
             resetup_amg!(H, A, :memory)
             @test H.levels[1].cf == stage_cf
             test_galerkin(H)
@@ -867,10 +886,12 @@ end
     cf, _, nc = KAPreconditioners.cf_split(C, strong, coarsening)
     @test cf == Int8[1, -3, -1, -1]
     @test nc == 1
-    H = setup_amg(A, AMGOptions(;
-        coarsening, interpolation = ExtendedIInterpolation(), max_row_sum = 1.0,
-        coarse_size = 1, max_levels = 2
-    ))
+    H = setup_amg(
+        A, AMGOptions(;
+            coarsening, interpolation = ExtendedIInterpolation(), max_row_sum = 1.0,
+            coarse_size = 1, max_levels = 2
+        )
+    )
     @test vec(Matrix(sparse_prolongation(H.levels[1].P))) ≈ [1, 0, 0.2, 0.2]
     cf, _, _ = KAPreconditioners.cf_split(C, strong, RugeStuben())
     @test cf == Int8[1, -3, -1, 1]
@@ -905,8 +926,12 @@ function test_two_stage_interpolation(backend)
 
     # ExtPI normalizes special F markers before building P2. Row 5 must
     # include its coupling to point 6 in the partial interpolation diagonal.
-    A = sparse([4.0 0 0 -3 -0.5 0; 0 4 0 -0.2 0 -3; 0 0 4 -1 -3 0;
-        0 -3 0 4 0 0; -2 0 0 -0.5 6 -3; 0 0 0 0 0 1])
+    A = sparse(
+        [
+            4.0 0 0 -3 -0.5 0; 0 4 0 -0.2 0 -3; 0 0 4 -1 -3 0;
+            0 -3 0 4 0 0; -2 0 0 -0.5 6 -3; 0 0 0 0 0 1
+        ]
+    )
     options = AMGOptions(
         coarsening = HMIS(0.25), aggressive_levels = 1,
         aggressive_interpolation = TwoStageExtendedIInterpolation(),
@@ -916,11 +941,11 @@ function test_two_stage_interpolation(backend)
     level = H.levels[1]
     @test Array(level.aggressive.first_cf) == Int8[-1, 1, -1, 1, 1, -3]
     @test Array(level.cf) == Int8[-1, 1, -1, 1, -1, -1]
-    expected = [0 6/7; 1 0; 0 131/152; 0 1; 0 31/38; 0 0]
+    expected = [0 6 / 7; 1 0; 0 131 / 152; 0 1; 0 31 / 38; 0 0]
     @test Matrix(sparse_prolongation(level.P)) ≈ expected
     B = copy(A)
     B[5, 6] = -2
-    updated = [0 6/7; 1 0; 0 145/208; 0 1; 0 31/52; 0 0]
+    updated = [0 6 / 7; 1 0; 0 145 / 208; 0 1; 0 31 / 52; 0 0]
     for mode in (:sparsity, :memory)
         resetup_amg!(H, csr_matrix(2B; backend), mode)
         @test Matrix(sparse_prolongation(H.levels[1].P)) ≈ updated
