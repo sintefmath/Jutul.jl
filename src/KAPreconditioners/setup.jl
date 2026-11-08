@@ -176,12 +176,11 @@ end
     return nothing
 end
 
-@inline function bucket_move!(
-        i::Int, value::Int, measure::Vector{Int},
+@inline function bucket_insert!(
+        i::Int, value::Int,
         head::Vector{Int}, tail::Vector{Int},
         next::Vector{Int}, prev::Vector{Int}
     )
-    bucket_remove!(i, measure, head, tail, next, prev)
     bucket = value + 1
     if bucket > length(head)
         old = length(head)
@@ -191,7 +190,6 @@ end
         fill!(view(tail, (old + 1):bucket), 0)
     end
     @inbounds begin
-        measure[i] = value
         p = tail[bucket]
         tail[bucket] = i
         prev[i] = p
@@ -205,11 +203,22 @@ end
     return nothing
 end
 
+@inline function bucket_move!(
+        i::Int, value::Int, measure::Vector{Int},
+        head::Vector{Int}, tail::Vector{Int},
+        next::Vector{Int}, prev::Vector{Int}
+    )
+    bucket_remove!(i, measure, head, tail, next, prev)
+    @inbounds measure[i] = value
+    bucket_insert!(i, value, head, tail, next, prev)
+    return nothing
+end
+
 
 """HYPRE-compatible RS first pass shared by classical RS and HMIS."""
 function hmis_rs_first_pass!(
         A::StaticSparsityMatrixCSR, strong, offsets, sources, cf,
-        workspace = nothing
+        workspace = nothing; keep_isolated::Bool = false
     )
     n = matrix_nrows(A)
     measure = host_buffer(optional_property(workspace, :int1), Int, n)
@@ -217,7 +226,8 @@ function hmis_rs_first_pass!(
         measure[i] = offsets[i + 1] - offsets[i]
     end
 
-    # HYPRE uses Z_PT (-2) for zero-measure points in the HMIS first pass.
+    # Rows with no strong dependencies are special F points (SF_PT), even
+    # when other rows depend on them. Aggressive second graphs retain them.
     @inbounds for i in 1:n
         has_out = false
         for k in nzrange(A, i)
@@ -226,19 +236,11 @@ function hmis_rs_first_pass!(
                 break
             end
         end
-        !has_out && measure[i] == 0 && (cf[i] = Int8(-2))
-    end
-    @inbounds for i in 1:n
-        cf[i] == 0 || continue
-        if measure[i] == 0
-            cf[i] = Int8(-2)
-            for k in nzrange(A, i)
-                j = Int(A.colval[k])
-                strong[k] && cf[j] == 0 && (measure[j] += 1)
-            end
+        if !has_out
+            cf[i] = keep_isolated ? Int8(1) : Int8(-3)
+            measure[i] = 0
         end
     end
-
     top = 0
     @inbounds for i in 1:n
         cf[i] == 0 && (top = max(top, measure[i]))
@@ -261,14 +263,24 @@ function hmis_rs_first_pass!(
     )
     @inbounds for i in 1:n
         cf[i] == 0 || continue
-        bucket = measure[i] + 1
-        p = tail[bucket]
-        tail[bucket] = i
-        prev[i] = p
-        if p == 0
-            head[bucket] = i
+        if measure[i] > 0
+            bucket_insert!(i, measure[i], head, tail, next, prev)
         else
-            next[p] = i
+            # Match HYPRE's initialization order: update points already on
+            # the lists immediately, and insert later points at their turn.
+            # Batching these updates changes ties in the maximum bucket.
+            cf[i] = Int8(-2)
+            for k in nzrange(A, i)
+                j = Int(A.colval[k])
+                strong[k] && cf[j] == 0 || continue
+                value = measure[j] + 1
+                if j < i
+                    bucket_move!(j, value, measure, head, tail, next, prev)
+                else
+                    measure[j] = value
+                end
+                top = max(top, value)
+            end
         end
     end
 
@@ -387,17 +399,20 @@ end
 
 function cf_split(
         A::StaticSparsityMatrixCSR{Tv, Ti}, strong, coarsening::RugeStuben,
-        reuse_cf = nothing, reuse_map = nothing, workspace = nothing
+        reuse_cf = nothing, reuse_map = nothing, workspace = nothing;
+        keep_isolated::Bool = false
     ) where {Tv, Ti}
     n = matrix_nrows(A)
     cf = host_buffer(reuse_cf, Int8, n; zeroed = true)
     offsets, sources = strong_transpose(A, strong, workspace)
-    hmis_rs_first_pass!(A, strong, offsets, sources, cf, workspace)
+    hmis_rs_first_pass!(A, strong, offsets, sources, cf, workspace; keep_isolated)
     @inbounds for i in eachindex(cf)
-        cf[i] = cf[i] == 1 ? Int8(1) : Int8(-1)
+        cf[i] in (1, -3) || (cf[i] = Int8(-1))
     end
-    promote_uncovered_f_points!(A, strong, cf)
-    coarsening.second_pass && ruge_stuben_second_pass!(A, strong, cf, workspace)
+    if coarsening.second_pass
+        ruge_stuben_second_pass!(A, strong, cf, workspace)
+        promote_uncovered_f_points!(A, strong, cf)
+    end
 
     coarse_map = host_buffer(reuse_map, Ti, n; zeroed = true)
     nc = rebuild_coarse_map!(coarse_map, cf)
@@ -427,7 +442,9 @@ end
 function hmis_pmis_finish!(A::StaticSparsityMatrixCSR, strong, cf, measure)
     n = matrix_nrows(A)
     @inbounds for i in 1:n
-        if cf[i] == -1
+        if cf[i] == -3
+            measure[i] = 0.0
+        elseif cf[i] == -1
             cf[i] = 0
         elseif cf[i] == -2
             has_out = false
@@ -506,12 +523,13 @@ end
 
 function cf_split(
         A::StaticSparsityMatrixCSR{Tv, Ti}, strong, ::HMIS,
-        reuse_cf = nothing, reuse_map = nothing, workspace = nothing
+        reuse_cf = nothing, reuse_map = nothing, workspace = nothing;
+        keep_isolated::Bool = false
     ) where {Tv, Ti}
     n = matrix_nrows(A)
     cf = host_buffer(reuse_cf, Int8, n; zeroed = true)
     offsets, sources = strong_transpose(A, strong, workspace)
-    hmis_rs_first_pass!(A, strong, offsets, sources, cf, workspace)
+    hmis_rs_first_pass!(A, strong, offsets, sources, cf, workspace; keep_isolated)
     measure = hypre_randomized_measure(offsets, n, workspace)
     hmis_pmis_finish!(A, strong, cf, measure)
 
@@ -655,7 +673,7 @@ function aggressive_cf_split(
         A, strong, first_cf, first_map, first_count, num_paths
     )
     second_cf, _, _ = cf_split(
-        second_graph, second_strength, coarsening
+        second_graph, second_strength, coarsening; keep_isolated = true
     )
 
     # HYPRE retains isolated first-pass C points. Create2ndS marks these
@@ -669,7 +687,7 @@ function aggressive_cf_split(
     coarse_map = host_buffer(reuse_map, Ti, n; zeroed = true)
     @inbounds for i in 1:n
         retained = first_cf[i] == 1 && second_cf[first_map[i]] == 1
-        cf[i] = retained ? Int8(1) : Int8(-1)
+        cf[i] = first_cf[i] == -3 ? Int8(-3) : retained ? Int8(1) : Int8(-1)
     end
     nc = repair_aggressive_split!(
         A, strong, cf, coarse_map, interpolation
@@ -682,15 +700,13 @@ function contracted_strength_graph(
     ) where {Tv, Ti}
     nc = Int(nc)
     row_columns = [Ti[] for _ in 1:nc]
-    marker = zeros(Int, nc)
     @inbounds for i in 1:matrix_nrows(A)
         I = Int(aggregate[i])
         columns = row_columns[I]
         for aidx in nzrange(A, i)
             strong[aidx] || continue
             J = Int(aggregate[A.colval[aidx]])
-            if J != I && marker[J] != I
-                marker[J] = I
+            if J != I
                 push!(columns, Ti(J))
             end
         end
@@ -698,7 +714,10 @@ function contracted_strength_graph(
     rowptr = Vector{Ti}(undef, nc + 1)
     rowptr[1] = one(Ti)
     @inbounds for I in 1:nc
+        # Fine rows belonging to an aggregate need not be contiguous. A
+        # single shared marker can be overwritten by an intervening aggregate.
         sort!(row_columns[I])
+        unique!(row_columns[I])
         rowptr[I + 1] = rowptr[I] + Ti(length(row_columns[I]))
     end
     colval = Vector{Ti}(undef, Int(rowptr[end] - one(Ti)))
@@ -783,13 +802,15 @@ end
 
 function scale_candidate_weights!(
         values::Vector{Tv},
-        effective_diagonal
+        effective_diagonal, zero_on_zero_diagonal::Bool = false
     ) where {Tv}
     if !iszero(effective_diagonal)
         scale = -inv(effective_diagonal)
         @inbounds for q in eachindex(values)
             values[q] *= scale
         end
+    elseif zero_on_zero_diagonal
+        fill!(values, zero(Tv))
     end
     return nothing
 end
@@ -882,7 +903,7 @@ function candidate_weights!(
             else
                 effective_diagonal += aij
             end
-        else
+        elseif cf[j] != -3
             effective_diagonal += aij
         end
     end
@@ -903,6 +924,7 @@ function candidate_weights!(
     @inbounds for k in nzrange(A, i)
         j = A.colval[k]
         j == i && continue
+        cf[j] == -3 && continue
         if strong[k] && cf[j] == 1
             accumulate_candidate!(cols, vals, cmap[j], A.nzval[k])
         elseif !strong[k]
@@ -915,10 +937,12 @@ function candidate_weights!(
     @inbounds for k in nzrange(A, i)
         j = A.colval[k]
         strong[k] && cf[j] == -1 || continue
+        sign_j = real(interpolation_diagonal(diagonal, j)) < 0 ? -1 : 1
         denominator = zero(Tv)
         for q in nzrange(A, j)
             l = A.colval[q]
             cf[l] == 1 || continue
+            sign_j * real(A.nzval[q]) < 0 || continue
             candidate_present(cols, cmap[l]) && (denominator += A.nzval[q])
         end
         if !iszero(denominator)
@@ -926,6 +950,7 @@ function candidate_weights!(
             for q in nzrange(A, j)
                 l = A.colval[q]
                 cf[l] == 1 || continue
+                sign_j * real(A.nzval[q]) < 0 || continue
                 position = candidate_index(cols, cmap[l])
                 iszero(position) || (vals[position] += distribute * A.nzval[q])
             end
@@ -934,7 +959,8 @@ function candidate_weights!(
         end
     end
 
-    return scale_candidate_weights!(vals, effective_diagonal)
+    # Classical interpolation uses zero weights for a zero effective diagonal.
+    return scale_candidate_weights!(vals, effective_diagonal, true)
 end
 
 @inline function candidate_score(value, p::Int)
@@ -2066,8 +2092,8 @@ function build_hierarchy(
                 old_cf, old_map, workspace
             )
             if options.coarsening isa HMIS && interpolation isa ClassicalInterpolation
-                promote_uncovered_f_points!(current, strong, cf)
                 ruge_stuben_second_pass!(current, strong, cf, workspace)
+                promote_uncovered_f_points!(current, strong, cf)
                 nc = rebuild_coarse_map!(cmap, cf)
             end
             nc == 0 && break

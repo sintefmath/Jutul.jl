@@ -176,14 +176,11 @@ end
             total += aij
             cmap[j] == J && (selected += aij)
         elseif strong[k] && cf[j] == -1
-            sign_j = 1
-            if extended
-                diag_j = zero(T)
-                for q in arp[j]:(arp[j + 1] - 1)
-                    acv[q] == j && (diag_j += av[q])
-                end
-                sign_j = real(diag_j) < 0 ? -1 : 1
+            diag_j = zero(T)
+            for q in arp[j]:(arp[j + 1] - 1)
+                acv[q] == j && (diag_j += av[q])
             end
+            sign_j = real(diag_j) < 0 ? -1 : 1
             denominator = zero(T)
             coarse_sum = zero(T)
             coupling = zero(T)
@@ -191,7 +188,7 @@ end
             for q in arp[j]:(arp[j + 1] - 1)
                 l, ajl = acv[q], av[q]
                 l == j && continue
-                extended && sign_j * real(ajl) >= 0 && continue
+                sign_j * real(ajl) >= 0 && continue
                 if extended && l == i
                     denominator += ajl
                     back += ajl
@@ -210,7 +207,7 @@ end
             else
                 diagonal += aij
             end
-        else
+        elseif cf[j] != -3
             diagonal += aij
         end
     end
@@ -234,6 +231,8 @@ end
                 )
                 scale = if !iszero(diagonal)
                     -inv(diagonal)
+                elseif !extended
+                    zero(eltype(pv))
                 else
                     one(eltype(pv))
                 end

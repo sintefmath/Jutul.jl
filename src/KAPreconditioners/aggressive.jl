@@ -9,11 +9,15 @@ function build_aggressive_prolongation(A, strong, options, interpolation::TwoSta
         A, strong, first_cf, first_map,
         first_count, options.aggressive_num_paths
     )
-    second_cf, _, _ = cf_split(graph, graph_strength, options.coarsening)
+    second_cf, _, _ = cf_split(
+        graph, graph_strength, options.coarsening; keep_isolated = true
+    )
     for I in eachindex(second_cf)
         isempty(nzrange(graph, I)) && (second_cf[I] = Int8(1))
     end
     rows = findall(==(Int8(1)), first_cf)
+    # ExtPI normalizes SF_PT to F_PT after P1. Partial interpolation must
+    # therefore include those couplings, while P1 keeps its original markers.
     cf = fill(Int8(-1), length(first_cf))
     for i in rows
         second_cf[first_map[i]] == 1 && (cf[i] = Int8(1))

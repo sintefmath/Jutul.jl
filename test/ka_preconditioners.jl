@@ -468,6 +468,92 @@ end
     test_numeric_interpolation_tuning(CPU())
 end
 
+function test_classical_interpolation_regressions(backend)
+    config = ClassicalInterpolation()
+    # Both diagonal signs must exclude same-sign coarse couplings in the
+    # strong F-neighbor row. Long rows also exercise the CPU candidate path.
+    for sign in (1.0, -1.0), nweak in (0, 14)
+        n = 4 + nweak
+        A = spdiagm(0 => fill(4.0, n))
+        A[1:4, 1:4] = [4.0 -1 -1 -1; -1 4 -2 1; -1 -2 4 -1; -1 1 -1 4]
+        for j in 5:n
+            A[1, j] = 0.01
+        end
+        A *= sign
+        C = csr_matrix(A)
+        cf = vcat(Int8[-1, -1], ones(Int8, n - 2))
+        cmap = vcat(Int32[0, 0], Int32.(1:(n - 2)))
+        strong = KAPreconditioners.strength(C, 0.25, 1.0; strength_type = :signed)
+        P = KAPreconditioners.build_prolongation(C, cf, cmap, n - 2, strong, config)
+        row = P.rowptr[1]:(P.rowptr[2] - 1)
+        expected = [2.0, 1.0] ./ (4.0 + 0.01 * nweak)
+        @test P.colval[row] == Int32[1, 2]
+        @test P.nzval[row] ≈ expected
+
+        # The positive coupling now exactly cancels the negative one if the
+        # sign filter is missing. It must not change this interpolation row.
+        B = copy(A)
+        B[2, 4] = 2sign
+        BC = csr_matrix(B)
+        if backend isa CPU
+            KAPreconditioners.update_cpu_prolongation!(P, BC, cf, cmap, strong, config, nothing)
+            @test P.nzval[row] ≈ expected
+        end
+        D = csr_matrix(B; backend)
+        dp = KAPreconditioners.backend_copy(backend, P.nzval)
+        drp = KAPreconditioners.backend_copy(backend, P.rowptr)
+        dcv = KAPreconditioners.backend_copy(backend, P.colval)
+        dcf = KAPreconditioners.backend_copy(backend, cf)
+        dmap = KAPreconditioners.backend_copy(backend, cmap)
+        ds = KAPreconditioners.backend_copy(backend, strong)
+        KAPreconditioners.update_interpolation_p_kernel!(backend, 128)(
+            dp, drp, dcv, D.rowptr, D.colval, D.nzval, dcf, dmap, ds,
+            false, true, n; ndrange = n
+        )
+        KAPreconditioners.synchronize_backend(backend)
+        @test Array(dp)[row] ≈ expected
+    end
+
+    # This SPD matrix has a zero effective diagonal in row 1: its weak
+    # connection -1 cancels the diagonal. Hypre sets classical weights to zero.
+    A = sparse([1.0 -2 -1 0 0; -2 100 0 -10 0; -1 0 100 0 -10; 0 -10 0 100 0; 0 0 -10 0 100])
+    @test isposdef(Matrix(A))
+    C = csr_matrix(A)
+    strong = KAPreconditioners.strength(C, 0.5, 1.0; strength_type = :signed)
+    cf, cmap, nc = KAPreconditioners.cf_split(C, strong, RugeStuben(0.5))
+    @test cf[1] == -1
+    for scale in (1.0, 3.0, 1.0e-20, 1.0e20)
+        C = csr_matrix(scale * A)
+        P = KAPreconditioners.build_prolongation(C, cf, cmap, nc, strong, config)
+        row = P.rowptr[1]:(P.rowptr[2] - 1)
+        @test !isempty(row)
+        @test all(iszero, P.nzval[row])
+        if backend isa CPU
+            fill!(P.nzval, NaN)
+            KAPreconditioners.update_cpu_prolongation!(P, C, cf, cmap, strong, config, nothing)
+            @test all(iszero, P.nzval[row])
+        end
+        D = csr_matrix(scale * A; backend)
+        dp = KAPreconditioners.backend_copy(backend, fill(NaN, length(P.nzval)))
+        KAPreconditioners.update_interpolation_p_kernel!(backend, 128)(
+            dp, KAPreconditioners.backend_copy(backend, P.rowptr),
+            KAPreconditioners.backend_copy(backend, P.colval),
+            D.rowptr, D.colval, D.nzval,
+            KAPreconditioners.backend_copy(backend, cf),
+            KAPreconditioners.backend_copy(backend, cmap),
+            KAPreconditioners.backend_copy(backend, strong),
+            false, true, 5; ndrange = 5
+        )
+        KAPreconditioners.synchronize_backend(backend)
+        @test all(iszero, Array(dp)[row])
+    end
+    return
+end
+
+@testset "Classical interpolation sign and zero-diagonal handling" begin
+    test_classical_interpolation_regressions(CPU())
+end
+
 @testset "AMG strength selection" begin
     A = sparse([1, 1, 1, 2, 2, 3], [1, 2, 3, 2, 3, 3], [5.0, -1.0, 2.0, 3.0, 1.0, 1.0], 3, 3)
     C = csr_matrix(A)
@@ -545,9 +631,11 @@ end
     P = KAPreconditioners.build_prolongation(
         C, cf, cmap, nc, strong, ClassicalInterpolation()
     )
-    @test all(i -> P.rowptr[i + 1] > P.rowptr[i], eachindex(cf))
+    @test cf[2] == -3
+    @test P.rowptr[2] == P.rowptr[3]
+    @test all(i -> cf[i] == -3 || P.rowptr[i + 1] > P.rowptr[i], eachindex(cf))
     @test all(eachindex(cf)) do i
-        cf[i] == 1 || any(nzrange(C, i)) do k
+        cf[i] != -1 || any(nzrange(C, i)) do k
             strong[k] && cf[C.colval[k]] == 1
         end
     end
@@ -645,6 +733,71 @@ end
     @test_throws ArgumentError setup_amg(A, AMGOptions(coarsening = Aggregation(), aggressive_interpolation = aggressive_interp))
 end
 
+@testset "RS/HMIS rows without strong dependencies" begin
+    # Row 1 has incoming dependencies but no outgoing strong edges. Hypre
+    # excludes it as SF_PT; row 2 must not lump its coupling into the diagonal.
+    A = sparse([1.0 0 0 0; -1 3 -1 0; 0 -1 3 -1; 0 0 -1 3])
+    C = csr_matrix(A)
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    expected_cf = Int8[-3, -1, 1, -1]
+    for coarsening in (RugeStuben(), HMIS(0.25))
+        cf, cmap, nc = KAPreconditioners.cf_split(C, strong, coarsening)
+        @test cf == expected_cf
+        @test cmap == Int32[0, 0, 1, 0]
+        @test nc == 1
+        for interpolation in (ClassicalInterpolation(), ExtendedIInterpolation()),
+                aggressive_levels in (0, 1)
+            options = AMGOptions(;
+                coarsening, interpolation, aggressive_levels,
+                coarse_size = 1, max_levels = 2, max_row_sum = 1.0
+            )
+            H = setup_amg(A, options)
+            level = H.levels[1]
+            stage_cf = aggressive_levels == 1 ? Int8[-1, -1, 1, -1] : expected_cf
+            @test level.cf == stage_cf
+            @test vec(Matrix(sparse_prolongation(level.P))) ≈ [0, 1/3, 1, 1/3]
+            resetup_amg!(H, 2A, :sparsity)
+            @test vec(Matrix(sparse_prolongation(level.P))) ≈ [0, 1/3, 1, 1/3]
+            resetup_amg!(H, A, :memory)
+            @test H.levels[1].cf == stage_cf
+            test_galerkin(H)
+        end
+        # The legacy aggressive split must also retain the special F marker.
+        cf, _, _ = KAPreconditioners.aggressive_cf_split(
+            C, strong, coarsening, ExtendedIInterpolation()
+        )
+        @test cf == expected_cf
+    end
+end
+
+@testset "RS first pass and HMIS bucket initialization" begin
+    # A zero-influence point updates an earlier point into an occupied
+    # maximum bucket. HYPRE keeps point 4 ahead of the updated point 3.
+    A = sparse([6.0 -1 0 -1 0; 0 6 0 0 0; 0 0 6 -1 0; -1 0 0 6 0; 0 -1 -1 0 6])
+    C = csr_matrix(A)
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    cf, _, nc = KAPreconditioners.cf_split(C, strong, HMIS(0.25))
+    @test cf == Int8[-1, -3, -1, 1, -1]
+    @test nc == 1
+
+    # Disabling the classical second pass must retain the distance-two-only
+    # F point 3. Premature coverage repair promotes it and changes the split.
+    A = sparse([5.0 0 -1 0; 0 5 0 0; 0 0 5 -1; -1 0 0 5])
+    C = csr_matrix(A)
+    strong = KAPreconditioners.strength(C, 0.25, 1.0)
+    coarsening = RugeStuben(; second_pass = false)
+    cf, _, nc = KAPreconditioners.cf_split(C, strong, coarsening)
+    @test cf == Int8[1, -3, -1, -1]
+    @test nc == 1
+    H = setup_amg(A, AMGOptions(;
+        coarsening, interpolation = ExtendedIInterpolation(), max_row_sum = 1.0,
+        coarse_size = 1, max_levels = 2
+    ))
+    @test vec(Matrix(sparse_prolongation(H.levels[1].P))) ≈ [1, 0, 0.2, 0.2]
+    cf, _, _ = KAPreconditioners.cf_split(C, strong, RugeStuben())
+    @test cf == Int8[1, -3, -1, 1]
+end
+
 function test_two_stage_interpolation(backend)
     # A seven-point chain gives C1={2,4,6}, C2={4}. P2 uses the original
     # rows 2 and 6: each has effective diagonal 2.5 and numerator -0.5.
@@ -670,6 +823,30 @@ function test_two_stage_interpolation(backend)
         @test Array(scaled.levels[1].P.nzval) ≈ Array(level.P.nzval)
         resetup_amg!(H, csr_matrix(scale * A; backend), :sparsity)
         @test Array(level.P.nzval) ≈ Array(scaled.levels[1].P.nzval)
+    end
+
+    # ExtPI normalizes special F markers before building P2. Row 5 must
+    # include its coupling to point 6 in the partial interpolation diagonal.
+    A = sparse([4.0 0 0 -3 -0.5 0; 0 4 0 -0.2 0 -3; 0 0 4 -1 -3 0;
+        0 -3 0 4 0 0; -2 0 0 -0.5 6 -3; 0 0 0 0 0 1])
+    options = AMGOptions(
+        coarsening = HMIS(0.25), aggressive_levels = 1,
+        aggressive_interpolation = TwoStageExtendedIInterpolation(),
+        coarse_size = 1, max_levels = 2, max_row_sum = 1.0
+    )
+    H = setup_amg(csr_matrix(A; backend), options)
+    level = H.levels[1]
+    @test Array(level.aggressive.first_cf) == Int8[-1, 1, -1, 1, 1, -3]
+    @test Array(level.cf) == Int8[-1, 1, -1, 1, -1, -1]
+    expected = [0 6/7; 1 0; 0 131/152; 0 1; 0 31/38; 0 0]
+    @test Matrix(sparse_prolongation(level.P)) ≈ expected
+    B = copy(A)
+    B[5, 6] = -2
+    updated = [0 6/7; 1 0; 0 145/208; 0 1; 0 31/52; 0 0]
+    for mode in (:sparsity, :memory)
+        resetup_amg!(H, csr_matrix(2B; backend), mode)
+        @test Matrix(sparse_prolongation(H.levels[1].P)) ≈ updated
+        test_galerkin(H)
     end
 
     # Nonuniform coefficient changes exercise both factors and final-product
@@ -802,6 +979,23 @@ end
     @test_throws ArgumentError setup_amg(
         A, AMGOptions(aggressive_levels = -1)
     )
+end
+
+@testset "Aggressive aggregation with interleaved aggregates" begin
+    # Aggregates 2 and 3 alternate in fine-row order and repeatedly depend on
+    # aggregate 1. Each coarse dependency must occur only once.
+    rows = [1, 2, 3, 4, 5, 6, 6, 1, 7]
+    cols = [6, 6, 6, 6, 6, 1, 2, 7, 6]
+    C = csr_matrix(sparse(rows, cols, fill(-1.0, length(rows)), 7, 7))
+    aggregate = Int32[2, 3, 2, 3, 2, 1, 4]
+    graph, strong = KAPreconditioners.contracted_strength_graph(
+        C, trues(length(C.nzval)), aggregate, 4
+    )
+    @test graph.rowptr == Int32[1, 3, 5, 6, 7]
+    @test graph.colval == Int32[2, 3, 1, 4, 1, 1]
+    _, coarse_map, nc = KAPreconditioners.aggregation_split(graph, strong)
+    @test nc == 1
+    @test coarse_map == ones(Int32, 4)
 end
 
 @testset "coarse LU" begin
