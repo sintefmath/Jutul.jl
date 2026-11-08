@@ -30,6 +30,13 @@ end
     end
 end
 
+# Multiplication can underflow to signed zero even when both entries are
+# representable. Real-valued strength only needs their signs.
+@inline function opposite_diagonal_sign(value::Real, diagonal::Real)
+    return (value < 0 && diagonal > 0) || (value > 0 && diagonal < 0)
+end
+@inline opposite_diagonal_sign(value, diagonal) = real(value * conj(diagonal)) < 0
+
 @kernel function strength_kernel!(
         strong, @Const(rp), @Const(cv), @Const(av),
         theta, max_row_sum, strength_mode, n
@@ -58,7 +65,7 @@ end
                 if cv[k] != i
                     magnitude = abs(a)
                     largest_any = max(largest_any, magnitude)
-                    if real(a * conj(diag)) < 0
+                    if opposite_diagonal_sign(a, diag)
                         largest_opposite = max(largest_opposite, magnitude)
                     end
                 end
@@ -73,7 +80,7 @@ end
             cutoff = theta * largest
             @inbounds for k in rp[i]:(rp[i + 1] - 1)
                 a = av[k]
-                opposite = real(a * conj(diag)) < 0
+                opposite = opposite_diagonal_sign(a, diag)
                 strong[k] = cv[k] != i && largest > 0 &&
                     (!use_signed || opposite) && abs(a) > cutoff
             end

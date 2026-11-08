@@ -572,6 +572,25 @@ end
     @test_throws ArgumentError setup_amg(A, AMGOptions(strength_type = :invalid))
 end
 
+@testset "AMG strength is invariant under real scaling" begin
+    # Include same-sign off-diagonals: falling back to absolute strength
+    # after a sign-product underflow would silently introduce extra edges.
+    A = sparse([4.0 -1 2; -1 4 -2; 2 -2 4])
+    for (T, small, large) in ((Float32, 1.0f-25, 1.0f25), (Float64, 1.0e-200, 1.0e200))
+        C = csr_matrix(SparseMatrixCSC{T, Int}(A))
+        for mode in (:signed, :signed_fallback, :absolute)
+            expected = KAPreconditioners.strength(C, 0.25, 1.0; strength_type = mode)
+            cf, cmap, nc = KAPreconditioners.cf_split(C, expected, HMIS(0.25))
+            for scale in (small, -small, large, -large)
+                scaled = csr_matrix(scale * SparseMatrixCSC{T, Int}(A))
+                strong = KAPreconditioners.strength(scaled, 0.25, 1.0; strength_type = mode)
+                @test strong == expected
+                @test KAPreconditioners.cf_split(scaled, strong, HMIS(0.25)) == (cf, cmap, nc)
+            end
+        end
+    end
+end
+
 @testset "Jutul simulation with KA AMG" begin
     grid = CartesianMesh((3, 3), (1.0, 1.0))
     model = SimulationModel(DiscretizedDomain(grid), SimpleHeatSystem())
