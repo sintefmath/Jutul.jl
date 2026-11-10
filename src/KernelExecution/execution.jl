@@ -1077,14 +1077,21 @@ function adapt_simulation_storage(
 end
 
 """
-    transfer_to_backend(simulator, backend; kwarg...)
-    transfer_to_backend(simulator, context::KernelAbstractionsContext)
+    transfer_to_backend(simulator, backend; do_copy=true, kwarg...)
+    transfer_to_backend(simulator, context::KernelAbstractionsContext; do_copy=true)
 
 Adapt a fully initialized CPU simulator to a KernelAbstractions backend.
 [`SimulationModel`](@ref) and [`MultiModel`](@ref) are supported. Sparsity
 discovery and Jacobian/cross-term alignment finish on the CPU before the CSR
 arrays are moved. Array aliases used by primary variables, parameters, residual
 views and Jacobian buffers are rebuilt against the adapted root arrays.
+
+With `do_copy=true` (default), copy buffers as needed to keep the original
+simulator valid. Set `do_copy=false` to reuse its buffers, including modifying
+CSR alignment in place. The original simulator is then modified and cannot be
+assumed to work. Copies required for independent host/backend evaluation mirrors
+are still made.
+
 Submodels marked `AssembleOnDevice` retain their CPU model and storage and copy
 into preallocated backend mirrors after evaluation. Mixed host/device cross
 terms execute on the host by default; set `mixed_cross_terms_on_host=false` to
@@ -1092,6 +1099,7 @@ use backend evaluation instead.
 """
 function transfer_to_backend(
         sim::Simulator, backend;
+        do_copy::Bool = true,
         group_execution = missing,
         mixed_cross_terms_on_host::Bool = true,
         kwarg...
@@ -1113,6 +1121,7 @@ function transfer_to_backend(
     )
     return transfer_to_backend(
         sim, ctx;
+        do_copy = do_copy,
         group_execution = group_execution,
         mixed_cross_terms_on_host = mixed_cross_terms_on_host
     )
@@ -1121,6 +1130,7 @@ end
 Base.@noinline function transfer_to_backend(
         sim::Simulator,
         ctx::KernelAbstractionsContext;
+        do_copy::Bool = true,
         group_execution = missing,
         mixed_cross_terms_on_host::Bool = true
     )
@@ -1132,10 +1142,14 @@ Base.@noinline function transfer_to_backend(
     if !(model_cpu isa SimulationModel)
         return transfer_multimodel_to_backend(
             sim, ctx;
+            do_copy = do_copy,
             mixed_cross_terms_on_host = mixed_cross_terms_on_host
         )
     end
     storage_cpu = sim.storage
+    if do_copy && is_cpu_backend(ctx)
+        storage_cpu = deepcopy(storage_cpu)
+    end
     model = Adapt.adapt(ctx, model_cpu)
 
     lsys = Adapt.adapt(linear_solver_context(ctx), storage_cpu.LinearizedSystem)
@@ -1209,6 +1223,7 @@ end
 function transfer_multimodel_to_backend(
         sim::Simulator,
         ctx::KernelAbstractionsContext;
+        do_copy::Bool = true,
         mixed_cross_terms_on_host::Bool = true
     )
     model_cpu = sim.model
@@ -1248,7 +1263,23 @@ function transfer_multimodel_to_backend(
     # sparsity/alignment copy on the CPU so every backend block has static CSR
     # ordering before any arrays are transferred.
     model_setup = cpu_csr_model(model_cpu)
-    setup_data = OrderedDict{Symbol, Any}(pairs(data(deepcopy(storage_cpu))))
+    setup_data = OrderedDict{Symbol, Any}(pairs(data(storage_cpu)))
+    # CPU adaptation reuses arrays, so retained host evaluation mirrors still
+    # need separate buffers even when the original simulator is discarded.
+    if do_copy || (is_cpu_backend(ctx) && !isempty(host_keys))
+        # Only equation/cross-term caches are changed by CSR alignment. Share
+        # the remaining CPU storage until adaptation.
+        setup_data[:cross_terms] = deepcopy(storage_cpu.cross_terms)
+        for key in submodels_symbols(model_cpu)
+            substorage = storage_cpu[key]
+            subdata = OrderedDict{Symbol, Any}(pairs(data(substorage)))
+            subdata[:equations] = deepcopy(substorage.equations)
+            if is_cpu_backend(ctx)
+                subdata[:state], subdata[:state0] = deepcopy((substorage.state, substorage.state0))
+            end
+            setup_data[key] = JutulStorage(subdata)
+        end
+    end
     storage_setup = JutulStorage(setup_data)
     setup_linearized_system!(storage_setup, model_setup)
     align_equations_to_linearized_system!(storage_setup, model_setup)

@@ -11,6 +11,27 @@ end
 
 @inline spai0_inverse(diagonal, scale, damping) = damping * inv(diagonal)
 
+@inline function spai0_row_inverse(diagonal::Number, scale::AbstractFloat, damping, rp, values, row)
+    if isfinite(scale) && scale >= floatmin(typeof(scale))
+        return spai0_inverse(diagonal, scale, damping)
+    end
+    # Recover from overflow or underflow in the squared row norm without
+    # changing the fast path for ordinarily scaled matrices.
+    magnitude = zero(real(diagonal))
+    @inbounds for k in rp[row]:(rp[row + 1] - 1)
+        magnitude = max(magnitude, abs(values[k]))
+    end
+    iszero(magnitude) && return zero(diagonal)
+    normalized_scale = zero(damping)
+    @inbounds for k in rp[row]:(rp[row + 1] - 1)
+        normalized_scale += abs2(values[k] / magnitude)
+    end
+    return (damping * (diagonal / magnitude) / normalized_scale) / magnitude
+end
+
+@inline spai0_row_inverse(diagonal, scale, damping, rp, values, row) =
+    spai0_inverse(diagonal, scale, damping)
+
 @kernel function spai0_setup_kernel!(d, @Const(rp), @Const(cv), @Const(av), damping, n)
     i = @index(Global)
     if i <= n
@@ -21,7 +42,7 @@ end
             scale += spai0_scale(value, damping)
             cv[k] == i && (diagonal += value)
         end
-        @inbounds d[i] = spai0_inverse(diagonal, scale, damping)
+        @inbounds d[i] = spai0_row_inverse(diagonal, scale, damping, rp, av, i)
     end
 end
 
@@ -154,7 +175,7 @@ function update_smoother!(
             scale += spai0_scale(value, damping)
             A.colval[k] == i && (aii += value)
         end
-        @inbounds diagonal[i] = spai0_inverse(aii, scale, damping)
+        @inbounds diagonal[i] = spai0_row_inverse(aii, scale, damping, A.rowptr, A.nzval, i)
     end
     return state
 end

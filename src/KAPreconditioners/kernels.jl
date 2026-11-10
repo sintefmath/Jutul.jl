@@ -30,6 +30,13 @@ end
     end
 end
 
+# Multiplication can underflow to signed zero even when both entries are
+# representable. Real-valued strength only needs their signs.
+@inline function opposite_diagonal_sign(value::Real, diagonal::Real)
+    return (value < 0 && diagonal > 0) || (value > 0 && diagonal < 0)
+end
+@inline opposite_diagonal_sign(value, diagonal) = real(value * conj(diagonal)) < 0
+
 @kernel function strength_kernel!(
         strong, @Const(rp), @Const(cv), @Const(av),
         theta, max_row_sum, strength_mode, n
@@ -58,7 +65,7 @@ end
                 if cv[k] != i
                     magnitude = abs(a)
                     largest_any = max(largest_any, magnitude)
-                    if real(a * conj(diag)) < 0
+                    if opposite_diagonal_sign(a, diag)
                         largest_opposite = max(largest_opposite, magnitude)
                     end
                 end
@@ -73,7 +80,7 @@ end
             cutoff = theta * largest
             @inbounds for k in rp[i]:(rp[i + 1] - 1)
                 a = av[k]
-                opposite = real(a * conj(diag)) < 0
+                opposite = opposite_diagonal_sign(a, diag)
                 strong[k] = cv[k] != i && largest > 0 &&
                     (!use_signed || opposite) && abs(a) > cutoff
             end
@@ -176,14 +183,11 @@ end
             total += aij
             cmap[j] == J && (selected += aij)
         elseif strong[k] && cf[j] == -1
-            sign_j = 1
-            if extended
-                diag_j = zero(T)
-                for q in arp[j]:(arp[j + 1] - 1)
-                    acv[q] == j && (diag_j += av[q])
-                end
-                sign_j = real(diag_j) < 0 ? -1 : 1
+            diag_j = zero(T)
+            for q in arp[j]:(arp[j + 1] - 1)
+                acv[q] == j && (diag_j += av[q])
             end
+            sign_j = real(diag_j) < 0 ? -1 : 1
             denominator = zero(T)
             coarse_sum = zero(T)
             coupling = zero(T)
@@ -191,7 +195,7 @@ end
             for q in arp[j]:(arp[j + 1] - 1)
                 l, ajl = acv[q], av[q]
                 l == j && continue
-                extended && sign_j * real(ajl) >= 0 && continue
+                sign_j * real(ajl) >= 0 && continue
                 if extended && l == i
                     denominator += ajl
                     back += ajl
@@ -210,7 +214,7 @@ end
             else
                 diagonal += aij
             end
-        else
+        elseif cf[j] != -3
             diagonal += aij
         end
     end
@@ -234,6 +238,8 @@ end
                 )
                 scale = if !iszero(diagonal)
                     -inv(diagonal)
+                elseif !extended
+                    zero(eltype(pv))
                 else
                     one(eltype(pv))
                 end

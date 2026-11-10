@@ -20,7 +20,11 @@ function add_option!(opts::JutulConfig, name::Symbol, default_value, short_descr
 end
 
 function checked_value(x, types, values, name)
-    x = convert(types, x)
+    try
+        x = convert(types, x)
+    catch
+        error("Failed to convert $name to $types: $x")
+    end
     if !ismissing(values)
         @assert x in values "$name must be one of $values, was: $x"
     end
