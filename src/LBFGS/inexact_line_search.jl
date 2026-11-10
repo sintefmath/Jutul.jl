@@ -58,7 +58,6 @@ within max_it iterations, the best evaluation found so far is returned.
 - The algorithm is hopefully quite robust wrt slightly noisy/inaccurate function evaluations
   and gradients, but this can be investigated further
 """
-
 function inexact_line_search(
         u0, v0, g0, d, f;
         max_it = 5,

@@ -67,7 +67,6 @@ Partial translation/improvement of the MRST function `optimizeBoundConstrained`.
 - `u`: Control/parameter vector corresponding to v
 - `history`: Named tuple containing iteration history
 """
-
 function optimize_bound_constrained(
         u0, f, lb, ub;
         maximize = false,
