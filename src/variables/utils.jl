@@ -542,5 +542,5 @@ function pick_relaxation(w, dv, dv0)
     if dv0 != 0
         w = min(w, r)
     end
-    return min(w, MINIMUM_SAT_RELAX)
+    return w
 end
