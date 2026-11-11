@@ -82,7 +82,9 @@ function solve_adjoint_generic!(
         G = Jutul.adjoint_wrap_objective(G, case.model)
         @tic "reset" Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
-        @tic "packed_steps" packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
+        @tic "packed_steps" packed_steps = set_packed_result_dynamic_values!(
+            packed_steps, case; keep_packed_forces = get(storage, :keep_packed_forces, false)
+        )
         H = storage[:adjoint_objective_helper]
         H.num_evals = 0
         H.packed_steps = packed_steps
@@ -168,11 +170,12 @@ function setup_adjoint_storage_generic(
         sparsity_step_type::Symbol = :all,
         use_sparsity = true,
         simulator = missing,
-        linear_solver = missing
+        linear_solver = missing,
+        keep_packed_forces = false
     )
     case = setup_case(X, F, packed_steps, state0, :all)
     G = Jutul.adjoint_wrap_objective(G, case.model)
-    packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
+    packed_steps = set_packed_result_dynamic_values!(packed_steps, case; keep_packed_forces)
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
@@ -286,6 +289,7 @@ function setup_adjoint_storage_generic(
     storage[:deps] = deps
     storage[:deps_ad] = deps_ad
     storage[:sparsity_step_type] = sparsity_step_type
+    storage[:keep_packed_forces] = keep_packed_forces
 
     # Switch to Y and F_dynamic(Y) as main function
     Y = F_static(X)
@@ -321,13 +325,12 @@ function setup_adjoint_storage_generic(
     return storage
 end
 
-function set_packed_result_dynamic_values!(packed_steps, case)
+function set_packed_result_dynamic_values!(packed_steps, case; keep_packed_forces = false)
     f = case.forces
     if f isa Vector
         steps = map(x -> x[:step], packed_steps.step_infos)
         forces = f[steps]
-    elseif packed_steps.forces isa Vector && length(packed_steps.forces) == length(packed_steps)
-        # The case holds the forces of one step only
+    elseif keep_packed_forces && packed_steps.forces isa Vector && length(packed_steps.forces) == length(packed_steps)
         forces = packed_steps.forces
     else
         forces = [f for _ in 1:length(packed_steps)]

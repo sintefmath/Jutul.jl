@@ -250,7 +250,9 @@ function setup_adjoint_forces_storage(
         X, F, packed_steps, G,
         single_step_sparsity = single_step_sparsity,
         sparsity_step_type = sparsity_step_type,
-        di_sparse = di_sparse
+        di_sparse = di_sparse,
+        # F constructs a case for one step. Keep the full forward force schedule.
+        keep_packed_forces = true
     )
     return storage
 end
