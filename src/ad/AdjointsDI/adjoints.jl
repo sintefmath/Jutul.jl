@@ -326,6 +326,9 @@ function set_packed_result_dynamic_values!(packed_steps, case)
     if f isa Vector
         steps = map(x -> x[:step], packed_steps.step_infos)
         forces = f[steps]
+    elseif packed_steps.forces isa Vector && length(packed_steps.forces) == length(packed_steps)
+        # The case holds the forces of one step only
+        forces = packed_steps.forces
     else
         forces = [f for _ in 1:length(packed_steps)]
     end

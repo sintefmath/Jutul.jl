@@ -122,7 +122,8 @@ function devectorize_forces(forces, model, X, config; offset = 0)
     for (k, v) in pairs(forces)
         target = config.targets[k]
         if isnothing(target)
-            new_forces[k] = copy(forces[k])
+            # Unset forces (nothing) are passed on as they are
+            new_forces[k] = isnothing(v) ? v : copy(v)
             continue
         end
         if isnothing(v)
@@ -283,7 +284,7 @@ function get_adjoint_forces_setup_function(storage, model, parameters, state0)
     offsets = storage[:forces_offsets]::Vector{Int}
     configs = storage[:forces_config]
     function F(X, step_info)
-        fmap = storage[:forces_map]
+        fmap = storage[:forces_map_base]
         ix = step_info[:step]
         i = fmap.timesteps_to_forces[ix]
         X_i = view(X, offsets[i]:(offsets[i + 1] - 1))

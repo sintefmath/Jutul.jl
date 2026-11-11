@@ -30,7 +30,10 @@ end
 
 function vectorize_forces!(v, model::MultiModel, config, forces; kwarg...)
     for k in submodels_symbols(model)
-        vectorize_forces!(v, model[k], config[k], forces[k]; kwarg...)
+        subconfig = config[k]
+        start = first(subconfig.offsets)
+        n = sum(subconfig.lengths)
+        vectorize_forces!(view(v, start:(start + n - 1)), model[k], subconfig, forces[k]; kwarg...)
     end
     return v
 end
