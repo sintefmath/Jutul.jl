@@ -8,6 +8,7 @@ function solve_adjoint_generic(
         extra_output = false,
         state0 = missing,
         forces = missing,
+        packed_forces = missing,
         info_level = 0,
         strict = false,
         kwarg...
@@ -23,6 +24,7 @@ function solve_adjoint_generic(
         X, F, packed_steps, G;
         info_level = info_level,
         state0 = state0,
+        packed_forces,
         kwarg...
     )
 
@@ -38,9 +40,10 @@ function solve_adjoint_generic(
         jutul_message("Adjoints", "Solving $N adjoint steps...", color = :blue)
     end
     solve_adjoint_generic!(
-        ∇G, X, F, storage, packed_steps, G,
+        ∇G, X, F, storage, packed_steps, G;
         info_level = info_level,
         state0 = state0,
+        packed_forces,
     )
     Jutul.print_global_timer(extra_timing; text = "Adjoint solve detailed timing")
     if extra_output
@@ -59,7 +62,8 @@ function solve_adjoint_generic!(
         ∇G, X, F, storage, packed_steps::AdjointPackedResult, G;
         info_level = 0,
         state0 = missing,
-        extra_timing = false
+        extra_timing = false,
+        packed_forces = missing
     )
     Jutul.set_global_timer!(extra_timing)
     t_solve = @elapsed begin
@@ -82,7 +86,7 @@ function solve_adjoint_generic!(
         G = Jutul.adjoint_wrap_objective(G, case.model)
         @tic "reset" Jutul.adjoint_reset_parameters!(storage, case.parameters)
 
-        @tic "packed_steps" packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
+        @tic "packed_steps" packed_steps = set_packed_result_dynamic_values!(packed_steps, case; packed_forces)
         H = storage[:adjoint_objective_helper]
         H.num_evals = 0
         H.packed_steps = packed_steps
@@ -168,11 +172,12 @@ function setup_adjoint_storage_generic(
         sparsity_step_type::Symbol = :all,
         use_sparsity = true,
         simulator = missing,
-        linear_solver = missing
+        linear_solver = missing,
+        packed_forces = missing
     )
     case = setup_case(X, F, packed_steps, state0, :all)
     G = Jutul.adjoint_wrap_objective(G, case.model)
-    packed_steps = set_packed_result_dynamic_values!(packed_steps, case)
+    packed_steps = set_packed_result_dynamic_values!(packed_steps, case; packed_forces)
     if ismissing(backend)
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
@@ -321,18 +326,21 @@ function setup_adjoint_storage_generic(
     return storage
 end
 
-function set_packed_result_dynamic_values!(packed_steps, case)
-    f = case.forces
-    if f isa Vector
-        steps = map(x -> x[:step], packed_steps.step_infos)
-        forces = f[steps]
-    else
-        forces = [f for _ in 1:length(packed_steps)]
+# When supplied, packed_forces already contains one entry per stored step.
+function set_packed_result_dynamic_values!(packed_steps, case; packed_forces = missing)
+    if ismissing(packed_forces)
+        f = case.forces
+        if f isa Vector
+            steps = map(x -> x[:step], packed_steps.step_infos)
+            packed_forces = f[steps]
+        else
+            packed_forces = [f for _ in 1:length(packed_steps)]
+        end
     end
-    packed_steps.forces = forces
+    length(packed_forces) == length(packed_steps) || error("Expected $(length(packed_steps)) forces, got $(length(packed_forces)).")
+    packed_steps.forces = packed_forces
     packed_steps.state0 = case.state0
     packed_steps.input_data = case.input_data
-    length(forces) == length(packed_steps.step_infos) || error("Expected $(length(packed_steps.step_infos)) forces, got $(length(forces)).")
     return packed_steps
 end
 
