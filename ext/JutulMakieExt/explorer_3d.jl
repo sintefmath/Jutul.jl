@@ -15,7 +15,7 @@ Base.show(io::IO, pe::PlotExplorerOutput) = show(io, pe.fig)
 Base.show(io::IO, ::MIME"text/plain", pe::PlotExplorerOutput) = print(io, "PlotExplorerOutput()")
 
 function Base.show(io::IO, mime::MIME"image/png", pe::PlotExplorerOutput)
-    show(io, mime, pe.fig)
+    return show(io, mime, pe.fig)
 end
 
 function Jutul.plot_explorer_impl(
