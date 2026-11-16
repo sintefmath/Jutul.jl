@@ -2,7 +2,7 @@ module JutulCUDAExt
 
 using Jutul
 using Jutul.KAPreconditioners
-using Jutul: StaticSparsityMatrixCSR
+using Jutul: KASparseFactorizations, StaticSparsityMatrixCSR
 using CUDA
 using CUDA.cuSPARSE: CuSparseMatrixBSR, CuSparseMatrixCSR
 using KernelAbstractions
@@ -14,6 +14,13 @@ import CUDA: KernelAdaptor
 import KernelAbstractions as KA
 
 include("cuda_sparse_lu.jl")
+
+function KASparseFactorizations.block_workgroupsize(::CUDA.CUDABackend, nblocks)
+    # Small well systems distribute work across multiprocessors with one
+    # well per group. Pack more wells into each group for larger batches.
+    nblocks < 2048 && return 1
+    return nblocks < 8192 ? 4 : 8
+end
 
 KAPreconditioners.default_ilu_ordering(::CUDA.CUDABackend) = :level
 

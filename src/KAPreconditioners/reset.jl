@@ -1,14 +1,20 @@
-function same_pattern(H::AMGHierarchy, A::StaticSparsityMatrixCSR)
+function same_pattern(H::AMGHierarchy, A::StaticSparsityMatrixCSR; check_device::Bool = false)
     matrix_nrows(A) == size(H, 1) || return false
     matrix_ncols(A) == size(H, 2) || return false
     matrix_nonzeros(A) == length(H.pattern_colval) || return false
-    if A.rowptr isa Array && A.colval isa Array
+    if A.rowptr isa Array && A.colval isa Array &&
+            H.pattern_rowptr isa Array && H.pattern_colval isa Array
         same_prefix(A.rowptr, H.pattern_rowptr, matrix_nrows(A) + 1) ||
             return false
         return same_prefix(A.colval, H.pattern_colval, matrix_nonzeros(A))
     end
+    if check_device
+        same_backend(matrix_backend(A), H.backend) || return false
+        return pmis_vectors_match(A.rowptr, H.pattern_rowptr) &&
+            pmis_vectors_match(A.colval, H.pattern_colval)
+    end
     # Device comparison would force a host synchronization. Length and dimensions
-    # are checked here; callers owning mutable device patterns should use :memory.
+    # are checked here; callers changing the finest pattern should use :none.
     return true
 end
 
@@ -179,10 +185,10 @@ finalizers can collect those wrappers and release allocator cache here.
 release_replaced_backend_storage!(backend) = nothing
 replaced_backend_storage_cleanup_threshold(backend) = 0
 
-function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
+function rebuild_memory!(H::AMGHierarchy, host_finest = nothing)
     # The finest graph is fixed by the discretization. Rebuild all strength,
     # splitting, interpolation, and coarse symbolic data, but retain level 1's
-    # structural arrays and use the supplied host values for symbolic setup.
+    # structural arrays. Host setup receives a staged copy; PMIS uses finest.
     finest = H.levels[1].A
     replaced_bytes = Ref(0)
     H.levels = build_hierarchy(
@@ -228,7 +234,8 @@ function partial_reset!(
         n_levels_partial_keep::Integer, n_partial_keep::Integer
     )
     cutoff = partial_reset_cutoff(H, n_levels_partial_keep, n_partial_keep)
-    same_pattern(H, A) ||
+    check_device = H.options.coarsening isa PMIS && 1 < cutoff <= length(H.levels)
+    same_pattern(H, A; check_device) ||
         throw(ArgumentError("reuse=$reuse requires an unchanged CSR pattern"))
     same_backend(matrix_backend(A), H.backend) ||
         throw(ArgumentError("matrix and hierarchy must use the same backend"))
@@ -249,7 +256,13 @@ function partial_reset!(
     end
     old_levels = H.levels
     cutoff_matrix = old_levels[cutoff].A
-    host_cutoff = H.backend isa KernelAbstractions.CPU ? cutoff_matrix : host_csr(cutoff_matrix)
+    host_cutoff = if H.options.coarsening isa PMIS
+        nothing
+    elseif H.backend isa KernelAbstractions.CPU
+        cutoff_matrix
+    else
+        host_csr(cutoff_matrix)
+    end
     replaced_bytes = Ref(0)
     H.levels = build_hierarchy(
         cutoff_matrix, H.options; reuse_levels = old_levels,
@@ -316,9 +329,14 @@ function memory_reset!(H::AMGHierarchy{Tv, Ti}, A::StaticSparsityMatrixCSR) wher
     same_backend(matrix_backend(A), H.backend) ||
         throw(ArgumentError("matrix and hierarchy must use the same backend"))
     validate_memory_reuse(H, size(A), matrix_nonzeros(A))
+    if H.options.coarsening isa PMIS && !same_pattern(H, A; check_device = true)
+        throw(ArgumentError("reuse=:memory requires an unchanged finest-level sparsity pattern"))
+    end
     finest = H.levels[1].A
     finest.nzval === A.nzval || copy_matrix_values!(finest, A)
-    if H.backend isa KernelAbstractions.CPU
+    if H.options.coarsening isa PMIS
+        return rebuild_memory!(H)
+    elseif H.backend isa KernelAbstractions.CPU
         host_finest = finest
     else
         host_values = host_value_buffer(H, matrix_nonzeros(A))
@@ -341,8 +359,9 @@ Refresh a hierarchy for new coefficients.
   recomputed.
 * `:sparsity` additionally recomputes the retained interpolation weights in
   place using the configured interpolation method.
-* `:memory` recomputes all symbolic data while recycling compatible hierarchy
-  buffers. The finest sparsity pattern must be unchanged; coefficients may alter
+* `:memory` refreshes symbolic data while recycling compatible hierarchy buffers.
+  PMIS reuses the split and Galerkin maps where their inputs are unchanged.
+  The finest sparsity pattern must be unchanged. Coefficients may alter
   strength, splitting, interpolation, and every coarse pattern.
 * `:partial_operators` and `:partial_sparsity` retain the first
   `n_levels_partial_keep` levels (default 3), updating them as in `:operators`
@@ -386,7 +405,7 @@ function resetup_amg!(
     ) where {Tv, Ti}
     validate_amg_reuse_mode(reuse)
     eltype(A) === Tv || throw(ArgumentError("matrix value type must match the hierarchy"))
-    if reuse == :memory
+    if reuse == :memory && !(H.options.coarsening isa PMIS)
         validate_memory_reuse(H, size(A), nnz(A))
         finest = H.levels[1].A
         host_values = host_value_buffer(H, nnz(A))
