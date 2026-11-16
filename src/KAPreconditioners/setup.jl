@@ -1999,6 +1999,12 @@ function build_hierarchy(
         reallocation_tracker = nothing
     ) where {Tv, Ti}
     validate_setup_options(options)
+    if options.coarsening isa PMIS
+        return build_pmis_hierarchy(
+            Ain, options, workspace, reuse_levels, reuse_finest_structure,
+            prefix_levels, reallocation_tracker
+        )
+    end
     current, stage_slot, backend, cpu_backend =
         initial_hierarchy_state(Ain, reuse_levels, workspace, host_finest)
     levels = copy(prefix_levels)
@@ -2176,17 +2182,21 @@ end
 
 Build an owned, reusable AMG hierarchy. Numerical kernels and all hierarchy
 arrays use the backend of `A` (or the backend requested when calling
-`csr_matrix`).
+`csr_matrix`). With `PMIS()`, symbolic setup also runs on that backend.
 """
 function setup_amg(A::StaticSparsityMatrixCSR{Tv, Ti}, options::AMGOptions = AMGOptions()) where {Tv, Ti}
     size(A, 1) == size(A, 2) || throw(DimensionMismatch("AMG requires a square matrix"))
     workspace = SetupWorkspace(Tv, Ti)
     levels = build_hierarchy(A, options; workspace = workspace)
+    finest = levels[1].A
+    rp, cv = if options.coarsening isa PMIS
+        finest.rowptr, finest.colval
+    else
+        host_prefix(A.rowptr, matrix_nrows(A) + 1), host_prefix(A.colval, matrix_nonzeros(A))
+    end
     return AMGHierarchy{Tv, Ti}(
         levels, workspace, options, matrix_backend(A),
-        matrix_batch_size(levels[1].A),
-        host_prefix(A.rowptr, matrix_nrows(A) + 1),
-        host_prefix(A.colval, matrix_nonzeros(A)), 0, Inf, 0
+        matrix_batch_size(finest), rp, cv, 0, Inf, 0
     )
 end
 

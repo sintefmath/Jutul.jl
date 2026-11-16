@@ -3,9 +3,18 @@
 
 Jutul preconditioner wrapper for the backend-portable algebraic multigrid
 implementation in the internal `KAPreconditioners` module. The default uses HMIS
-coarsening with an ILU(0) smoother. The supported compatibility methods are
+coarsening with a SPAI0 smoother. The supported compatibility methods are
 `:hmis`, `:aggregation`, and `:ruge_stuben`. They default to Extended+i,
 piecewise-constant, and classical interpolation, respectively.
+
+The experimental `:pmis` method uses parallel coarsening with Extended+i
+interpolation by default. Setup and `reuse=:memory` keep CSR data on its
+backend, including on the GPU. The host reads scalar counts and stopping flags.
+On the KernelAbstractions CPU backend, the row kernels can use multiple Julia
+threads (start Julia with `--threads=auto`).
+PMIS supports Float32 and Float64 matrices, SPAI0 smoothing, and no aggressive
+levels. On accelerators, the coarse solver uses native dense LU when available;
+use `coarse_solver=:spai0` to use kernels for the coarse solve as well.
 
 The other options of the AMG preconditioner correspond to the fields of
 `AMGOptions` and control various aspects of the multigrid hierarchy, such as the
@@ -51,6 +60,8 @@ function amg_coarsening(method::Symbol, theta; second_pass::Bool = true)
         return KAPreconditioners.Aggregation(theta)
     elseif method == :hmis
         return KAPreconditioners.HMIS(theta)
+    elseif method == :pmis
+        return KAPreconditioners.PMIS(theta)
     else
         throw(ArgumentError("Unsupported AMG method: $method"))
     end

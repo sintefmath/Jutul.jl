@@ -2,13 +2,14 @@ function same_pattern(H::AMGHierarchy, A::StaticSparsityMatrixCSR)
     matrix_nrows(A) == size(H, 1) || return false
     matrix_ncols(A) == size(H, 2) || return false
     matrix_nonzeros(A) == length(H.pattern_colval) || return false
-    if A.rowptr isa Array && A.colval isa Array
+    if A.rowptr isa Array && A.colval isa Array &&
+            H.pattern_rowptr isa Array && H.pattern_colval isa Array
         same_prefix(A.rowptr, H.pattern_rowptr, matrix_nrows(A) + 1) ||
             return false
         return same_prefix(A.colval, H.pattern_colval, matrix_nonzeros(A))
     end
     # Device comparison would force a host synchronization. Length and dimensions
-    # are checked here; callers owning mutable device patterns should use :memory.
+    # are checked here; callers changing the finest pattern should use :none.
     return true
 end
 
@@ -179,10 +180,10 @@ finalizers can collect those wrappers and release allocator cache here.
 release_replaced_backend_storage!(backend) = nothing
 replaced_backend_storage_cleanup_threshold(backend) = 0
 
-function rebuild_memory!(H::AMGHierarchy, host_finest::StaticSparsityMatrixCSR)
+function rebuild_memory!(H::AMGHierarchy, host_finest = nothing)
     # The finest graph is fixed by the discretization. Rebuild all strength,
     # splitting, interpolation, and coarse symbolic data, but retain level 1's
-    # structural arrays and use the supplied host values for symbolic setup.
+    # structural arrays. Host setup receives a staged copy; PMIS uses finest.
     finest = H.levels[1].A
     replaced_bytes = Ref(0)
     H.levels = build_hierarchy(
@@ -249,7 +250,13 @@ function partial_reset!(
     end
     old_levels = H.levels
     cutoff_matrix = old_levels[cutoff].A
-    host_cutoff = H.backend isa KernelAbstractions.CPU ? cutoff_matrix : host_csr(cutoff_matrix)
+    host_cutoff = if H.options.coarsening isa PMIS
+        nothing
+    elseif H.backend isa KernelAbstractions.CPU
+        cutoff_matrix
+    else
+        host_csr(cutoff_matrix)
+    end
     replaced_bytes = Ref(0)
     H.levels = build_hierarchy(
         cutoff_matrix, H.options; reuse_levels = old_levels,
@@ -318,7 +325,9 @@ function memory_reset!(H::AMGHierarchy{Tv, Ti}, A::StaticSparsityMatrixCSR) wher
     validate_memory_reuse(H, size(A), matrix_nonzeros(A))
     finest = H.levels[1].A
     finest.nzval === A.nzval || copy_matrix_values!(finest, A)
-    if H.backend isa KernelAbstractions.CPU
+    if H.options.coarsening isa PMIS
+        return rebuild_memory!(H)
+    elseif H.backend isa KernelAbstractions.CPU
         host_finest = finest
     else
         host_values = host_value_buffer(H, matrix_nonzeros(A))
@@ -386,7 +395,7 @@ function resetup_amg!(
     ) where {Tv, Ti}
     validate_amg_reuse_mode(reuse)
     eltype(A) === Tv || throw(ArgumentError("matrix value type must match the hierarchy"))
-    if reuse == :memory
+    if reuse == :memory && !(H.options.coarsening isa PMIS)
         validate_memory_reuse(H, size(A), nnz(A))
         finest = H.levels[1].A
         host_values = host_value_buffer(H, nnz(A))

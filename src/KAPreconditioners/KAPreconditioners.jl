@@ -29,6 +29,7 @@ include("smoothers/ilu0.jl")
 include("smoothers/multicolor_ilu.jl")
 include("smoothers/vendor_ilu.jl")
 include("setup.jl")
+include("pmis.jl")
 include("aggressive.jl")
 include("reset.jl")
 include("cycle.jl")
@@ -57,7 +58,7 @@ function update_ka_smoother!(state, A::SparseMatrixCSC)
 end
 apply_ka_smoother!(x, state, b) = apply!(x, state, b)
 
-export AbstractCoarsening, Aggregation, RugeStuben, HMIS
+export AbstractCoarsening, Aggregation, RugeStuben, HMIS, PMIS
 export AbstractInterpolation, ConstantInterpolation, ClassicalInterpolation,
     ExtendedIInterpolation, TwoStageExtendedIInterpolation, AMGOptions, AMGHierarchy
 export AbstractSmoother, AbstractSmootherState, SPAI0, GaussSeidel, HybridGaussSeidel, ILU0, DILU,

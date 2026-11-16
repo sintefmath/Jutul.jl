@@ -122,9 +122,17 @@ end
 
 HMIS(theta::Real = 0.5) = HMIS(Float64(theta))
 
+"""Parallel modified independent-set coarsening with on-backend AMG setup."""
+struct PMIS <: AbstractCoarsening
+    theta::Float64
+end
+
+PMIS(theta::Real = 0.5) = PMIS(Float64(theta))
+
 default_interpolation(::Aggregation) = ConstantInterpolation()
 default_interpolation(::RugeStuben) = ClassicalInterpolation()
 default_interpolation(::HMIS) = ExtendedIInterpolation()
+default_interpolation(::PMIS) = ExtendedIInterpolation()
 
 """
     AMGOptions(; coarsening=HMIS(), interpolation=default_interpolation(coarsening), ...)
@@ -278,6 +286,7 @@ mutable struct SetupWorkspace{Tv, Ti}
     stage_cf::Vector{Int8}
     stage_coarse_map::Vector{Ti}
     stage_strength::Vector{Bool}
+    pmis_buffers::Dict{Symbol, Any}
 end
 
 function SetupWorkspace(::Type{Tv}, ::Type{Ti}) where {Tv, Ti}
@@ -288,6 +297,7 @@ function SetupWorkspace(::Type{Tv}, ::Type{Ti}) where {Tv, Ti}
         [sizehint!(Tv[], 32) for _ in 1:nt],
         [sizehint!(Ti[], 64) for _ in 1:nt],
         nothing, nothing, nothing, nothing, nothing, Int8[], Ti[], Bool[],
+        Dict{Symbol, Any}(),
     )
 end
 
@@ -298,8 +308,8 @@ mutable struct AMGHierarchy{Tv, Ti}
     options::AMGOptions
     backend::Any
     block_size::Int
-    pattern_rowptr::Vector{Ti}
-    pattern_colval::Vector{Ti}
+    pattern_rowptr::AbstractVector{Ti}
+    pattern_colval::AbstractVector{Ti}
     last_iterations::Int
     last_residual::Float64
     pending_replaced_storage::Int
