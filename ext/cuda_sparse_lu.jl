@@ -112,12 +112,3 @@ function LinearAlgebra.ldiv!(
     copyto!(x, F.solution)
     return x
 end
-
-function Jutul.KernelExecution.factorize_linear_system(
-        ::typeof(lu),
-        matrix::StaticSparsityMatrixCSR{
-            Float64, Ti, V, I, R, B,
-        }
-    ) where {Ti <: Integer, V, I, R, B <: CUDA.CUDABackend}
-    return KAPreconditioners.setup_sparse_lu(matrix)
-end

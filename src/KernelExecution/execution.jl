@@ -1537,7 +1537,18 @@ function factorize_linear_system(
     ) where {
         Tv, Ti <: Integer, V, I, R, B <: KernelAbstractions.Backend,
     }
+    if !applicable(KAPreconditioners.setup_preferred_sparse_lu, matrix)
+        F = KASparseFactorizations.try_factorize(matrix)
+        isnothing(F) || return F
+    end
     return KAPreconditioners.setup_sparse_lu(matrix)
+end
+
+function refactorize_linear_system!(
+        update!, factorization::KASparseFactorizations.BlockSparseLU,
+        matrix::StaticSparsityMatrixCSR
+    )
+    return KASparseFactorizations.refactorize!(factorization, matrix)
 end
 
 function refactorize_linear_system!(

@@ -67,6 +67,7 @@ include("KAPreconditioners/interface.jl")
 
 # Backend-portable algebraic multigrid and smoothers.
 include("KAPreconditioners/KAPreconditioners.jl")
+include("linsolve/KASparseFactorizations.jl")
 
 # Interfaces implemented by optional execution modules and applications.
 include("KernelExecution/interface.jl")
