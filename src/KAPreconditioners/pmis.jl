@@ -302,8 +302,10 @@ end
             for q in rp[j]:(rp[j + 1] - 1)
                 l, ajl = cv[q], av[q]
                 if l != j && sign_j * ajl < 0 &&
-                        ((extended && l == i) ||
-                        (cf[l] == 1 && !iszero(pmis_candidate_position(cols, first, last, cmap[l]))))
+                        (
+                        (extended && l == i) ||
+                            (cf[l] == 1 && !iszero(pmis_candidate_position(cols, first, last, cmap[l])))
+                    )
                     denominator += ajl
                 end
             end
@@ -369,8 +371,10 @@ end
             for k in (first + 1):last
                 col, val = cols[k], vals[k]
                 j = k
-                while j > first && (abs(val) > abs(vals[j - 1]) ||
-                        (abs(val) == abs(vals[j - 1]) && col < cols[j - 1]))
+                while j > first && (
+                        abs(val) > abs(vals[j - 1]) ||
+                            (abs(val) == abs(vals[j - 1]) && col < cols[j - 1])
+                    )
                     cols[j], vals[j] = cols[j - 1], vals[j - 1]
                     j -= 1
                 end
@@ -718,8 +722,10 @@ function build_pmis_hierarchy(
         rp = backend_copy(backend, A.rowptr)
         cv = backend_copy(backend, A.colval)
         av = backend_copy(backend, A.nzval)
-        csr_matrix(rp, cv, av, matrix_nrows(A), matrix_ncols(A);
-            backend, block_size = options.block_size, use_vendor_linalg = A.use_vendor_linalg)
+        csr_matrix(
+            rp, cv, av, matrix_nrows(A), matrix_ncols(A);
+            backend, block_size = options.block_size, use_vendor_linalg = A.use_vendor_linalg
+        )
     end
     for l in (length(prefix) + 1):(options.max_levels - 1)
         n = matrix_nrows(current)
