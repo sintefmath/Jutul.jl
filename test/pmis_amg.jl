@@ -14,6 +14,7 @@ function check_pmis_galerkin(H)
         coarse = KAPreconditioners.sparse_matrix(H.levels[l + 1].A)
         @test coarse ≈ Pt * A * transpose(Pt)
     end
+    return
 end
 
 function check_pmis_memory(backend, ::Type{T}, interpolation, coarse_solver) where {T}
@@ -52,7 +53,7 @@ function check_pmis_memory(backend, ::Type{T}, interpolation, coarse_solver) whe
     check_pmis_galerkin(H)
 
     fresh = setup_amg(Bdev, opts)
-    b = KAPreconditioners.backend_copy(backend, T.(1:n^2) ./ T(n^2))
+    b = KAPreconditioners.backend_copy(backend, T.(1:(n^2)) ./ T(n^2))
     x = similar(b)
     KAPreconditioners.apply!(x, H, b)
     @test Array(x) ≈ Array(fresh * b)
@@ -74,11 +75,11 @@ function check_pmis_memory(backend, ::Type{T}, interpolation, coarse_solver) whe
     @test H.levels[1] === first_level
     check_pmis_galerkin(H)
 
-    perm = [2; 1; collect(3:n^2)]
+    perm = [2; 1; collect(3:(n^2))]
     changed_graph = csr_matrix(B[perm, perm]; backend)
     @test nnz(changed_graph) == nnz(Bdev)
     @test_throws ArgumentError resetup_amg!(H, changed_graph, :memory)
-    @test Array(H.levels[1].A.nzval) == Array(Bdev.nzval)
+    return @test Array(H.levels[1].A.nzval) == Array(Bdev.nzval)
 end
 
 function check_pmis_rerank(backend)
@@ -101,7 +102,7 @@ function check_pmis_rerank(backend)
     @test Array(current.strength) == initial_strength
     @test Array(current.cf) == initial_split
     @test Array(current.P.colval) != initial_cols
-    check_pmis_galerkin(H)
+    return check_pmis_galerkin(H)
 end
 
 @testset "PMIS symbolic AMG setup on KA CPU" begin
