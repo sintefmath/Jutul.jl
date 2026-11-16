@@ -13,7 +13,9 @@ backend, including on the GPU. The host reads scalar counts and stopping flags.
 On the KernelAbstractions CPU backend, the row kernels can use multiple Julia
 threads (start Julia with `--threads=auto`).
 PMIS supports Float32 and Float64 matrices, SPAI0 smoothing, and no aggressive
-levels. On accelerators, the coarse solver uses native dense LU when available;
+levels. SPAI0 computes its diagonal from CSR values on the backend. ILU0 and
+DILU setup currently need a host copy of the CSR pattern for scheduling.
+On accelerators, the coarse solver uses native dense LU when available;
 use `coarse_solver=:spai0` to use kernels for the coarse solve as well.
 
 The other options of the AMG preconditioner correspond to the fields of

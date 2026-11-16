@@ -1,5 +1,11 @@
 # Symbolic setup on the matrix backend. Scans and reductions use the backend
 # array implementation; only scalar sizes and termination flags reach the host.
+function pmis_vectors_match(first, second)
+    return first === second || mapreduce(
+        ==, &, logical_backend_buffer(first), logical_backend_buffer(second); init = true
+    )
+end
+
 function pmis_buffer(old, backend, ::Type{T}, n, tracker) where {T}
     allocation, compatible = reusable_backend_allocation(old, T, backend)
     if compatible && allocation isa Vector
@@ -75,7 +81,12 @@ function pmis_transpose(
     else
         pmis_buffer(optional_property(old, :offsets), backend, Int, ncol + 1, tracker)
     end
-    nentries = pmis_scan!(offsets, counts, backend)
+    nentries = if is_strength
+        pmis_scan!(offsets, counts, backend)
+    else
+        cumsum!(logical_backend_buffer(offsets), counts)
+        length(cv)
+    end
     rows = if is_strength
         pmis_scratch!(workspace, :strength_rows, backend, Ti, nentries, tracker)
     else
@@ -251,12 +262,77 @@ end
     end
 end
 
-@inline function pmis_insert_candidate!(cols, first, last, c)
+@inline function pmis_candidate_position(cols, first, last, c)
     @inbounds for k in first:last
-        cols[k] == c && return last
+        cols[k] == c && return k
     end
+    return 0
+end
+
+@inline function pmis_insert_candidate!(cols, first, last, c)
+    iszero(pmis_candidate_position(cols, first, last, c)) || return last
     @inbounds cols[last + 1] = c
     return last + 1
+end
+
+@inline function pmis_candidate_weights!(
+        vals, cols, first, last, rp, cv, av, cf, cmap, strong, i, extended
+    )
+    T = eltype(vals)
+    diagonal = zero(T)
+    @inbounds for p in first:last
+        vals[p] = zero(T)
+    end
+    # The complete candidate set is already in cols. Distribute each strong
+    # fine neighbor's contribution once across that set.
+    @inbounds for k in rp[i]:(rp[i + 1] - 1)
+        j, aij = cv[k], av[k]
+        pos = cf[j] == 1 ? pmis_candidate_position(cols, first, last, cmap[j]) : 0
+        if j == i
+            diagonal += aij
+        elseif !iszero(pos)
+            vals[pos] += aij
+        elseif strong[k] && cf[j] == -1
+            diag_j = zero(T)
+            for q in rp[j]:(rp[j + 1] - 1)
+                cv[q] == j && (diag_j += av[q])
+            end
+            sign_j = diag_j < 0 ? -one(T) : one(T)
+            denominator = zero(T)
+            for q in rp[j]:(rp[j + 1] - 1)
+                l, ajl = cv[q], av[q]
+                if l != j && sign_j * ajl < 0 &&
+                        ((extended && l == i) ||
+                        (cf[l] == 1 && !iszero(pmis_candidate_position(cols, first, last, cmap[l]))))
+                    denominator += ajl
+                end
+            end
+            if iszero(denominator)
+                diagonal += aij
+            else
+                distribute = aij / denominator
+                for q in rp[j]:(rp[j + 1] - 1)
+                    l, ajl = cv[q], av[q]
+                    (l != j && sign_j * ajl < 0) || continue
+                    if extended && l == i
+                        diagonal += distribute * ajl
+                    elseif cf[l] == 1
+                        pos = pmis_candidate_position(cols, first, last, cmap[l])
+                        iszero(pos) || (vals[pos] += distribute * ajl)
+                    end
+                end
+            end
+        elseif cf[j] != -3
+            diagonal += aij
+        end
+    end
+    scale = iszero(diagonal) ? (extended ? one(T) : zero(T)) : -inv(diagonal)
+    total = zero(T)
+    @inbounds for p in first:last
+        vals[p] *= scale
+        total += vals[p]
+    end
+    return total
 end
 
 @kernel function pmis_p_select!(
@@ -286,13 +362,9 @@ end
                     end
                 end
             end
-            total = zero(eltype(vals))
-            for k in first:last
-                diagonal, _, selected = interpolation_row_terms(rp, cv, av, cf, cmap, strong, i, cols[k], extended)
-                scale = iszero(diagonal) ? (extended ? one(diagonal) : zero(diagonal)) : -inv(diagonal)
-                vals[k] = scale * selected
-                total += vals[k]
-            end
+            total = pmis_candidate_weights!(
+                vals, cols, first, last, rp, cv, av, cf, cmap, strong, i, extended
+            )
             # Rank by weight, then pack the retained entries in CSR column order.
             for k in (first + 1):last
                 col, val = cols[k], vals[k]
@@ -340,6 +412,24 @@ end
     end
 end
 
+@kernel function pmis_p_pattern_matches!(
+        matches, @Const(scan), @Const(slots), @Const(candidate_cols), @Const(rp), @Const(cv)
+    )
+    i = @index(Global)
+    @inbounds begin
+        same = scan[i] == rp[i] && scan[i + 1] == rp[i + 1]
+        if same
+            for k in rp[i]:(rp[i + 1] - 1)
+                if cv[k] != candidate_cols[slots[i] + k - rp[i]]
+                    same = false
+                    break
+                end
+            end
+        end
+        matches[i] = same
+    end
+end
+
 function pmis_index_limit(::Type{Ti}, n) where {Ti}
     n < typemax(Ti) || throw(ArgumentError("AMG sparsity exceeds the CSR index range; use wider indices"))
     return n
@@ -351,7 +441,9 @@ function pmis_offsets(::Type{Ti}, scan, backend, block, old, tracker) where {Ti}
     return offsets
 end
 
-function pmis_prolongation(A, cf, cmap, nc, strong, interpolation, workspace, old, tracker)
+function pmis_prolongation(
+        A, cf, cmap, nc, strong, interpolation, workspace, old, compare_pattern, tracker
+    )
     backend, block = matrix_backend(A), matrix_kernel_block_size(A)
     n = matrix_nrows(A)
     Tv, Ti = eltype(A), eltype(A.colval)
@@ -371,11 +463,25 @@ function pmis_prolongation(A, cf, cmap, nc, strong, interpolation, workspace, ol
     )
     scan = pmis_scratch!(workspace, :row_scan, backend, Int, n + 1, tracker)
     np = pmis_index_limit(Ti, pmis_scan!(scan, counts, backend))
+    if compare_pattern && !isnothing(old) && old.ncol == nc && length(old.colval) == np
+        matches = pmis_scratch!(workspace, :matching_p_rows, backend, Bool, n, tracker)
+        pmis_p_pattern_matches!(backend, block)(
+            matches, scan, slots, cols, old.rowptr, old.colval; ndrange = n
+        )
+        if all(matches)
+            # Candidate selection can change with the values even when the
+            # strength graph stays fixed. Reuse the maps only after this check.
+            pmis_p_pack!(backend, block)(
+                old.colval, old.nzval, old.rowptr, slots, cols, vals; ndrange = n
+            )
+            return old, true
+        end
+    end
     rp = pmis_offsets(Ti, scan, backend, block, optional_property(old, :rowptr), tracker)
     cv = pmis_buffer(optional_property(old, :colval), backend, Ti, np, tracker)
     pv = pmis_buffer(optional_property(old, :nzval), backend, Tv, np, tracker)
     pmis_p_pack!(backend, block)(cv, pv, rp, slots, cols, vals; ndrange = n)
-    return Prolongation{Tv, Ti, typeof(rp), typeof(cv), typeof(pv)}(rp, cv, pv, n, nc)
+    return Prolongation{Tv, Ti, typeof(rp), typeof(cv), typeof(pv)}(rp, cv, pv, n, nc), false
 end
 
 @kernel function pmis_galerkin_counts!(counts, @Const(trp), @Const(rows), @Const(arp), @Const(acv), @Const(prp))
@@ -394,16 +500,96 @@ end
     end
 end
 
-@inline function pmis_sift_down!(entries, base, root, last)
-    @inbounds while root <= last ÷ 2
-        child = 2 * root
-        if child < last && isless(entries[base + child], entries[base + child + 1])
-            child += 1
+@inline pmis_galerkin_less(a, b) = isless(a, b)
+
+@inline function pmis_galerkin_less(a::NTuple{4, Int32}, b::NTuple{4, Int32})
+    # CSR indices are positive. Each word compares two indices in lexicographic order.
+    first_a = (UInt64(unsigned(a[1])) << 32) | unsigned(a[2])
+    first_b = (UInt64(unsigned(b[1])) << 32) | unsigned(b[2])
+    first_a == first_b || return first_a < first_b
+    second_a = (UInt64(unsigned(a[3])) << 32) | unsigned(a[4])
+    second_b = (UInt64(unsigned(b[3])) << 32) | unsigned(b[4])
+    return second_a < second_b
+end
+
+@inline function pmis_sift_down!(entries, base, root, last, value)
+    @inbounds begin
+        while root <= last ÷ 2
+            child = 2 * root
+            best = entries[base + child]
+            if child < last
+                right = entries[base + child + 1]
+                if pmis_galerkin_less(best, right)
+                    best = right
+                    child += 1
+                end
+            end
+            pmis_galerkin_less(value, best) || break
+            entries[base + root] = best
+            root = child
         end
-        r, c = base + root, base + child
-        isless(entries[r], entries[c]) || break
-        entries[r], entries[c] = entries[c], entries[r]
-        root = child
+        entries[base + root] = value
+    end
+    return nothing
+end
+
+@inline function pmis_heapsort_row!(entries, first, last)
+    base, n = first - 1, last - first + 1
+    @inbounds begin
+        for r in (n ÷ 2):-1:1
+            pmis_sift_down!(entries, base, r, n, entries[base + r])
+        end
+        for j in last:-1:(first + 1)
+            root, value = entries[first], entries[j]
+            entries[j] = root
+            pmis_sift_down!(entries, base, 1, j - first, value)
+        end
+    end
+    return nothing
+end
+
+@inline function pmis_fill_galerkin_row!(entries, first, trp, rows, pl, arp, acv, prp, pcv, i)
+    slot = first
+    Ti = eltype(pcv)
+    @inbounds for t in trp[i]:(trp[i + 1] - 1)
+        r = rows[t]
+        for a in arp[r]:(arp[r + 1] - 1)
+            j = acv[a]
+            for p in prp[j]:(prp[j + 1] - 1)
+                entries[slot] = (pcv[p], pl[t], Ti(a), Ti(p))
+                slot += 1
+            end
+        end
+    end
+    return slot - 1
+end
+
+@inline function pmis_galerkin_column_count(entries, first, last, previous)
+    count = 0
+    @inbounds for t in first:last
+        col = entries[t][1]
+        count += Int(col != previous)
+        previous = col
+    end
+    return count
+end
+
+function pmis_galerkin_rows_cpu!(
+        entries, counts, slots, trp, rows, pl, arp, acv, prp, pcv, ncoarse, batch_size
+    )
+    counts[1] = 1
+    foreach_cpu_row(ncoarse, batch_size) do i
+        @inbounds begin
+            first = slots[i]
+            last = pmis_fill_galerkin_row!(entries, first, trp, rows, pl, arp, acv, prp, pcv, i)
+            if last - first + 1 <= 1024
+                sort!(view(entries, first:last); alg = QuickSort, lt = pmis_galerkin_less)
+            else
+                # Bound quicksort's worst-case cost on rows with high fill.
+                pmis_heapsort_row!(entries, first, last)
+            end
+            counts[i + 1] = pmis_galerkin_column_count(entries, first, last, zero(eltype(pcv)))
+        end
     end
     return nothing
 end
@@ -415,36 +601,11 @@ end
     i = @index(Global)
     @inbounds begin
         first = slots[i]
-        slot = first
-        Ti = eltype(pcv)
-        for t in trp[i]:(trp[i + 1] - 1)
-            r = rows[t]
-            for a in arp[r]:(arp[r + 1] - 1)
-                j = acv[a]
-                for p in prp[j]:(prp[j + 1] - 1)
-                    entries[slot] = (pcv[p], pl[t], Ti(a), Ti(p))
-                    slot += 1
-                end
-            end
-        end
+        last = pmis_fill_galerkin_row!(entries, first, trp, rows, pl, arp, acv, prp, pcv, i)
         # Rows are independent. Group triples by output column, with their
         # indices as tie breakers so the accumulation order is deterministic.
-        base, n = first - 1, slot - first
-        for r in (n ÷ 2):-1:1
-            pmis_sift_down!(entries, base, r, n)
-        end
-        for j in (slot - 1):-1:(first + 1)
-            entries[first], entries[j] = entries[j], entries[first]
-            pmis_sift_down!(entries, base, 1, j - first)
-        end
-        count = 0
-        prev = zero(Ti)
-        for t in first:(slot - 1)
-            col = entries[t][1]
-            count += Int(col != prev)
-            prev = col
-        end
-        counts[i + 1] = count
+        pmis_heapsort_row!(entries, first, last)
+        counts[i + 1] = pmis_galerkin_column_count(entries, first, last, zero(eltype(pcv)))
         i == 1 && (counts[i] = 1)
     end
 end
@@ -481,10 +642,15 @@ function pmis_galerkin(A, P, Pt, workspace, old, old_coarse, tracker)
     )
     nt = pmis_scan!(slots, counts, backend)
     entries = pmis_scratch!(workspace, :galerkin_entries, backend, NTuple{4, Ti}, nt, tracker)
-    pmis_galerkin_rows!(backend, block)(
+    row_args = (
         entries, counts, slots, Pt.offsets, Pt.fine_rows, Pt.p_indices,
-        A.rowptr, A.colval, P.rowptr, P.colval; ndrange = nc
+        A.rowptr, A.colval, P.rowptr, P.colval,
     )
+    if backend isa KernelAbstractions.CPU
+        pmis_galerkin_rows_cpu!(row_args..., nc, block)
+    else
+        pmis_galerkin_rows!(backend, block)(row_args...; ndrange = nc)
+    end
     scan = pmis_scratch!(workspace, :row_scan, backend, Int, nc + 1, tracker)
     nz = pmis_index_limit(Ti, pmis_scan!(scan, counts, backend))
     rp = pmis_offsets(Ti, scan, backend, block, optional_property(old_coarse, :rowptr), tracker)
@@ -559,21 +725,45 @@ function build_pmis_hierarchy(
         n = matrix_nrows(current)
         n <= options.coarse_size && break
         old = reuse_level(reuse_levels, l)
+        same_fine_pattern = !isnothing(old) && current === old.A
         strong = pmis_buffer(optional_property(old, :strength), backend, Bool, matrix_nonzeros(current), tracker)
-        strength(current, options.coarsening.theta, options.max_row_sum, strong; strength_type = options.strength_type)
+        compare_strength = same_fine_pattern && !isnothing(old.P)
+        buffer = if compare_strength
+            pmis_scratch!(workspace, :candidate_strength, backend, Bool, length(strong), tracker)
+        else
+            strong
+        end
+        strength(current, options.coarsening.theta, options.max_row_sum, buffer; strength_type = options.strength_type)
         interpolation = options.interpolation
-        cf, cmap, nc = pmis_split(current, strong, interpolation, workspace, old, tracker)
+        cf, cmap, nc = if compare_strength && pmis_vectors_match(strong, buffer)
+            old.cf, old.coarse_map, old.P.ncol
+        else
+            if compare_strength
+                copy_kernel!(backend, matrix_kernel_block_size(current))(
+                    strong, buffer, length(strong); ndrange = length(strong)
+                )
+            end
+            pmis_split(current, strong, interpolation, workspace, old, tracker)
+        end
         0 < nc < n || break
-        P = pmis_prolongation(current, cf, cmap, nc, strong, interpolation, workspace, optional_property(old, :P), tracker)
-        off, rows, idx = pmis_transpose(
-            P.rowptr, P.colval, nothing, n, nc, backend, matrix_kernel_block_size(current),
-            workspace, optional_property(old, :Pt), tracker
+        P, same_p_pattern = pmis_prolongation(
+            current, cf, cmap, nc, strong, interpolation, workspace,
+            optional_property(old, :P), same_fine_pattern, tracker
         )
-        Pt = TransposeMap{Ti, typeof(off), typeof(rows), typeof(idx)}(off, rows, idx)
-        coarse, G = pmis_galerkin(
-            current, P, Pt, workspace, optional_property(old, :galerkin),
-            optional_property(reuse_level(reuse_levels, l + 1), :A), tracker
-        )
+        old_coarse = optional_property(reuse_level(reuse_levels, l + 1), :A)
+        if same_p_pattern
+            Pt, G = old.Pt, old.galerkin
+            coarse = galerkin!(old_coarse, current, P, G)
+        else
+            off, rows, idx = pmis_transpose(
+                P.rowptr, P.colval, nothing, n, nc, backend, matrix_kernel_block_size(current),
+                workspace, optional_property(old, :Pt), tracker
+            )
+            Pt = TransposeMap{Ti, typeof(off), typeof(rows), typeof(idx)}(off, rows, idx)
+            coarse, G = pmis_galerkin(
+                current, P, Pt, workspace, optional_property(old, :galerkin), old_coarse, tracker
+            )
+        end
         push!(levels, pmis_level(current, P, Pt, G, strong, cf, cmap, options, old, tracker))
         current = coarse
     end
