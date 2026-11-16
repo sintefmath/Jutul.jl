@@ -25,14 +25,17 @@ struct BlockSparseLU{V, I, B, R, C, Ti}
     host_status::Vector{Ti}
 end
 
+block_workgroupsize(backend, nblocks) = 1
+
 """
     try_factorize(A::StaticSparsityMatrixCSR)
 
 Analyze the structural components of a square CSR matrix and compute a
 pivoted LU when it decomposes into independent blocks of at most 32 rows.
-Store fill only within each component and return `nothing` if the pattern
-needs a general sparse solver. Symbolic analysis runs on the host once.
-`refactorize!` and `ldiv!` run on the matrix backend.
+The row limit applies to each block. The number of blocks is limited by the
+index type and available memory, and a block of size `b` stores `b^2` factor
+entries. Return `nothing` for patterns outside this path. Symbolic analysis
+runs on the host once. `refactorize!` and `ldiv!` run on the matrix backend.
 """
 function try_factorize(A::StaticSparsityMatrixCSR)
     n = size(A, 1)
@@ -97,12 +100,11 @@ function refactorize!(F::BlockSparseLU, A::StaticSparsityMatrixCSR)
             throw(ArgumentError("sparse LU refactorization requires the same CSR pattern"))
     end
 
-    # A workgroup per component distributes the small blocks across GPU
-    # multiprocessors and lets KA schedule them across host threads.
-    factor! = factor_blocks_kernel!(F.backend, 1)
+    nblocks = length(F.status)
+    factor! = factor_blocks_kernel!(F.backend, block_workgroupsize(F.backend, nblocks))
     event = factor!(
         F.factors, F.pivots, F.status, A.nzval, F.order, F.blockptr,
-        F.factorptr, F.source_map; ndrange = length(F.status)
+        F.factorptr, F.source_map; ndrange = nblocks
     )
     isnothing(event) || wait(event)
     copyto!(F.host_status, F.status)
@@ -200,10 +202,11 @@ end
 
 function LinearAlgebra.ldiv!(x, F::BlockSparseLU, b)
     length(x) == length(F.order) == length(b) || throw(DimensionMismatch())
-    solve! = solve_blocks_kernel!(F.backend, 1)
+    nblocks = length(F.status)
+    solve! = solve_blocks_kernel!(F.backend, block_workgroupsize(F.backend, nblocks))
     event = solve!(
         x, b, F.work, F.factors, F.pivots, F.order, F.blockptr, F.factorptr;
-        ndrange = length(F.status)
+        ndrange = nblocks
     )
     isnothing(event) || wait(event)
     return x

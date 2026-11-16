@@ -60,6 +60,25 @@ using Test
 
             connected = sparse(Float32[4 1; 1 4])
             @test isnothing(Jutul.KASparseFactorizations.try_factorize(csr(connected)))
+
+            @testset "Many independent well blocks" begin
+                nblocks, blocksize = 2049, 8
+                block = spdiagm(
+                    -1 => fill(-1.0f0, blocksize - 1), 0 => fill(4.0f0, blocksize),
+                    1 => fill(-1.0f0, blocksize - 1)
+                )
+                A = kron(sparse(I, nblocks, nblocks), block)
+                matrix = csr(A)
+                F = Jutul.KASparseFactorizations.try_factorize(matrix)
+                @test F isa Jutul.KASparseFactorizations.BlockSparseLU
+                @test length(F.factors) == nblocks * blocksize^2
+                b = Jutul.KAPreconditioners.backend_copy(backend, ones(Float32, size(A, 1)))
+                x = similar(b)
+                nonzeros(matrix) .*= 1.25f0
+                @test Jutul.KernelExecution.refactorize_linear_system!(lu!, F, matrix) === F
+                ldiv!(x, F, b)
+                @test 1.25f0 .* (A * Array(x)) ≈ Array(b)
+            end
         end
     end
 end
