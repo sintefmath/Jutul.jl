@@ -1616,6 +1616,35 @@ function LinearAlgebra.ldiv!(
 end
 
 function linear_solve!(
+        sys::LinearizedSystem{L, J}, solver::LUSolver, arg...;
+        dx = sys.dx_buffer, r = sys.r_buffer, kwarg...
+    ) where {
+        L, Tv <: AbstractFloat, Ti <: Integer, V, I, R,
+        B <: KernelAbstractions.Backend,
+        J <: StaticSparsityMatrixCSR{Tv, Ti, V, I, R, B},
+    }
+    if length(sys.dx_buffer) > solver.max_size
+        error("System too big for LU solver. You can increase max_size at your own peril.")
+    end
+    # In particular, well presolves must use the same backend-aware LU as the
+    # Schur blocks. Calling lu(A) directly iterates a device CSR matrix on CPU.
+    if !solver.reuse_memory
+        factorization = factorize_linear_system(lu, sys.jac)
+    else
+        if isnothing(solver.F)
+            solver.F = factorize_linear_system(lu, sys.jac)
+        else
+            refactorize_linear_system!(lu!, solver.F, sys.jac)
+        end
+        factorization = solver.F
+    end
+    ldiv!(dx, factorization, r)
+    dx .*= -one(eltype(dx))
+    @assert all(isfinite, dx) "Linear solve resulted in non-finite values."
+    return linear_solve_return()
+end
+
+function linear_solve!(
         sys::LinearizedSystem{<:Any, <:StaticSparsityMatrixCSR},
         ::Nothing, ctx::KernelAbstractionsContext, arg...;
         dx = sys.dx, r = sys.r_buffer, kwarg...
