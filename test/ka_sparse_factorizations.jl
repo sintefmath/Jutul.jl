@@ -94,41 +94,44 @@ end
             end
             raw = Jutul.KAPreconditioners.csr_matrix(A; backend)
             matrix = Jutul.KAPreconditioners.csr_matrix(
-                raw.rowptr, raw.colval, raw.nzval, size(raw)...; backend)
+                raw.rowptr, raw.colval, raw.nzval, size(raw)...; backend
+            )
             rhs = T.(1:size(A, 1))
             r = Jutul.KAPreconditioners.backend_copy(backend, rhs)
             dx = similar(r)
             system = Jutul.LinearizedSystem(
-                matrix, r, dx, nonzeros(matrix), r, dx, Jutul.EquationMajorLayout())
+                matrix, r, dx, nonzeros(matrix), r, dx, Jutul.EquationMajorLayout()
+            )
             solver = LUSolver()
             result = Jutul.linear_solve!(system, solver)
             @test result.ok
-            @test A*Array(dx) ≈ -rhs
+            @test A * Array(dx) ≈ -rhs
             @test Array(r) == rhs
             factorization = solver.F
             nonzeros(matrix) .*= T(1.25)
             Jutul.linear_solve!(system, solver)
             @test solver.F === factorization
-            @test T(1.25)*(A*Array(dx)) ≈ -rhs
+            @test T(1.25) * (A * Array(dx)) ≈ -rhs
 
             # Explicit output/rhs buffers must not read or overwrite the
             # system's default buffers, including its non-finite output.
             fill!(dx, T(NaN))
             output = similar(dx)
             alternate_rhs = Jutul.KAPreconditioners.backend_copy(backend, reverse(rhs))
-            result = Jutul.linear_solve!(system, solver; dx=output, r=alternate_rhs)
+            result = Jutul.linear_solve!(system, solver; dx = output, r = alternate_rhs)
             @test result.ok
-            @test T(1.25)*(A*Array(output)) ≈ -reverse(rhs)
+            @test T(1.25) * (A * Array(output)) ≈ -reverse(rhs)
             @test all(isnan, Array(dx))
             @test Array(alternate_rhs) == reverse(rhs)
             @test Array(r) == rhs
 
-            solver = LUSolver(reuse_memory=false)
+            solver = LUSolver(reuse_memory = false)
             Jutul.linear_solve!(system, solver)
             @test isnothing(solver.F)
-            @test T(1.25)*(A*Array(dx)) ≈ -rhs
+            @test T(1.25) * (A * Array(dx)) ≈ -rhs
             @test_throws ErrorException Jutul.linear_solve!(
-                system, LUSolver(max_size=length(rhs)-1))
+                system, LUSolver(max_size = length(rhs) - 1)
+            )
         end
     end
 end
