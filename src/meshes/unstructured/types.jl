@@ -721,5 +721,9 @@ function UnstructuredMesh(G_raw::AbstractDict; kwarg...)
     nodePos_raw = Int.(vec(G_raw["faces"]["nodePos"][:, 1]))
     coord = collect(G_raw["nodes"]["coords"]')
     N_raw = Int.(G_raw["faces"]["neighbors"]')
+    if haskey(G_raw, "cartDims") && !haskey(kwarg, :structure)
+        cart_dims = Int.(vec(G_raw["cartDims"]))
+        kwarg = (; kwarg..., structure = CartesianIndex(cart_dims...))
+    end
     return UnstructuredMesh(faces_raw, facePos_raw, nodes_raw, nodePos_raw, coord, N_raw; kwarg...)
 end
