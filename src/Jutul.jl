@@ -159,6 +159,7 @@ include("ConvergenceMonitors/ConvergenceMonitors.jl")
 import Jutul.ConvergenceMonitors: ConvergenceMonitorCuttingCriterion
 import Jutul.ConvergenceMonitors: set_convergence_monitor_cutting_criterion!
 import Jutul.ConvergenceMonitors: set_convergence_monitor_relaxation!
+import Jutul.ConvergenceMonitors: optimize_convergence_monitor
 
 # Embedded meshes
 import Jutul.EmbeddedMeshes: EmbeddedMesh
