@@ -573,7 +573,7 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     op_p = linear_operator(lsys_param)
     λ_host = adjoint_storage.lagrange_host
     copyto!(λ_host, λ)
-    sens_add_mult!(∇G, op_p, λ_host)
+    @tic "∇G += op*λ" sens_add_mult!(∇G, op_p, λ_host)
     dparam = adjoint_storage.dparam
     return @tic "objective parameter gradient" if !isnothing(dparam)
         if i == N
@@ -627,7 +627,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
     objective_sim = adjoint_storage.objective
     objective_model = objective_sim.model
     objective_rhs = adjoint_storage.objective_rhs
-    reset_variables!(objective_sim, state)
+    @tic "reset variables" reset_variables!(objective_sim, state)
     obj_eval = objective_evaluator_from_model_and_state(
         G, objective_model, packed_steps, i
     )
@@ -651,7 +651,7 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
         # rhs += op*λ
         # - (∂Fₙ₊₁ / ∂xₙ)ᵀ λₙ₊₁
         adjoint_transfer_canonical_order!(λ_b, λ, forward_sim.model, to_canonical = false)
-        sens_add_mult!(rhs, op, λ_b)
+        @tic "rhs += op*λ" sens_add_mult!(rhs, op, λ_b)
     end
     # We have the right hand side, assemble the Jacobian and solve for the Lagrange multiplier
     lsolve = adjoint_storage.forward_config[:linear_solver]
@@ -687,18 +687,18 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     s = sim.storage
     model = sim.model
     # Deal with state0 first
-    reset_previous_state!(sim, state0)
-    update_secondary_variables!(s, model, true)
+    @tic "reset state0" reset_previous_state!(sim, state0)
+    @tic "secondary variables" update_secondary_variables!(s, model, true)
     # Make sure that state is that of the previous state TODO: This does an
     # extra update of properties that could maybe be avoided, but is needed to
     # make everything consistent with how the forward simulator works before
     # update_before_step! is called.
-    reset_state_to_previous_state!(sim)
+    @tic "reset state" reset_state_to_previous_state!(sim)
     # Apply logic as if timestep is starting
-    update_before_step!(s, model, dt, forces, time = time, recorder = progress_recorder(sim))
+    @tic "update_before_step" update_before_step!(s, model, dt, forces, time = time, recorder = progress_recorder(sim))
     # Then the current primary variables
-    reset_variables!(s, model, state)
-    update_state_dependents!(s, model, dt, forces, time = time, update_secondary = true)
+    @tic "reset state" reset_variables!(s, model, state)
+    @tic "state_dependents" update_state_dependents!(s, model, dt, forces, time = time, update_secondary = true)
     # Finally update the system
     return update_linearized_system!(s, model)
 end
