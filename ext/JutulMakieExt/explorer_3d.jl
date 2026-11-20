@@ -1,4 +1,5 @@
 using Jutul.StaticArrays
+using Jutul.LinearAlgebra: norm
 using OrderedCollections
 
 struct PlotExplorerOutput
@@ -161,6 +162,7 @@ function Jutul.plot_explorer_impl(
         title = missing,
         sens_enabled = false,
         mesh_enabled = true,
+        axis_cross_enabled = true,
         sens_kwarg = NamedTuple(),
         kwarg...
     )
@@ -718,6 +720,7 @@ function Jutul.plot_explorer_impl(
         center = Vec3f(center[1], center[2], 0)
     end
     cam = Makie.cam3d!(lscene.scene; upvector = upvector, lookat = center, camarg...)
+    add_axis_cross!(lscene, visible = axis_cross_enabled, textcolor = main_color)
     # w, h = size(scene_outer)
     # nearplane = 0.1f0
     # farplane = 100f0
@@ -936,6 +939,128 @@ function Jutul.plot_explorer_impl(
         end
     end
     return PlotExplorerOutput(fig, lscene, right_grid_layout, add_menu!, add_toggle!, color_information)
+end
+
+"""
+    add_axis_cross!(lscene; visible = true, textcolor = :white)
+
+Draw a small x/y/z orientation cross in the lower left corner of `lscene`. The
+cross follows the rotation of the 3D camera and the scene transformation (e.g.
+a flipped axis from `scale!`), but not zoom or panning, so it always shows how
+the coordinate axes are oriented on screen. Axes pointing away from the viewer
+are drawn faded.
+"""
+function add_axis_cross!(lscene;
+        visible = true,
+        textcolor = :white,
+        length_px = 50.0,
+        margin_px = 28.0,
+        linewidth = 3.0,
+        fontsize = 18,
+        labels = ("X", "Y", "Z")
+    )
+    parent_scene = lscene.scene
+    textcolor = Makie.to_color(textcolor)
+    if Makie.Colors.Gray(textcolor).val > 0.5
+        # Light text => dark background, use bright axis colors
+        colors = (RGBf(1.0, 0.35, 0.35), RGBf(0.4, 0.9, 0.4), RGBf(0.4, 0.65, 1.0))
+    else
+        colors = (RGBf(0.85, 0.1, 0.1), RGBf(0.0, 0.6, 0.0), RGBf(0.1, 0.25, 0.9))
+    end
+    # Pixel space overlay scene drawn after the 3D scene. It gets its own
+    # transformation so that scaling the 3D scene does not distort the cross.
+    overlay = Scene(parent_scene, camera = campixel!, transformation = Makie.Transformation())
+    center = Point2f(margin_px + length_px, margin_px + length_px)
+    segments = Observable(fill(center, 6))
+    segment_colors = Observable(fill(RGBAf(0, 0, 0, 0), 6))
+    heads = Observable(fill(center, 3))
+    head_rotations = Observable(zeros(Float32, 3))
+    head_colors = Observable(fill(RGBAf(0, 0, 0, 0), 3))
+    label_positions = Observable(fill(center, 3))
+    label_colors = Observable([RGBAf(c, 1.0) for c in colors])
+
+    function update_axis_cross!(view, model)
+        # Rotation part of the camera view: world -> camera space where x is
+        # right, y is up and z points towards the viewer.
+        R = SMatrix{3, 3, Float64}([view[i, j] for i in 1:3, j in 1:3])
+        M = SMatrix{3, 3, Float64}([model[i, j] for i in 1:3, j in 1:3])
+        dirs = map(1:3) do i
+            d = M[:, i]
+            n = norm(d)
+            if n > 0
+                d = d / n
+            end
+            R * d
+        end
+        # Draw the axis pointing most away from the viewer first
+        order = sortperm(dirs, by = d -> d[3])
+        seg = segments[]
+        seg_c = segment_colors[]
+        head = heads[]
+        head_rot = head_rotations[]
+        head_c = head_colors[]
+        lpos = label_positions[]
+        lcol = label_colors[]
+        for (k, i) in enumerate(order)
+            d = dirs[i]
+            dir2 = Vec2f(d[1], d[2])
+            tip = center + Float32(length_px) * dir2
+            alpha = Float32(d[3] >= 0 ? 1.0 : max(0.35, 1.0 + 0.65 * d[3]))
+            c = RGBAf(colors[i], alpha)
+            seg[2k - 1] = center
+            seg[2k] = tip
+            seg_c[2k - 1] = c
+            seg_c[2k] = c
+            head[k] = tip
+            head_rot[k] = atan(dir2[2], dir2[1]) - Float32(π / 2)
+            # Hide the arrow head when the axis points (almost) straight at
+            # or away from the viewer, its direction is then meaningless.
+            head_c[k] = RGBAf(colors[i], norm(dir2) > 0.2 ? alpha : 0.0f0)
+            lpos[i] = center + Float32(length_px + 0.75 * fontsize) * dir2
+            lcol[i] = c
+        end
+        notify(segments)
+        notify(segment_colors)
+        notify(heads)
+        notify(head_rotations)
+        notify(head_colors)
+        notify(label_positions)
+        notify(label_colors)
+        return nothing
+    end
+    cam = camera(parent_scene)
+    model = Makie.transformationmatrix(parent_scene)
+    update_axis_cross!(cam.view[], model[])
+    onany(update_axis_cross!, cam.view, model)
+
+    # overdraw: ignore depth so that the 3D geometry never hides the cross.
+    linesegments!(overlay, segments,
+        color = segment_colors,
+        linewidth = linewidth,
+        visible = visible,
+        overdraw = true,
+        inspectable = false
+    )
+    scatter!(overlay, heads,
+        marker = :utriangle,
+        markersize = 3.5 * linewidth,
+        rotation = head_rotations,
+        color = head_colors,
+        visible = visible,
+        overdraw = true,
+        inspectable = false
+    )
+    text!(overlay, label_positions,
+        text = collect(labels),
+        color = label_colors,
+        align = (:center, :center),
+        fontsize = fontsize,
+        font = :bold,
+        visible = visible,
+        overdraw = true,
+        inspectable = false
+    )
+    return overlay
 end
 
 function mesh_as_static(m; kwarg...)
