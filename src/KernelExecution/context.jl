@@ -48,7 +48,7 @@ in-place updates of its values. Set it to `false` to use KA kernels instead.
 struct KernelAbstractionsContext{B, F, I, L, LF, LI, S} <: GPUJutulContext
     backend::B
     matrix_layout::L
-    workgroupsize::Union{Int, Nothing}
+    workgroupsize::Int
     minbatch::Int
     use_kernels_for_secondary::Bool
     reduce_memory::Bool
@@ -86,8 +86,10 @@ function KernelAbstractionsContext(
     if !(LI <: Integer) || LI === Bool
         throw(ArgumentError("linear_index_type must be a non-Bool Integer type"))
     end
-    if !isnothing(workgroupsize) && workgroupsize <= 0
-        throw(ArgumentError("workgroupsize must be positive"))
+    if isnothing(workgroupsize)
+        workgroupsize = 0
+    elseif workgroupsize < 0
+        throw(ArgumentError("workgroupsize must be non-negative"))
     end
     if minbatch <= 0
         throw(ArgumentError("minbatch must be positive"))
@@ -107,13 +109,19 @@ function KernelAbstractionsContext(
     if secondary_scheme != :flat && use_kernels_for_secondary
         throw(ArgumentError("secondary_scheme=$secondary_scheme requires host evaluation on a CPU backend"))
     end
-    if workgroupsize isa Number
-        workgroupsize = Int(workgroupsize)
-    end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI, secondary_scheme}(
-        backend, matrix_layout, workgroupsize, Int(minbatch),
+        backend, matrix_layout, Int(workgroupsize), Int(minbatch),
         use_kernels_for_secondary, reduce_memory, use_vendor_linalg, Int(nthreads)
     )
+end
+
+function workgroupsize(ctx::KernelAbstractionsContext)
+    sz = workgroupsize(ctx)
+    if sz == 0
+        return nothing
+    else
+        return sz
+    end
 end
 
 float_type(::KernelAbstractionsContext{B, F}) where {B, F} = F
@@ -144,7 +152,7 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         linear_float_type = linear_float_type(ctx),
         linear_index_type = linear_index_type(ctx),
         matrix_layout = adjoint(matrix_layout(ctx)),
-        workgroupsize = ctx.workgroupsize,
+        workgroupsize = workgroupsize(ctx),
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
@@ -164,7 +172,7 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         float_type = linear_float_type(ctx),
         index_type = linear_index_type(ctx),
         matrix_layout = matrix_layout(ctx),
-        workgroupsize = ctx.workgroupsize,
+        workgroupsize = workgroupsize(ctx),
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
@@ -192,7 +200,7 @@ function launch_threaded_loop(
         threaded_loop_minbatch(f, n, batches, cpu_minbatch, :batch)
         return nothing
     end
-    kernel! = threaded_loop_kernel(ctx.backend, ctx.workgroupsize)
+    kernel! = threaded_loop_kernel(ctx.backend, workgroupsize(ctx))
     return kernel!(f; ndrange = n)
 end
 
@@ -247,7 +255,7 @@ function secondary_variable_loop!(state, model, k::Symbol, ctx::KernelAbstractio
     var = model[k]
     deps = Tuple(Jutul.get_dependencies(var, model))
     dependencies = NamedTuple{deps}(ntuple(i -> state[deps[i]], length(deps)))
-    kernel! = secondary_variable_update_kernel!(ctx.backend, ctx.workgroupsize)
+    kernel! = secondary_variable_update_kernel!(ctx.backend, workgroupsize(ctx))
     event = kernel!(dest, var, model, dependencies; ndrange = n)
     if do_wait
         wait_for_kernel(event, ctx)
