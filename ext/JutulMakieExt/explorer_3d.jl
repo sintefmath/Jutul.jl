@@ -1035,7 +1035,8 @@ function add_axis_cross!(
         overdraw = true,
         inspectable = false
     )
-    text!(overlay, label_positions,
+    text!(
+        overlay, label_positions,
         text = collect(labels),
         color = label_colors,
         align = (:center, :center),
