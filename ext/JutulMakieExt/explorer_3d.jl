@@ -932,7 +932,8 @@ a flipped axis from `scale!`), but not zoom or panning, so it always shows how
 the coordinate axes are oriented on screen. Axes pointing away from the viewer
 are drawn faded.
 """
-function add_axis_cross!(lscene;
+function add_axis_cross!(
+        lscene;
         visible = true,
         textcolor = :white,
         length_px = 50.0,
