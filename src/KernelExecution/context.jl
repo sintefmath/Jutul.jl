@@ -124,6 +124,16 @@ function workgroupsize(ctx::KernelAbstractionsContext, default = nothing)
     end
 end
 
+function context_kernel(kernel, ctx::KernelAbstractionsContext)
+    sz = workgroupsize(ctx)
+    if isnothing(sz)
+        # Omitting the size selects a dynamic kernel; passing nothing is invalid.
+        return kernel(ctx.backend)
+    else
+        return kernel(ctx.backend, sz)
+    end
+end
+
 float_type(::KernelAbstractionsContext{B, F}) where {B, F} = F
 index_type(::KernelAbstractionsContext{B, F, I}) where {B, F, I} = I
 linear_float_type(::KernelAbstractionsContext{B, F, I, L, LF}) where {B, F, I, L, LF} = LF
@@ -200,7 +210,7 @@ function launch_threaded_loop(
         threaded_loop_minbatch(f, n, batches, cpu_minbatch, :batch)
         return nothing
     end
-    kernel! = threaded_loop_kernel(ctx.backend, workgroupsize(ctx))
+    kernel! = context_kernel(threaded_loop_kernel, ctx)
     return kernel!(f; ndrange = n)
 end
 
@@ -255,7 +265,7 @@ function secondary_variable_loop!(state, model, k::Symbol, ctx::KernelAbstractio
     var = model[k]
     deps = Tuple(Jutul.get_dependencies(var, model))
     dependencies = NamedTuple{deps}(ntuple(i -> state[deps[i]], length(deps)))
-    kernel! = secondary_variable_update_kernel!(ctx.backend, workgroupsize(ctx))
+    kernel! = context_kernel(secondary_variable_update_kernel!, ctx)
     event = kernel!(dest, var, model, dependencies; ndrange = n)
     if do_wait
         wait_for_kernel(event, ctx)
