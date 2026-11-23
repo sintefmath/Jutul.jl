@@ -1017,7 +1017,8 @@ function add_axis_cross!(
     onany(update_axis_cross!, cam.view, model)
 
     # overdraw: ignore depth so that the 3D geometry never hides the cross.
-    linesegments!(overlay, segments,
+    linesegments!(
+        overlay, segments,
         color = segment_colors,
         linewidth = linewidth,
         visible = visible,
