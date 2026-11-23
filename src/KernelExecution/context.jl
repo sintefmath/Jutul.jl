@@ -3,7 +3,8 @@
                               linear_float_type=float_type,
                               linear_index_type=index_type,
                               matrix_layout=EquationMajorLayout(),
-                              workgroupsize=256, minbatch=minbatch(nothing),
+                              workgroupsize=nothing,
+                              minbatch=minbatch(nothing),
                               use_kernels_for_secondary=!is_cpu_backend,
                               secondary_scheme=:flat,
                               reduce_memory=true, use_vendor_linalg=true)
@@ -47,7 +48,7 @@ in-place updates of its values. Set it to `false` to use KA kernels instead.
 struct KernelAbstractionsContext{B, F, I, L, LF, LI, S} <: GPUJutulContext
     backend::B
     matrix_layout::L
-    workgroupsize::Int
+    workgroupsize::Union{Int, Nothing}
     minbatch::Int
     use_kernels_for_secondary::Bool
     reduce_memory::Bool
@@ -65,7 +66,7 @@ function KernelAbstractionsContext(
         use_kernels_for_secondary = missing,
         secondary_scheme = :flat,
         matrix_layout = EquationMajorLayout(),
-        workgroupsize = 256,
+        workgroupsize = nothing,
         minbatch = 1000,
         reduce_memory = true,
         use_vendor_linalg::Bool = false
@@ -85,7 +86,7 @@ function KernelAbstractionsContext(
     if !(LI <: Integer) || LI === Bool
         throw(ArgumentError("linear_index_type must be a non-Bool Integer type"))
     end
-    if workgroupsize <= 0
+    if !isnothing(workgroupsize) && workgroupsize <= 0
         throw(ArgumentError("workgroupsize must be positive"))
     end
     if minbatch <= 0
@@ -106,8 +107,11 @@ function KernelAbstractionsContext(
     if secondary_scheme != :flat && use_kernels_for_secondary
         throw(ArgumentError("secondary_scheme=$secondary_scheme requires host evaluation on a CPU backend"))
     end
+    if workgroupsize isa Number
+        workgroupsize = Int(workgroupsize)
+    end
     return KernelAbstractionsContext{typeof(backend), F, I, typeof(matrix_layout), LF, LI, secondary_scheme}(
-        backend, matrix_layout, Int(workgroupsize), Int(minbatch),
+        backend, matrix_layout, workgroupsize, Int(minbatch),
         use_kernels_for_secondary, reduce_memory, use_vendor_linalg, Int(nthreads)
     )
 end
