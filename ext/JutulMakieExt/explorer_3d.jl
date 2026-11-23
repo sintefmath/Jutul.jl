@@ -791,17 +791,37 @@ function Jutul.plot_explorer_impl(
         end
         return nothing
     end
+    # Select on click only: the button must be pressed and released inside the
+    # scene without dragging, since dragging is used to rotate/pan the camera.
+    click_drag_tolerance_px = 4.0
+    pressed_button = Ref{Union{Nothing, Mouse.Button}}(nothing)
+    press_position_px = Ref(Vec2f(0, 0))
     on(events(fig).mousebutton, priority = 2) do event
         is_left = event.button == Mouse.left
         clear_selection = event.button == Mouse.middle
-        if (is_left || clear_selection) && event.action == Mouse.press && Makie.is_mouseinside(lscene.scene)
-            position = mouseposition(fig)
-            is_shift = ispressed(fig, Keyboard.left_shift) || ispressed(fig, Keyboard.right_shift)
-            errormonitor(
-                @async lock(selection_lock) do
-                    update_selection(position, clear_selection, is_shift)
-                end
-            )
+        if !(is_left || clear_selection)
+            return Consume(false)
+        end
+        mouse_px = Vec2f(events(fig).mouseposition[])
+        if event.action == Mouse.press
+            if Makie.is_mouseinside(lscene.scene)
+                pressed_button[] = event.button
+                press_position_px[] = mouse_px
+            else
+                pressed_button[] = nothing
+            end
+        elseif event.action == Mouse.release && pressed_button[] == event.button
+            pressed_button[] = nothing
+            is_click = maximum(abs, mouse_px - press_position_px[]) <= click_drag_tolerance_px
+            if is_click && Makie.is_mouseinside(lscene.scene)
+                position = mouseposition(fig)
+                is_shift = ispressed(fig, Keyboard.left_shift) || ispressed(fig, Keyboard.right_shift)
+                errormonitor(
+                    @async lock(selection_lock) do
+                        update_selection(position, clear_selection, is_shift)
+                    end
+                )
+            end
         end
         return Consume(false)
     end
