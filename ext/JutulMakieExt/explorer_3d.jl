@@ -1025,7 +1025,8 @@ function add_axis_cross!(
         overdraw = true,
         inspectable = false
     )
-    scatter!(overlay, heads,
+    scatter!(
+        overlay, heads,
         marker = :utriangle,
         markersize = 3.5 * linewidth,
         rotation = head_rotations,
