@@ -3,6 +3,7 @@ module JutulCUDAExt
 using Jutul
 using Jutul.KAPreconditioners
 using Jutul: KASparseFactorizations, StaticSparsityMatrixCSR
+using Jutul.KernelExecution: workgroupsize
 using CUDA
 using CUDA.cuSPARSE: CuSparseMatrixBSR, CuSparseMatrixCSR
 using KernelAbstractions
@@ -731,12 +732,20 @@ function Jutul.KernelExecution.launch_threaded_loop(
     end
     n = Int(n)
     call = CUDA.KernelCall(jutul_threaded_loop_kernel, f, n)
+    return launch_cuda_threaded_loop(call, n, context)
+end
+
+function launch_cuda_threaded_loop(call, n::Int, context)
+    maxthreads = workgroupsize(context, nothing)
     kernel = CUDA.kernel_compile(
         call;
         always_inline = context.backend.always_inline,
-        maxthreads = context.workgroupsize
+        maxthreads = maxthreads
     )
-    threads = min(n, context.workgroupsize)
+    if isnothing(maxthreads)
+        maxthreads = Int(CUDA.launch_configuration(kernel.fun).threads)
+    end
+    threads = min(n, maxthreads)
     blocks = cld(n, threads)
     CUDA.kernel_launch(kernel, call; threads = threads, blocks = blocks)
     return nothing
@@ -773,15 +782,7 @@ function Jutul.KernelExecution.launch_preconverted_threaded_loop(
         jutul_preconverted_threaded_loop_kernel,
         PreconvertedKernelArgument(f), n, args...
     )
-    kernel = CUDA.kernel_compile(
-        call;
-        always_inline = context.backend.always_inline,
-        maxthreads = context.workgroupsize
-    )
-    threads = min(n, context.workgroupsize)
-    blocks = cld(n, threads)
-    CUDA.kernel_launch(kernel, call; threads = threads, blocks = blocks)
-    return nothing
+    return launch_cuda_threaded_loop(call, n, context)
 end
 
 end

@@ -40,7 +40,7 @@ struct EventlessSecondaryLaunch
     backend::EventlessTestBackend
 end
 Jutul.KernelExecution.secondary_variable_update_kernel!(
-    backend::EventlessTestBackend, workgroupsize
+    backend::EventlessTestBackend
 ) = EventlessSecondaryLaunch(backend)
 function (kernel::EventlessSecondaryLaunch)(dest, var, model, dependencies; ndrange)
     push!(

@@ -201,6 +201,25 @@ end
 end
 
 @testset "KernelAbstractions context" begin
+    KE = Jutul.KernelExecution
+    backend = CPU()
+    @test KE.workgroupsize(KernelAbstractionsContext(backend)) == 32
+    for (requested_size, expected_size) in ((nothing, nothing), (0, nothing), (64, 64))
+        context = KernelAbstractionsContext(
+            backend; workgroupsize = requested_size, linear_float_type = Float32
+        )
+        for ctx in (context, adjoint(context), Jutul.linear_solver_context(context))
+            @test KE.workgroupsize(ctx) == something(expected_size, 32)
+            @test KE.workgroupsize(ctx, nothing) === expected_size
+            @test KE.workgroupsize(ctx, 128) == something(expected_size, 128)
+            kernel = KE.context_kernel(KE.threaded_loop_kernel, ctx)
+            kernel_size = isnothing(expected_size) ? KernelAbstractions.DynamicSize :
+                KernelAbstractions.StaticSize{(expected_size,)}
+            @test KernelAbstractions.workgroupsize(kernel) === kernel_size
+        end
+    end
+    @test_throws ArgumentError KernelAbstractionsContext(backend; workgroupsize = -1)
+
     threshold_context = KernelAbstractionsContext(
         CPU();
         minbatch = 4, workgroupsize = 2

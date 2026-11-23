@@ -20,6 +20,10 @@ host-side execution per submodel through
 Polyester and execute directly when there is only one batch; accelerator
 backends launch KernelAbstractions kernels.
 
+`workgroupsize` accepts a positive size or `nothing` or `0` for automatic
+kernel launch sizing. Operations that require a concrete size use 32 in
+automatic mode.
+
 `use_kernels_for_secondary` controls whether secondary properties use
 KernelAbstractions kernels. It defaults to `false` for the CPU backend, where
 the regular host-parallel path is generally preferable, and to `true` for
@@ -115,7 +119,7 @@ function KernelAbstractionsContext(
     )
 end
 
-function workgroupsize(ctx::KernelAbstractionsContext, default = nothing)
+function workgroupsize(ctx::KernelAbstractionsContext, default = 32)
     sz = ctx.workgroupsize
     if sz == 0
         return default
@@ -125,7 +129,7 @@ function workgroupsize(ctx::KernelAbstractionsContext, default = nothing)
 end
 
 function context_kernel(kernel, ctx::KernelAbstractionsContext)
-    sz = workgroupsize(ctx)
+    sz = workgroupsize(ctx, nothing)
     if isnothing(sz)
         # Omitting the size selects a dynamic kernel; passing nothing is invalid.
         return kernel(ctx.backend)
@@ -162,7 +166,7 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         linear_float_type = linear_float_type(ctx),
         linear_index_type = linear_index_type(ctx),
         matrix_layout = adjoint(matrix_layout(ctx)),
-        workgroupsize = workgroupsize(ctx),
+        workgroupsize = workgroupsize(ctx, nothing),
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
@@ -182,7 +186,7 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         float_type = linear_float_type(ctx),
         index_type = linear_index_type(ctx),
         matrix_layout = matrix_layout(ctx),
-        workgroupsize = workgroupsize(ctx),
+        workgroupsize = workgroupsize(ctx, nothing),
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
