@@ -13,6 +13,14 @@ end
 
 set_global_timer!(::Nothing) = nothing
 
+function get_global_timer(; copy = false)
+    t = TimerOutputs.DEFAULT_TIMER
+    if copy
+        t = deepcopy(t)
+    end
+    return t
+end
+
 function print_global_timer(do_print = true; text = "Detailed timing")
     return if do_print
         if !isnothing(text)

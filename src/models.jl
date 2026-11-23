@@ -1118,7 +1118,7 @@ function reset_state_to_previous_state!(storage, model)
     # Replace primary variable values with those from previous state
     replace_values!(storage.primary_variables, storage.state0, model.context)
     # Update secondary variables to be in sync with current primary values
-    update_secondary_variables!(storage, model)
+    @tic "secondary variables (reset)" update_secondary_variables!(storage, model)
     return storage
 end
 

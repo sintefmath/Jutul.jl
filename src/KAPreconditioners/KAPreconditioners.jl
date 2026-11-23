@@ -10,7 +10,7 @@ using StaticArrays: StaticMatrix, SVector
 import Adapt
 import ..Jutul
 
-using ..Jutul: StaticSparsityMatrixCSR, colvals, minbatch
+using ..Jutul: StaticSparsityMatrixCSR, colvals, minbatch, @tic
 import ..Jutul: apply_ka_amg!, apply_ka_smoother!, setup_ka_amg,
     setup_ka_smoother, update_ka_amg!, update_ka_smoother!
 
@@ -34,14 +34,25 @@ include("aggressive.jl")
 include("reset.jl")
 include("cycle.jl")
 
-setup_ka_amg(A, options) = setup_amg(A, options)
-update_ka_amg!(hierarchy, A, reuse; kwargs...) =
-    resetup_amg!(hierarchy, A, reuse; kwargs...)
-apply_ka_amg!(x, hierarchy, b) = apply!(x, hierarchy, b)
+function setup_ka_amg(A, options)
+    return @tic "setup_amg" setup_amg(A, options)
+end
 
-setup_ka_smoother(A, config; reuse = nothing) =
-    setup_smoother(A, config; reuse = reuse)
-update_ka_smoother!(state, A) = update_smoother!(state, A)
+function update_ka_amg!(hierarchy, A, reuse; kwargs...)
+    return @tic "resetup_amg" resetup_amg!(hierarchy, A, reuse; kwargs...)
+end
+
+function apply_ka_amg!(x, hierarchy, b)
+    return @tic "amg apply" apply!(x, hierarchy, b)
+end
+
+function setup_ka_smoother(A, config; reuse = nothing)
+    return @tic "setup_smoother" setup_smoother(A, config; reuse = reuse)
+end
+
+function update_ka_smoother!(state, A)
+    return @tic "update_smoother" update_smoother!(state, A)
+end
 
 smoother_index_type(::SPAI0State) = Int32
 smoother_index_type(state::GaussSeidelState) = eltype(state.matrix.colval)

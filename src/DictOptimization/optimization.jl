@@ -5,7 +5,7 @@ function solve_and_differentiate_for_optimization(
         solution_history = false,
         print_parameters = false,
         allow_errors = false,
-        extra_timing = false,
+        extra_timing = extra_timing_default(),
         gradient_scaling = false,
         output_path = nothing
     )
@@ -56,7 +56,10 @@ function solve_and_differentiate_for_optimization(
     else
         result = forward_simulate_for_optimization(case, adj_cache, extra_timing = extra_timing, output_path = output_path_sim)
     end
-    config = get(adj_cache, :config, missing)
+    gt_forward = gt_backward = missing
+    if extra_timing
+        gt_forward = Jutul.get_global_timer(copy = true)
+    end
     info_level = get(adj_cache, :info_level, 0)
     if solve_failure
         if is_first_iteration
@@ -115,6 +118,10 @@ function solve_and_differentiate_for_optimization(
             end
             adj_cache[:backward_count] += 1
             adj_cache[:previous][:result] = result
+            if extra_timing
+                gt_backward = Jutul.get_global_timer(copy = true)
+            end
+            adj_cache[:previous][:timers] = (forward = gt_forward, backward = gt_backward)
             adj_cache[:previous][:gradient] = g
         else
             g = missing

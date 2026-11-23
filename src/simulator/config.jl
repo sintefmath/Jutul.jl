@@ -34,8 +34,7 @@ Negative values disable output. The interpretation of this number is subject to 
     add_option!(cfg, :output_reports, true, "Return reports in-memory as output.", types = Bool)
     add_option!(cfg, :safe_mode, true, "Add extra checks in simulator that have a small extra cost.", types = Bool)
 
-    env_extra_timing = get(ENV, "JUTUL_EXTRA_TIMING", "false")
-    env_extra_timing = env_extra_timing == "true" || env_extra_timing == "1"
+    env_extra_timing = extra_timing_default()
     add_option!(
         cfg, :extra_timing, env_extra_timing, "Output extra, highly detailed performance report at simulation end. Can be enabled by default by setting ENV[\"JUTUL_EXTRA_TIMING\"] = \"true\".",
         description = " This uses TimerOutputs.jl's @timeit_debug macro. You may have to call the function twice with this option the first time you use it.", types = Bool
@@ -98,6 +97,10 @@ Negative values disable output. The interpretation of this number is subject to 
         out = cfg
     end
     return out
+end
+
+function extra_timing_default()
+    return get(ENV, "JUTUL_EXTRA_TIMING", "false") in ("true", "1")
 end
 
 function simulator_config!(cfg, sim, ::Missing, ::Missing)
