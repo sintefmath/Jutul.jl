@@ -115,10 +115,10 @@ function KernelAbstractionsContext(
     )
 end
 
-function workgroupsize(ctx::KernelAbstractionsContext)
+function workgroupsize(ctx::KernelAbstractionsContext, default = nothing)
     sz = ctx.workgroupsize
     if sz == 0
-        return nothing
+        return default
     else
         return sz
     end

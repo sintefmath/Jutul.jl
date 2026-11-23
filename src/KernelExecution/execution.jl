@@ -291,7 +291,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
     if is_cpu_backend(ctx)
         execution_size = minbatch(ctx)
     else
-        execution_size = workgroupsize(ctx)
+        execution_size = workgroupsize(ctx, 256)
     end
     return StaticSparsityMatrixCSR(
         nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
