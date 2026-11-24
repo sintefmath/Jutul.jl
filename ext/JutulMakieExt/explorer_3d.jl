@@ -163,6 +163,7 @@ function Jutul.plot_explorer_impl(
         sens_enabled = false,
         mesh_enabled = true,
         axis_cross_enabled = true,
+        axis_cross_labels = ("X", "Y", "Z"),
         sens_kwarg = NamedTuple(),
         kwarg...
     )
@@ -721,7 +722,7 @@ function Jutul.plot_explorer_impl(
     end
     cam = Makie.cam3d!(lscene.scene; upvector = upvector, lookat = center, camarg...)
     if axis_cross_enabled
-        add_axis_cross!(lscene, textcolor = main_color)
+        add_axis_cross!(lscene, textcolor = main_color, labels = axis_cross_labels)
     end
     # w, h = size(scene_outer)
     # nearplane = 0.1f0
@@ -924,24 +925,38 @@ function Jutul.plot_explorer_impl(
 end
 
 """
-    add_axis_cross!(lscene; visible = true, textcolor = :white)
+    add_axis_cross!(lscene; visible = true, textcolor = :white, labels = ("X", "Y", "Z"))
 
 Draw a small x/y/z orientation cross in the lower left corner of `lscene`. The
 cross follows the rotation of the 3D camera and the scene transformation (e.g.
 a flipped axis from `scale!`), but not zoom or panning, so it always shows how
 the coordinate axes are oriented on screen. Axes pointing away from the viewer
 are drawn faded.
+
+`labels` are the names of the first, second and third coordinate axes, e.g.
+`("E", "N", "Depth")` for map data. The corner margin grows with the longest
+label unless `margin_px` is given.
 """
 function add_axis_cross!(
         lscene;
         visible = true,
         textcolor = :white,
         length_px = 50.0,
-        margin_px = 28.0,
+        margin_px = missing,
         linewidth = 3.0,
         fontsize = 18,
         labels = ("X", "Y", "Z")
     )
+    labels = map(string, collect(labels))
+    length(labels) == 3 || throw(ArgumentError("Axis cross needs exactly three labels, got $(length(labels))."))
+    # Gap between the arrow tip and the nearest edge of its label
+    label_gap = 0.35 * fontsize
+    if ismissing(margin_px)
+        # Rough width of the longest label in bold, so that it fits in the
+        # corner whichever way the axis points.
+        max_label_px = 0.65 * fontsize * maximum(length, labels)
+        margin_px = max(28.0, max_label_px + label_gap - 0.5 * fontsize)
+    end
     parent_scene = lscene.scene
     textcolor = Makie.to_color(textcolor)
     if Makie.Colors.Gray(textcolor).val > 0.5
@@ -960,6 +975,7 @@ function add_axis_cross!(
     head_rotations = Observable(zeros(Float32, 3))
     head_colors = Observable(fill(RGBAf(0, 0, 0, 0), 3))
     label_positions = Observable(fill(center, 3))
+    label_aligns = Observable(fill(Vec2f(0.5, 0.5), 3))
     label_colors = Observable([RGBAf(c, 1.0) for c in colors])
 
     function update_axis_cross!(view, model)
@@ -983,6 +999,7 @@ function add_axis_cross!(
         head_rot = head_rotations[]
         head_c = head_colors[]
         lpos = label_positions[]
+        lalign = label_aligns[]
         lcol = label_colors[]
         for (k, i) in enumerate(order)
             d = dirs[i]
@@ -999,7 +1016,14 @@ function add_axis_cross!(
             # Hide the arrow head when the axis points (almost) straight at
             # or away from the viewer, its direction is then meaningless.
             head_c[k] = RGBAf(colors[i], norm(dir2) > 0.2 ? alpha : 0.0f0)
-            lpos[i] = center + Float32(length_px + 0.75 * fontsize) * dir2
+            # Anchor the label on the side of its bounding box that faces
+            # the tip, so that long labels extend outwards instead of
+            # covering the arrow. Continuous in the direction, so labels do
+            # not jump while rotating.
+            n2 = norm(dir2)
+            u = n2 > 0 ? dir2 / n2 : Vec2f(0, 0)
+            lpos[i] = tip + Float32(label_gap) * u
+            lalign[i] = Vec2f(0.5 - 0.5 * u[1], 0.5 - 0.5 * u[2])
             lcol[i] = c
         end
         notify(segments)
@@ -1008,6 +1032,7 @@ function add_axis_cross!(
         notify(head_rotations)
         notify(head_colors)
         notify(label_positions)
+        notify(label_aligns)
         notify(label_colors)
         return nothing
     end
@@ -1037,9 +1062,9 @@ function add_axis_cross!(
     )
     text!(
         overlay, label_positions,
-        text = collect(labels),
+        text = labels,
         color = label_colors,
-        align = (:center, :center),
+        align = label_aligns,
         fontsize = fontsize,
         font = :bold,
         visible = visible,
