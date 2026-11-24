@@ -84,7 +84,7 @@ function generate_metis_graph(A::SparseMatrixCSC)
     J = vcat(j, i)
     V = vcat(V, V)
     M = sparse(I, J, V, n, n)
-    return Metis.graph(M, check_hermitian = false, weights = true)
+    return Metis.graph(M, check = false, weights = true)
 end
 
 function metis_integer_weights(x::AbstractVector{<:Integer})
@@ -495,16 +495,22 @@ function partition_hypergraph_implementation(hg, n, mp::MetisPartitioner)
     return metis_partition(mp, g_metis, n)
 end
 
-# Metis.jl passes a global options array to METIS, so set the objective only for this call.
 function metis_partition(mp::MetisPartitioner, g, m; alg = mp.algorithm, kwarg...)
     lib = Metis.LibMetis
-    ix = Int(lib.METIS_OPTION_OBJTYPE) + 1
-    old = Metis.options[ix]
-    Metis.options[ix] = Cint(mp.objective == :vol ? lib.METIS_OBJTYPE_VOL : lib.METIS_OBJTYPE_CUT)
-    try
-        return Metis.partition(g, m; alg = alg, kwarg...)
-    finally
-        Metis.options[ix] = old
+    objtype = mp.objective == :vol ? lib.METIS_OBJTYPE_VOL : lib.METIS_OBJTYPE_CUT
+    options = Metis.Options(objtype = objtype)
+    return Metis.partition(g, m; alg = metis_algorithm(alg), options = options, kwarg...)
+end
+
+metis_algorithm(alg::Metis.Algorithm.T) = alg
+
+function metis_algorithm(alg::Symbol)
+    if alg === :KWAY
+        return Metis.Algorithm.KWAY
+    elseif alg === :RECURSIVE
+        return Metis.Algorithm.RECURSIVE
+    else
+        throw(ArgumentError("unknown Metis algorithm $(repr(alg)), expected :KWAY or :RECURSIVE"))
     end
 end
 
