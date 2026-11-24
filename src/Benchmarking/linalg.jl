@@ -61,11 +61,11 @@ function benchmark_linear_operators(
             Jutul.synchronize(context)
             function update_prec()
                 Jutul.update_preconditioner!(prec, sys, context, model, storage, recorder, executor)
-                Jutul.synchronize(context)
+                return Jutul.synchronize(context)
             end
             function apply_prec()
                 apply!(x, prec, r)
-                Jutul.synchronize(context)
+                return Jutul.synchronize(context)
             end
             if warm
                 update_prec()
