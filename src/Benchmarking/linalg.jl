@@ -17,12 +17,21 @@ function benchmark_linear_operators(
     context = model.context
     x = missing
     function cycle(loc, x = missing)
-        @timeit loc "linear_operator" op = Jutul.linear_operator(sys)
-        @timeit loc "residual" r = Jutul.vector_residual(sys)
+        @timeit loc "linear_operator" begin
+            op = Jutul.linear_operator(sys)
+            Jutul.synchronize(context)
+        end
+        @timeit loc "residual" begin
+            r = Jutul.vector_residual(sys)
+            Jutul.synchronize(context)
+        end
         if ismissing(x)
             x = similar(r)
         end
-        @timeit loc "mul!" mul!(x, op, r)
+        @timeit loc "mul!" begin
+            mul!(x, op, r)
+            Jutul.synchronize(context)
+        end
         return x
     end
     update_state_dependents!(
@@ -36,6 +45,7 @@ function benchmark_linear_operators(
         Jutul.update_linearized_system!(storage, model)
         Jutul.prepare_linear_solve!(sys)
     end
+    Jutul.synchronize(context)
 
     x = cycle(dummy_timer)
     @timeit timer "linear_operator" begin
@@ -48,8 +58,15 @@ function benchmark_linear_operators(
         if lsolve isa GenericKrylov
             prec = lsolve.preconditioner
             r = Jutul.vector_residual(sys)
-            update_prec() = Jutul.update_preconditioner!(prec, sys, context, model, storage, recorder, executor)
-            apply_prec() = apply!(x, prec, r)
+            Jutul.synchronize(context)
+            function update_prec()
+                Jutul.update_preconditioner!(prec, sys, context, model, storage, recorder, executor)
+                Jutul.synchronize(context)
+            end
+            function apply_prec()
+                apply!(x, prec, r)
+                Jutul.synchronize(context)
+            end
             if warm
                 update_prec()
                 apply_prec()
