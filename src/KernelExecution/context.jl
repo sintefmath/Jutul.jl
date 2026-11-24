@@ -3,7 +3,8 @@
                               linear_float_type=float_type,
                               linear_index_type=index_type,
                               matrix_layout=EquationMajorLayout(),
-                              workgroupsize=256, minbatch=minbatch(nothing),
+                              workgroupsize=nothing,
+                              minbatch=minbatch(nothing),
                               use_kernels_for_secondary=!is_cpu_backend,
                               secondary_scheme=:flat,
                               reduce_memory=true, use_vendor_linalg=true)
@@ -18,6 +19,10 @@ host-side execution per submodel through
 `minbatch` is the minimum number of entries per CPU batch. CPU loops use
 Polyester and execute directly when there is only one batch; accelerator
 backends launch KernelAbstractions kernels.
+
+`workgroupsize` accepts a positive size or `nothing` or `0` for automatic
+kernel launch sizing. Operations that require a concrete size use 32 in
+automatic mode.
 
 `use_kernels_for_secondary` controls whether secondary properties use
 KernelAbstractions kernels. It defaults to `false` for the CPU backend, where
@@ -65,7 +70,7 @@ function KernelAbstractionsContext(
         use_kernels_for_secondary = missing,
         secondary_scheme = :flat,
         matrix_layout = EquationMajorLayout(),
-        workgroupsize = 256,
+        workgroupsize = nothing,
         minbatch = 1000,
         reduce_memory = true,
         use_vendor_linalg::Bool = false
@@ -85,8 +90,10 @@ function KernelAbstractionsContext(
     if !(LI <: Integer) || LI === Bool
         throw(ArgumentError("linear_index_type must be a non-Bool Integer type"))
     end
-    if workgroupsize <= 0
-        throw(ArgumentError("workgroupsize must be positive"))
+    if isnothing(workgroupsize)
+        workgroupsize = 0
+    elseif workgroupsize < 0
+        throw(ArgumentError("workgroupsize must be non-negative"))
     end
     if minbatch <= 0
         throw(ArgumentError("minbatch must be positive"))
@@ -110,6 +117,25 @@ function KernelAbstractionsContext(
         backend, matrix_layout, Int(workgroupsize), Int(minbatch),
         use_kernels_for_secondary, reduce_memory, use_vendor_linalg, Int(nthreads)
     )
+end
+
+function workgroupsize(ctx::KernelAbstractionsContext, default = 32)
+    sz = ctx.workgroupsize
+    if sz == 0
+        return default
+    else
+        return sz
+    end
+end
+
+function context_kernel(kernel, ctx::KernelAbstractionsContext)
+    sz = workgroupsize(ctx, nothing)
+    if isnothing(sz)
+        # Omitting the size selects a dynamic kernel; passing nothing is invalid.
+        return kernel(ctx.backend)
+    else
+        return kernel(ctx.backend, sz)
+    end
 end
 
 float_type(::KernelAbstractionsContext{B, F}) where {B, F} = F
@@ -140,7 +166,7 @@ function Base.adjoint(ctx::KernelAbstractionsContext)
         linear_float_type = linear_float_type(ctx),
         linear_index_type = linear_index_type(ctx),
         matrix_layout = adjoint(matrix_layout(ctx)),
-        workgroupsize = ctx.workgroupsize,
+        workgroupsize = workgroupsize(ctx, nothing),
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
@@ -160,7 +186,7 @@ function linear_solver_context(ctx::KernelAbstractionsContext)
         float_type = linear_float_type(ctx),
         index_type = linear_index_type(ctx),
         matrix_layout = matrix_layout(ctx),
-        workgroupsize = ctx.workgroupsize,
+        workgroupsize = workgroupsize(ctx, nothing),
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),
         use_kernels_for_secondary = ctx.use_kernels_for_secondary,
@@ -188,7 +214,7 @@ function launch_threaded_loop(
         threaded_loop_minbatch(f, n, batches, cpu_minbatch, :batch)
         return nothing
     end
-    kernel! = threaded_loop_kernel(ctx.backend, ctx.workgroupsize)
+    kernel! = context_kernel(threaded_loop_kernel, ctx)
     return kernel!(f; ndrange = n)
 end
 
@@ -243,7 +269,7 @@ function secondary_variable_loop!(state, model, k::Symbol, ctx::KernelAbstractio
     var = model[k]
     deps = Tuple(Jutul.get_dependencies(var, model))
     dependencies = NamedTuple{deps}(ntuple(i -> state[deps[i]], length(deps)))
-    kernel! = secondary_variable_update_kernel!(ctx.backend, ctx.workgroupsize)
+    kernel! = context_kernel(secondary_variable_update_kernel!, ctx)
     event = kernel!(dest, var, model, dependencies; ndrange = n)
     if do_wait
         wait_for_kernel(event, ctx)

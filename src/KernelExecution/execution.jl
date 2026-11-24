@@ -291,7 +291,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, A::StaticSparsity
     if is_cpu_backend(ctx)
         execution_size = minbatch(ctx)
     else
-        execution_size = ctx.workgroupsize
+        execution_size = workgroupsize(ctx)
     end
     return StaticSparsityMatrixCSR(
         nzval, colval, rowptr, size(A, 1), size(A, 2), ctx.backend;
@@ -596,7 +596,7 @@ function Adapt.adapt_structure(ctx::KernelAbstractionsContext, model::MultiModel
             linear_float_type = linear_float_type(ctx),
             linear_index_type = linear_index_type(ctx),
             matrix_layout = matrix_layout(source),
-            workgroupsize = ctx.workgroupsize,
+            workgroupsize = workgroupsize(ctx, nothing),
             minbatch = minbatch(ctx),
             use_kernels_for_secondary = ctx.use_kernels_for_secondary,
             secondary_scheme = context_secondary_scheme(ctx),
