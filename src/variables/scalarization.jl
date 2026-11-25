@@ -114,15 +114,10 @@ end
 function scalarize_primary_variable(model, source_mat, var::Jutul.FractionVariables, index; numeric::Bool = false)
     N = degrees_of_freedom_per_entity(model, var)
     if N == 1
-        scalar_v = value(source_mat[1, index])
-    else
-        tmp = @MVector zeros(N)
-        for i in 1:N
-            tmp[i] = value(source_mat[i, index])
-        end
-        scalar_v = SVector{N, Float64}(tmp)
+        return value(source_mat[1, index])
     end
-    return scalar_v
+    values = ntuple(i -> value(source_mat[i, index]), Val(N))
+    return SVector{N}(values)
 end
 
 function descalarize_primary_variable!(
@@ -171,7 +166,7 @@ function scalarize_primary_variables!(V::Vector{ScalarizedJutulVariables{T}}, mo
     pvars_keys = keys(pvars)
     for i in eachindex(V)
         val = map((k, d) -> scalarize_primary_variable(model, state[k], d, i), pvars_keys, pvars_def)
-        V[i] = ScalarizedJutulVariables(val)
+        V[i] = ScalarizedJutulVariables{T}(val)
     end
     return V
 end
