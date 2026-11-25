@@ -59,6 +59,18 @@ using Jutul, Test
     @test eq_x == eq_x_ref
     @test eq_x == block_x
 
+    function fraction_values(x)
+        return Jutul.scalarize_primary_variable(eq_model, reshape(x, size(fraction)), eq_model[:Fraction], 1)
+    end
+    fraction_jacobian = Jutul.AdjointsDI.jacobian(fraction_values, Jutul.default_di_backend(), vec(fraction))
+    @test fraction_jacobian == [1.0 0 0 0 0 0; 0 1.0 0 0 0 0]
+
+    fraction_vars = (Fraction = eq_model[:Fraction],)
+    fraction_state = (Fraction = Float32.(fraction),)
+    scalarized = Jutul.scalarize_primary_variables(eq_model, fraction_state, fraction_vars)
+    @test eltype(scalarized[1][1]) === Float64
+    @test scalarized[1][1] == fraction_state.Fraction[1:2, 1]
+
     eq_y = Jutul.adjoint_transfer_canonical_order(eq_x, eq_model; to_canonical = false)
     @test eq_y == eq_x
     @test Jutul.adjoint_transfer_canonical_order(eq_y, eq_model; to_canonical = true) == eq_x
