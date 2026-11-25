@@ -307,6 +307,16 @@ using Jutul, Test
     d[:permeability] = 1.0
     Tb1 = compute_boundary_trans(d)
     @test all(Tb1 .== 1)
+
+    @testset "Non-finite face resistance" begin
+        neighbors = reshape([1, 2], 2, 1)
+        face_trans(halves) = only(compute_face_trans(halves, neighbors))
+        @test face_trans([0.0, 0.0]) == 0.0
+        @test face_trans([NaN, 2.0]) == 0.0
+        @test ForwardDiff.derivative(x -> face_trans([0 * x, 0 * x]), 1.0) == 0.0
+        halves = [ForwardDiff.Dual(2.0, NaN), ForwardDiff.Dual(2.0, 0.0)]
+        @test ForwardDiff.value(face_trans(halves)) == 1.0
+    end
 end
 
 @testset "IndirectionMap" begin

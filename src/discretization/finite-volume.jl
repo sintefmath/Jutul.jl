@@ -254,7 +254,15 @@ function compute_face_trans(T_hf, N, faces = first(get_facepos(N)))
     for i in eachindex(faces)
         T[faces[i]] += 1.0 / T_hf[i]
     end
-    @. T = 1.0 / T
+    for i in eachindex(T)
+        T_sum = T[i]
+        # isfinite checks the primal resistance for dual numbers.
+        if isfinite(T_sum)
+            T[i] = 1.0 / T_sum
+        else
+            T[i] = zero(T_sum)
+        end
+    end
     return T
 end
 
