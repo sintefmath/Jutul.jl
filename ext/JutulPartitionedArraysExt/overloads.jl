@@ -158,6 +158,7 @@ function Jutul.perform_step!(
         solve = true,
         iteration = 1,
         executor = Jutul.default_executor(),
+        relaxation = 1.0,
         vararg...
     )
     s = simulator.storage
@@ -184,6 +185,7 @@ function Jutul.perform_step!(
             report = rep,
             update_secondary = false,
             executor = Jutul.simulator_executor(sim),
+            relaxation = relaxation,
             vararg...
         )
         if haskey(rep, :secondary_time)
@@ -191,17 +193,25 @@ function Jutul.perform_step!(
         else
             rep[:secondary_time] = t_s
         end
-        return (e, Int(conv))
+        # Scaled error sum of this process, used to select the nonlinear relaxation
+        if haskey(rep, :errors) && !isnothing(rep[:errors])
+            error_sum = Jutul.error_sum_scaled(Jutul.get_simulator_model(sim), rep[:errors])
+        else
+            error_sum = 0.0
+        end
+        return (e, Int(conv), error_sum)
     end
-    errors, converged = tuple_of_arrays(out)
+    errors, converged, error_sums = tuple_of_arrays(out)
 
     nconverged = sum(converged)
     all_processes_converged = nconverged == np
     max_error = reduce(max, errors, init = 0)
+    total_error_sum = reduce(+, error_sums, init = 0.0)
 
     parray_print_convergence_status(simulator, config, reports, converged, iteration, config[:max_nonlinear_iterations], nconverged, np)
     should_solve = solve && !all_processes_converged
     report = Jutul.setup_ministep_report(converged = all_processes_converged, solved = should_solve)
+    report[:error_sum_scaled] = total_error_sum
     map(reports) do subrep
         for k in [:secondary_time, :equations_time, :linear_system_time, :convergence_time]
             report[k] += subrep[k]
@@ -215,7 +225,8 @@ function Jutul.perform_step!(
             t_update = @elapsed map(simulators) do sim
                 Jutul.update_primary_variables!(
                     Jutul.get_simulator_storage(sim),
-                    Jutul.get_simulator_model(sim)
+                    Jutul.get_simulator_model(sim);
+                    relaxation = relaxation
                 )
                 nothing
             end
@@ -236,6 +247,23 @@ function Jutul.perform_step!(
     end
     report[:update] = missing
     return (max_error, all_processes_converged, report)
+end
+
+function Jutul.select_nonlinear_relaxation(sim::PArraySimulator, rel_type::Jutul.SimpleRelaxation, reports, ω)
+    # Same as for a single process, using the error sum over all processes so
+    # that all processes select the same relaxation.
+    if length(reports) > 1
+        (; tol, dw_decrease, dw_increase, w_max, w_min) = rel_type
+        e_old = reports[end - 1][:error_sum_scaled]
+        e_new = reports[end][:error_sum_scaled]
+        if (e_old - e_new) / max(e_old, 1.0e-20) < tol
+            ω = ω - dw_decrease
+        else
+            ω = ω + dw_increase
+        end
+        ω = clamp(ω, w_min, w_max)
+    end
+    return ω
 end
 
 function parray_print_convergence_status(simulator, config, reports, converged, iteration, maxits, nconverged, np)
