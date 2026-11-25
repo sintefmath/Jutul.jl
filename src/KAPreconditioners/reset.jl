@@ -384,15 +384,15 @@ function resetup_amg!(
             throw(ArgumentError("matrix and hierarchy must use the same backend"))
     end
     if reuse == :operators
-        numeric_reset!(H, A, :operators)
+        @tic "operators" numeric_reset!(H, A, :operators)
     elseif reuse == :sparsity
-        numeric_reset!(H, A, :sparsity)
+        @tic "sparsity" numeric_reset!(H, A, :sparsity)
     elseif reuse == :memory
-        memory_reset!(H, A)
+        @tic "memory" memory_reset!(H, A)
     elseif reuse == :partial_sparsity || reuse == :partial_operators
-        partial_reset!(H, A, reuse, n_levels_partial_keep, n_partial_keep)
+        @tic "partial_rebuild" partial_reset!(H, A, reuse, n_levels_partial_keep, n_partial_keep)
     else
-        replace_hierarchy!(H, setup_amg(A, H.options))
+        @tic "full reset" replace_hierarchy!(H, setup_amg(A, H.options))
     end
     return H
 end
