@@ -63,8 +63,10 @@ function AdjointForcesAdapt.adapt_storage(::KernelAbstractionsContext, forces::V
     return [AdjointBackendTestForce(force.value, true) for force in forces]
 end
 
-function Jutul.apply_forces_to_equation!(d, storage, model, eq::Jutul.ScalarTestEquation, eq_s,
-        forces::AbstractVector{AdjointBackendTestForce}, time)
+function Jutul.apply_forces_to_equation!(
+        d, storage, model, eq::Jutul.ScalarTestEquation, eq_s,
+        forces::AbstractVector{AdjointBackendTestForce}, time
+    )
     backend = model.context isa KernelAbstractionsContext
     @assert all(force -> force.prepared == backend, forces) "Forces do not match the assembly backend"
     source = ScalarTestForce(sum(force.value for force in forces))
@@ -72,8 +74,10 @@ function Jutul.apply_forces_to_equation!(d, storage, model, eq::Jutul.ScalarTest
 end
 
 @testset "Adjoint forces follow each simulator's backend" begin
-    model = SimulationModel(ScalarTestDomain(use_manual = false), ScalarTestSystem();
-        context = ParallelCSRContext(1))
+    model = SimulationModel(
+        ScalarTestDomain(use_manual = false), ScalarTestSystem();
+        context = ParallelCSRContext(1)
+    )
     state = setup_state(model; XVar = 0.0)
     forces = setup_forces(model; sources = [AdjointBackendTestForce(2.0, false)])
     backend_sim = transfer_to_backend(Simulator(model; state0 = state), AdjointForcesKA.CPU())

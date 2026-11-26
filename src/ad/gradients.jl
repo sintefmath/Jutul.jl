@@ -445,7 +445,7 @@ function update_objective_sparsity!(
     update_secondary_variables!(sim.storage, sim.model)
     adjoint_copy_objective_state!(state, sim)
     # The parameter simulator represents target parameters as primary variables.
-    obj_sparsity[k] = determine_objective_sparsity(
+    return obj_sparsity[k] = determine_objective_sparsity(
         state, model, G, packed_steps, :variables, steps
     )
 end
