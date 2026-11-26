@@ -21,6 +21,7 @@ function BoomerAMGPreconditioner(;
         AggNumLevels = 1,      # Aggressive coarsening for first levels
         AggTruncFactor = 0.3,  # Remove weak connections
         InterpType = 6,        # ext+i
+        PMaxElmts = 2,         # Sparser interpolation: cheaper setup and cycle (Norne CPRW: -4% wall)
         PrintLevel = 0,
         Tol = 0.0,
         MaxIter = 1,
@@ -37,6 +38,7 @@ function BoomerAMGPreconditioner(;
             AggNumLevels = AggNumLevels,
             AggTruncFactor = AggTruncFactor,
             InterpType = InterpType,
+            PMaxElmts = PMaxElmts,
             Tol = Tol,
             MaxIter = MaxIter,
             PrintLevel = PrintLevel,
