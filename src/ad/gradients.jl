@@ -686,6 +686,9 @@ end
 function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     s = sim.storage
     model = sim.model
+    # State Jacobians can run on a device while parameter Jacobians stay on
+    # the host. Prepare the case forces for this simulator's execution context.
+    forces = preprocess_forces(sim, forces_for_host(forces)).forces
     # Deal with state0 first
     @tic "reset state0" reset_previous_state!(sim, state0)
     @tic "secondary variables" update_secondary_variables!(s, model, true)
