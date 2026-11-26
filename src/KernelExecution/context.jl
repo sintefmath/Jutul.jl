@@ -159,13 +159,17 @@ KernelAbstractions.get_backend(ctx::KernelAbstractionsContext) = ctx.backend
 is_cpu_backend(ctx::KernelAbstractionsContext) = ctx.backend isa KernelAbstractions.CPU
 
 function Base.adjoint(ctx::KernelAbstractionsContext)
+    return with_matrix_layout(ctx, adjoint(matrix_layout(ctx)))
+end
+
+function with_matrix_layout(ctx::KernelAbstractionsContext, layout)
     return KernelAbstractionsContext(
         ctx.backend;
         float_type = float_type(ctx),
         index_type = index_type(ctx),
         linear_float_type = linear_float_type(ctx),
         linear_index_type = linear_index_type(ctx),
-        matrix_layout = adjoint(matrix_layout(ctx)),
+        matrix_layout = layout,
         workgroupsize = workgroupsize(ctx, nothing),
         minbatch = minbatch(ctx),
         nthreads = nthreads(ctx),

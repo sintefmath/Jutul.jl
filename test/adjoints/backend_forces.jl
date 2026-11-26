@@ -8,6 +8,56 @@ struct AdjointBackendTestForce <: Jutul.JutulForce
     prepared::Bool
 end
 
+struct AdjointTestCoefficient <: ScalarVariable end
+struct AdjointTestProperty <: ScalarVariable end
+
+@jutul_secondary function adjoint_test_property!(
+        out, property::AdjointTestProperty, model, XVar, Coefficient, indices
+    )
+    for i in indices
+        out[i] = Coefficient[i] * XVar[i]^2
+    end
+end
+
+@testset "Adjoint secondary properties on the selected backend" begin
+    model = SimulationModel(
+        ScalarTestDomain(use_manual = false), ScalarTestSystem();
+        context = ParallelCSRContext(1)
+    )
+    set_parameters!(model; Coefficient = AdjointTestCoefficient())
+    set_secondary_variables!(model; Property = AdjointTestProperty())
+    state0 = setup_state(model; XVar = 2.0)
+    parameters = setup_parameters(model; Coefficient = 3.0)
+    forces = setup_forces(model)
+    dt = [1.0, 1.0]
+    states = [Jutul.JutulStorage(deepcopy(state0)) for _ in dt]
+    G(model, state, dt, step_info, forces) = only(state.Property)
+
+    sim = Simulator(model; state0, parameters)
+    backend_sim = transfer_to_backend(sim, AdjointForcesKA.CPU())
+    for execution_model in (model, backend_sim.model)
+        storage = setup_adjoint_storage(
+            model;
+            state0,
+            parameters,
+            execution_model,
+            include_state0 = true,
+            linear_solver = GenericKrylov(:gmres, rtol = 1.0e-12)
+        )
+        if execution_model === backend_sim.model
+            @test storage.parameter.model.context isa KernelAbstractionsContext
+        end
+        gradient = zeros(1)
+        for _ in 1:2
+            solve_adjoint_sensitivities!(
+                gradient, storage, states, state0, dt, G; forces, info_level = -1
+            )
+            @test only(gradient) ≈ 8.0
+            @test only(storage.dstate0) ≈ 24.0
+        end
+    end
+end
+
 # Mark transfers explicitly so a CPU backend can detect a missing device transfer.
 function AdjointForcesAdapt.adapt_storage(::KernelAbstractionsContext, forces::Vector{AdjointBackendTestForce})
     return [AdjointBackendTestForce(force.value, true) for force in forces]
