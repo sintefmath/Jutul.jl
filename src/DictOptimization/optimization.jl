@@ -109,6 +109,10 @@ function solve_and_differentiate_for_optimization(
                 if excpt isa InterruptException || !allow_errors
                     rethrow(excpt)
                 end
+            finally
+                if get(adj_cache, :clear_linear_solvers, false)
+                    clear_linear_solver_storage(S[:forward_config])
+                end
             end
             if is_first_iteration && adjoint_failure
                 error("First adjoint solve failed. Unable to proceed, even with allow_errors=true. The initial setup must be possible to simulate and differentiate.")
@@ -277,14 +281,20 @@ function forward_simulate_for_optimization(case, adj_cache; extra_timing = false
     if !isnothing(output_path)
         config[:output_path] = output_path
     end
-    out = simulate!(
-        sim, case.dt,
-        config = config,
-        state0 = case.state0,
-        parameters = case.parameters,
-        forces = case.forces,
-        extra_timing = extra_timing
-    )
+    out = try
+        simulate!(
+            sim, case.dt,
+            config = config,
+            state0 = case.state0,
+            parameters = case.parameters,
+            forces = case.forces,
+            extra_timing = extra_timing
+        )
+    finally
+        if get(adj_cache, :clear_linear_solvers, false)
+            clear_linear_solver_storage(config)
+        end
+    end
     if !isnothing(output_path)
         config[:output_path] = nothing
     end

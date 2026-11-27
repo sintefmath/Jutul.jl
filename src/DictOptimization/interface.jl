@@ -50,6 +50,9 @@ using `free_optimization_parameter!` prior to calling the optimizer.
   internal gradient and objective value is divided by the chosen scaling.
 - `simulator`: Optional simulator object used in forward simulations
 - `config`: Optional configuration for the setup
+- `clear_linear_solvers`: Clear the linear solve workspaces after the forward
+  and adjoint solves. This can save memory at the cost of the preconditioners
+  being reallocated before each solve.
 - `solution_history`: If `true`, stores all intermediate solutions
 - `deps`: One of `:case`, `:parameters`, `:parameters_and_state0`. Defines the
   dependencies for the adjoint computation. See notes for more details.
@@ -107,6 +110,7 @@ function optimize(
         deps_ad = :jutul,
         simulator = missing,
         config = missing,
+        clear_linear_solvers::Bool = false,
         solution_history = false,
         print_parameters = false,
         allow_errors = false,
@@ -122,6 +126,7 @@ function optimize(
         dopt, objective, setup_fn;
         simulator = simulator,
         config = config,
+        clear_linear_solvers = clear_linear_solvers,
         info_level = info_level,
         backend_arg = backend_arg,
         solution_history = solution_history,

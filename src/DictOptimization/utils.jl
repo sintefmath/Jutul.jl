@@ -1,3 +1,14 @@
+function clear_linear_solver_storage(config)
+    solver = get(config, :linear_solver, nothing)
+    T = typeof(solver)
+    if ismutabletype(T) && hasfield(T, :storage)
+        if !isconst(T, :storage) && Nothing <: fieldtype(T, :storage)
+            setfield!(solver, :storage, nothing)
+        end
+    end
+    return config
+end
+
 function active_keys(dopt::DictParameters)
     return keys(dopt.parameter_targets)
 end
