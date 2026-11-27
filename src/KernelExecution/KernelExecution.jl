@@ -42,7 +42,7 @@ import ..Jutul: AssembleOnDevice, BilinearInterpolant,
     submodels_symbols, synchronize, threaded_loop, threaded_loop_minbatch,
     transfer, transfer_adjoint_simulator, transfer_csr_to_backend,
     transfer_to_backend, unpack_tag,
-    adjoint_transfer_canonical_order_inner!,
+    adjoint_parameter_context, adjoint_transfer_canonical_order_inner!,
     degrees_of_freedom_per_entity, get_primary_variable_ordered_entities,
     update_secondary_variable!,
     update_secondary_variables_state!, updated_state_value, update_values!

@@ -1371,14 +1371,24 @@ function transfer_multimodel_to_backend(
     return Simulator(sim.executor, model, storage)
 end
 
-function transfer_adjoint_simulator(
-        simulator,
-        execution_model::KASimulationModel
-    )
-    return transfer_to_backend(simulator, adjoint(execution_model.context))
+function transfer_adjoint_simulator(simulator, execution_model::KASimulationModel)
+    layout = matrix_layout(simulator.model.context)
+    context = with_matrix_layout(execution_model.context, layout)
+    return transfer_to_backend(simulator, context)
 end
 
-function transfer_adjoint_simulator(simulator, execution_model::MultiModel)
+# Parameter Jacobians are rectangular and use scalar equation-major CSR.
+adjoint_parameter_context(::KASimulationModel) = ParallelCSRContext()
+function adjoint_parameter_context(model::MultiModel)
+    if model.context isa KernelAbstractionsContext
+        return ParallelCSRContext()
+    end
+    return DefaultContext()
+end
+
+function transfer_adjoint_simulator(
+        simulator, execution_model::MultiModel, mixed_cross_terms_on_host = true
+    )
     context = execution_model.context
     if !(context isa KernelAbstractionsContext)
         return simulator
@@ -1387,9 +1397,10 @@ function transfer_adjoint_simulator(simulator, execution_model::MultiModel)
     for key in submodels_symbols(execution_model)
         policy[key] = group_execution_mode(execution_model, key)
     end
+    layout = matrix_layout(simulator.model.context)
+    context = with_matrix_layout(context, layout)
     return transfer_to_backend(
-        simulator, adjoint(context);
-        group_execution = policy
+        simulator, context; group_execution = policy, mixed_cross_terms_on_host
     )
 end
 

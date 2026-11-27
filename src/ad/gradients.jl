@@ -4,6 +4,12 @@ export state_gradient, solve_adjoint_sensitivities, solve_adjoint_sensitivities!
 # simulator to the execution backend of `execution_model`.
 transfer_adjoint_simulator(simulator, execution_model) = simulator
 
+function transfer_adjoint_simulator(simulator, execution_model, mixed_cross_terms_on_host)
+    return transfer_adjoint_simulator(simulator, execution_model)
+end
+
+adjoint_parameter_context(execution_model) = DefaultContext()
+
 """
     solve_adjoint_sensitivities(model, states, reports_or_timesteps, G; extra_timing = false, state0 = setup_state(model), forces = setup_forces(model), raw_output = false, kwarg...)
 
@@ -55,7 +61,7 @@ function solve_adjoint_sensitivities(
     if info_level > 1
         jutul_message("Adjoints", "Storage set up in $(get_tstr(t_storage)).", color = :blue)
     end
-    parameter_model = storage.parameter.model
+    parameter_model = storage.parameter_model
     n_param = number_of_degrees_of_freedom(parameter_model)
     ∇G = gradient_vec_or_mat(n_param, n_objective)
     # Timesteps
@@ -135,6 +141,7 @@ function setup_adjoint_storage(
         include_state0 = false,
         use_sparsity = true,
         execution_model = model,
+        mixed_cross_terms_on_host = true,
         linear_solver = missing,
         param_obj = true,
         info_level = 0,
@@ -146,22 +153,45 @@ function setup_adjoint_storage(
             execution_model, mode = :adjoint, rtol = 1.0e-6
         )
     end
-    parameter_model = adjoint_parameter_model(model, targets)
-    n_prm = number_of_degrees_of_freedom(parameter_model)
-    # Note that primary is here because the target parameters are now the primaries for the parameter_model
+    parameter_context = adjoint_parameter_context(execution_model)
+    parameter_model = adjoint_parameter_model(model, targets; context = parameter_context)
+    n_param = number_of_degrees_of_freedom(parameter_model)
+    # The parameter adjoint seeds the target parameters as primary variables.
     parameter_map, = variable_mapper(parameter_model, :primary, targets = targets; kwarg...)
-    # Transfer over parameters and state0 variables since many parameters are now variables
     state0_p = swap_variables(state0, parameters, parameter_model, variables = true)
     parameters_p = swap_variables(state0, parameters, parameter_model, variables = false)
-    parameter_sim = Simulator(parameter_model, state0 = deepcopy(state0_p), parameters = deepcopy(parameters_p), mode = :sensitivities, extra_timing = nothing)
+    parameter_host = Simulator(
+        parameter_model;
+        state0 = state0_p,
+        parameters = parameters_p,
+        mode = :sensitivities,
+        extra_timing = nothing
+    )
+    parameter_sim = transfer_adjoint_simulator(
+        parameter_host, execution_model, mixed_cross_terms_on_host
+    )
+
+    parameter_objective_state = nothing
+    dobj_dparam = nothing
+    param_buf = nothing
     if param_obj
-        n_param = number_of_degrees_of_freedom(parameter_model)
+        # Keep the host state for objective callbacks. The host Jacobian can be released.
+        parameter_objective_state = parameter_host.storage.state
         dobj_dparam = gradient_vec_or_mat(n_param, n_objective)
         param_buf = similar(dobj_dparam)
-    else
-        dobj_dparam = nothing
-        param_buf = nothing
     end
+
+    parameter_gradient = nothing
+    if parameter_sim !== parameter_host
+        # Accumulate the residual contribution on the backend throughout the sweep.
+        residual = parameter_sim.storage.LinearizedSystem.r_buffer
+        dims = (n_param,)
+        if !isnothing(n_objective)
+            dims = (n_param, n_objective)
+        end
+        parameter_gradient = similar(residual, dims)
+    end
+
     # Set up the generic adjoint storage
     storage = setup_adjoint_storage_base(
         model, state0, parameters,
@@ -170,6 +200,7 @@ function setup_adjoint_storage(
         n_objective = n_objective,
         info_level = info_level,
         execution_model = execution_model,
+        mixed_cross_terms_on_host = mixed_cross_terms_on_host,
     )
     if include_state0
         state0_model = storage.objective.model
@@ -184,15 +215,18 @@ function setup_adjoint_storage(
         state0_buf = missing
         state0_device = missing
     end
+    storage[:parameter] = parameter_sim
+    storage[:parameter_model] = parameter_model
+    storage[:parameter_map] = parameter_map
+    storage[:parameter_gradient] = parameter_gradient
+    storage[:parameter_objective_state] = parameter_objective_state
     storage[:dparam] = dobj_dparam
     storage[:param_buf] = param_buf
-    storage[:parameter] = parameter_sim
-    storage[:parameter_map] = parameter_map
     storage[:state0_map] = state0_map
     storage[:dstate0] = state0_vec
     storage[:state0_buf] = state0_buf
     storage[:state0_device] = state0_device
-    storage[:n] = n_prm
+    storage[:n] = n_param
 
     return storage
 end
@@ -207,7 +241,8 @@ function setup_adjoint_storage_base(
         linear_solver = missing,
         n_objective = nothing,
         info_level = 0,
-        execution_model = model
+        execution_model = model,
+        mixed_cross_terms_on_host = true
     )
     if ismissing(linear_solver)
         linear_solver = select_linear_solver(
@@ -219,8 +254,12 @@ function setup_adjoint_storage_base(
     forward_host = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :forward, extra_timing = nothing)
     # Same model, but adjoint for: ∂Fₙ₊₁ᵀ / ∂xₙ
     backward_host = Simulator(primary_model, state0 = deepcopy(state0), parameters = deepcopy(parameters), mode = :reverse, extra_timing = nothing)
-    forward_sim = transfer_adjoint_simulator(forward_host, execution_model)
-    backward_sim = transfer_adjoint_simulator(backward_host, execution_model)
+    forward_sim = transfer_adjoint_simulator(
+        forward_host, execution_model, mixed_cross_terms_on_host
+    )
+    backward_sim = transfer_adjoint_simulator(
+        backward_host, execution_model, mixed_cross_terms_on_host
+    )
     if use_sparsity isa Bool
         if use_sparsity
             # We will update these later on
@@ -264,7 +303,6 @@ function setup_adjoint_storage_base(
     storage[:objective_sparsity] = sparsity_obj
     storage[:lagrange] = λ
     storage[:lagrange_buffer] = similar(λ)
-    storage[:lagrange_host] = zeros(eltype(λ), size(λ))
     storage[:objective_rhs] = zeros(eltype(rhs), size(rhs))
     storage[:dx] = dx
     storage[:rhs] = rhs
@@ -302,8 +340,13 @@ function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPacked
     N = length(packed_steps)
     update_objective_sparsity!(storage, G, packed_steps, :forward, objective_sparsity_steps)
     update_objective_sparsity!(storage, G, packed_steps, :parameter, objective_sparsity_steps)
-    # Set gradient to zero before solve starts
-    @. ∇G = 0
+    parameter_gradient = storage.parameter_gradient
+    if isnothing(parameter_gradient)
+        parameter_gradient = ∇G
+    else
+        fill!(∇G, 0)
+    end
+    fill!(parameter_gradient, 0)
     if info_level > 0
         jutul_message("Jutul", "Solving adjoint for $N substeps")
     end
@@ -319,13 +362,17 @@ function solve_adjoint_sensitivities!(∇G, storage, packed_steps::AdjointPacked
             next!(p)
         end
         s0, s, s_next = adjoint_step_state_triplet(packed_steps, i)
-        update_sensitivities!(∇G, i, G, storage, s0, s, s_next, packed_steps)
+        update_sensitivities!(parameter_gradient, i, G, storage, s0, s, s_next, packed_steps)
+    end
+    if parameter_gradient !== ∇G
+        context = storage.parameter.model.context
+        copyto!(∇G, backend_to_host(context, parameter_gradient))
     end
     dparam = storage.dparam
     if !isnothing(dparam)
         @. ∇G += dparam
     end
-    @tic "rescale" rescale_sensitivities!(∇G, storage.parameter.model, storage.parameter_map)
+    @tic "rescale" rescale_sensitivities!(∇G, storage.parameter_model, storage.parameter_map)
     @assert all(isfinite, ∇G)
     # Finally deal with initial state gradients
     @tic "state0_jacobian" if !ismissing(storage.state0_map)
@@ -375,23 +422,32 @@ function adjoint_step_state_triplet(packed_steps::AdjointPackedResult, i::Int)
     return (s0, s, s_next)
 end
 
-function update_objective_sparsity!(storage, G, packed_steps::AdjointPackedResult, k = :forward, steps = missing)
+function update_objective_sparsity!(
+        storage, G, packed_steps::AdjointPackedResult, k = :forward, steps = missing
+    )
     k in (:forward, :parameter) || error("Invalid sparsity key $k")
     obj_sparsity = storage.objective_sparsity
     if isnothing(obj_sparsity) || (k == :parameter && isnothing(storage.dparam))
         return
-    else
-        sparsity = obj_sparsity[k]
-        if isnothing(sparsity)
-            if k == :forward
-                sim = storage.objective
-            else
-                sim = storage[k]
-            end
-            # Note: Variables here may be parameters or variables depending in the "outer" context
-            obj_sparsity[k] = determine_objective_sparsity(sim, sim.model, G, packed_steps, :variables, steps)
-        end
     end
+    if !isnothing(obj_sparsity[k])
+        return
+    end
+    if k == :forward
+        model = storage.objective.model
+        state = storage.objective.storage.state
+    else
+        model = storage.parameter_model
+        state = storage.parameter_objective_state
+    end
+
+    sim = storage[k]
+    update_secondary_variables!(sim.storage, sim.model)
+    adjoint_copy_objective_state!(state, sim)
+    # The parameter simulator represents target parameters as primary variables.
+    return obj_sparsity[k] = determine_objective_sparsity(
+        state, model, G, packed_steps, :variables, steps
+    )
 end
 
 function get_objective_sparsity(storage, k)
@@ -404,10 +460,10 @@ function get_objective_sparsity(storage, k)
     return S
 end
 
-function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packed_steps::AdjointPackedResult, variant = missing, steps = missing)
-    update_secondary_variables!(sim.storage, sim.model)
-    state = sim.storage.state
-
+function determine_objective_sparsity(
+        state, model, G::AbstractSumObjective, packed_steps::AdjointPackedResult,
+        variant = missing, steps = missing
+    )
     function F_outer(state, i)
         ps = packed_steps[i]
         si = ps.step_info
@@ -425,9 +481,10 @@ function determine_objective_sparsity(sim, model, G::AbstractSumObjective, packe
     return sparsity
 end
 
-function determine_objective_sparsity(sim, model, G::AbstractGlobalObjective, packed_steps::AdjointPackedResult, variant = missing, steps = missing)
-    update_secondary_variables!(sim.storage, sim.model)
-    state = sim.storage.state
+function determine_objective_sparsity(
+        state, model, G::AbstractGlobalObjective, packed_steps::AdjointPackedResult,
+        variant = missing, steps = missing
+    )
     function F_outer(state)
         si = packed_steps.step_infos
         f = packed_steps.forces
@@ -571,18 +628,21 @@ function update_sensitivities!(∇G, i, G, adjoint_storage, state0, state, state
     @tic "jacobian (for parameters)" adjoint_reassemble!(parameter_sim, state, state0, dt, forces, current_time)
     lsys_param = parameter_sim.storage.LinearizedSystem
     op_p = linear_operator(lsys_param)
-    λ_host = adjoint_storage.lagrange_host
-    copyto!(λ_host, λ)
-    @tic "∇G += op*λ" sens_add_mult!(∇G, op_p, λ_host)
+    @tic "∇G += op*λ" sens_add_mult!(∇G, op_p, λ)
     dparam = adjoint_storage.dparam
     return @tic "objective parameter gradient" if !isnothing(dparam)
         if i == N
             @. dparam = 0
         end
-        obj_eval = objective_evaluator_from_model_and_state(G, parameter_sim.model, packed_steps, i)
+        objective_model = adjoint_storage.parameter_model
+        objective_state = adjoint_storage.parameter_objective_state
+        adjoint_copy_objective_state!(objective_state, parameter_sim)
+        obj_eval = objective_evaluator_from_model_and_state(
+            G, objective_model, packed_steps, i
+        )
         pbuf = adjoint_storage.param_buf
         S_p = get_objective_sparsity(adjoint_storage, :parameter)
-        state_gradient_outer!(pbuf, obj_eval, parameter_sim.model, parameter_sim.storage.state, sparsity = S_p)
+        state_gradient_outer!(pbuf, obj_eval, objective_model, objective_state; sparsity = S_p)
         @. dparam += pbuf
     end
 end
@@ -627,7 +687,10 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
     objective_sim = adjoint_storage.objective
     objective_model = objective_sim.model
     objective_rhs = adjoint_storage.objective_rhs
-    @tic "reset variables" reset_variables!(objective_sim, state)
+    @tic "reset variables" begin
+        reset_variables!(objective_sim, state)
+        adjoint_copy_objective_state!(objective_sim.storage.state, forward_sim)
+    end
     obj_eval = objective_evaluator_from_model_and_state(
         G, objective_model, packed_steps, i
     )
@@ -643,8 +706,10 @@ function next_lagrange_multiplier!(adjoint_storage, i, G, state0, state, state_n
     else
         next_packed_step = packed_steps[i + 1]
         next_step_info = next_packed_step.step_info
-        forces_next = next_packed_step.forces
-        @tic "jacobian (with state0)" adjoint_reassemble!(backward_sim, state_next, state, next_step_info[:dt], forces_next, next_step_info[:time])
+        @tic "jacobian (with state0)" adjoint_reassemble!(
+            backward_sim, state_next, state,
+            next_step_info[:dt], next_packed_step.forces, next_step_info[:time]
+        )
         lsys_next = backward_sim.storage.LinearizedSystem
         op = linear_operator(lsys_next, skip_red = true)
         # In-place version of
@@ -683,9 +748,19 @@ function sens_add_mult!(x::AbstractMatrix, op::LinearOperator, y::AbstractMatrix
     return
 end
 
+function adjoint_copy_objective_state!(state, source)
+    source_state = source.storage.state
+    state === source_state && return nothing
+    backend_copyto!(state, source_state)
+    synchronize(source.model.context)
+    return nothing
+end
+
 function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     s = sim.storage
     model = sim.model
+    # Prepare the case forces for this simulator's execution context.
+    forces = preprocess_forces(sim, forces_for_host(forces)).forces
     # Deal with state0 first
     @tic "reset state0" reset_previous_state!(sim, state0)
     @tic "secondary variables" update_secondary_variables!(s, model, true)
@@ -698,6 +773,12 @@ function adjoint_reassemble!(sim, state, state0, dt, forces, time)
     @tic "update_before_step" update_before_step!(s, model, dt, forces, time = time, recorder = progress_recorder(sim))
     # Then the current primary variables
     @tic "reset state" reset_variables!(s, model, state)
+    if model isa MultiModel
+        # Device-evaluated mixed cross terms need the updated previous state.
+        synchronize_cross_term_states!(
+            s, model; state = false, state0 = true, parameters = false
+        )
+    end
     @tic "state_dependents" update_state_dependents!(s, model, dt, forces, time = time, update_secondary = true)
     # Finally update the system
     return update_linearized_system!(s, model)

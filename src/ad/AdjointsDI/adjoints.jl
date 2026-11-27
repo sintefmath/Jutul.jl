@@ -182,10 +182,18 @@ function setup_adjoint_storage_generic(
         backend = Jutul.default_di_backend(sparse = di_sparse)
     end
     model = case.model
-    if ismissing(simulator)
-        execution_model = model
-    else
+    execution_model = model
+    mixed_cross_terms_on_host = true
+    if !ismissing(simulator)
         execution_model = Jutul.get_simulator_model(simulator)
+        if execution_model isa Jutul.MultiModel &&
+                execution_model.context isa Jutul.KernelAbstractionsContext
+            execution_storage = Jutul.get_simulator_storage(simulator)
+            if haskey(execution_storage, :host_evaluation)
+                cross_terms = execution_storage.host_evaluation.cross_term_evaluation
+                mixed_cross_terms_on_host = cross_terms.mixed_on_host
+            end
+        end
     end
     if isnothing(deps_targets)
         deps_targets = Jutul.parameter_targets(model)
@@ -208,6 +216,7 @@ function setup_adjoint_storage_generic(
         n_objective = nothing,
         info_level = info_level,
         execution_model = execution_model,
+        mixed_cross_terms_on_host = mixed_cross_terms_on_host,
     )
     use_di = deps_ad == :di
     fully_dynamic = deps == :case
@@ -262,7 +271,7 @@ function setup_adjoint_storage_generic(
             # that it is consistent in the code.
             parameter_map = storage.parameter_map
             state0_map = storage.state0_map
-            prm_model = storage.parameter.model
+            prm_model = storage.parameter_model
         end
         N_prm = Jutul.vectorized_length(case.model, parameter_map)
         if inc_state0
@@ -316,6 +325,10 @@ function setup_adjoint_storage_generic(
     end
     storage[:prep_di] = prep
     storage[:backend_di] = backend
+    if deps_ad == :di
+        λ = storage.lagrange
+        storage[:lagrange_host] = zeros(eltype(λ), length(λ) + 1)
+    end
     if use_di
         storage[:dparam] = zeros(storage[:n_dynamic])
     else
@@ -367,11 +380,10 @@ function update_sensitivities_generic!(∇G, X, H, i, G, adjoint_storage, packed
         jac = jacobian(H, prep, backend, X)
     end
     # jac = jacobian(H, AutoForwardDiff(), X)
-    # Add zero entry (corresponding to objective values) to avoid resizing matrix.
-    N = length(λ)
-    push!(λ, 0.0)
-    mul!(∇G, jac', λ, 1.0, 1.0)
-    resize!(λ, N)
+    # The last entry stays zero to exclude the objective row from this product.
+    λ_host = adjoint_storage.lagrange_host
+    copyto!(λ_host, 1, λ, 1, length(λ))
+    mul!(∇G, jac', λ_host, 1.0, 1.0)
     # Gradient of partial objective to parameters
     dparam = adjoint_storage.dparam
     if i == length(packed_steps)
