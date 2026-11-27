@@ -159,6 +159,12 @@ function DictParametersSampler(
     return DictParametersSampler(parameters, dopt.setup_function, output_function, objective, simulator, config, setup)
 end
 
+"""
+    JutulOptimizationProblem(dopt, objective, setup_fn = dopt.setup_function; kwargs...)
+
+Set `clear_linear_solvers = true` to clear each solver's workspace after its
+forward or adjoint solve. The default is `false`.
+"""
 struct JutulOptimizationProblem
     dict_parameters::DictParameters
     setup_function
@@ -181,6 +187,7 @@ struct JutulOptimizationProblem
             deps_ad::Symbol = :jutul,
             simulator = missing,
             config = missing,
+            clear_linear_solvers::Bool = false,
             solution_history::Union{Bool, Symbol} = false,
             print_parameters::Bool = false,
             allow_errors::Bool = false,
@@ -208,6 +215,7 @@ struct JutulOptimizationProblem
         # Set up a cache for forward/backward sim
         adj_cache = setup_optimization_cache(dopt, simulator = simulator, config = config, info_level = info_level)
         adj_cache[:strict] = strict
+        adj_cache[:clear_linear_solvers] = clear_linear_solvers
 
         if solution_history isa Symbol
             solution_history in (:full, :x) || error("solution_history must be :full or :x if a Symbol. Got $solution_history.")
