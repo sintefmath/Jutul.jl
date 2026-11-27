@@ -177,7 +177,7 @@ function AMGOptions(;
         coarsening::AbstractCoarsening = HMIS(),
         interpolation::AbstractInterpolation = default_interpolation(coarsening),
         smoother::AbstractSmoother = SPAI0(1, 1.0),
-        max_levels::Integer = 20,
+        max_levels::Integer = 10_000,
         aggressive_levels::Integer = 0,
         aggressive_num_paths::Integer = 1,
         aggressive_interpolation::Union{Nothing, AbstractInterpolation} = nothing,
