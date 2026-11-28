@@ -117,11 +117,15 @@ end
 @kernel function pmis_initialize!(cf, @Const(rp), @Const(strong), @Const(offsets))
     i = @index(Global)
     @inbounds begin
-        connected = offsets[i] != offsets[i + 1]
+        has_out = false
         for k in rp[i]:(rp[i + 1] - 1)
-            connected |= strong[k]
+            has_out |= strong[k]
         end
-        cf[i] = connected ? Int8(0) : Int8(-3)
+        # HYPRE's special F points have no outgoing strong dependencies,
+        # even when other rows depend on them. Points influencing no other
+        # row are ordinary F points and must not enter the independent set.
+        cf[i] = !has_out ? Int8(-3) :
+            (offsets[i] == offsets[i + 1] ? Int8(-1) : Int8(0))
     end
 end
 
@@ -151,7 +155,7 @@ end
     end
 end
 
-@kernel function pmis_commit!(cf, pending, @Const(selected), @Const(rp), @Const(cv), @Const(strong), @Const(offsets), @Const(rows))
+@kernel function pmis_commit!(cf, pending, @Const(selected), @Const(rp), @Const(cv), @Const(strong))
     i = @index(Global)
     @inbounds begin
         state = cf[i]
@@ -162,9 +166,8 @@ end
             for k in rp[i]:(rp[i + 1] - 1)
                 covered |= strong[k] && selected[cv[k]]
             end
-            for k in offsets[i]:(offsets[i + 1] - 1)
-                covered |= selected[rows[k]]
-            end
+            # Coverage follows outgoing dependencies, as interpolation does.
+            # An incoming edge alone does not make this row an F point.
             covered && (state = Int8(-1))
         end
         cf[i] = state
@@ -172,33 +175,9 @@ end
     end
 end
 
-@kernel function pmis_repair!(promote, @Const(cf), @Const(rp), @Const(cv), @Const(strong), extended)
+@kernel function pmis_coarse_counts!(counts, @Const(cf))
     i = @index(Global)
     @inbounds begin
-        needs_coarse = cf[i] == -1
-        if needs_coarse
-            for k in rp[i]:(rp[i + 1] - 1)
-                strong[k] || continue
-                j = cv[k]
-                if cf[j] == 1
-                    needs_coarse = false
-                    break
-                elseif extended && cf[j] == -1
-                    for q in rp[j]:(rp[j + 1] - 1)
-                        strong[q] && cf[cv[q]] == 1 && (needs_coarse = false)
-                    end
-                    needs_coarse || break
-                end
-            end
-        end
-        promote[i] = needs_coarse
-    end
-end
-
-@kernel function pmis_coarse_counts!(counts, cf, @Const(promote))
-    i = @index(Global)
-    @inbounds begin
-        promote[i] && (cf[i] = Int8(1))
         counts[i + 1] = Int(cf[i] == 1)
         i == 1 && (counts[i] = 1)
     end
@@ -223,17 +202,12 @@ function pmis_split(A, strong, interpolation, workspace, old, tracker)
     commit! = pmis_commit!(backend, block)
     while true
         select!(selected, cf, A.rowptr, A.colval, strong, offsets, rows; ndrange = n)
-        commit!(cf, pending, selected, A.rowptr, A.colval, strong, offsets, rows; ndrange = n)
+        commit!(cf, pending, selected, A.rowptr, A.colval, strong; ndrange = n)
         any(pending) || break
     end
-    # Interpolation follows outgoing edges, whereas independence involves both
-    # directions. Repair rows whose directed interpolation stencil is empty.
-    pmis_repair!(backend, block)(
-        selected, cf, A.rowptr, A.colval, strong, interpolation isa ExtendedIInterpolation; ndrange = n
-    )
     counts = pmis_scratch!(workspace, :row_counts, backend, Int, n + 1, tracker)
     scan = pmis_scratch!(workspace, :row_scan, backend, Int, n + 1, tracker)
-    pmis_coarse_counts!(backend, block)(counts, cf, selected; ndrange = n)
+    pmis_coarse_counts!(backend, block)(counts, cf; ndrange = n)
     nc = pmis_scan!(scan, counts, backend)
     cmap = pmis_buffer(optional_property(old, :coarse_map), backend, eltype(A.colval), n, tracker)
     pmis_coarse_map!(backend, block)(cmap, scan, cf; ndrange = n)
@@ -673,11 +647,16 @@ end
 
 function pmis_coarse_solver(A, options, old)
     options.coarse_solver == :spai0 && return nothing
+    n = matrix_nrows(A)
+    # Like BoomerAMG, use relaxation if coarsening stalled or exhausted its
+    # levels before reaching the requested direct-solve size.
+    n <= options.coarse_size || return nothing
     backend = matrix_backend(A)
     backend isa KernelAbstractions.CPU && return build_coarse_solver(A, backend, old)
-    n = matrix_nrows(A)
-    n <= max(options.coarse_size, 256) || throw(
-        ArgumentError("PMIS stopped at a large coarse grid; use coarse_solver=:spai0 to avoid dense LU")
+    # coarse_size is user configurable; it must not raise the dense memory cap.
+    n <= 256 || return nothing
+    native_dense_lu(A.nzval) || throw(
+        ArgumentError("PMIS requires native dense LU on this backend; use coarse_solver=:spai0")
     )
     if old isa DenseLUState && size(old.factorization.factors) == size(A)
         return update_coarse_solver!(old, A)
@@ -712,9 +691,6 @@ function build_pmis_hierarchy(
     options.interpolation isa Union{ClassicalInterpolation, ExtendedIInterpolation} ||
         throw(ArgumentError("PMIS requires Classical or Extended+i interpolation"))
     backend = matrix_backend(A)
-    if options.coarse_solver == :lu && !(backend isa KernelAbstractions.CPU || native_dense_lu(A.nzval))
-        throw(ArgumentError("PMIS requires native dense LU on this backend; use coarse_solver=:spai0"))
-    end
     levels = copy(prefix)
     current = if reuse_finest_structure
         A
