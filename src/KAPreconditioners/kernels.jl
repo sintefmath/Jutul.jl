@@ -50,28 +50,33 @@ end
             row_sum += a
             cv[k] == i && (diag += a)
         end
-        usable_diagonal = !iszero(diag)
-        weakened = max_row_sum < one(max_row_sum) && usable_diagonal &&
-            abs(row_sum) > abs(diag) * max_row_sum
+        largest_opposite = zero(real(eltype(av)))
+        largest_any = zero(real(eltype(av)))
+        absolute_row_sum = abs(diag)
+        @inbounds for k in rp[i]:(rp[i + 1] - 1)
+            a = av[k]
+            if cv[k] != i
+                magnitude = abs(a)
+                absolute_row_sum += magnitude
+                largest_any = max(largest_any, magnitude)
+                if opposite_diagonal_sign(a, diag)
+                    largest_opposite = max(largest_opposite, magnitude)
+                end
+            end
+        end
+        use_signed = strength_mode == 1 ||
+            (strength_mode == 0 && largest_opposite > 0)
+        # HYPRE uses different dominance tests for signed and absolute
+        # strength. A signed row sum would erase same-sign connections
+        # precisely when signed_fallback switches to absolute strength.
+        weakened = max_row_sum < one(max_row_sum) && !iszero(diag) &&
+            (use_signed ? abs(row_sum) > abs(diag) * max_row_sum :
+                absolute_row_sum < abs(diag) * (2 - max_row_sum))
         if weakened
             @inbounds for k in rp[i]:(rp[i + 1] - 1)
                 strong[k] = false
             end
         else
-            largest_opposite = zero(real(eltype(av)))
-            largest_any = zero(real(eltype(av)))
-            @inbounds for k in rp[i]:(rp[i + 1] - 1)
-                a = av[k]
-                if cv[k] != i
-                    magnitude = abs(a)
-                    largest_any = max(largest_any, magnitude)
-                    if opposite_diagonal_sign(a, diag)
-                        largest_opposite = max(largest_opposite, magnitude)
-                    end
-                end
-            end
-            use_signed = strength_mode == 1 ||
-                (strength_mode == 0 && largest_opposite > 0)
             largest = if use_signed
                 largest_opposite
             else

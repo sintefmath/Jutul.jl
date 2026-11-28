@@ -15,8 +15,11 @@ threads (start Julia with `--threads=auto`).
 PMIS supports Float32 and Float64 matrices, SPAI0 smoothing, and no aggressive
 levels. SPAI0 computes its diagonal from CSR values on the backend. ILU0 and
 DILU setup currently need a host copy of the CSR pattern for scheduling.
-On accelerators, the coarse solver uses native dense LU when available;
-use `coarse_solver=:spai0` to use kernels for the coarse solve as well.
+The coarse solver uses LU only when the terminal grid reaches `coarse_size`.
+Larger terminal grids use SPAI0 relaxation, including when coarsening stalls
+or reaches `max_levels`. On accelerators, dense LU is also capped at 256 rows,
+independently of `coarse_size`. Use `coarse_solver=:spai0` to always use
+kernels for the coarse solve as well.
 
 The other options of the AMG preconditioner correspond to the fields of
 `AMGOptions` and control various aspects of the multigrid hierarchy, such as the
