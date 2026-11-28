@@ -34,9 +34,8 @@ import Jutul: process_partition
     p = Jutul.partition(MetisPartitioner(objective = :vol), A, 5)
     test_basic_partition_features(p, 5)
     @test_throws ArgumentError MetisPartitioner(objective = :foo)
-    # The objective is set for one call only
-    ix = Int(Jutul.Metis.LibMetis.METIS_OPTION_OBJTYPE) + 1
-    @test Jutul.Metis.options[ix] == -1
+    p = Jutul.partition(MetisPartitioner(:RECURSIVE), A, 5)
+    test_basic_partition_features(p, 5)
 
     l = 1:49
     r = 2:50
